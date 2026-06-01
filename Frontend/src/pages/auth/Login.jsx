@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { Mail, Lock, Eye, EyeOff } from 'lucide-react';
 import LoginPageImg from '../../assets/LoginPage.png';
@@ -7,9 +8,12 @@ const Login = () => {
   const { register, handleSubmit, formState: { errors } } = useForm();
   const [showPassword, setShowPassword] = useState(false);
 
+  const navigate = useNavigate();
+
   const onSubmit = (data) => {
     console.log("Login data:", data);
-    // API integration goes here later
+    // Redirect to the admin dashboard (Dummy sign-in logic)
+    navigate('/admin/dashboard');
   };
 
   return (
