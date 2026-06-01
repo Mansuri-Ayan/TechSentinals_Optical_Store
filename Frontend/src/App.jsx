@@ -1,12 +1,11 @@
-/** @format */
-
-
+import React from 'react';
+import AppRouter from './routes/AppRouter';
 
 function App() {
   return (
-    <>
-      <div className="App">My Sweet home</div>
-    </>
+    <div className="App">
+      <AppRouter />
+    </div>
   );
 }
 
