@@ -1,30 +1,143 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
+import { useAuthStore } from '../store/store';
 import Login from '../pages/auth/Login';
+import ProfileHome from '../pages/auth/ProfileHome';
 import AdminLayout from '../layouts/AdminLayout';
 import Dashboard from '../pages/admin/Dashboard';
 import Staff from '../pages/admin/Staff';
 
+// Route for non-logged in users (Guests)
+const GuestRoute = ({ children }) => {
+  const { isAuthenticated, user, isLoading } = useAuthStore();
+  const token = localStorage.getItem('access_token');
+
+  if (isLoading && token) {
+    return (
+      <div className="min-h-screen bg-navy flex items-center justify-center text-slate-300">
+        <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
+  if (isAuthenticated && user) {
+    return user.role === 'admin' ? (
+      <Navigate to="/admin/dashboard" replace />
+    ) : (
+      <Navigate to="/" replace />
+    );
+  }
+
+  return children;
+};
+
+// Route for authenticated users
+const PrivateRoute = ({ children }) => {
+  const { isAuthenticated, isLoading } = useAuthStore();
+  const token = localStorage.getItem('access_token');
+
+  if (isLoading && token) {
+    return (
+      <div className="min-h-screen bg-navy flex items-center justify-center text-slate-300">
+        <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated && !token) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return children;
+};
+
+// Route specifically for Admins
+const AdminRoute = ({ children }) => {
+  const { isAuthenticated, user, isLoading } = useAuthStore();
+  const token = localStorage.getItem('access_token');
+
+  if (isLoading && token) {
+    return (
+      <div className="min-h-screen bg-navy flex items-center justify-center text-slate-300">
+        <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated && !token) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (user && user.role !== 'admin') {
+    return <Navigate to="/" replace />;
+  }
+
+  return children;
+};
+
+// Route specifically for Home (Redirects admin to dashboard, others to ProfileHome)
+const HomeRoute = () => {
+  const { user, isLoading } = useAuthStore();
+  const token = localStorage.getItem('access_token');
+
+  if (isLoading && token) {
+    return (
+      <div className="min-h-screen bg-navy flex items-center justify-center text-slate-300">
+        <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
+  if (user && user.role === 'admin') {
+    return <Navigate to="/admin/dashboard" replace />;
+  }
+
+  return <ProfileHome />;
+};
+
 function AppRouter() {
   return (
-    <BrowserRouter>
-      <Routes>
-        {/* Public Routes */}
-        <Route path="/login" element={<Login />} />
-        
-        {/* Admin Routes */}
-        <Route path="/admin" element={<AdminLayout />}>
-          {/* Redirect /admin to /admin/dashboard */}
-          <Route index element={<Navigate to="dashboard" replace />} />
-          <Route path="dashboard" element={<Dashboard />} />
-          <Route path="staff" element={<Staff />} />
-        </Route>
-        
-        {/* Fallback root redirect */}
-        <Route path="/" element={<Navigate to="/login" replace />} />
-      </Routes>
-    </BrowserRouter>
+    <Routes>
+      {/* Public Routes */}
+      <Route 
+        path="/login" 
+        element={
+          <GuestRoute>
+            <Login />
+          </GuestRoute>
+        } 
+      />
+      
+      {/* Main home route - protected */}
+      <Route 
+        path="/" 
+        element={
+          <PrivateRoute>
+            <HomeRoute />
+          </PrivateRoute>
+        } 
+      />
+      
+      {/* Admin Routes - protected to only admins */}
+      <Route 
+        path="/admin" 
+        element={
+          <AdminRoute>
+            <AdminLayout />
+          </AdminRoute>
+        }
+      >
+        {/* Redirect /admin to /admin/dashboard */}
+        <Route index element={<Navigate to="dashboard" replace />} />
+        <Route path="dashboard" element={<Dashboard />} />
+        <Route path="staff" element={<Staff />} />
+      </Route>
+      
+      {/* Fallback root redirect */}
+      <Route path="*" element={<Navigate to="/login" replace />} />
+    </Routes>
   );
 }
 
 export default AppRouter;
+

@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import { LayoutDashboard, Users, LogOut, Glasses, ChevronDown, Check } from 'lucide-react';
+import { useAuth } from '../../hooks/useAuth';
+import { useAuthStore } from '../../store/store';
 
 const dummyStores = [
   { id: 1, name: 'Main St Optical' },
@@ -12,6 +14,14 @@ const Sidebar = () => {
   const [selectedStore, setSelectedStore] = useState(dummyStores[0]);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
+
+  const { logout, isLoggingOut } = useAuth();
+  const { user } = useAuthStore();
+
+  const getInitials = (name) => {
+    if (!name) return 'AM';
+    return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+  };
 
   // Close dropdown if clicked outside
   useEffect(() => {
@@ -107,22 +117,23 @@ const Sidebar = () => {
       <div className="p-4 border-t border-white/10 bg-[#060a16]">
         {/* Profile Card */}
         <div className="flex items-center px-4 py-3 mb-2 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 transition-colors cursor-pointer">
-          <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-emerald-400 to-emerald-600 flex items-center justify-center text-white font-bold text-sm shadow-md">
-            AM
+          <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-emerald-400 to-emerald-600 flex items-center justify-center text-white font-bold text-sm shadow-md flex-shrink-0">
+            {getInitials(user?.full_name)}
           </div>
           <div className="ml-3 flex-1 overflow-hidden">
-            <p className="text-sm font-semibold text-white truncate">Admin Manager</p>
-            <p className="text-xs text-slate-400 truncate">admin@gmail.com</p>
+            <p className="text-sm font-semibold text-white truncate">{user?.full_name || 'Admin Manager'}</p>
+            <p className="text-xs text-slate-400 truncate">{user?.email || 'admin@gmail.com'}</p>
           </div>
         </div>
 
-        <NavLink
-          to="/login"
-          className="flex items-center px-4 py-2.5 text-slate-400 hover:bg-red-500/10 hover:text-red-400 rounded-xl transition-colors group"
+        <button
+          onClick={logout}
+          disabled={isLoggingOut}
+          className="w-full flex items-center px-4 py-2.5 text-slate-400 hover:bg-red-500/10 hover:text-red-400 rounded-xl transition-colors group text-left cursor-pointer focus:outline-none disabled:opacity-50"
         >
           <LogOut className="w-5 h-5 mr-3 group-hover:-translate-x-1 transition-transform" />
-          <span className="font-medium text-sm">Sign Out</span>
-        </NavLink>
+          <span className="font-medium text-sm">{isLoggingOut ? 'Signing Out...' : 'Sign Out'}</span>
+        </button>
       </div>
     </div>
   );

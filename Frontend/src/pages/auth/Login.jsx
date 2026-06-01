@@ -1,19 +1,22 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useForm } from 'react-hook-form';
-import { Mail, Lock, Eye, EyeOff } from 'lucide-react';
-import LoginPageImg from '../../assets/LoginPage.png';
+/** @format */
+
+import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { Mail, Lock, Eye, EyeOff } from "lucide-react";
+import LoginPageImg from "../../assets/LoginPage.png";
+import { useAuth } from "../../hooks/useAuth";
 
 const Login = () => {
-  const { register, handleSubmit, formState: { errors } } = useForm();
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm();
   const [showPassword, setShowPassword] = useState(false);
-
-  const navigate = useNavigate();
+  const { login, isLoggingIn } = useAuth();
 
   const onSubmit = (data) => {
-    console.log("Login data:", data);
-    // Redirect to the admin dashboard (Dummy sign-in logic)
-    navigate('/admin/dashboard');
+    login(data);
   };
 
   return (
@@ -46,8 +49,11 @@ const Login = () => {
               Sign in to your account
             </h2>
             <p className="mt-2 text-sm text-gray-600">
-              Don't have an account?{' '}
-              <a href="#" className="font-medium text-emerald-600 hover:text-emerald-500 transition-colors">
+              Don't have an account?{" "}
+              <a
+                href="#"
+                className="font-medium text-emerald-600 hover:text-emerald-500 transition-colors"
+              >
                 Create one
               </a>
             </p>
@@ -57,7 +63,9 @@ const Login = () => {
             <div className="space-y-5">
               {/* Email Field */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Email Address
+                </label>
                 <div className="relative rounded-lg shadow-sm">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                     <Mail className="h-5 w-5 text-gray-400" />
@@ -67,20 +75,26 @@ const Login = () => {
                     {...register("email", {
                       required: "Email is required",
                       pattern: {
-                        value: /^[a-zA-Z0-9._-]+@gmail\.com$/,
-                        message: "Please enter a valid Gmail address"
-                      }
+                        value: /^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/,
+                        message: "Please enter a valid email address",
+                      },
                     })}
-                    className={`focus:ring-emerald-500 focus:border-emerald-500 block w-full pl-10 sm:text-sm border-gray-300 rounded-lg py-3 border transition-colors ${errors.email ? 'border-red-500 focus:ring-red-500 focus:border-red-500' : ''}`}
+                    className={`focus:ring-emerald-500 focus:border-emerald-500 block w-full pl-10 sm:text-sm border-gray-300 rounded-lg py-3 border transition-colors ${errors.email ? "border-red-500 focus:ring-red-500 focus:border-red-500" : ""}`}
                     placeholder="you@gmail.com"
                   />
                 </div>
-                {errors.email && <p className="mt-1.5 text-sm text-red-600 font-medium">{errors.email.message}</p>}
+                {errors.email && (
+                  <p className="mt-1.5 text-sm text-red-600 font-medium">
+                    {errors.email.message}
+                  </p>
+                )}
               </div>
 
               {/* Password Field */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Password
+                </label>
                 <div className="relative rounded-lg shadow-sm">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                     <Lock className="h-5 w-5 text-gray-400" />
@@ -91,10 +105,10 @@ const Login = () => {
                       required: "Password is required",
                       minLength: {
                         value: 6,
-                        message: "Password must be at least 6 characters"
-                      }
+                        message: "Password must be at least 6 characters",
+                      },
                     })}
-                    className={`focus:ring-emerald-500 focus:border-emerald-500 block w-full pl-10 pr-10 sm:text-sm border-gray-300 rounded-lg py-3 border transition-colors ${errors.password ? 'border-red-500 focus:ring-red-500 focus:border-red-500' : ''}`}
+                    className={`focus:ring-emerald-500 focus:border-emerald-500 block w-full pl-10 pr-10 sm:text-sm border-gray-300 rounded-lg py-3 border transition-colors ${errors.password ? "border-red-500 focus:ring-red-500 focus:border-red-500" : ""}`}
                     placeholder="••••••••"
                   />
                   <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
@@ -103,20 +117,29 @@ const Login = () => {
                       onClick={() => setShowPassword(!showPassword)}
                       className="text-gray-400 hover:text-gray-600 focus:outline-none transition-colors"
                     >
-                      {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                      {showPassword ? (
+                        <EyeOff className="h-5 w-5" />
+                      ) : (
+                        <Eye className="h-5 w-5" />
+                      )}
                     </button>
                   </div>
                 </div>
-                {errors.password && <p className="mt-1.5 text-sm text-red-600 font-medium">{errors.password.message}</p>}
+                {errors.password && (
+                  <p className="mt-1.5 text-sm text-red-600 font-medium">
+                    {errors.password.message}
+                  </p>
+                )}
               </div>
             </div>
 
             <div>
               <button
                 type="submit"
-                className="w-full flex justify-center py-3.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-semibold text-white bg-emerald-700 hover:bg-emerald-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-600 transition-all active:scale-[0.98]"
+                disabled={isLoggingIn}
+                className="w-full flex justify-center py-3.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-semibold text-white bg-emerald-700 hover:bg-emerald-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-600 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Sign In
+                {isLoggingIn ? "Signing In..." : "Sign In"}
               </button>
             </div>
           </form>
