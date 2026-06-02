@@ -1,15 +1,16 @@
-import React, { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import { Menu } from 'lucide-react';
 import Sidebar from '../components/admin/Sidebar';
 
 function AdminLayout() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const handleCloseSidebar = useCallback(() => setIsSidebarOpen(false), []);
 
   return (
     <div className="flex min-h-screen bg-gray-50">
       {/* Sidebar Component */}
-      <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+      <Sidebar isOpen={isSidebarOpen} onClose={handleCloseSidebar} />
       
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0">

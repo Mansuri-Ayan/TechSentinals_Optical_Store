@@ -1,9 +1,16 @@
 # Service: store_service.py
 from datetime import datetime, timezone
-from sqlalchemy import select
+from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from models.store import Store
 from schemas.store import StoreCreate, StoreUpdate
+
+
+async def _generate_store_code(db: AsyncSession) -> str:
+    stmt = select(Store.id).order_by(desc(Store.id)).limit(1)
+    result = await db.execute(stmt)
+    last_store_id = result.scalar_one_or_none() or 0
+    return f"STR-{last_store_id + 1:06d}"
 
 
 async def create_store(
@@ -12,10 +19,11 @@ async def create_store(
     payload: StoreCreate,
 ) -> Store:
     """Create a new store owned by the given admin."""
+    store_code = payload.store_code or await _generate_store_code(db)
     new_store = Store(
         admin_id=admin_id,
         store_name=payload.store_name,
-        store_code=payload.store_code,
+        store_code=store_code,
         email=payload.email,
         phone=payload.phone,
         address=payload.address,
@@ -23,6 +31,7 @@ async def create_store(
         state=payload.state,
         pincode=payload.pincode,
         gst_number=payload.gst_number,
+        is_active=payload.is_active,
     )
     db.add(new_store)
     await db.commit()
