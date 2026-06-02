@@ -1,160 +1,81 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useParams } from 'react-router-dom';
-import {
-  Search, Edit2, Trash2, Plus, Users,
-  UserCheck, UserMinus, UserPlus, Download,
-  Upload, ChevronRight,
+import React, { useState } from 'react';
+import { 
+  Search, Edit2, Trash2, X, Plus, Users, 
+  UserCheck, UserMinus, UserPlus, Download, 
+  Upload, ChevronRight
 } from 'lucide-react';
 import AddStaffModal from '../../components/admin/AddStaffModal';
-import { useStoreStore } from '../../store/store';
-import { useStoreStaff } from '../../hooks/useStaff';
 
-const roleOptions = [
-  { value: 'all', label: 'All Roles' },
-  { value: 'worker', label: 'Worker' },
-  { value: 'manager', label: 'Manager' },
-  { value: 'optician', label: 'Optician' },
+const roleColors = ['border-blue-500', 'border-emerald-500', 'border-purple-500', 'border-amber-500', 'border-rose-500', 'border-cyan-500', 'border-indigo-500'];
+
+const initialStaffData = [
+  { id: 1, name: 'Jane Doe', role: 'Optometrist', email: 'jane.doe@example.com', phone: '+1 234 567 8900', joiningDate: '2023-01-15', status: 'Active', lastActive: '2 mins ago', roleColor: 'border-blue-500', image: null },
+  { id: 2, name: 'John Smith', role: 'Sales Associate', email: 'john.smith@example.com', phone: '+1 234 567 8901', joiningDate: '2023-03-10', status: 'Active', lastActive: '1 hr ago', roleColor: 'border-emerald-500', image: null },
+  { id: 3, name: 'Emily Clark', role: 'Store Manager', email: 'emily.clark@example.com', phone: '+1 234 567 8902', joiningDate: '2022-11-05', status: 'On Leave', lastActive: '2 days ago', roleColor: 'border-purple-500', image: null },
+  { id: 4, name: 'Michael Brown', role: 'Technician', email: 'michael.b@example.com', phone: '+1 234 567 8903', joiningDate: '2024-02-20', status: 'Active', lastActive: 'Just now', roleColor: 'border-amber-500', image: null },
 ];
 
-const statusOptions = [
-  { value: 'all', label: 'All Status' },
-  { value: 'active', label: 'Active' },
-  { value: 'inactive', label: 'Inactive' },
+const kpiData = [ 
+  { title: 'Total Staff', value: '24', trend: '+12%', trendUp: true, icon: Users, color: 'text-blue-500', bg: 'bg-blue-500/10' },
+  { title: 'Active Today', value: '18', trend: '+5%', trendUp: true, icon: UserCheck, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
+  { title: 'On Leave', value: '3', trend: '-1', trendUp: false, icon: UserMinus, color: 'text-amber-500', bg: 'bg-amber-500/10' },
+  { title: 'New This Month', value: '2', trend: '+2', trendUp: true, icon: UserPlus, color: 'text-purple-500', bg: 'bg-purple-500/10' },
 ];
 
-const roleColorByRole = {
-  worker: 'border-blue-500',
-  manager: 'border-purple-500',
-  optician: 'border-emerald-500',
-};
-
-const formatRole = (role) => role.charAt(0).toUpperCase() + role.slice(1);
-
-const formatLastActive = (value) => {
-  if (!value) return 'Never';
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return 'Never';
-
-  return date.toLocaleDateString(undefined, {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  });
-};
+const filters = ['All Roles', 'Active', 'On Leave', 'Managers', 'Optometrists'];
 
 const Staff = () => {
-  const { storeId } = useParams();
-  const { stores, selectedStore, setSelectedStore } = useStoreStore();
-  const {
-    staff,
-    isLoadingStaff,
-    isStaffError,
-    createStaffAsync,
-    updateStaffAsync,
-    deleteStaffAsync,
-    isSavingStaff,
-    isDeletingStaff,
-  } = useStoreStaff(storeId);
+  const [staff, setStaff] = useState(initialStaffData);
   const [searchTerm, setSearchTerm] = useState('');
-  const [roleFilter, setRoleFilter] = useState('all');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [activeFilter, setActiveFilter] = useState('All Roles');
   const [editingStaff, setEditingStaff] = useState(null);
   const [showAddStaff, setShowAddStaff] = useState(false);
 
-  useEffect(() => {
-    const routeStore = stores.find((store) => String(store.id) === String(storeId));
-    if (routeStore && selectedStore?.id !== routeStore.id) {
-      setSelectedStore(routeStore);
-    }
-  }, [selectedStore?.id, setSelectedStore, storeId, stores]);
+  // Derived state for filtering
+  const filteredStaff = staff.filter(person => {
+    const matchesSearch = person.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          person.email.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesFilter = activeFilter === 'All Roles' || 
+                          person.status === activeFilter ||
+                          (activeFilter === 'Managers' && person.role.includes('Manager')) ||
+                          (activeFilter === 'Optometrists' && person.role.includes('Optometrist'));
+    return matchesSearch && matchesFilter;
+  });
 
-  const formattedStaff = useMemo(() => staff.map((person) => ({
-    ...person,
-    name: `${person.first_name} ${person.last_name}`.trim(),
-    status: person.is_active ? 'Active' : 'Inactive',
-    lastActive: formatLastActive(person.last_login_at),
-    roleColor: roleColorByRole[person.role] || 'border-slate-500',
-  })), [staff]);
-
-  const filteredStaff = useMemo(() => formattedStaff.filter((person) => {
-    const search = searchTerm.toLowerCase().trim();
-    const matchesSearch = !search ||
-      person.name.toLowerCase().includes(search) ||
-      (person.email || '').toLowerCase().includes(search) ||
-      person.role.toLowerCase().includes(search) ||
-      person.employee_code.toLowerCase().includes(search);
-    const matchesRole = roleFilter === 'all' || person.role === roleFilter;
-    const matchesStatus =
-      statusFilter === 'all' ||
-      (statusFilter === 'active' && person.is_active) ||
-      (statusFilter === 'inactive' && !person.is_active);
-
-    return matchesSearch && matchesRole && matchesStatus;
-  }), [formattedStaff, roleFilter, searchTerm, statusFilter]);
-
-  const activeCount = formattedStaff.filter((person) => person.is_active).length;
-  const inactiveCount = formattedStaff.length - activeCount;
-  const createdThisMonthCount = formattedStaff.filter((person) => {
-    const createdAt = new Date(person.created_at);
-    const now = new Date();
-    return createdAt.getMonth() === now.getMonth() &&
-      createdAt.getFullYear() === now.getFullYear();
-  }).length;
-
-  const kpiData = [
-    { title: 'Total Staff', value: formattedStaff.length, icon: Users, color: 'text-blue-500', bg: 'bg-blue-500/10' },
-    { title: 'Active Staff', value: activeCount, icon: UserCheck, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
-    { title: 'Inactive Staff', value: inactiveCount, icon: UserMinus, color: 'text-red-500', bg: 'bg-red-500/10' },
-    { title: 'New This Month', value: createdThisMonthCount, icon: UserPlus, color: 'text-purple-500', bg: 'bg-purple-500/10' },
-  ];
-
-  const statusSelectClass = statusFilter ===""
-  const handleDelete = async (person) => {
-    if (window.confirm(`Are you sure you want to delete ${person.name}?`)) {
-      await deleteStaffAsync({
-        role: person.role,
-        id: person.id,
-      });
+  const handleDelete = (id) => {
+    if (window.confirm("Are you sure you want to delete this staff member?")) {
+      setStaff(staff.filter(person => person.id !== id));
     }
   };
 
-  const handleSubmitStaff = async ({ role, payload, staff: staffMember }) => {
-    if (staffMember) {
-      await updateStaffAsync({
-        role,
-        id: staffMember.id,
-        payload,
-      });
-      return;
-    }
+  const handleEditStaff = (updatedStaff) => {
+    setStaff(staff.map(person => person.id === updatedStaff.id ? updatedStaff : person));
+  };
 
-    await createStaffAsync({
-      storeId,
-      role,
-      payload,
-    });
+  const handleAddStaff = (newStaff) => {
+    setStaff(prev => [newStaff, ...prev]);
   };
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-[1400px] mx-auto animate-fade-in font-sans">
+      
+      {/* Breadcrumbs & Header */}
       <div className="mb-6 sm:mb-8">
         <div className="flex items-center text-sm text-slate-500 font-medium mb-3 sm:mb-4 space-x-2">
           <span className="hover:text-slate-800 cursor-pointer transition-colors">Dashboard</span>
           <ChevronRight className="w-4 h-4 flex-shrink-0" />
           <span className="text-slate-900 font-semibold">Staff</span>
         </div>
-
+        
         <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
           <div>
             <h1 className="text-2xl sm:text-3xl lg:text-4xl font-heading font-bold text-transparent bg-clip-text bg-gradient-to-r from-slate-900 to-slate-600 tracking-tight">
               Staff Directory
             </h1>
-            <p className="text-slate-500 mt-2 text-sm sm:text-base">
-              Manage your optical store employees, roles, and permissions.
-            </p>
+            <p className="text-slate-500 mt-2 text-sm sm:text-base">Manage your optical store employees, roles, and permissions.</p>
           </div>
-
+          
+          {/* Contextual Actions */}
           <div className="flex items-center space-x-3">
             <button className="flex items-center px-4 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-sm font-semibold hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm">
               <Upload className="w-4 h-4 mr-2 text-slate-400" />
@@ -164,7 +85,7 @@ const Staff = () => {
               <Download className="w-4 h-4 mr-2 text-slate-400" />
               Export
             </button>
-            <button
+            <button 
               onClick={() => setShowAddStaff(true)}
               className="flex items-center px-5 py-2.5 bg-[#0A0F1F] text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5"
             >
@@ -175,9 +96,10 @@ const Staff = () => {
         </div>
       </div>
 
+      {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 mb-6 sm:mb-10">
-        {kpiData.map((kpi) => (
-          <div key={kpi.title} className="bg-white p-4 sm:p-6 rounded-xl sm:rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow group relative overflow-hidden">
+        {kpiData.map((kpi, i) => (
+          <div key={i} className="bg-white p-4 sm:p-6 rounded-xl sm:rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow group relative overflow-hidden">
             <div className="absolute -right-6 -top-6 w-20 sm:w-24 h-20 sm:h-24 bg-gradient-to-br from-slate-50 to-slate-100 rounded-full opacity-50 group-hover:scale-150 transition-transform duration-500"></div>
             <div className="flex justify-between items-start relative z-10">
               <div className="min-w-0 flex-1">
@@ -189,118 +111,119 @@ const Staff = () => {
               </div>
             </div>
             <div className="mt-2 sm:mt-4 flex items-center text-xs sm:text-sm relative z-10">
-              <span className="text-slate-400 truncate">Current store</span>
+              <span className={`font-semibold ${kpi.trendUp ? 'text-emerald-500' : 'text-amber-500'}`}>
+                {kpi.trend}
+              </span>
+              <span className="text-slate-400 ml-1.5 sm:ml-2 truncate">vs last month</span>
             </div>
           </div>
         ))}
       </div>
 
+      {/* Search & Filters */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
-        <div className="flex flex-col sm:flex-row gap-3 w-full lg:max-w-3xl">
-          <div className="relative w-full group">
-            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-              <Search className="h-5 w-5 text-slate-400 group-focus-within:text-emerald-500 transition-colors" />
-            </div>
-            <input
-              type="text"
-              placeholder="Search by name, email, or role..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="block w-full pl-11 pr-16 py-3 bg-white/70 backdrop-blur-md border border-slate-200 rounded-xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 sm:text-sm font-medium transition-all shadow-sm placeholder:text-slate-400"
-            />
-            <div className="absolute inset-y-0 right-0 pr-3 hidden sm:flex items-center pointer-events-none">
-              <span className="text-xs font-semibold text-slate-400 bg-slate-100 px-2 py-1 rounded-md border border-slate-200">Ctrl K</span>
-            </div>
+        <div className="relative w-full lg:max-w-md group">
+          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+            <Search className="h-5 w-5 text-slate-400 group-focus-within:text-emerald-500 transition-colors" />
           </div>
-          <select
-            value={roleFilter}
-            onChange={(e) => setRoleFilter(e.target.value)}
-            className="w-full sm:w-40 px-4 py-3 bg-white border border-slate-200 text-slate-700 rounded-xl text-sm font-semibold focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 shadow-sm"
-          >
-            {roleOptions.map((role) => (
-              <option key={role.value} value={role.value}>{role.label}</option>
-            ))}
-          </select>
+          <input
+            type="text"
+            placeholder="Search by name, email, or role..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="block w-full pl-11 pr-16 py-3 bg-white/70 backdrop-blur-md border border-slate-200 rounded-xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 sm:text-sm font-medium transition-all shadow-sm placeholder:text-slate-400"
+          />
+          <div className="absolute inset-y-0 right-0 pr-3 hidden sm:flex items-center pointer-events-none">
+            <span className="text-xs font-semibold text-slate-400 bg-slate-100 px-2 py-1 rounded-md border border-slate-200">⌘K</span>
+          </div>
         </div>
-
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className={`w-full sm:w-40 px-4 py-3 border rounded-xl text-sm font-semibold focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 shadow-sm transition-colors ${statusSelectClass}`}
-        >
-          {statusOptions.map((status) => (
-            <option key={status.value} value={status.value}>{status.label}</option>
+        
+        <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
+          {filters.map(filter => (
+            <button
+              key={filter}
+              onClick={() => setActiveFilter(filter)}
+              className={`px-4 py-2 rounded-full text-sm font-semibold transition-all ${
+                activeFilter === filter 
+                  ? 'bg-slate-900 text-white shadow-md' 
+                  : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 hover:border-slate-300'
+              }`}
+            >
+              {filter}
+            </button>
           ))}
-        </select>
+        </div>
       </div>
 
+      {/* Staff Directory Cards */}
       <div className="space-y-3">
-        {isLoadingStaff ? (
-          <div className="bg-white border border-slate-100 rounded-xl p-8 text-center text-slate-500 font-semibold">
-            Loading staff...
-          </div>
-        ) : isStaffError ? (
-          <div className="bg-red-50 border border-red-100 rounded-xl p-8 text-center text-red-700 font-semibold">
-            Unable to load staff for this store.
-          </div>
-        ) : filteredStaff.length > 0 ? filteredStaff.map((person) => (
-          <div key={`${person.role}-${person.id}`} className="bg-white border border-slate-100 rounded-xl sm:rounded-2xl p-3 sm:p-4 shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5 group relative overflow-hidden">
+        {filteredStaff.length > 0 ? filteredStaff.map((person) => (
+          <div key={person.id} className="bg-white border border-slate-100 rounded-xl sm:rounded-2xl p-3 sm:p-4 shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5 group relative overflow-hidden">
+            {/* Accent Border */}
             <div className={`absolute left-0 top-0 bottom-0 w-1 ${person.roleColor}`}></div>
-
+            
+            {/* Desktop Layout (md+): Single row with aligned fixed-width columns */}
+            {/* Mobile Layout (<md): Stacked vertical */}
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 md:gap-0">
+              {/* Avatar + Name Section */}
               <div className="flex items-center pl-2 min-w-0 md:flex-1">
                 <div className="relative flex-shrink-0">
-                  {person.profile_image ? (
-                    <img src={person.profile_image} alt={person.name} className="h-10 w-10 md:h-12 md:w-12 rounded-full object-cover shadow-inner" />
+                  {person.image ? (
+                    <img src={person.image} alt={person.name} className="h-10 w-10 md:h-12 md:w-12 rounded-full object-cover shadow-inner" />
                   ) : (
                     <div className="h-10 w-10 md:h-12 md:w-12 rounded-full bg-gradient-to-tr from-slate-800 to-slate-600 flex items-center justify-center text-white font-bold text-base md:text-lg shadow-inner">
                       {person.name.charAt(0)}
                     </div>
                   )}
-                  {person.is_active && (
+                  {/* Online Pulse Indicator */}
+                  {person.status === 'Active' && (
                     <span className="absolute bottom-0 right-0 block h-3 w-3 md:h-3.5 md:w-3.5 rounded-full bg-emerald-400 ring-2 ring-white shadow-[0_0_8px_rgba(52,211,153,0.8)]"></span>
                   )}
                 </div>
                 <div className="ml-3 md:ml-5 min-w-0">
                   <div className="text-sm md:text-base font-bold text-slate-900 truncate">{person.name}</div>
-                  <div className="text-xs md:text-sm font-medium text-slate-500 mt-0.5 truncate">{person.email || 'No email added'}</div>
+                  <div className="text-xs md:text-sm font-medium text-slate-500 mt-0.5 truncate">{person.email}</div>
                 </div>
               </div>
 
+              {/* Info columns + Actions - aligned on desktop */}
               <div className="flex flex-wrap items-center gap-2 pl-2 md:pl-0 md:flex-nowrap md:gap-0">
+                {/* Role Badge - fixed width on desktop */}
                 <div className="md:w-40 flex items-center md:justify-center">
                   <span className="inline-flex items-center px-3 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200">
-                    {formatRole(person.role)}
+                    {person.role}
                   </span>
                 </div>
-
+                
+                {/* Status Badge - fixed width on desktop */}
                 <div className="md:w-32 flex items-center md:justify-center">
                   <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold border ${
-                    person.is_active
-                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200 shadow-[0_0_10px_rgba(16,185,129,0.1)]'
-                      : 'bg-red-50 text-red-700 border-red-200'
+                    person.status === 'Active' 
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200 shadow-[0_0_10px_rgba(16,185,129,0.1)]' 
+                      : 'bg-amber-50 text-amber-700 border-amber-200'
                   }`}>
-                    <span className={`w-1.5 h-1.5 rounded-full mr-2 ${person.is_active ? 'bg-emerald-500' : 'bg-red-500'}`}></span>
+                    <span className={`w-1.5 h-1.5 rounded-full mr-2 ${person.status === 'Active' ? 'bg-emerald-500' : 'bg-amber-500'}`}></span>
                     {person.status}
                   </span>
                 </div>
 
+                {/* Last Active - fixed width on desktop, hidden on mobile (shown below) */}
                 <div className="hidden md:flex md:w-32 items-center justify-center text-sm font-medium text-slate-400">
                   {person.lastActive}
                 </div>
 
+                {/* Action Buttons - always visible on mobile, hover on desktop */}
                 <div className="md:w-auto flex items-center space-x-1 md:space-x-2 md:opacity-0 group-hover:opacity-100 transition-opacity ml-auto md:ml-0">
-                  <button
+                  <button 
                     onClick={() => setEditingStaff(person)}
-                    className="p-2 md:p-2.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg md:rounded-xl transition-colors"
+                    className="p-2 md:p-2.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg md:rounded-xl transition-colors" 
                     title="Edit"
                   >
                     <Edit2 className="w-4 h-4" />
                   </button>
-                  <button
-                    onClick={() => handleDelete(person)}
-                    disabled={isDeletingStaff}
-                    className="p-2 md:p-2.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg md:rounded-xl transition-colors"
+                  <button 
+                    onClick={() => handleDelete(person.id)}
+                    className="p-2 md:p-2.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg md:rounded-xl transition-colors" 
                     title="Delete"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -309,6 +232,7 @@ const Staff = () => {
               </div>
             </div>
 
+            {/* Mobile-only: Last Active time */}
             <div className="md:hidden mt-2 pl-2 text-xs font-medium text-slate-400">
               Last active: {person.lastActive}
             </div>
@@ -319,13 +243,9 @@ const Staff = () => {
               <Search className="w-6 h-6 sm:w-8 sm:h-8 text-slate-300" />
             </div>
             <h3 className="text-base sm:text-lg font-bold text-slate-900 mb-1">No staff members found</h3>
-            <p className="text-slate-500 text-sm">No staff match the current search and filters.</p>
-            <button
-              onClick={() => {
-                setSearchTerm('');
-                setRoleFilter('all');
-                setStatusFilter('all');
-              }}
+            <p className="text-slate-500 text-sm">We couldn't find anyone matching your search criteria.</p>
+            <button 
+              onClick={() => {setSearchTerm(''); setActiveFilter('All Roles');}}
               className="mt-3 sm:mt-4 text-emerald-600 font-semibold hover:text-emerald-700 transition-colors text-sm"
             >
               Clear filters
@@ -334,16 +254,13 @@ const Staff = () => {
         )}
       </div>
 
-      {(showAddStaff || !!editingStaff) && (
-        <AddStaffModal
-          key={editingStaff ? `${editingStaff.role}-${editingStaff.id}` : 'new-staff'}
-          isOpen={showAddStaff || !!editingStaff}
-          onClose={() => { setShowAddStaff(false); setEditingStaff(null); }}
-          onSubmitStaff={handleSubmitStaff}
-          initialData={editingStaff}
-          isSaving={isSavingStaff}
-        />
-      )}
+      <AddStaffModal 
+        isOpen={showAddStaff || !!editingStaff} 
+        onClose={() => { setShowAddStaff(false); setEditingStaff(null); }} 
+        onAddStaff={handleAddStaff}
+        onEditStaff={handleEditStaff}
+        initialData={editingStaff}
+      />
     </div>
   );
 };

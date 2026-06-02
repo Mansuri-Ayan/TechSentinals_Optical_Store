@@ -1,24 +1,18 @@
-import { useState, useRef, useEffect } from 'react';
-import { NavLink, useLocation, useNavigate } from 'react-router-dom';
+import React, { useState, useRef, useEffect } from 'react';
+import { NavLink, useLocation } from 'react-router-dom';
 import { LayoutDashboard, Users, LogOut, Glasses, ChevronDown, Check, X } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useAuthStore, useStoreStore } from '../../store/store';
-import { useStores } from '../../hooks/useStores';
 
 const Sidebar = ({ isOpen, onClose }) => {
-  const { stores, selectedStore, setSelectedStore, setStores } = useStoreStore();
-  const { stores: fetchedStores, isLoadingStores, isStoresError } = useStores();
+  const { stores } = useStoreStore();
+  const { selectedStore, setSelectedStore } = useStoreStore();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
   const location = useLocation();
-  const navigate = useNavigate();
 
   const { logout, isLoggingOut } = useAuth();
   const { user } = useAuthStore();
-
-  useEffect(() => {
-    setStores(fetchedStores);
-  }, [fetchedStores, setStores]);
 
   // Set default selected store
   useEffect(() => {
@@ -48,20 +42,9 @@ const Sidebar = ({ isOpen, onClose }) => {
     if (onClose) {
       onClose();
     }
-  }, [location.pathname, onClose]);
+  }, [location.pathname]);
 
   const currentStore = selectedStore || stores[0];
-  const getStoreName = (store) => store?.store_name || store?.name || 'Select Store';
-  const staffRoute = currentStore ? `/admin/store/${currentStore.id}/staff` : '/admin/dashboard';
-
-  const handleStoreSelect = (store) => {
-    setSelectedStore(store);
-    setIsDropdownOpen(false);
-
-    if (location.pathname.startsWith('/admin/store/') && location.pathname.endsWith('/staff')) {
-      navigate(`/admin/store/${store.id}/staff`);
-    }
-  };
 
   return (
     <>
@@ -90,21 +73,15 @@ const Sidebar = ({ isOpen, onClose }) => {
             <Glasses className="w-5 h-5 text-emerald-400 flex-shrink-0" />
           </div>
 
-          {isLoadingStores ? (
-            <h2 className="text-base font-semibold tracking-tight text-slate-400 truncate">Loading stores...</h2>
-          ) : isStoresError ? (
-            <h2 className="text-base font-semibold tracking-tight text-red-300 truncate">Unable to load stores</h2>
-          ) : stores.length === 0 ? (
-            <h2 className="text-base font-semibold tracking-tight text-slate-400 truncate">No stores found</h2>
-          ) : stores.length === 1 ? (
-            <h2 className="text-lg font-semibold tracking-tight text-white truncate">{getStoreName(stores[0])}</h2>
+          {stores.length === 1 ? (
+            <h2 className="text-lg font-semibold tracking-tight text-white truncate">{stores[0].name}</h2>
           ) : (
             <div className="relative flex-1 min-w-0" ref={dropdownRef}>
               <button
                 onClick={() => setIsDropdownOpen(!isDropdownOpen)}
                 className="flex items-center justify-between w-full bg-transparent text-white text-base font-semibold focus:outline-none py-2 text-left"
               >
-                <span className="truncate">{getStoreName(currentStore)}</span>
+                <span className="truncate">{currentStore?.name}</span>
                 <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform flex-shrink-0 ml-2 ${isDropdownOpen ? 'rotate-180' : ''}`} />
               </button>
 
@@ -115,16 +92,15 @@ const Sidebar = ({ isOpen, onClose }) => {
                     <button
                       key={store.id}
                       onClick={() => {
-                        handleStoreSelect(store);
+                        setSelectedStore(store);
+                        setIsDropdownOpen(false);
                       }}
                       className={`w-full text-left px-4 py-3 flex items-center justify-between text-sm transition-colors ${currentStore?.id === store.id
                           ? 'bg-emerald-500/10 text-emerald-400 font-semibold'
                           : 'text-slate-300 hover:bg-slate-700/50 hover:text-white'
                         }`}
                     >
-                      <span className="truncate">
-                        {getStoreName(store)}
-                      </span>
+                      {store.name}
                       {currentStore?.id === store.id && <Check className="w-4 h-4" />}
                     </button>
                   ))}
@@ -161,7 +137,7 @@ const Sidebar = ({ isOpen, onClose }) => {
           </NavLink>
 
           <NavLink
-            to={staffRoute}
+            to="/admin/staff"
             className={({ isActive }) =>
               `flex items-center px-4 py-2.5 rounded-xl transition-all duration-200 group ${isActive
                 ? 'bg-emerald-500/10 text-emerald-400 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_0_10px_rgba(16,185,129,0.1)] border border-emerald-500/20'

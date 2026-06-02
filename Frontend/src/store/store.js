@@ -15,24 +15,16 @@ export const useAuthStore = create((set) => ({
 }));
 
 export const useStoreStore = create((set) => ({
-  stores: [],
+  stores: [
+    { id: 1, name: 'Main St Optical', code: 'MSO-001', gst: '', phone: '9876543210', email: '', address: '123 Main St', city: 'Mumbai', state: 'Maharashtra', pincode: '400001', status: 'Active' },
+    { id: 2, name: 'Downtown Eyewear', code: 'DTE-002', gst: '', phone: '9876543211', email: '', address: '456 Downtown Rd', city: 'Delhi', state: 'Delhi', pincode: '110001', status: 'Active' },
+    { id: 3, name: 'Westside Clinic', code: 'WSC-003', gst: '', phone: '9876543212', email: '', address: '789 West Ave', city: 'Pune', state: 'Maharashtra', pincode: '411001', status: 'Active' },
+  ],
   selectedStore: null,
 
-  setStores: (stores) => set((state) => ({
-    stores,
-    selectedStore: state.selectedStore && stores.some((store) => store.id === state.selectedStore.id)
-      ? stores.find((store) => store.id === state.selectedStore.id)
-      : stores[0] || null,
+  addStore: (store) => set((state) => ({
+    stores: [...state.stores, { ...store, id: Date.now() }],
   })),
-
-  upsertStore: (store) => set((state) => {
-    const exists = state.stores.some((item) => item.id === store.id);
-    return {
-      stores: exists
-        ? state.stores.map((item) => item.id === store.id ? store : item)
-        : [store, ...state.stores],
-    };
-  }),
 
   setSelectedStore: (store) => set({ selectedStore: store }),
 }));

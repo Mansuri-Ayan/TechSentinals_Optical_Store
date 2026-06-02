@@ -1,7 +1,6 @@
-import { useState } from 'react';
-import { Check, X, Store } from 'lucide-react';
-import { useStores } from '../../hooks/useStores';
-import { useAuthStore } from '../../store/store';
+import React, { useState } from 'react';
+import { X, Store } from 'lucide-react';
+import { useStoreStore } from '../../store/store';
 
 const indianStates = [
   'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh',
@@ -14,26 +13,22 @@ const indianStates = [
 ];
 
 const emptyStoreForm = {
-  store_name: '',
+  name: '',
   createdBy: 'Admin User',
   creatorEmail: 'admin@techsentinals.com',
-  gst_number: '',
+  gst: '',
   phone: '',
   email: '',
   address: '',
   city: '',
   state: '',
   pincode: '',
-  is_active: true,
+  status: 'Active',
 };
 
 const AddStoreModal = ({ isOpen, onClose }) => {
   const [storeForm, setStoreForm] = useState(emptyStoreForm);
-  const [useExistingGst, setUseExistingGst] = useState(true);
-  const { createStoreAsync, isCreatingStore } = useStores();
-  const { user } = useAuthStore();
-  const adminGstNumber = user?.gst_number || '';
-  const isUsingExistingGst = useExistingGst && Boolean(adminGstNumber);
+  const { addStore } = useStoreStore();
 
   if (!isOpen) return null;
 
@@ -41,33 +36,15 @@ const AddStoreModal = ({ isOpen, onClose }) => {
     setStoreForm(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleStoreSubmit = async (e) => {
+  const handleStoreSubmit = (e) => {
     e.preventDefault();
-    const payload = {
-      store_name: storeForm.store_name,
-      email: storeForm.email || null,
-      phone: storeForm.phone,
-      address: storeForm.address,
-      city: storeForm.city,
-      state: storeForm.state,
-      pincode: storeForm.pincode,
-      gst_number: (isUsingExistingGst ? adminGstNumber : storeForm.gst_number) || null,
-      is_active: storeForm.is_active,
-    };
-
-    try {
-      await createStoreAsync(payload);
-      setStoreForm({ ...emptyStoreForm });
-      setUseExistingGst(true);
-      onClose();
-    } catch {
-      // Toast feedback is handled by the store mutation.
-    }
+    addStore(storeForm);
+    setStoreForm({ ...emptyStoreForm });
+    onClose();
   };
 
   const handleCancel = () => {
     setStoreForm({ ...emptyStoreForm });
-    setUseExistingGst(true);
     onClose();
   };
 
@@ -107,8 +84,8 @@ const AddStoreModal = ({ isOpen, onClose }) => {
                 <input
                   type="text"
                   required
-                  value={storeForm.store_name}
-                  onChange={(e) => handleStoreChange('store_name', e.target.value)}
+                  value={storeForm.name}
+                  onChange={(e) => handleStoreChange('name', e.target.value)}
                   placeholder="Enter store name"
                   className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 font-medium text-slate-900 transition-all text-sm"
                 />
@@ -132,34 +109,13 @@ const AddStoreModal = ({ isOpen, onClose }) => {
                 />
               </div>
               <div className="sm:col-span-2">
-                <div className="flex items-center justify-between gap-3 mb-1.5">
-                  <label className="block text-sm font-semibold text-slate-700">GST Number</label>
-                  <button
-                    type="button"
-                    onClick={() => setUseExistingGst((current) => !current)}
-                    className="inline-flex items-center gap-2 text-xs sm:text-sm font-semibold text-slate-600"
-                  >
-                    <span className={`w-5 h-5 rounded-full border flex items-center justify-center transition-colors ${
-                      isUsingExistingGst
-                        ? 'bg-emerald-500 border-emerald-500 text-white'
-                        : 'bg-white border-slate-300 text-transparent'
-                    }`}>
-                      <Check className="w-3.5 h-3.5" />
-                    </span>
-                    Use existing GST number
-                  </button>
-                </div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1.5">GST Number</label>
                 <input
                   type="text"
-                  readOnly={isUsingExistingGst}
-                  value={isUsingExistingGst ? adminGstNumber : storeForm.gst_number}
-                  onChange={(e) => handleStoreChange('gst_number', e.target.value)}
-                  placeholder={isUsingExistingGst ? 'Admin GST number' : 'e.g. 22AAAAA0000A1Z5'}
-                  className={`w-full px-4 py-2.5 border rounded-xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 font-medium text-slate-900 transition-all text-sm ${
-                    isUsingExistingGst
-                      ? 'bg-slate-50 border-slate-200 cursor-not-allowed text-slate-500'
-                      : 'bg-white border-slate-300'
-                  }`}
+                  value={storeForm.gst}
+                  onChange={(e) => handleStoreChange('gst', e.target.value)}
+                  placeholder="e.g. 22AAAAA0000A1Z5"
+                  className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 font-medium text-slate-900 transition-all text-sm"
                 />
               </div>
             </div>
@@ -264,13 +220,13 @@ const AddStoreModal = ({ isOpen, onClose }) => {
             <div className="flex items-center gap-3">
               <button
                 type="button"
-                onClick={() => handleStoreChange('is_active', !storeForm.is_active)}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${storeForm.is_active ? 'bg-emerald-500' : 'bg-slate-300'}`}
+                onClick={() => handleStoreChange('status', storeForm.status === 'Active' ? 'Inactive' : 'Active')}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${storeForm.status === 'Active' ? 'bg-emerald-500' : 'bg-slate-300'}`}
               >
-                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform shadow-sm ${storeForm.is_active ? 'translate-x-6' : 'translate-x-1'}`} />
+                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform shadow-sm ${storeForm.status === 'Active' ? 'translate-x-6' : 'translate-x-1'}`} />
               </button>
-              <span className={`text-sm font-semibold ${storeForm.is_active ? 'text-emerald-600' : 'text-slate-500'}`}>
-                {storeForm.is_active ? 'Active' : 'Inactive'}
+              <span className={`text-sm font-semibold ${storeForm.status === 'Active' ? 'text-emerald-600' : 'text-slate-500'}`}>
+                {storeForm.status}
               </span>
             </div>
           </div>
@@ -286,10 +242,9 @@ const AddStoreModal = ({ isOpen, onClose }) => {
             </button>
             <button
               type="submit"
-              disabled={isCreatingStore}
-              className="w-full sm:w-auto px-6 py-2.5 bg-[#0A0F1F] text-white hover:bg-slate-800 rounded-xl font-semibold transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 text-sm disabled:opacity-60 disabled:hover:translate-y-0"
+              className="w-full sm:w-auto px-6 py-2.5 bg-[#0A0F1F] text-white hover:bg-slate-800 rounded-xl font-semibold transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 text-sm"
             >
-              {isCreatingStore ? 'Saving...' : 'Save Store'}
+              Save Store
             </button>
           </div>
         </form>
