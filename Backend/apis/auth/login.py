@@ -5,35 +5,44 @@ from core.config import get_settings
 from db.session import get_db
 from schemas.token import TokenPair
 from schemas.user import UserLogin
-from services.auth_service import authenticate_admin, create_tokens
+from services.auth_service import authenticate_user_by_role, create_tokens
 
 router = APIRouter()
 
 
 @router.post(
-    "/login",
+    "/login/{role}",
     response_model=TokenPair,
-    summary="Admin login",
+    summary="Role-based staff login",
     description=(
-        "Authenticate with email and password.  Returns a JWT "
-        "access token (30 min) and a refresh token (7 days).  "
+        "Authenticate with email and password for a specific role (admin, manager, worker, optician).  "
+        "Returns a JWT access token (30 min) and a refresh token (7 days).  "
         "Tokens are also set as HttpOnly cookies."
     ),
 )
 async def login(
+    role: str,
     credentials: UserLogin,
     response: Response,
     db: AsyncSession = Depends(get_db),
 ) -> TokenPair:
-    admin = await authenticate_admin(db, credentials.email, credentials.password)
-    if admin is None:
+    role_norm = role.lower().strip()
+    if role_norm not in ["admin", "manager", "worker", "optician"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid login role: {role}",
+        )
+
+    res = await authenticate_user_by_role(db, credentials.email, credentials.password, role_norm)
+    if res is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    token_pair = await create_tokens(db, admin)
+    user, role_name = res
+    token_pair = await create_tokens(db, user, role_name)
 
     # ── Set cookies ────────────────────────────────────────────
     settings = get_settings()

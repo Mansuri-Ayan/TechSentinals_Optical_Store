@@ -19,6 +19,7 @@ from models.store import Store
 from models.worker import Worker
 from models.optician import Optician
 from models.manager import Manager
+from models.role import Role
 
 # ===============================================================
 #  SEED DATA DEFINITIONS
@@ -320,6 +321,26 @@ async def seed() -> None:
         admin_ids: list[int] = []
         store_ids: list[int] = []
 
+        # ── 0. Seed roles ──────────────────────────────────────
+        print("\n" + "=" * 60)
+        print("  Seeding Roles")
+        print("=" * 60)
+        role_map = {}
+        for role_name in ["admin", "manager", "worker", "optician"]:
+            stmt = select(Role).where(Role.role == role_name)
+            result = await session.execute(stmt)
+            existing = result.scalar_one_or_none()
+            if existing:
+                role_map[role_name] = existing.id
+                print(f"  [SKIP] Role '{role_name}' (already exists, id={existing.id})")
+                continue
+
+            new_role = Role(role=role_name)
+            session.add(new_role)
+            await session.flush()
+            role_map[role_name] = new_role.id
+            print(f"  [OK]   Role '{role_name}' -> id={new_role.id}")
+
         # ── 1. Seed admins ─────────────────────────────────────
         print("\n" + "=" * 60)
         print("  Seeding Admins")
@@ -334,6 +355,7 @@ async def seed() -> None:
                 continue
 
             admin = Admin(
+                role_id=role_map["admin"],
                 business_name=data["business_name"],
                 owner_first_name=data["owner_first_name"],
                 owner_last_name=data["owner_last_name"],
@@ -396,6 +418,7 @@ async def seed() -> None:
 
             worker = Worker(
                 store_id=store_ids[i],
+                role_id=role_map["worker"],
                 first_name=data["first_name"],
                 last_name=data["last_name"],
                 email=data.get("email"),
@@ -421,6 +444,7 @@ async def seed() -> None:
 
             optician = Optician(
                 store_id=store_ids[i],
+                role_id=role_map["optician"],
                 first_name=data["first_name"],
                 last_name=data["last_name"],
                 email=data.get("email"),
@@ -447,6 +471,7 @@ async def seed() -> None:
 
             manager = Manager(
                 store_id=store_ids[i],
+                role_id=role_map["manager"],
                 first_name=data["first_name"],
                 last_name=data["last_name"],
                 email=data.get("email"),

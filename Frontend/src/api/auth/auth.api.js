@@ -2,11 +2,11 @@ import api from '../../lib/axios';
 
 /**
  * Staff login
- * @param {Object} credentials - { email, password }
+ * @param {Object} credentials - { email, password, role }
  * @returns {Promise<Object>} TokenPair
  */
-export const loginApi = async (credentials) => {
-  const response = await api.post('/auth/login', credentials);
+export const loginApi = async ({ email, password, role }) => {
+  const response = await api.post(`/auth/login/${role}`, { email, password });
   return response.data;
 };
 

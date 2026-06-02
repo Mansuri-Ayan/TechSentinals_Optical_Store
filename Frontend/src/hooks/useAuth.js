@@ -15,17 +15,13 @@ export const useAuth = () => {
   const loginMutation = useMutation({
     mutationFn: loginApi,
     onSuccess: async (data) => {
-      // Save tokens
-      localStorage.setItem("access_token", data.access_token);
-      localStorage.setItem("refresh_token", data.refresh_token);
-
       try {
         setLoading(true);
-        // Fetch current user details
+        // Fetch current user details (cookies sent automatically)
         const userProfile = await getMeApi();
         setUser(userProfile);
 
-        toast.success(`Welcome back, ${userProfile.full_name}!`);
+        toast.success(`Welcome back, ${userProfile.first_name}!`);
 
         // Redirect based on role
         if (userProfile.role === "admin") {
@@ -35,7 +31,7 @@ export const useAuth = () => {
         }
       } catch (error) {
         toast.error("Failed to retrieve user profile after login.");
-        console.log(error);
+        console.error(error);
         clearUser();
       } finally {
         setLoading(false);
@@ -51,28 +47,28 @@ export const useAuth = () => {
   // Logout Mutation
   const logoutMutation = useMutation({
     mutationFn: () => {
-      const refreshToken = localStorage.getItem("refresh_token");
-      if (refreshToken) {
-        return logoutApi({ refresh_token: refreshToken });
-      }
-      return Promise.resolve();
+      // Server reads refresh_token from cookie automatically, body not strictly required
+      return logoutApi({});
     },
     onSettled: () => {
       clearUser();
       queryClient.clear();
-      toast.success("Successfully logged out.");
+
       navigate("/login", { replace: true });
     },
   });
 
-  // Me Query - runs automatically if access_token is present in localStorage
+  // Me Query - runs automatically to verify session on page load/mount
   const useMeQuery = (options = {}) => {
-    const token = localStorage.getItem("access_token");
+    const { user, isLoading } = useAuthStore();
+
+    // Only run if we are loading initial state, or if we are already logged in
+    const shouldFetch = isLoading || !!user;
 
     return useQuery({
       queryKey: ["auth", "me"],
       queryFn: getMeApi,
-      enabled: !!token,
+      enabled: shouldFetch,
       retry: false,
       staleTime: 1000 * 60 * 5, // 5 minutes
       ...options,

@@ -4,6 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from core.security import hash_password
 from models.manager import Manager
+from models.role import Role
 from schemas.manager import ManagerCreate, ManagerUpdate
 
 async def create_manager(
@@ -12,8 +13,13 @@ async def create_manager(
     payload: ManagerCreate,
 ) -> Manager:
     """Create a new manager assigned to the given store."""
+    role_stmt = select(Role).where(Role.role == "manager")
+    role_res = await db.execute(role_stmt)
+    role = role_res.scalar_one()
+
     new_manager = Manager(
         store_id=store_id,
+        role_id=role.id,
         first_name=payload.first_name,
         last_name=payload.last_name,
         email=payload.email,

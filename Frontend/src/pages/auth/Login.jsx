@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useForm } from "react-hook-form";
-import { Mail, Lock, Eye, EyeOff } from "lucide-react";
+import { Mail, Lock, Eye, EyeOff, Shield } from "lucide-react";
 import LoginPageImg from "../../assets/LoginPage.png";
 import { useAuth } from "../../hooks/useAuth";
 
@@ -61,6 +61,41 @@ const Login = () => {
 
           <form className="mt-6 sm:mt-8 space-y-5 sm:space-y-6" onSubmit={handleSubmit(onSubmit)}>
             <div className="space-y-4 sm:space-y-5">
+              {/* Role Selection Dropdown */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Designation / Role
+                </label>
+                <div className="relative rounded-lg shadow-sm">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Shield className="h-5 w-5 text-gray-400" />
+                  </div>
+                  <select
+                    {...register("role", { required: "Role is required" })}
+                    className={`focus:ring-emerald-500 focus:border-emerald-500 block w-full pl-10 pr-10 text-sm border-gray-300 rounded-lg py-3 border appearance-none bg-white transition-colors cursor-pointer ${errors.role ? "border-red-500 focus:ring-red-500 focus:border-red-500" : ""}`}
+                    defaultValue=""
+                  >
+                    <option value="" disabled hidden>
+                      Select your designation...
+                    </option>
+                    <option value="admin">Admin / Shop Owner</option>
+                    <option value="manager">Manager</option>
+                    <option value="worker">Worker</option>
+                    <option value="optician">Optician</option>
+                  </select>
+                  <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-gray-400">
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                </div>
+                {errors.role && (
+                  <p className="mt-1.5 text-sm text-red-600 font-medium">
+                    {errors.role.message}
+                  </p>
+                )}
+              </div>
+
               {/* Email Field */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">

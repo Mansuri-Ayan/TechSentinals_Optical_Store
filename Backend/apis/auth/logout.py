@@ -2,9 +2,8 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from core.config import get_settings
-from core.deps import get_current_admin
+from core.deps import get_current_user
 from db.session import get_db
-from models.admin import Admin
 from schemas.token import TokenRefreshRequest
 from services.auth_service import revoke_refresh_token
 
@@ -25,7 +24,7 @@ async def logout(
     response: Response,
     body: TokenRefreshRequest | None = None,
     db: AsyncSession = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin),
+    current_user = Depends(get_current_user),
 ):
     # Try body first, then cookie
     raw_refresh_token: str | None = None

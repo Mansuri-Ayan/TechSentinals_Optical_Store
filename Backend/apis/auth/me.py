@@ -1,22 +1,48 @@
 # API: auth/me.py
 from fastapi import APIRouter, Depends
-from core.deps import get_current_admin
+from core.deps import get_current_user
 from models.admin import Admin
+from models.manager import Manager
+from models.worker import Worker
+from models.optician import Optician
 from schemas.admin import AdminRead
+from schemas.manager import ManagerRead
+from schemas.worker import WorkerRead
+from schemas.optician import OpticianRead
 
 router = APIRouter()
 
 
 @router.get(
     "/me",
-    response_model=AdminRead,
-    summary="Get current admin profile",
+    summary="Get current user profile",
     description=(
-        "Returns the profile of the currently authenticated admin.  "
+        "Returns the profile of the currently authenticated user (Admin, Manager, Worker, or Optician).  "
         "Requires a valid Bearer access token or access_token cookie."
     ),
 )
 async def me(
-    current_admin: Admin = Depends(get_current_admin),
-) -> AdminRead:
-    return AdminRead.model_validate(current_admin)
+    current_user = Depends(get_current_user),
+):
+    """
+    Return the authenticated user's profile serialized with the correct Pydantic schema
+    depending on their role type.
+    """
+    if isinstance(current_user, Admin):
+        data = AdminRead.model_validate(current_user).model_dump()
+        data["role"] = "admin"
+        data["first_name"] = current_user.owner_first_name
+        data["last_name"] = current_user.owner_last_name
+        return data
+    elif isinstance(current_user, Manager):
+        data = ManagerRead.model_validate(current_user).model_dump()
+        data["role"] = "manager"
+        return data
+    elif isinstance(current_user, Worker):
+        data = WorkerRead.model_validate(current_user).model_dump()
+        data["role"] = "worker"
+        return data
+    elif isinstance(current_user, Optician):
+        data = OpticianRead.model_validate(current_user).model_dump()
+        data["role"] = "optician"
+        return data

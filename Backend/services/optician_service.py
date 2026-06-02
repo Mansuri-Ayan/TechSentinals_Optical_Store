@@ -4,6 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from core.security import hash_password
 from models.optician import Optician
+from models.role import Role
 from schemas.optician import OpticianCreate, OpticianUpdate
 
 
@@ -13,8 +14,13 @@ async def create_optician(
     payload: OpticianCreate,
 ) -> Optician:
     """Create a new optician assigned to the given store."""
+    role_stmt = select(Role).where(Role.role == "optician")
+    role_res = await db.execute(role_stmt)
+    role = role_res.scalar_one()
+
     new_optician = Optician(
         store_id=store_id,
+        role_id=role.id,
         first_name=payload.first_name,
         last_name=payload.last_name,
         email=payload.email,

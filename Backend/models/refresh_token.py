@@ -21,9 +21,33 @@ class RefreshToken(Base):
     admin_id = Column(
         BigInteger,
         ForeignKey("admins.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
         index=True,
-        comment="FK → admins.id — owner of this token",
+        comment="FK → admins.id — owner of this token (if admin)",
+    )
+
+    manager_id = Column(
+        BigInteger,
+        ForeignKey("managers.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+        comment="FK → managers.id — owner of this token (if manager)",
+    )
+
+    worker_id = Column(
+        BigInteger,
+        ForeignKey("workers.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+        comment="FK → workers.id — owner of this token (if worker)",
+    )
+
+    optician_id = Column(
+        BigInteger,
+        ForeignKey("opticians.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+        comment="FK → opticians.id — owner of this token (if optician)",
     )
 
     token_hash = Column(
@@ -64,10 +88,21 @@ class RefreshToken(Base):
         "Admin",
         back_populates="refresh_tokens",
     )
+    manager = relationship(
+        "Manager",
+        back_populates="refresh_tokens",
+    )
+    worker = relationship(
+        "Worker",
+        back_populates="refresh_tokens",
+    )
+    optician = relationship(
+        "Optician",
+        back_populates="refresh_tokens",
+    )
 
     def __repr__(self) -> str:
         return (
             f"<RefreshToken(token_id={self.token_id!r}, "
-            f"admin_id={self.admin_id!r}, "
             f"revoked={'yes' if self.revoked_at else 'no'})>"
         )

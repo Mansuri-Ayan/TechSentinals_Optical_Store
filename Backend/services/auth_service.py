@@ -10,6 +10,9 @@ from core.security import (
     verify_password,
 )
 from models.admin import Admin
+from models.manager import Manager
+from models.worker import Worker
+from models.optician import Optician
 from models.refresh_token import RefreshToken
 from schemas.token import TokenPair
 
@@ -18,36 +21,57 @@ def _hash_token(raw_token: str) -> str:
     return hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
 
 
-async def authenticate_admin(
+async def authenticate_user_by_role(
     db: AsyncSession,
     email: str,
     password: str,
-) -> Admin | None:
-    """Validate admin credentials. Returns the Admin or None."""
-    stmt = select(Admin).where(Admin.email == email)
-    result = await db.execute(stmt)
-    admin = result.scalar_one_or_none()
+    role: str,
+) -> tuple[Admin | Manager | Worker | Optician, str] | None:
+    """
+    Validate credentials by querying the specific table matching the role parameter.
+    Returns a tuple of (user, role_string) or None if validation fails.
+    """
+    if role == "admin":
+        stmt = select(Admin).where(Admin.email == email)
+        result = await db.execute(stmt)
+        user = result.scalar_one_or_none()
+        if user and verify_password(password, user.password_hash) and user.status == "ACTIVE" and user.deleted_at is None:
+            return user, "admin"
 
-    if admin is None:
-        return None
-    if admin.status != "ACTIVE":
-        return None
-    if admin.deleted_at is not None:
-        return None
-    if not verify_password(password, admin.password_hash):
-        return None
-    return admin
+    elif role == "manager":
+        stmt = select(Manager).where(Manager.email == email)
+        result = await db.execute(stmt)
+        user = result.scalar_one_or_none()
+        if user and verify_password(password, user.password_hash) and user.is_active and user.deleted_at is None:
+            return user, "manager"
+
+    elif role == "worker":
+        stmt = select(Worker).where(Worker.email == email)
+        result = await db.execute(stmt)
+        user = result.scalar_one_or_none()
+        if user and verify_password(password, user.password_hash) and user.is_active and user.deleted_at is None:
+            return user, "worker"
+
+    elif role == "optician":
+        stmt = select(Optician).where(Optician.email == email)
+        result = await db.execute(stmt)
+        user = result.scalar_one_or_none()
+        if user and verify_password(password, user.password_hash) and user.is_active and user.deleted_at is None:
+            return user, "optician"
+
+    return None
 
 
 async def create_tokens(
     db: AsyncSession,
-    admin: Admin,
+    user: Admin | Manager | Worker | Optician,
+    role_name: str,
     device_fingerprint: str | None = None,
 ) -> TokenPair:
-    """Issue a new access + refresh token pair for the admin."""
+    """Issue a new access + refresh token pair for any user role."""
     jwt_payload = {
-        "sub": str(admin.id),
-        "role": "admin",
+        "sub": str(user.id),
+        "role": role_name,
     }
 
     access_token = create_access_token(jwt_payload)
@@ -59,14 +83,24 @@ async def create_tokens(
     )
 
     token_record = RefreshToken(
-        admin_id=admin.id,
         token_hash=_hash_token(refresh_token),
         expires_at=expires_at,
         device_fingerprint=device_fingerprint,
     )
+    
+    # Assign the correct polymorphic foreign key based on the user's role
+    if role_name == "admin":
+        token_record.admin_id = user.id
+    elif role_name == "manager":
+        token_record.manager_id = user.id
+    elif role_name == "worker":
+        token_record.worker_id = user.id
+    elif role_name == "optician":
+        token_record.optician_id = user.id
+
     db.add(token_record)
 
-    admin.last_login_at = datetime.now(timezone.utc)
+    user.last_login_at = datetime.now(timezone.utc)
     await db.commit()
 
     return TokenPair(
@@ -98,16 +132,45 @@ async def refresh_access_token(
     # Revoke old token
     token_record.revoked_at = datetime.now(timezone.utc)
 
-    admin_id = int(payload["sub"])
-    stmt = select(Admin).where(Admin.id == admin_id)
-    result = await db.execute(stmt)
-    admin = result.scalar_one_or_none()
+    user_id = int(payload["sub"])
+    role_name = payload.get("role")
 
-    if admin is None or admin.status != "ACTIVE":
+    # Dynamic lookup based on role
+    user = None
+    if role_name == "admin":
+        stmt = select(Admin).where(Admin.id == user_id)
+        res = await db.execute(stmt)
+        user = res.scalar_one_or_none()
+        if user is None or user.status != "ACTIVE" or user.deleted_at is not None:
+            await db.commit()
+            return None
+    elif role_name == "manager":
+        stmt = select(Manager).where(Manager.id == user_id)
+        res = await db.execute(stmt)
+        user = res.scalar_one_or_none()
+        if user is None or not user.is_active or user.deleted_at is not None:
+            await db.commit()
+            return None
+    elif role_name == "worker":
+        stmt = select(Worker).where(Worker.id == user_id)
+        res = await db.execute(stmt)
+        user = res.scalar_one_or_none()
+        if user is None or not user.is_active or user.deleted_at is not None:
+            await db.commit()
+            return None
+    elif role_name == "optician":
+        stmt = select(Optician).where(Optician.id == user_id)
+        res = await db.execute(stmt)
+        user = res.scalar_one_or_none()
+        if user is None or not user.is_active or user.deleted_at is not None:
+            await db.commit()
+            return None
+
+    if user is None:
         await db.commit()
         return None
 
-    new_pair = await create_tokens(db, admin, device_fingerprint)
+    new_pair = await create_tokens(db, user, role_name, device_fingerprint)
     return new_pair
 
 

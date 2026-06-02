@@ -16,8 +16,8 @@ class TokenPair(BaseModel):
         description="Always 'bearer' — tells clients how to attach the token",
     )
 class TokenRefreshRequest(BaseModel):
-    refresh_token: str = Field(
-        ...,
+    refresh_token: str | None = Field(
+        default=None,
         description="The refresh JWT issued during login or previous refresh",
     )
     device_fingerprint: str | None = Field(

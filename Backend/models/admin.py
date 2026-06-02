@@ -6,6 +6,7 @@ from sqlalchemy import (
     Column,
     DateTime,
     Enum,
+    ForeignKey,
     String,
     Text,
 )
@@ -106,6 +107,13 @@ class Admin(Base):
         comment="6-digit pincode",
     )
 
+    role_id = Column(
+        BigInteger,
+        ForeignKey("roles.id", ondelete="RESTRICT"),
+        nullable=False,
+        comment="FK → roles.id — the role of this admin",
+    )
+
     is_email_verified = Column(
         Boolean,
         nullable=False,
@@ -166,6 +174,10 @@ class Admin(Base):
         "RefreshToken",
         back_populates="admin",
         cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+    role = relationship(
+        "Role",
         lazy="selectin",
     )
 

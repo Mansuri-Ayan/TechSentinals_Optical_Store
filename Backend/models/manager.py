@@ -32,6 +32,13 @@ class Manager(Base):
         comment="FK → stores.id — the store this manager belongs to",
     )
 
+    role_id = Column(
+        BigInteger,
+        ForeignKey("roles.id", ondelete="RESTRICT"),
+        nullable=False,
+        comment="FK → roles.id — the role of this manager",
+    )
+
     first_name = Column(
         String(100),
         nullable=False,
@@ -122,6 +129,16 @@ class Manager(Base):
     store = relationship(
         "Store",
         back_populates="managers",
+    )
+    role = relationship(
+        "Role",
+        lazy="selectin",
+    )
+    refresh_tokens = relationship(
+        "RefreshToken",
+        back_populates="manager",
+        cascade="all, delete-orphan",
+        lazy="selectin",
     )
 
     def __repr__(self) -> str:

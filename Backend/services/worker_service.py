@@ -4,6 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from core.security import hash_password
 from models.worker import Worker
+from models.role import Role
 from schemas.worker import WorkerCreate, WorkerUpdate
 
 
@@ -13,8 +14,13 @@ async def create_worker(
     payload: WorkerCreate,
 ) -> Worker:
     """Create a new worker assigned to the given store."""
+    role_stmt = select(Role).where(Role.role == "worker")
+    role_res = await db.execute(role_stmt)
+    role = role_res.scalar_one()
+
     new_worker = Worker(
         store_id=store_id,
+        role_id=role.id,
         first_name=payload.first_name,
         last_name=payload.last_name,
         email=payload.email,

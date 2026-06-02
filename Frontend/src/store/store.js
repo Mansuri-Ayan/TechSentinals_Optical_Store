@@ -8,8 +8,6 @@ export const useAuthStore = create((set) => ({
   setUser: (user) => set({ user, isAuthenticated: !!user, isLoading: false }),
   
   clearUser: () => {
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
     set({ user: null, isAuthenticated: false, isLoading: false });
   },
 

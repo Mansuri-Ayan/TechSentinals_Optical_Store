@@ -17,9 +17,8 @@ const LoadingSpinner = () => (
 // Route for non-logged in users (Guests)
 const GuestRoute = ({ children }) => {
   const { isAuthenticated, user, isLoading } = useAuthStore();
-  const token = localStorage.getItem('access_token');
 
-  if (isLoading && token) {
+  if (isLoading) {
     return <LoadingSpinner />;
   }
 
@@ -37,13 +36,12 @@ const GuestRoute = ({ children }) => {
 // Route for authenticated users
 const PrivateRoute = ({ children }) => {
   const { isAuthenticated, isLoading } = useAuthStore();
-  const token = localStorage.getItem('access_token');
 
-  if (isLoading && token) {
+  if (isLoading) {
     return <LoadingSpinner />;
   }
 
-  if (!isAuthenticated && !token) {
+  if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
 
@@ -53,13 +51,12 @@ const PrivateRoute = ({ children }) => {
 // Route specifically for Admins
 const AdminRoute = ({ children }) => {
   const { isAuthenticated, user, isLoading } = useAuthStore();
-  const token = localStorage.getItem('access_token');
 
-  if (isLoading && token) {
+  if (isLoading) {
     return <LoadingSpinner />;
   }
 
-  if (!isAuthenticated && !token) {
+  if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
 
@@ -73,9 +70,8 @@ const AdminRoute = ({ children }) => {
 // Route specifically for Home (Redirects admin to dashboard, others to ProfileHome)
 const HomeRoute = () => {
   const { user, isLoading } = useAuthStore();
-  const token = localStorage.getItem('access_token');
 
-  if (isLoading && token) {
+  if (isLoading) {
     return <LoadingSpinner />;
   }
 
@@ -113,9 +109,9 @@ function AppRouter() {
       <Route 
         path="/admin" 
         element={
-          // <AdminRoute>
+          <AdminRoute>
             <AdminLayout />
-          /* </AdminRoute> */
+          </AdminRoute>
         }
       >
         {/* Redirect /admin to /admin/dashboard */}
