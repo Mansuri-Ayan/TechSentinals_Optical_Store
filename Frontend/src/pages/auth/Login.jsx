@@ -21,7 +21,7 @@ const Login = () => {
 
   return (
     <div className="min-h-screen flex bg-gray-50">
-      {/* Left Side - Image with Text Overlay (Uses a placeholder for the 2nd image) */}
+      {/* Left Side - Image with Text Overlay (Only on desktop/web view) */}
       <div className="hidden lg:flex lg:w-1/2 relative bg-gray-900">
         <img
           src={LoginPageImg}
@@ -30,22 +30,22 @@ const Login = () => {
         />
         {/* Overlay to ensure text is visible on the image as requested */}
         <div className="absolute inset-0 bg-black/40 z-10"></div>
-        <div className="relative z-20 flex flex-col justify-center px-16 text-white h-full">
-          <h1 className="text-5xl font-extrabold mb-6 tracking-tight">
+        <div className="relative z-20 flex flex-col justify-center px-10 xl:px-16 text-white h-full">
+          <h1 className="text-4xl xl:text-5xl font-extrabold mb-4 xl:mb-6 tracking-tight">
             See the World Clearly.
           </h1>
-          <p className="text-xl text-gray-200 max-w-md font-medium">
+          <p className="text-lg xl:text-xl text-gray-200 max-w-md font-medium">
             Premium eyewear and curated optics to elevate your vision and style.
           </p>
         </div>
       </div>
 
       {/* Right Side - Login Form */}
-      <div className="w-full lg:w-1/2 flex flex-col items-center justify-center p-8 bg-white shadow-xl lg:shadow-none">
-        <div className="max-w-md w-full space-y-8">
+      <div className="w-full lg:w-1/2 flex flex-col items-center justify-center p-6 sm:p-8 bg-white shadow-xl lg:shadow-none">
+        <div className="max-w-md w-full space-y-6 sm:space-y-8">
           <div className="text-center">
             {/* You can add your store logo here */}
-            <h2 className="mt-6 text-3xl font-bold text-gray-900 tracking-tight">
+            <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">
               Sign in to your account
             </h2>
             <p className="mt-2 text-sm text-gray-600">
@@ -59,8 +59,8 @@ const Login = () => {
             </p>
           </div>
 
-          <form className="mt-8 space-y-6" onSubmit={handleSubmit(onSubmit)}>
-            <div className="space-y-5">
+          <form className="mt-6 sm:mt-8 space-y-5 sm:space-y-6" onSubmit={handleSubmit(onSubmit)}>
+            <div className="space-y-4 sm:space-y-5">
               {/* Email Field */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -79,7 +79,7 @@ const Login = () => {
                         message: "Please enter a valid email address",
                       },
                     })}
-                    className={`focus:ring-emerald-500 focus:border-emerald-500 block w-full pl-10 sm:text-sm border-gray-300 rounded-lg py-3 border transition-colors ${errors.email ? "border-red-500 focus:ring-red-500 focus:border-red-500" : ""}`}
+                    className={`focus:ring-emerald-500 focus:border-emerald-500 block w-full pl-10 text-sm border-gray-300 rounded-lg py-3 border transition-colors ${errors.email ? "border-red-500 focus:ring-red-500 focus:border-red-500" : ""}`}
                     placeholder="you@gmail.com"
                   />
                 </div>
@@ -108,7 +108,7 @@ const Login = () => {
                         message: "Password must be at least 6 characters",
                       },
                     })}
-                    className={`focus:ring-emerald-500 focus:border-emerald-500 block w-full pl-10 pr-10 sm:text-sm border-gray-300 rounded-lg py-3 border transition-colors ${errors.password ? "border-red-500 focus:ring-red-500 focus:border-red-500" : ""}`}
+                    className={`focus:ring-emerald-500 focus:border-emerald-500 block w-full pl-10 pr-10 text-sm border-gray-300 rounded-lg py-3 border transition-colors ${errors.password ? "border-red-500 focus:ring-red-500 focus:border-red-500" : ""}`}
                     placeholder="••••••••"
                   />
                   <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
@@ -137,7 +137,7 @@ const Login = () => {
               <button
                 type="submit"
                 disabled={isLoggingIn}
-                className="w-full flex justify-center py-3.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-semibold text-white bg-emerald-700 hover:bg-emerald-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-600 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full flex justify-center py-3 sm:py-3.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-semibold text-white bg-emerald-700 hover:bg-emerald-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-600 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isLoggingIn ? "Signing In..." : "Sign In"}
               </button>
