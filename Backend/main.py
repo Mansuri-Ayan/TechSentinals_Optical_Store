@@ -3,29 +3,46 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routes.authrouter import auth_router
+from routes.store_router import store_router
+from routes.worker_router import worker_router
+from routes.optician_router import optician_router
+from routes.manager_router import manager_router
 from db.session import engine
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    yield                                             
-    await engine.dispose()                               
+    yield
+    await engine.dispose()
+
+
 app = FastAPI(
     title="TechSentinals Optical Store API",
     description=(
         "Backend REST API for the TechSentinals Optical Store "
-        "management system.  Handles staff authentication, "
-        "inventory, sales, and prescriptions."
+        "management system.  Handles admin authentication, "
+        "store management, staff (workers/opticians), and roles."
     ),
-    version="1.0.0",
+    version="2.0.0",
     lifespan=lifespan,
 )
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],                                       
+    allow_origins=["http://localhost:3000", "http://localhost:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ── Register routers ──────────────────────────────────────────
 app.include_router(auth_router)
+app.include_router(store_router)
+app.include_router(worker_router)
+app.include_router(optician_router)
+app.include_router(manager_router)
+
+
 @app.get(
     "/",
     tags=["Health"],
@@ -35,5 +52,5 @@ def read_root():
     return {
         "status": "healthy",
         "service": "TechSentinals Optical Store API",
-        "version": "1.0.0",
+        "version": "2.0.0",
     }

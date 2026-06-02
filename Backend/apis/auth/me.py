@@ -1,19 +1,22 @@
-# Main module: me.py
+# API: auth/me.py
 from fastapi import APIRouter, Depends
-from core.deps import get_current_user
-from models.user import User
-from schemas.user import UserRead
+from core.deps import get_current_admin
+from models.admin import Admin
+from schemas.admin import AdminRead
+
 router = APIRouter()
+
+
 @router.get(
     "/me",
-    response_model=UserRead,
-    summary="Get current user profile",
+    response_model=AdminRead,
+    summary="Get current admin profile",
     description=(
-        "Returns the profile of the currently authenticated user.  "
-        "Requires a valid Bearer access token."
+        "Returns the profile of the currently authenticated admin.  "
+        "Requires a valid Bearer access token or access_token cookie."
     ),
 )
 async def me(
-    current_user: User = Depends(get_current_user),
-) -> UserRead:
-    return UserRead.model_validate(current_user)
+    current_admin: Admin = Depends(get_current_admin),
+) -> AdminRead:
+    return AdminRead.model_validate(current_admin)
