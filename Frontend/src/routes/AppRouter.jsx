@@ -1,6 +1,5 @@
-import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { useAuthStore } from '../store/store';
+import { useAuthStore, useStoreStore } from '../store/store';
 import Login from '../pages/auth/Login';
 import ProfileHome from '../pages/auth/ProfileHome';
 import AdminLayout from '../layouts/AdminLayout';
@@ -82,6 +81,17 @@ const HomeRoute = () => {
   return <ProfileHome />;
 };
 
+const StaffRouteRedirect = () => {
+  const { selectedStore, stores } = useStoreStore();
+  const targetStore = selectedStore || stores[0];
+
+  if (!targetStore) {
+    return <Navigate to="/admin/dashboard" replace />;
+  }
+
+  return <Navigate to={`/admin/store/${targetStore.id}/staff`} replace />;
+};
+
 function AppRouter() {
   return (
     <Routes>
@@ -117,7 +127,8 @@ function AppRouter() {
         {/* Redirect /admin to /admin/dashboard */}
         <Route index element={<Navigate to="dashboard" replace />} />
         <Route path="dashboard" element={<Dashboard />} />
-        <Route path="staff" element={<Staff />} />
+        <Route path="staff" element={<StaffRouteRedirect />} />
+        <Route path="store/:storeId/staff" element={<Staff />} />
       </Route>
       
       {/* Fallback root redirect */}
