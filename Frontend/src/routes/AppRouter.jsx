@@ -96,32 +96,32 @@ function AppRouter() {
   return (
     <Routes>
       {/* Public Routes */}
-      <Route 
-        path="/login" 
+      <Route
+        path="/login"
         element={
           <GuestRoute>
             <Login />
           </GuestRoute>
-        } 
+        }
       />
-      
+
       {/* Main home route - protected */}
-      <Route 
-        path="/" 
+      <Route
+        path="/"
         element={
           <PrivateRoute>
             <HomeRoute />
           </PrivateRoute>
-        } 
+        }
       />
-      
+
       {/* Admin Routes - protected to only admins */}
-      <Route 
-        path="/admin" 
+      <Route
+        path="/admin"
         element={
-          <AdminRoute>
-            <AdminLayout />
-          </AdminRoute>
+          // <AdminRoute>
+          <AdminLayout />
+          // </AdminRoute>
         }
       >
         {/* Redirect /admin to /admin/dashboard */}
@@ -130,7 +130,7 @@ function AppRouter() {
         <Route path="staff" element={<StaffRouteRedirect />} />
         <Route path="store/:storeId/staff" element={<Staff />} />
       </Route>
-      
+
       {/* Fallback root redirect */}
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>

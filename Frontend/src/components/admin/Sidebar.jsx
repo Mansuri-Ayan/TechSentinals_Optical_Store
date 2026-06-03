@@ -78,7 +78,7 @@ const Sidebar = ({ isOpen, onClose }) => {
       <div
         className={`
           fixed top-0 left-0 h-full z-50
-          w-[350px] shrink-0 bg-[#0A0F1F] text-slate-300 min-h-screen flex flex-col border-r border-white/5 shadow-2xl
+          w-[350px] shrink-0 bg-[#0A0F1F] text-slate-300 flex flex-col border-r border-white/5 shadow-2xl
           transition-transform duration-300 ease-in-out
           lg:translate-x-0 lg:static lg:z-20
           ${isOpen ? 'translate-x-0' : '-translate-x-full'}
@@ -110,7 +110,7 @@ const Sidebar = ({ isOpen, onClose }) => {
 
               {/* Custom Dropdown Menu */}
               {isDropdownOpen && (
-                <div className="absolute top-full left-0 right-0 mt-2 bg-[#1E293B] border border-slate-700 rounded-xl shadow-xl overflow-hidden z-50 animate-fade-in max-h-60 overflow-y-auto">
+                <div className="absolute top-full left-0 right-0 mt-2 bg-[#1E293B] border border-slate-700 rounded-xl shadow-xl overflow-hidden z-50 animate-fade-in max-h-60 overflow-y-auto hide-scrollbar">
                   {stores.map(store => (
                     <button
                       key={store.id}
@@ -144,7 +144,7 @@ const Sidebar = ({ isOpen, onClose }) => {
         </div>
 
         {/* Navigation Links */}
-        <nav className="flex-1 px-4 py-6 sm:py-8 space-y-1.5 overflow-y-auto">
+        <nav className="flex-1 px-4 py-6 sm:py-8 space-y-1.5 overflow-y-auto hide-scrollbar">
           <div className="px-4 mb-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Overview</div>
 
           <NavLink

@@ -8,7 +8,7 @@ function AdminLayout() {
   const handleCloseSidebar = useCallback(() => setIsSidebarOpen(false), []);
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div className="flex h-screen overflow-hidden bg-gray-50">
       {/* Sidebar Component */}
       <Sidebar isOpen={isSidebarOpen} onClose={handleCloseSidebar} />
       
@@ -27,7 +27,7 @@ function AdminLayout() {
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-50">
+        <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-50 hide-scrollbar">
           <Outlet />
         </main>
       </div>

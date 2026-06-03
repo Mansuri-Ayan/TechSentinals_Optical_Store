@@ -1,11 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import {
-  Search, Edit2, Trash2, Plus, Users,
-  UserCheck, UserMinus, UserPlus, Download,
-  Upload, ChevronRight,
-} from 'lucide-react';
+import { Plus, Users, UserCheck, UserMinus, UserPlus, Download, Upload, ChevronRight, Search, Edit2, Trash2 } from 'lucide-react';
 import AddStaffModal from '../../components/admin/AddStaffModal';
+import Pagination from '../../components/shared/Pagination';
 import { useStoreStore } from '../../store/store';
 import { useStoreStaff } from '../../hooks/useStaff';
 
@@ -59,8 +56,14 @@ const Staff = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [currentPage, setCurrentPage] = useState(1);
   const [editingStaff, setEditingStaff] = useState(null);
   const [showAddStaff, setShowAddStaff] = useState(false);
+  const ITEMS_PER_PAGE = 10;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, roleFilter, statusFilter]);
 
   useEffect(() => {
     const routeStore = stores.find((store) => String(store.id) === String(storeId));
@@ -92,6 +95,11 @@ const Staff = () => {
 
     return matchesSearch && matchesRole && matchesStatus;
   }), [formattedStaff, roleFilter, searchTerm, statusFilter]);
+
+  const paginatedStaff = useMemo(() => {
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredStaff.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [filteredStaff, currentPage]);
 
   const activeCount = formattedStaff.filter((person) => person.is_active).length;
   const inactiveCount = formattedStaff.length - activeCount;
@@ -243,7 +251,7 @@ const Staff = () => {
           <div className="bg-red-50 border border-red-100 rounded-xl p-8 text-center text-red-700 font-semibold">
             Unable to load staff for this store.
           </div>
-        ) : filteredStaff.length > 0 ? filteredStaff.map((person) => (
+        ) : paginatedStaff.length > 0 ? paginatedStaff.map((person) => (
           <div key={`${person.role}-${person.id}`} className="bg-white border border-slate-100 rounded-xl sm:rounded-2xl p-3 sm:p-4 shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5 group relative overflow-hidden">
             <div className={`absolute left-0 top-0 bottom-0 w-1 ${person.roleColor}`}></div>
 
@@ -331,6 +339,15 @@ const Staff = () => {
               Clear filters
             </button>
           </div>
+        )}
+        
+        {filteredStaff.length > ITEMS_PER_PAGE && (
+          <Pagination
+            totalItems={filteredStaff.length}
+            itemsPerPage={ITEMS_PER_PAGE}
+            currentPage={currentPage}
+            onPageChange={setCurrentPage}
+          />
         )}
       </div>
 
