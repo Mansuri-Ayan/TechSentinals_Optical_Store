@@ -5,6 +5,7 @@ import ProfileHome from '../pages/auth/ProfileHome';
 import AdminLayout from '../layouts/AdminLayout';
 import Dashboard from '../pages/admin/Dashboard';
 import Staff from '../pages/admin/Staff';
+import Inventory from '../pages/admin/Inventory';
 
 // Responsive loading spinner component
 const LoadingSpinner = () => (
@@ -129,6 +130,7 @@ function AppRouter() {
         <Route path="dashboard" element={<Dashboard />} />
         <Route path="staff" element={<StaffRouteRedirect />} />
         <Route path="store/:storeId/staff" element={<Staff />} />
+        <Route path="inventory" element={<Inventory />} />
       </Route>
 
       {/* Fallback root redirect */}
