@@ -1,11 +1,18 @@
 # Service: worker_service.py
 from datetime import datetime, timezone
-from sqlalchemy import select
+from sqlalchemy import desc, select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from core.security import hash_password
 from models.worker import Worker
 from models.role import Role
 from schemas.worker import WorkerCreate, WorkerUpdate
+
+
+async def _generate_worker_code(db: AsyncSession) -> str:
+    stmt = select(Worker.id).order_by(desc(Worker.id)).limit(1)
+    result = await db.execute(stmt)
+    last_id = result.scalar_one_or_none() or 0
+    return f"WRK-{last_id + 1}"
 
 
 async def create_worker(
@@ -18,6 +25,8 @@ async def create_worker(
     role_res = await db.execute(role_stmt)
     role = role_res.scalar_one()
 
+    employee_code = payload.employee_code or await _generate_worker_code(db)
+
     new_worker = Worker(
         store_id=store_id,
         role_id=role.id,
@@ -26,7 +35,7 @@ async def create_worker(
         email=payload.email,
         phone=payload.phone,
         password_hash=hash_password(payload.password),
-        employee_code=payload.employee_code,
+        employee_code=employee_code,
         joining_date=payload.joining_date,
     )
     db.add(new_worker)
@@ -42,15 +51,43 @@ async def get_worker(db: AsyncSession, worker_id: int) -> Worker | None:
     return result.scalar_one_or_none()
 
 
-async def get_workers_by_store(db: AsyncSession, store_id: int) -> list[Worker]:
-    """List all non-deleted workers for a given store."""
-    stmt = (
-        select(Worker)
-        .where(Worker.store_id == store_id, Worker.deleted_at.is_(None))
-        .order_by(Worker.created_at.desc())
-    )
+async def get_workers_by_store(
+    db: AsyncSession,
+    store_id: int,
+    page: int = 1,
+    limit: int = 20,
+    search: str | None = None,
+    is_active: bool | None = None,
+    paginate: bool = True,
+) -> tuple[list[Worker], int]:
+    """List all non-deleted workers for a given store with pagination and filtering."""
+    stmt = select(Worker).where(Worker.store_id == store_id, Worker.deleted_at.is_(None))
+    count_stmt = select(func.count()).select_from(Worker).where(Worker.store_id == store_id, Worker.deleted_at.is_(None))
+
+    if is_active is not None:
+        stmt = stmt.where(Worker.is_active == is_active)
+        count_stmt = count_stmt.where(Worker.is_active == is_active)
+    if search:
+        search_filter = (
+            Worker.first_name.ilike(f"%{search}%") |
+            Worker.last_name.ilike(f"%{search}%") |
+            Worker.email.ilike(f"%{search}%") |
+            Worker.phone.ilike(f"%{search}%") |
+            Worker.employee_code.ilike(f"%{search}%")
+        )
+        stmt = stmt.where(search_filter)
+        count_stmt = count_stmt.where(search_filter)
+
+    count_result = await db.execute(count_stmt)
+    total = count_result.scalar_one()
+
+    stmt = stmt.order_by(Worker.created_at.desc())
+    if paginate:
+        offset = (page - 1) * limit
+        stmt = stmt.offset(offset).limit(limit)
+
     result = await db.execute(stmt)
-    return list(result.scalars().all())
+    return list(result.scalars().all()), total
 
 
 async def update_worker(

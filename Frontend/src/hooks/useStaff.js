@@ -7,21 +7,29 @@ import {
   updateStaffApi,
 } from '../api/staff/staff.api';
 
-export const staffQueryKey = (storeId) => ['stores', storeId, 'staff'];
+export const staffQueryKey = (storeId, params) => ['stores', storeId, 'staff', params];
 
-export const useStoreStaff = (storeId) => {
+export const useStoreStaff = (storeId, params) => {
   const queryClient = useQueryClient();
 
   const staffQuery = useQuery({
-    queryKey: staffQueryKey(storeId),
-    queryFn: () => getStoreStaffApi(storeId),
+    queryKey: staffQueryKey(storeId, params),
+    queryFn: () => getStoreStaffApi(storeId, params),
     enabled: Boolean(storeId),
     retry: false, 
     staleTime: 1000 * 60 * 5,
   });
 
+  const staffKpisQuery = useQuery({
+    queryKey: ['stores', storeId, 'staff', 'kpis'],
+    queryFn: () => getStoreStaffApi(storeId, { paginate: false }),
+    enabled: Boolean(storeId),
+    retry: false,
+    staleTime: 1000 * 60 * 5,
+  });
+
   const invalidateStaff = () => {
-    queryClient.invalidateQueries({ queryKey: staffQueryKey(storeId) });
+    queryClient.invalidateQueries({ queryKey: ['stores', storeId, 'staff'] });
   };
 
   const createStaffMutation = useMutation({
@@ -59,9 +67,18 @@ export const useStoreStaff = (storeId) => {
 
   return {
     staffQuery,
-    staff: staffQuery.data || [],
+    staff: staffQuery.data?.items || [],
+    total: staffQuery.data?.total || 0,
+    page: staffQuery.data?.page || 1,
+    pages: staffQuery.data?.pages || 1,
+    limit: staffQuery.data?.limit || 20,
     isLoadingStaff: staffQuery.isLoading,
     isStaffError: staffQuery.isError,
+    
+    // KPI Data
+    kpiStaff: staffKpisQuery.data?.items || [],
+    isLoadingKpis: staffKpisQuery.isLoading,
+    
     createStaffAsync: createStaffMutation.mutateAsync,
     updateStaffAsync: updateStaffMutation.mutateAsync,
     deleteStaffAsync: deleteStaffMutation.mutateAsync,

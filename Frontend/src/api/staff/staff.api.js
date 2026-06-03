@@ -1,32 +1,23 @@
 import api from '../../lib/axios';
 
-export const getWorkersByStoreApi = async (storeId) => {
-  const response = await api.get(`/stores/${storeId}/workers`);
+export const getWorkersByStoreApi = async (storeId, params) => {
+  const response = await api.get(`/stores/${storeId}/workers`, { params });
   return response.data;
 };
 
-export const getManagersByStoreApi = async (storeId) => {
-  const response = await api.get(`/stores/${storeId}/managers`);
+export const getManagersByStoreApi = async (storeId, params) => {
+  const response = await api.get(`/stores/${storeId}/managers`, { params });
   return response.data;
 };
 
-export const getOpticiansByStoreApi = async (storeId) => {
-  const response = await api.get(`/stores/${storeId}/opticians`);
+export const getOpticiansByStoreApi = async (storeId, params) => {
+  const response = await api.get(`/stores/${storeId}/opticians`, { params });
   return response.data;
 };
 
-export const getStoreStaffApi = async (storeId) => {
-  const [workers, managers, opticians] = await Promise.all([
-    getWorkersByStoreApi(storeId),
-    getManagersByStoreApi(storeId),
-    getOpticiansByStoreApi(storeId),
-  ]);
-
-  return [
-    ...workers.map((person) => ({ ...person, role: 'worker' })),
-    ...managers.map((person) => ({ ...person, role: 'manager' })),
-    ...opticians.map((person) => ({ ...person, role: 'optician' })),
-  ];
+export const getStoreStaffApi = async (storeId, params) => {
+  const response = await api.get(`/stores/${storeId}/staff`, { params });
+  return response.data;
 };
 
 export const createStaffApi = async ({ storeId, role, payload }) => {

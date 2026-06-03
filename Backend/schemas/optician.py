@@ -24,9 +24,9 @@ class OpticianCreate(BaseModel):
         ..., min_length=6, examples=["Optician@123"],
         description="Plain-text password (will be hashed with bcrypt)",
     )
-    employee_code: str = Field(
-        ..., max_length=50, examples=["OPT-001"],
-        description="Unique employee identifier code",
+    employee_code: str | None = Field(
+        default=None, max_length=50, examples=["OPT-1"],
+        description="Unique employee identifier code. Automatically generated if omitted.",
     )
     qualification: str | None = Field(
         default=None, max_length=255, examples=["B.Optom"],

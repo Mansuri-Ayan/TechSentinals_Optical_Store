@@ -1,11 +1,19 @@
 # Service: manager_service.py
 from datetime import datetime, timezone
-from sqlalchemy import select
+from sqlalchemy import desc, select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from core.security import hash_password
 from models.manager import Manager
 from models.role import Role
 from schemas.manager import ManagerCreate, ManagerUpdate
+
+
+async def _generate_manager_code(db: AsyncSession) -> str:
+    stmt = select(Manager.id).order_by(desc(Manager.id)).limit(1)
+    result = await db.execute(stmt)
+    last_id = result.scalar_one_or_none() or 0
+    return f"MGR-{last_id + 1}"
+
 
 async def create_manager(
     db: AsyncSession,
@@ -17,6 +25,8 @@ async def create_manager(
     role_res = await db.execute(role_stmt)
     role = role_res.scalar_one()
 
+    employee_code = payload.employee_code or await _generate_manager_code(db)
+
     new_manager = Manager(
         store_id=store_id,
         role_id=role.id,
@@ -25,7 +35,7 @@ async def create_manager(
         email=payload.email,
         phone=payload.phone,
         password_hash=hash_password(payload.password),
-        employee_code=payload.employee_code,
+        employee_code=employee_code,
         joining_date=payload.joining_date,
     )
     db.add(new_manager)
@@ -44,16 +54,42 @@ async def get_manager(db: AsyncSession, manager_id: int) -> Manager | None:
 
 
 async def get_managers_by_store(
-    db: AsyncSession, store_id: int
-) -> list[Manager]:
-    """List all non-deleted managers for a given store."""
-    stmt = (
-        select(Manager)
-        .where(Manager.store_id == store_id, Manager.deleted_at.is_(None))
-        .order_by(Manager.created_at.desc())
-    )
+    db: AsyncSession,
+    store_id: int,
+    page: int = 1,
+    limit: int = 20,
+    search: str | None = None,
+    is_active: bool | None = None,
+    paginate: bool = True,
+) -> tuple[list[Manager], int]:
+    """List all non-deleted managers for a given store with pagination and filtering."""
+    stmt = select(Manager).where(Manager.store_id == store_id, Manager.deleted_at.is_(None))
+    count_stmt = select(func.count()).select_from(Manager).where(Manager.store_id == store_id, Manager.deleted_at.is_(None))
+
+    if is_active is not None:
+        stmt = stmt.where(Manager.is_active == is_active)
+        count_stmt = count_stmt.where(Manager.is_active == is_active)
+    if search:
+        search_filter = (
+            Manager.first_name.ilike(f"%{search}%") |
+            Manager.last_name.ilike(f"%{search}%") |
+            Manager.email.ilike(f"%{search}%") |
+            Manager.phone.ilike(f"%{search}%") |
+            Manager.employee_code.ilike(f"%{search}%")
+        )
+        stmt = stmt.where(search_filter)
+        count_stmt = count_stmt.where(search_filter)
+
+    count_result = await db.execute(count_stmt)
+    total = count_result.scalar_one()
+
+    stmt = stmt.order_by(Manager.created_at.desc())
+    if paginate:
+        offset = (page - 1) * limit
+        stmt = stmt.offset(offset).limit(limit)
+
     result = await db.execute(stmt)
-    return list(result.scalars().all())
+    return list(result.scalars().all()), total
 
 
 async def update_manager(

@@ -43,8 +43,49 @@ const formatLastActive = (value) => {
 const Staff = () => {
   const { storeId } = useParams();
   const { stores, selectedStore, setSelectedStore } = useStoreStore();
+  const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [roleFilter, setRoleFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [editingStaff, setEditingStaff] = useState(null);
+  const [showAddStaff, setShowAddStaff] = useState(false);
+  const ITEMS_PER_PAGE = 20;
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+    }, 300);
+    return () => clearTimeout(handler);
+  }, [searchTerm]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedSearch, roleFilter, statusFilter]);
+
+  const apiParams = useMemo(() => {
+    const params = {
+      page: currentPage,
+      limit: ITEMS_PER_PAGE,
+      paginate: true,
+    };
+    if (debouncedSearch.trim()) {
+      params.search = debouncedSearch.trim();
+    }
+    if (roleFilter !== 'all') {
+      params.role = roleFilter;
+    }
+    if (statusFilter !== 'all') {
+      params.is_active = statusFilter === 'active';
+    }
+    return params;
+  }, [currentPage, debouncedSearch, roleFilter, statusFilter]);
+
   const {
     staff,
+    total,
+    pages,
+    kpiStaff,
     isLoadingStaff,
     isStaffError,
     createStaffAsync,
@@ -52,18 +93,7 @@ const Staff = () => {
     deleteStaffAsync,
     isSavingStaff,
     isDeletingStaff,
-  } = useStoreStaff(storeId);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [roleFilter, setRoleFilter] = useState('all');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [currentPage, setCurrentPage] = useState(1);
-  const [editingStaff, setEditingStaff] = useState(null);
-  const [showAddStaff, setShowAddStaff] = useState(false);
-  const ITEMS_PER_PAGE = 10;
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm, roleFilter, statusFilter]);
+  } = useStoreStaff(storeId, apiParams);
 
   useEffect(() => {
     const routeStore = stores.find((store) => String(store.id) === String(storeId));
@@ -80,44 +110,28 @@ const Staff = () => {
     roleColor: roleColorByRole[person.role] || 'border-slate-500',
   })), [staff]);
 
-  const filteredStaff = useMemo(() => formattedStaff.filter((person) => {
-    const search = searchTerm.toLowerCase().trim();
-    const matchesSearch = !search ||
-      person.name.toLowerCase().includes(search) ||
-      (person.email || '').toLowerCase().includes(search) ||
-      person.role.toLowerCase().includes(search) ||
-      person.employee_code.toLowerCase().includes(search);
-    const matchesRole = roleFilter === 'all' || person.role === roleFilter;
-    const matchesStatus =
-      statusFilter === 'all' ||
-      (statusFilter === 'active' && person.is_active) ||
-      (statusFilter === 'inactive' && !person.is_active);
-
-    return matchesSearch && matchesRole && matchesStatus;
-  }), [formattedStaff, roleFilter, searchTerm, statusFilter]);
-
-  const paginatedStaff = useMemo(() => {
-    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-    return filteredStaff.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-  }, [filteredStaff, currentPage]);
-
-  const activeCount = formattedStaff.filter((person) => person.is_active).length;
-  const inactiveCount = formattedStaff.length - activeCount;
-  const createdThisMonthCount = formattedStaff.filter((person) => {
+  const activeCount = useMemo(() => kpiStaff.filter((person) => person.is_active).length, [kpiStaff]);
+  const inactiveCount = useMemo(() => kpiStaff.length - activeCount, [kpiStaff, activeCount]);
+  const createdThisMonthCount = useMemo(() => kpiStaff.filter((person) => {
     const createdAt = new Date(person.created_at);
     const now = new Date();
     return createdAt.getMonth() === now.getMonth() &&
       createdAt.getFullYear() === now.getFullYear();
-  }).length;
+  }).length, [kpiStaff]);
 
-  const kpiData = [
-    { title: 'Total Staff', value: formattedStaff.length, icon: Users, color: 'text-blue-500', bg: 'bg-blue-500/10' },
+  const kpiData = useMemo(() => [
+    { title: 'Total Staff', value: kpiStaff.length, icon: Users, color: 'text-blue-500', bg: 'bg-blue-500/10' },
     { title: 'Active Staff', value: activeCount, icon: UserCheck, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
     { title: 'Inactive Staff', value: inactiveCount, icon: UserMinus, color: 'text-red-500', bg: 'bg-red-500/10' },
     { title: 'New This Month', value: createdThisMonthCount, icon: UserPlus, color: 'text-purple-500', bg: 'bg-purple-500/10' },
-  ];
+  ], [kpiStaff, activeCount, inactiveCount, createdThisMonthCount]);
 
-  const statusSelectClass = statusFilter ===""
+  const statusSelectClass =
+    statusFilter === 'all'
+      ? 'border-slate-200 text-slate-700 bg-white'
+      : statusFilter === 'active'
+      ? 'border-emerald-200 text-emerald-700 bg-emerald-50/50'
+      : 'border-red-200 text-red-700 bg-red-50/50';
   const handleDelete = async (person) => {
     if (window.confirm(`Are you sure you want to delete ${person.name}?`)) {
       await deleteStaffAsync({
@@ -251,7 +265,7 @@ const Staff = () => {
           <div className="bg-red-50 border border-red-100 rounded-xl p-8 text-center text-red-700 font-semibold">
             Unable to load staff for this store.
           </div>
-        ) : paginatedStaff.length > 0 ? paginatedStaff.map((person) => (
+        ) : formattedStaff.length > 0 ? formattedStaff.map((person) => (
           <div key={`${person.role}-${person.id}`} className="bg-white border border-slate-100 rounded-xl sm:rounded-2xl p-3 sm:p-4 shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5 group relative overflow-hidden">
             <div className={`absolute left-0 top-0 bottom-0 w-1 ${person.roleColor}`}></div>
 
@@ -341,9 +355,9 @@ const Staff = () => {
           </div>
         )}
         
-        {filteredStaff.length > ITEMS_PER_PAGE && (
+        {total > ITEMS_PER_PAGE && (
           <Pagination
-            totalItems={filteredStaff.length}
+            totalItems={total}
             itemsPerPage={ITEMS_PER_PAGE}
             currentPage={currentPage}
             onPageChange={setCurrentPage}

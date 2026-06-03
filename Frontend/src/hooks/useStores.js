@@ -6,13 +6,13 @@ import { useStoreStore } from '../store/store';
 export const storesQueryKey = ['stores'];
 const emptyStores = [];
 
-export const useStores = () => {
+export const useStores = (params = { paginate: false }) => {
   const queryClient = useQueryClient();
   const { setSelectedStore, upsertStore } = useStoreStore();
 
   const storesQuery = useQuery({
-    queryKey: storesQueryKey,
-    queryFn: getStoresApi,
+    queryKey: [storesQueryKey, params],
+    queryFn: () => getStoresApi(params),
     staleTime: 1000 * 60 * 5,
     retry: false,
   });
@@ -34,7 +34,7 @@ export const useStores = () => {
 
   return {
     storesQuery,
-    stores: storesQuery.data || emptyStores,
+    stores: storesQuery.data?.items || emptyStores,
     isLoadingStores: storesQuery.isLoading,
     isStoresError: storesQuery.isError,
     createStore: createStoreMutation.mutate,

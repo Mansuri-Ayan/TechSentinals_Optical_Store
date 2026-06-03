@@ -111,7 +111,7 @@ const Sidebar = ({ isOpen, onClose }) => {
               {/* Custom Dropdown Menu */}
               {isDropdownOpen && (
                 <div className="absolute top-full left-0 right-0 mt-2 bg-[#1E293B] border border-slate-700 rounded-xl shadow-xl overflow-hidden z-50 animate-fade-in max-h-60 overflow-y-auto hide-scrollbar">
-                  {stores.map(store => (
+                  { stores.map(store => (
                     <button
                       key={store.id}
                       onClick={() => {

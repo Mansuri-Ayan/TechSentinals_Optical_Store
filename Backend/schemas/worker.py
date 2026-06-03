@@ -24,9 +24,9 @@ class WorkerCreate(BaseModel):
         ..., min_length=6, examples=["Worker@123"],
         description="Plain-text password (will be hashed with bcrypt)",
     )
-    employee_code: str = Field(
-        ..., max_length=50, examples=["WRK-001"],
-        description="Unique employee identifier code",
+    employee_code: str | None = Field(
+        default=None, max_length=50, examples=["WRK-1"],
+        description="Unique employee identifier code. Automatically generated if omitted.",
     )
     joining_date: date = Field(
         ..., examples=["2025-01-15"],

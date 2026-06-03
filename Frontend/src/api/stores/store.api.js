@@ -1,7 +1,7 @@
 import api from '../../lib/axios';
 
-export const getStoresApi = async () => {
-  const response = await api.get('/stores/');
+export const getStoresApi = async (params) => {
+  const response = await api.get('/stores/', { params });
   return response.data;
 };
 
