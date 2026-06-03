@@ -8,13 +8,11 @@ if str(_backend_dir) not in sys.path:
 
 from db.session import engine, Base
 # Import all models to ensure they register on Base.metadata
-from models.role import Role
-from models.admin import Admin
-from models.store import Store
-from models.worker import Worker
-from models.optician import Optician
-from models.manager import Manager
-from models.refresh_token import RefreshToken
+from models import (
+    Role, Admin, Store, Worker, Optician, Manager, RefreshToken,
+    Brand, Category, Subcategory, Product, FrameProduct, LensProduct,
+    AccessoryProduct, Inventory, InventoryTransaction
+)
 from db.seed_data import seed
 
 async def recreate_db():

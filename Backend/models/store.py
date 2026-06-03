@@ -134,6 +134,19 @@ class Store(Base):
         lazy="selectin",
     )
 
+    # ── Inventory-module relationships ─────────────────────────
+    # owner_id is polymorphic (not a real FK to stores), so we
+    # use a manual primaryjoin to tell SQLAlchemy how to resolve it.
+    inventories = relationship(
+        "Inventory",
+        primaryjoin=(
+            "and_(foreign(Inventory.owner_id) == Store.id, "
+            "Inventory.owner_type == 'STORE')"
+        ),
+        viewonly=True,
+        lazy="noload",
+    )
+
     def __repr__(self) -> str:
         return (
             f"<Store(id={self.id!r}, store_name={self.store_name!r}, "

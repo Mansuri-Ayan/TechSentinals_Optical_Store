@@ -1,5 +1,7 @@
 # Seed script: seed_data.py
 # Seeds 5 admins, 5 stores, 5 workers, 5 opticians, 5 managers
+# + 5 brands, 5 categories, 5 subcategories, 5 products (with extensions),
+#   5 inventories, 5 inventory transactions
 import asyncio
 import sys
 from datetime import date
@@ -20,6 +22,15 @@ from models.worker import Worker
 from models.optician import Optician
 from models.manager import Manager
 from models.role import Role
+from models.brand import Brand
+from models.category import Category
+from models.subcategory import Subcategory
+from models.product import Product
+from models.frame_product import FrameProduct
+from models.lens_product import LensProduct
+from models.accessory_product import AccessoryProduct
+from models.inventory import Inventory, OwnerType
+from models.inventory_transaction import InventoryTransaction, TransactionType
 
 # ===============================================================
 #  SEED DATA DEFINITIONS
@@ -309,7 +320,142 @@ MANAGERS = [
     },
 ]
 
+# ── Brands — all linked to admin[0] (Visionary Optics) ─────────
+BRANDS = [
+    {"name": "Ray-Ban"},
+    {"name": "Titan Eyeplus"},
+    {"name": "Lenskart Hustle"},
+    {"name": "John Jacobs"},
+    {"name": "Vincent Chase"},
+]
 
+# ── Categories — all linked to admin[0] ────────────────────────
+CATEGORIES = [
+    {"name": "Frames",       "description": "Eyeglass and sunglass frames"},
+    {"name": "Lenses",       "description": "Prescription and non-prescription lenses"},
+    {"name": "Sunglasses",   "description": "UV-protection and fashion sunglasses"},
+    {"name": "Contact Lenses", "description": "Daily, monthly and yearly contact lenses"},
+    {"name": "Accessories",  "description": "Cases, cloths, chains and solutions"},
+]
+
+# ── Subcategories — linked to categories by index ──────────────
+SUBCATEGORIES = [
+    {"category_index": 0, "name": "Full-Rim Frames",   "description": "Complete rim around the lenses"},
+    {"category_index": 0, "name": "Half-Rim Frames",   "description": "Rim on the top half only"},
+    {"category_index": 1, "name": "Single Vision",     "description": "Single focal point lenses"},
+    {"category_index": 1, "name": "Progressive",       "description": "Multi-focal seamless gradient"},
+    {"category_index": 4, "name": "Eyeglass Cases",    "description": "Protective storage cases"},
+]
+
+# ── Products — 2 frames, 2 lenses, 1 accessory ────────────────
+PRODUCTS = [
+    {
+        "sku": "FRM-RB-001",
+        "name": "Ray-Ban Aviator Classic",
+        "category_index": 0,
+        "subcategory_index": 0,
+        "brand_index": 0,
+        "cost_price": 3200.00,
+        "selling_price": 5999.00,
+        "type": "frame",
+        "details": {
+            "frame_type": "Full-Rim",
+            "shape": "Aviator",
+            "material": "Metal",
+            "color": "Gold",
+            "lens_width": "58",
+            "bridge_width": "14",
+            "temple_length": "135",
+            "gender": "Unisex",
+            "age_group": "Adult",
+        },
+    },
+    {
+        "sku": "FRM-TE-001",
+        "name": "Titan Eyeplus Rectangle",
+        "category_index": 0,
+        "subcategory_index": 1,
+        "brand_index": 1,
+        "cost_price": 1800.00,
+        "selling_price": 3499.00,
+        "type": "frame",
+        "details": {
+            "frame_type": "Half-Rim",
+            "shape": "Rectangle",
+            "material": "TR-90",
+            "color": "Matte Black",
+            "lens_width": "52",
+            "bridge_width": "18",
+            "temple_length": "140",
+            "gender": "Male",
+            "age_group": "Adult",
+        },
+    },
+    {
+        "sku": "LNS-SV-001",
+        "name": "CR-39 Single Vision 1.56",
+        "category_index": 1,
+        "subcategory_index": 2,
+        "brand_index": 2,
+        "cost_price": 450.00,
+        "selling_price": 999.00,
+        "type": "lens",
+        "details": {
+            "lens_type": "Single Vision",
+            "material": "CR-39",
+            "index_value": "1.56",
+            "coating": "Anti-Reflective",
+            "tint_color": "Clear",
+            "uv_protection": "UV400",
+            "blue_cut": "Yes",
+            "photochromic": "No",
+            "polarized": "No",
+        },
+    },
+    {
+        "sku": "LNS-PG-001",
+        "name": "Polycarbonate Progressive 1.60",
+        "category_index": 1,
+        "subcategory_index": 3,
+        "brand_index": 2,
+        "cost_price": 1800.00,
+        "selling_price": 3999.00,
+        "type": "lens",
+        "details": {
+            "lens_type": "Progressive",
+            "material": "Polycarbonate",
+            "index_value": "1.60",
+            "coating": "HMC Multi-Coat",
+            "tint_color": "Clear",
+            "uv_protection": "UV400",
+            "blue_cut": "Yes",
+            "photochromic": "Yes",
+            "polarized": "No",
+        },
+    },
+    {
+        "sku": "ACC-CS-001",
+        "name": "Premium Leather Hard Case",
+        "category_index": 4,
+        "subcategory_index": 4,
+        "brand_index": 3,
+        "cost_price": 250.00,
+        "selling_price": 599.00,
+        "type": "accessory",
+        "details": {
+            "accessory_type": "Hard Case",
+            "material": "Genuine Leather",
+            "color": "Brown",
+            "size": "Standard (160x70x40 mm)",
+        },
+    },
+]
+
+# ── Inventories — admin warehouse + store stock for each product
+# These will be created programmatically in the seed function.
+
+# ── Inventory Transactions — purchase + admin-to-store transfers
+# These will be created programmatically in the seed function.
 
 
 # ===============================================================
@@ -485,6 +631,293 @@ async def seed() -> None:
 
         await session.commit()
 
+        # ── 6. Seed brands ─────────────────────────────────────
+        print("\n" + "=" * 60)
+        print("  Seeding Brands for all Admins")
+        print("=" * 60)
+        admin_brand_map = {}
+        for admin_id in admin_ids:
+            brand_ids = []
+            for data in BRANDS:
+                stmt = select(Brand).where(
+                    Brand.name == data["name"],
+                    Brand.admin_id == admin_id,
+                )
+                result = await session.execute(stmt)
+                existing = result.scalar_one_or_none()
+                if existing:
+                    brand_ids.append(existing.id)
+                    continue
+
+                brand = Brand(
+                    admin_id=admin_id,
+                    name=data["name"],
+                )
+                session.add(brand)
+                await session.flush()
+                brand_ids.append(brand.id)
+            admin_brand_map[admin_id] = brand_ids
+            print(f"  [OK] seeded brands for Admin ID={admin_id}")
+
+        # ── 7. Seed categories ─────────────────────────────────
+        print("\n" + "=" * 60)
+        print("  Seeding Categories for all Admins")
+        print("=" * 60)
+        admin_category_map = {}
+        for admin_id in admin_ids:
+            category_ids = []
+            for data in CATEGORIES:
+                stmt = select(Category).where(
+                    Category.name == data["name"],
+                    Category.admin_id == admin_id,
+                )
+                result = await session.execute(stmt)
+                existing = result.scalar_one_or_none()
+                if existing:
+                    category_ids.append(existing.id)
+                    continue
+
+                category = Category(
+                    admin_id=admin_id,
+                    name=data["name"],
+                    description=data.get("description"),
+                )
+                session.add(category)
+                await session.flush()
+                category_ids.append(category.id)
+            admin_category_map[admin_id] = category_ids
+            print(f"  [OK] seeded categories for Admin ID={admin_id}")
+
+        # ── 8. Seed subcategories ──────────────────────────────
+        print("\n" + "=" * 60)
+        print("  Seeding Subcategories for all Admins")
+        print("=" * 60)
+        admin_subcategory_map = {}
+        for admin_id in admin_ids:
+            category_ids = admin_category_map[admin_id]
+            subcategory_ids = []
+            for data in SUBCATEGORIES:
+                cat_id = category_ids[data["category_index"]]
+                stmt = select(Subcategory).where(
+                    Subcategory.name == data["name"],
+                    Subcategory.category_id == cat_id,
+                )
+                result = await session.execute(stmt)
+                existing = result.scalar_one_or_none()
+                if existing:
+                    subcategory_ids.append(existing.id)
+                    continue
+
+                subcategory = Subcategory(
+                    category_id=cat_id,
+                    name=data["name"],
+                    description=data.get("description"),
+                )
+                session.add(subcategory)
+                await session.flush()
+                subcategory_ids.append(subcategory.id)
+            admin_subcategory_map[admin_id] = subcategory_ids
+            print(f"  [OK] seeded subcategories for Admin ID={admin_id}")
+
+        # ── 9. Seed products + extensions ──────────────────────
+        print("\n" + "=" * 60)
+        print("  Seeding Products for all Admins")
+        print("=" * 60)
+        admin_product_map = {}
+        for admin_id in admin_ids:
+            category_ids = admin_category_map[admin_id]
+            subcategory_ids = admin_subcategory_map[admin_id]
+            brand_ids = admin_brand_map[admin_id]
+            product_ids = []
+
+            for data in PRODUCTS:
+                # Suffix SKU to ensure global SKU uniqueness per admin
+                sku = f"{data['sku']}-A{admin_id}"
+                stmt = select(Product).where(Product.sku == sku)
+                result = await session.execute(stmt)
+                existing = result.scalar_one_or_none()
+                if existing:
+                    product_ids.append(existing.id)
+                    continue
+
+                product = Product(
+                    admin_id=admin_id,
+                    category_id=category_ids[data["category_index"]],
+                    subcategory_id=subcategory_ids[data["subcategory_index"]],
+                    sku=sku,
+                    name=data["name"],
+                    brand_id=brand_ids[data["brand_index"]],
+                    cost_price=data["cost_price"],
+                    selling_price=data["selling_price"],
+                )
+                session.add(product)
+                await session.flush()
+                product_ids.append(product.id)
+
+                # Create type-specific extension
+                if data["type"] == "frame":
+                    ext = FrameProduct(product_id=product.id, **data["details"])
+                    session.add(ext)
+                elif data["type"] == "lens":
+                    ext = LensProduct(product_id=product.id, **data["details"])
+                    session.add(ext)
+                elif data["type"] == "accessory":
+                    ext = AccessoryProduct(product_id=product.id, **data["details"])
+                    session.add(ext)
+
+            admin_product_map[admin_id] = product_ids
+            print(f"  [OK] seeded products for Admin ID={admin_id}")
+
+        await session.commit()
+
+        # ── 10. Seed inventories (admin warehouse + store) ─────
+        print("\n" + "=" * 60)
+        print("  Seeding Inventories for all Admins & Stores")
+        print("=" * 60)
+        admin_inv_map = {}
+        store_inv_map = {}
+        warehouse_quantities = [50, 40, 200, 100, 150]
+        store_quantities     = [10,  8,  50,  20,  30]
+
+        for idx, admin_id in enumerate(admin_ids):
+            product_ids = admin_product_map[admin_id]
+            store_id = store_ids[idx]
+            admin_invs = []
+            store_invs = []
+
+            for i, pid in enumerate(product_ids):
+                # Admin warehouse inventory
+                stmt = select(Inventory).where(
+                    Inventory.owner_type == OwnerType.ADMIN,
+                    Inventory.owner_id == admin_id,
+                    Inventory.product_id == pid,
+                )
+                result = await session.execute(stmt)
+                existing = result.scalar_one_or_none()
+                if existing:
+                    admin_invs.append(existing.id)
+                else:
+                    wh_qty = warehouse_quantities[i]
+                    inv = Inventory(
+                        owner_type=OwnerType.ADMIN,
+                        owner_id=admin_id,
+                        product_id=pid,
+                        quantity=wh_qty,
+                        available_quantity=wh_qty,
+                        reserved_quantity=0,
+                        reorder_level=10,
+                        last_purchase_price=PRODUCTS[i]["cost_price"],
+                    )
+                    session.add(inv)
+                    await session.flush()
+                    admin_invs.append(inv.id)
+
+                # Store inventory
+                stmt = select(Inventory).where(
+                    Inventory.owner_type == OwnerType.STORE,
+                    Inventory.owner_id == store_id,
+                    Inventory.product_id == pid,
+                )
+                result = await session.execute(stmt)
+                existing = result.scalar_one_or_none()
+                if existing:
+                    store_invs.append(existing.id)
+                else:
+                    st_qty = store_quantities[i]
+                    inv = Inventory(
+                        owner_type=OwnerType.STORE,
+                        owner_id=store_id,
+                        product_id=pid,
+                        quantity=st_qty,
+                        available_quantity=st_qty,
+                        reserved_quantity=0,
+                        reorder_level=5,
+                    )
+                    session.add(inv)
+                    await session.flush()
+                    store_invs.append(inv.id)
+
+            admin_inv_map[admin_id] = admin_invs
+            store_inv_map[store_id] = store_invs
+            print(f"  [OK] seeded inventories for Admin ID={admin_id}, Store ID={store_id}")
+
+        await session.commit()
+
+        # ── 11. Seed inventory transactions ────────────────────
+        print("\n" + "=" * 60)
+        print("  Seeding Inventory Transactions for all Admins & Stores")
+        print("=" * 60)
+        # Check if transactions already exist
+        stmt = select(InventoryTransaction).limit(1)
+        result = await session.execute(stmt)
+        if result.scalar_one_or_none():
+            print("  [SKIP] Transactions already exist, skipping")
+        else:
+            for idx, admin_id in enumerate(admin_ids):
+                product_ids = admin_product_map[admin_id]
+                store_id = store_ids[idx]
+                admin_inv_ids = admin_inv_map[admin_id]
+                store_inv_ids = store_inv_map[store_id]
+
+                txn_data = [
+                    # Purchase transactions (stock entering admin warehouse)
+                    {
+                        "inventory_id": admin_inv_ids[0],
+                        "product_id": product_ids[0],
+                        "transaction_type": TransactionType.PURCHASE,
+                        "quantity": 50,
+                        "remarks": f"Initial purchase of Ray-Ban Aviator frames for Admin {admin_id}",
+                    },
+                    {
+                        "inventory_id": admin_inv_ids[2],
+                        "product_id": product_ids[2],
+                        "transaction_type": TransactionType.PURCHASE,
+                        "quantity": 200,
+                        "remarks": f"Bulk purchase of CR-39 lenses for Admin {admin_id}",
+                    },
+                    # Admin → Store transfer
+                    {
+                        "inventory_id": admin_inv_ids[0],
+                        "product_id": product_ids[0],
+                        "transaction_type": TransactionType.ADMIN_TRANSFER_OUT,
+                        "quantity": 10,
+                        "receive_store_id": store_id,
+                        "remarks": f"Sent 10 Aviator frames to Store {store_id}",
+                    },
+                    {
+                        "inventory_id": store_inv_ids[0],
+                        "product_id": product_ids[0],
+                        "transaction_type": TransactionType.ADMIN_TRANSFER_IN,
+                        "quantity": 10,
+                        "receive_store_id": store_id,
+                        "remarks": f"Received 10 Aviator frames from admin warehouse",
+                    },
+                    # Sale at store
+                    {
+                        "inventory_id": store_inv_ids[0],
+                        "product_id": product_ids[0],
+                        "transaction_type": TransactionType.SALE,
+                        "quantity": 2,
+                        "send_store_id": store_id,
+                        "remarks": "Sold 2 Aviator frames to customer",
+                    },
+                ]
+                for td in txn_data:
+                    txn = InventoryTransaction(
+                        inventory_id=td["inventory_id"],
+                        product_id=td["product_id"],
+                        transaction_type=td["transaction_type"],
+                        quantity=td["quantity"],
+                        send_store_id=td.get("send_store_id"),
+                        receive_store_id=td.get("receive_store_id"),
+                        remarks=td.get("remarks"),
+                        created_by=admin_id,
+                    )
+                    session.add(txn)
+                print(f"  [OK] seeded transactions for Admin ID={admin_id}")
+
+            await session.commit()
+
     print("\n" + "=" * 60)
     print("  [DONE] Seed completed successfully!")
     print("=" * 60)
@@ -494,6 +927,14 @@ async def seed() -> None:
     print(f"  {'-' * 30} {'-' * 15}")
     for a in ADMINS:
         print(f"  {a['email']:<30} {a['password']:<15}")
+    print()
+    print("  Inventory seed summary (per admin/store):")
+    print(f"  Brands:        {len(BRANDS)}")
+    print(f"  Categories:    {len(CATEGORIES)}")
+    print(f"  Subcategories: {len(SUBCATEGORIES)}")
+    print(f"  Products:      {len(PRODUCTS)} (2 frames, 2 lenses, 1 accessory)")
+    print(f"  Inventories:   {len(PRODUCTS) * 2} (admin warehouse + store)")
+    print(f"  Transactions:  5 (2 purchases, 2 transfers, 1 sale)")
     print()
 
 

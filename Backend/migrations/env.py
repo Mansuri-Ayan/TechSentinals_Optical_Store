@@ -25,6 +25,15 @@ from models.worker import Worker
 from models.optician import Optician
 from models.manager import Manager
 from models.refresh_token import RefreshToken
+from models.brand import Brand
+from models.category import Category
+from models.subcategory import Subcategory
+from models.product import Product
+from models.frame_product import FrameProduct
+from models.lens_product import LensProduct
+from models.accessory_product import AccessoryProduct
+from models.inventory import Inventory
+from models.inventory_transaction import InventoryTransaction
 
 target_metadata = Base.metadata
 

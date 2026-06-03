@@ -181,6 +181,26 @@ class Admin(Base):
         lazy="selectin",
     )
 
+    # ── Inventory-module relationships ─────────────────────────
+    categories = relationship(
+        "Category",
+        back_populates="admin",
+        cascade="all, delete-orphan",
+        lazy="noload",
+    )
+    brands = relationship(
+        "Brand",
+        back_populates="admin",
+        cascade="all, delete-orphan",
+        lazy="noload",
+    )
+    products = relationship(
+        "Product",
+        back_populates="admin",
+        cascade="all, delete-orphan",
+        lazy="noload",
+    )
+
     def __repr__(self) -> str:
         return (
             f"<Admin(id={self.id!r}, email={self.email!r}, "

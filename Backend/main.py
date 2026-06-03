@@ -7,6 +7,11 @@ from routes.store_router import store_router
 from routes.worker_router import worker_router
 from routes.optician_router import optician_router
 from routes.manager_router import manager_router
+from routes.category_router import category_router
+from routes.brand_router import brand_router
+from routes.product_router import product_router
+from routes.inventory_router import inventory_router
+from routes.transfer_router import transfer_router
 from db.session import engine
 
 
@@ -50,6 +55,13 @@ app.include_router(store_router)
 app.include_router(worker_router)
 app.include_router(optician_router)
 app.include_router(manager_router)
+
+# ── Inventory Management module ───────────────────────────────
+app.include_router(category_router)
+app.include_router(brand_router)
+app.include_router(product_router)
+app.include_router(inventory_router)
+app.include_router(transfer_router)
 
 
 @app.get(
