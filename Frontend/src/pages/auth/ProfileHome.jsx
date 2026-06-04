@@ -1,7 +1,7 @@
 import React from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { useAuthStore } from '../../store/store';
-import { LogOut, User, Mail, Shield, Calendar, Activity, Building } from 'lucide-react';
+import { LogOut, User, Mail, Shield, Calendar, Activity, Building, Loader2 } from 'lucide-react';
 
 const ProfileHome = () => {
   const { logout, isLoggingOut } = useAuth();
@@ -79,7 +79,7 @@ const ProfileHome = () => {
                 </p>
               </div>
             </div>
-            
+
             <button
               onClick={handleLogout}
               disabled={isLoggingOut}

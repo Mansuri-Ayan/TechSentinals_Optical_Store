@@ -1,0 +1,382 @@
+import { useState, useMemo, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import {
+  Search, Plus, Truck, ChevronRight,
+  Edit2, Trash2, X as XIcon,
+  Package, ShoppingCart, CheckCircle,
+  Phone, MapPin,
+} from 'lucide-react';
+import Pagination from '../../components/shared/Pagination';
+import AddEditSupplierModal from '../../components/admin/suppliers/AddEditSupplierModal';
+import DeleteConfirmModal from '../../components/admin/suppliers/DeleteConfirmModal';
+import { MOCK_SUPPLIERS } from '../../data/suppliersData';
+
+const ITEMS_PER_PAGE = 12;
+
+/* ── Status badge ── */
+const StatusBadge = ({ status }) => {
+  const active = status === 'Active';
+  return (
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border ${active ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-slate-600 bg-slate-100 border-slate-200'}`}>
+      <span className={`w-1.5 h-1.5 rounded-full ${active ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+      {status}
+    </span>
+  );
+};
+
+/* ── Supplier Card ── */
+const SupplierCard = ({ supplier: s, onClick, onEdit, onDelete }) => (
+  <div
+    onClick={onClick}
+    className="group relative bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-200 cursor-pointer overflow-hidden"
+  >
+    {/* Top accent bar */}
+    <div className="h-1.5 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500" />
+
+    <div className="p-4 sm:p-5">
+      {/* Header row */}
+      <div className="flex items-start justify-between gap-2 mb-4">
+        <div className="flex items-center gap-3 min-w-0">
+          {/* Avatar */}
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-slate-700 to-slate-900 flex items-center justify-center text-white font-black text-xl shadow-md flex-shrink-0">
+            {s.name[0]}
+          </div>
+          <div className="min-w-0">
+            <p className="font-bold text-slate-900 text-sm sm:text-base leading-tight truncate">{s.name}</p>
+            <p className="text-xs text-slate-500 font-medium mt-0.5 truncate">{s.contactPerson}</p>
+          </div>
+        </div>
+        <StatusBadge status={s.status} />
+      </div>
+
+      {/* Info rows */}
+      <div className="space-y-1.5 mb-4">
+        <div className="flex items-center gap-2 text-xs text-slate-500 font-medium">
+          <Phone className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+          <span>{s.phone}</span>
+        </div>
+        <div className="flex items-center gap-2 text-xs text-slate-500 font-medium">
+          <MapPin className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+          <span className="truncate">{s.city}, {s.state}</span>
+        </div>
+      </div>
+
+      {/* Stats row */}
+      <div className="flex items-center gap-2 pt-3 border-t border-slate-100">
+        <div className="flex-1 flex items-center gap-1.5 px-3 py-2 bg-purple-50 border border-purple-100 rounded-xl">
+          <Package className="w-3.5 h-3.5 text-purple-600" />
+          <div>
+            <p className="text-[10px] font-semibold text-purple-500">Products</p>
+            <p className="text-sm font-bold text-slate-900 leading-none">{s.totalProducts}</p>
+          </div>
+        </div>
+        <div className="flex-1 flex items-center gap-1.5 px-3 py-2 bg-blue-50 border border-blue-100 rounded-xl">
+          <ShoppingCart className="w-3.5 h-3.5 text-blue-600" />
+          <div>
+            <p className="text-[10px] font-semibold text-blue-500">Orders</p>
+            <p className="text-sm font-bold text-slate-900 leading-none">{s.totalOrders}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {/* Hover action buttons (top-right overlay) */}
+    <div
+      className="absolute top-4 right-4 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity"
+      onClick={e => e.stopPropagation()}
+    >
+      <button
+        onClick={() => onEdit(s)}
+        className="w-8 h-8 flex items-center justify-center bg-white border border-slate-200 rounded-xl shadow-sm text-slate-500 hover:text-amber-600 hover:border-amber-300 hover:bg-amber-50 transition-colors"
+        title="Edit supplier"
+      >
+        <Edit2 className="w-3.5 h-3.5" />
+      </button>
+      <button
+        onClick={() => onDelete(s)}
+        className="w-8 h-8 flex items-center justify-center bg-white border border-slate-200 rounded-xl shadow-sm text-slate-500 hover:text-red-600 hover:border-red-300 hover:bg-red-50 transition-colors"
+        title="Delete supplier"
+      >
+        <Trash2 className="w-3.5 h-3.5" />
+      </button>
+    </div>
+  </div>
+);
+
+/* ─────────────────────────────────────────────────────────
+   MAIN PAGE
+───────────────────────────────────────────────────────── */
+const Suppliers = () => {
+  const navigate = useNavigate();
+  const [suppliers, setSuppliers] = useState(() => {
+    const saved = localStorage.getItem('suppliers');
+    return saved ? JSON.parse(saved) : MOCK_SUPPLIERS;
+  });
+  const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+
+  const [editSupplier, setEditSupplier]   = useState(null);
+  const [deleteSupplier, setDeleteSupplier] = useState(null);
+  const [showAddModal, setShowAddModal]   = useState(false);
+
+  useEffect(() => {
+    localStorage.setItem('suppliers', JSON.stringify(suppliers));
+  }, [suppliers]);
+
+  /* ── Filter ── */
+  const filtered = useMemo(() => {
+    const q = searchTerm.toLowerCase().trim();
+    if (!q) return suppliers;
+    return suppliers.filter(s =>
+      s.name.toLowerCase().includes(q) ||
+      s.contactPerson.toLowerCase().includes(q) ||
+      s.email.toLowerCase().includes(q) ||
+      s.city.toLowerCase().includes(q) ||
+      s.state.toLowerCase().includes(q) ||
+      s.status.toLowerCase().includes(q)
+    );
+  }, [suppliers, searchTerm]);
+
+  const paginated = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filtered.slice(start, start + ITEMS_PER_PAGE);
+  }, [filtered, currentPage]);
+
+  /* ── Handlers ── */
+  const handleSave = (data) => {
+    if (data.id) {
+      setSuppliers(prev => prev.map(s => s.id === data.id ? { ...s, ...data } : s));
+    } else {
+      setSuppliers(prev => [{
+        ...data,
+        id: Date.now(),
+        status: 'Active',
+        totalProducts: 0,
+        totalOrders: 0,
+        totalAmount: 0,
+        createdAt: new Date().toISOString().split('T')[0],
+        products: [],
+        transactions: [],
+      }, ...prev]);
+    }
+    setShowAddModal(false);
+    setEditSupplier(null);
+  };
+
+  const handleDelete = (id) => {
+    setSuppliers(prev => prev.filter(s => s.id !== id));
+    setDeleteSupplier(null);
+  };
+
+  /* ── KPI stats ── */
+  const kpi = useMemo(() => ({
+    total: suppliers.length,
+    active: suppliers.filter(s => s.status === 'Active').length,
+    products: suppliers.reduce((sum, s) => sum + s.totalProducts, 0),
+    orders: suppliers.reduce((sum, s) => sum + s.totalOrders, 0),
+  }), [suppliers]);
+
+  return (
+    <div className="p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto animate-fade-in font-sans">
+
+      {/* ── Breadcrumb + Header ── */}
+      <div className="mb-6 sm:mb-8">
+        <div className="flex items-center text-sm text-slate-500 font-medium mb-3 space-x-2">
+          <Link to="/admin/dashboard" className="hover:text-slate-800 transition-colors">Dashboard</Link>
+          <ChevronRight className="w-4 h-4 flex-shrink-0" />
+          <span className="text-slate-900 font-semibold">Suppliers</span>
+        </div>
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+              <Truck className="w-8 h-8 text-blue-500" />
+              Suppliers
+            </h1>
+            <p className="text-slate-500 mt-1.5 text-sm sm:text-base">
+              Manage all product suppliers and their purchase histories.
+            </p>
+          </div>
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="flex items-center gap-2 px-5 py-2.5 bg-[#0A0F1F] text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 flex-shrink-0 w-full sm:w-auto justify-center"
+          >
+            <Plus className="w-4 h-4" />
+            Add Supplier
+          </button>
+        </div>
+      </div>
+
+      {/* ── KPI Cards ── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
+        {[
+          { label: 'Total Suppliers', value: kpi.total, icon: Truck, color: 'text-blue-600 bg-blue-50 border-blue-200' },
+          { label: 'Active', value: kpi.active, icon: CheckCircle, color: 'text-emerald-600 bg-emerald-50 border-emerald-200' },
+          { label: 'Products Tracked', value: kpi.products, icon: Package, color: 'text-purple-600 bg-purple-50 border-purple-200' },
+          { label: 'Total Orders', value: kpi.orders, icon: ShoppingCart, color: 'text-amber-600 bg-amber-50 border-amber-200' },
+        ].map(card => {
+          const Icon = card.icon;
+          return (
+            <div key={card.label} className={`flex items-center gap-4 p-4 sm:p-5 rounded-2xl border shadow-sm ${card.color}`}>
+              <div className="p-2.5 rounded-xl bg-white/60 flex-shrink-0">
+                <Icon className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-xs font-semibold opacity-70">{card.label}</p>
+                <p className="text-2xl font-bold text-slate-900">{card.value}</p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* ── Search Bar ── */}
+      <div className="relative w-full mb-5 group">
+        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+          <Search className="h-5 w-5 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
+        </div>
+        <input
+          type="text"
+          value={searchTerm}
+          onChange={e => { setSearchTerm(e.target.value); setCurrentPage(1); }}
+          placeholder="Search by name, contact, city, state or status…"
+          className="w-full pl-11 pr-10 py-3 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 text-sm font-medium transition-all shadow-sm placeholder:text-slate-400"
+        />
+        {searchTerm && (
+          <button onClick={() => { setSearchTerm(''); setCurrentPage(1); }}
+            className="absolute inset-y-0 right-3 flex items-center text-slate-400 hover:text-slate-700 transition-colors">
+            <XIcon className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+
+      {/* ── Results info ── */}
+      {searchTerm && (
+        <p className="text-xs text-slate-500 font-medium mb-4">
+          {filtered.length} supplier{filtered.length !== 1 ? 's' : ''} found for "{searchTerm}"
+        </p>
+      )}
+
+      {/* ── Grid/Table Listing ── */}
+      {filtered.length === 0 ? (
+        <div className="bg-white border border-dashed border-slate-200 rounded-2xl p-12 flex flex-col items-center justify-center text-center">
+          <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4 border border-slate-100">
+            <Truck className="w-8 h-8 text-slate-300" />
+          </div>
+          <h3 className="text-base font-bold text-slate-900 mb-1">No suppliers found</h3>
+          <p className="text-slate-500 text-sm">Try adjusting your search or add a new supplier.</p>
+        </div>
+      ) : (
+        <>
+          {/* Desktop Table View */}
+          <div className="hidden lg:block bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden mb-6">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-100">
+                    {['Supplier Name', 'Contact Person', 'Phone', 'Email', 'City & State', 'Products', 'Orders', 'Status', 'Actions'].map(col => (
+                      <th key={col} className="px-5 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">
+                        {col}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {paginated.map(s => (
+                    <tr
+                      key={s.id}
+                      onClick={() => navigate(`/admin/suppliers/${s.id}`)}
+                      className="hover:bg-blue-50/40 transition-colors cursor-pointer group"
+                    >
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-3 min-w-0">
+                          {/* Avatar */}
+                          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-slate-700 to-slate-900 flex items-center justify-center text-white font-black text-base shadow-sm flex-shrink-0">
+                            {s.name[0]}
+                          </div>
+                          <span className="font-bold text-slate-900 truncate">{s.name}</span>
+                        </div>
+                      </td>
+                      <td className="px-5 py-4 text-slate-700 font-semibold">{s.contactPerson}</td>
+                      <td className="px-5 py-4 text-slate-500 font-medium whitespace-nowrap">{s.phone}</td>
+                      <td className="px-5 py-4 text-slate-500 font-medium truncate max-w-[180px]">{s.email}</td>
+                      <td className="px-5 py-4 text-slate-600 font-semibold">{s.city}, {s.state}</td>
+                      <td className="px-5 py-4">
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-purple-50 border border-purple-100 rounded-lg text-purple-700 text-xs font-bold">
+                          <Package className="w-3.5 h-3.5" />
+                          {s.totalProducts}
+                        </span>
+                      </td>
+                      <td className="px-5 py-4">
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-50 border border-blue-100 rounded-lg text-blue-700 text-xs font-bold">
+                          <ShoppingCart className="w-3.5 h-3.5" />
+                          {s.totalOrders}
+                        </span>
+                      </td>
+                      <td className="px-5 py-4">
+                        <StatusBadge status={s.status} />
+                      </td>
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                          <button
+                            onClick={() => setEditSupplier(s)}
+                            className="w-8 h-8 flex items-center justify-center bg-slate-50 border border-slate-200 rounded-lg text-slate-500 hover:text-amber-600 hover:border-amber-300 hover:bg-amber-50 transition-colors"
+                            title="Edit supplier"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => setDeleteSupplier(s)}
+                            className="w-8 h-8 flex items-center justify-center bg-slate-50 border border-slate-200 rounded-lg text-slate-500 hover:text-red-600 hover:border-red-300 hover:bg-red-50 transition-colors"
+                            title="Delete supplier"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Mobile/Tablet Card View */}
+          <div className="lg:hidden grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {paginated.map(s => (
+              <SupplierCard
+                key={s.id}
+                supplier={s}
+                onClick={() => navigate(`/admin/suppliers/${s.id}`)}
+                onEdit={setEditSupplier}
+                onDelete={setDeleteSupplier}
+              />
+            ))}
+          </div>
+
+          <Pagination
+            totalItems={filtered.length}
+            itemsPerPage={ITEMS_PER_PAGE}
+            currentPage={currentPage}
+            onPageChange={setCurrentPage}
+          />
+        </>
+      )}
+
+      {/* ── Modals ── */}
+      <AddEditSupplierModal
+        isOpen={showAddModal || Boolean(editSupplier)}
+        supplier={editSupplier}
+        onClose={() => { setShowAddModal(false); setEditSupplier(null); }}
+        onSubmit={handleSave}
+      />
+
+      <DeleteConfirmModal
+        supplier={deleteSupplier}
+        onClose={() => setDeleteSupplier(null)}
+        onConfirm={handleDelete}
+      />
+    </div>
+  );
+};
+
+export default Suppliers;

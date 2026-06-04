@@ -8,6 +8,9 @@ import Staff from '../pages/admin/Staff';
 import Inventory from '../pages/admin/Inventory';
 import Brands from '../pages/admin/Brands';
 import Categories from '../pages/admin/Categories';
+import Transactions from '../pages/admin/Transactions';
+import Suppliers from '../pages/admin/Suppliers';
+import SupplierDetail from '../pages/admin/SupplierDetail';
 
 // Responsive loading spinner component
 const LoadingSpinner = () => (
@@ -171,6 +174,12 @@ function AppRouter() {
         <Route path="store/:storeId/brands" element={<Brands />} />
         <Route path="categories" element={<CategoriesRouteRedirect />} />
         <Route path="store/:storeId/categories" element={<Categories />} />
+        <Route path="inventory" element={<Inventory />} />
+        <Route path="brands" element={<Brands />} />
+        <Route path="categories" element={<Categories />} />
+        <Route path="transactions" element={<Transactions />} />
+        <Route path="suppliers" element={<Suppliers />} />
+        <Route path="suppliers/:id" element={<SupplierDetail />} />
       </Route>
 
       {/* Fallback root redirect */}
