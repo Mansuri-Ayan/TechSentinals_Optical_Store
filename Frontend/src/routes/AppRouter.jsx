@@ -143,14 +143,11 @@ function AppRouter() {
         <Route path="dashboard" element={<Dashboard />} />
         <Route path="staff" element={<StaffRouteRedirect />} />
         <Route path="store/:storeId/staff" element={<Staff />} />
-<<<<<<< Updated upstream
         <Route path="inventory" element={<InventoryRouteRedirect />} />
         <Route path="store/:storeId/inventory" element={<Inventory />} />
-=======
         <Route path="inventory" element={<Inventory />} />
         <Route path="brands" element={<Brands />} />
         <Route path="categories" element={<Categories />} />
->>>>>>> Stashed changes
       </Route>
 
       {/* Fallback root redirect */}

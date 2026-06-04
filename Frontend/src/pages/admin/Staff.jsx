@@ -1,11 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-<<<<<<< Updated upstream
-import { useParams } from 'react-router-dom';
-import { Plus, Users, UserCheck, UserMinus, UserPlus, Download, Upload, ChevronRight, Search, Edit2, Trash2, Loader2 } from 'lucide-react';
-=======
 import { useParams, Link } from 'react-router-dom';
 import { Plus, Users, UserCheck, UserMinus, UserPlus, Download, Upload, ChevronRight, Search, Edit2, Trash2 } from 'lucide-react';
->>>>>>> Stashed changes
 import AddStaffModal from '../../components/admin/AddStaffModal';
 import Pagination from '../../components/shared/Pagination';
 import { useStoreStore } from '../../store/store';
