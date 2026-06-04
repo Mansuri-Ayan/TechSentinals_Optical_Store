@@ -1,8 +1,9 @@
 import api from '../../lib/axios';
 
+// ── Categories ────────────────────────────────────────────────
+
 /**
- * Fetch all categories for the current admin.
- * @param {Object} params - Optional query params (e.g. { active_only: true })
+ * Fetch categories for the current admin (paginated).
  */
 export const getCategoriesApi = async (params = {}) => {
   const response = await api.get('/categories/', { params });
@@ -10,11 +11,59 @@ export const getCategoriesApi = async (params = {}) => {
 };
 
 /**
- * Fetch subcategories for a specific category.
- * @param {number} categoryId
- * @param {Object} params - Optional query params
+ * Create a new category.
+ */
+export const createCategoryApi = async (payload) => {
+  const response = await api.post('/categories/', payload);
+  return response.data;
+};
+
+/**
+ * Update an existing category.
+ */
+export const updateCategoryApi = async (id, payload) => {
+  const response = await api.put(`/categories/${id}`, payload);
+  return response.data;
+};
+
+/**
+ * Soft-delete a category.
+ */
+export const deleteCategoryApi = async (id) => {
+  const response = await api.delete(`/categories/${id}`);
+  return response.data;
+};
+
+// ── Subcategories ─────────────────────────────────────────────
+
+/**
+ * Fetch subcategories for a specific category (paginated).
  */
 export const getSubcategoriesApi = async (categoryId, params = {}) => {
   const response = await api.get(`/categories/${categoryId}/subcategories`, { params });
+  return response.data;
+};
+
+/**
+ * Create a subcategory under a category.
+ */
+export const createSubcategoryApi = async (categoryId, payload) => {
+  const response = await api.post(`/categories/${categoryId}/subcategories`, payload);
+  return response.data;
+};
+
+/**
+ * Update an existing subcategory.
+ */
+export const updateSubcategoryApi = async (id, payload) => {
+  const response = await api.put(`/categories/subcategories/${id}`, payload);
+  return response.data;
+};
+
+/**
+ * Soft-delete a subcategory.
+ */
+export const deleteSubcategoryApi = async (id) => {
+  const response = await api.delete(`/categories/subcategories/${id}`);
   return response.data;
 };

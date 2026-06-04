@@ -30,6 +30,7 @@ class CategoryRead(BaseModel):
     created_at: datetime
     updated_at: datetime
     subcategories_count: int = 0
+    products_count: int = 0
 
     model_config = {"from_attributes": True}
 
@@ -60,5 +61,6 @@ class SubcategoryRead(BaseModel):
     is_active: bool
     created_at: datetime
     updated_at: datetime
+    products_count: int = 0
 
     model_config = {"from_attributes": True}

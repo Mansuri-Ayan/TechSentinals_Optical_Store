@@ -30,6 +30,9 @@ def _inventory_to_read(inv) -> InventoryRead:
         cost_price=product.cost_price if product else None,
         selling_price=product.selling_price if product else None,
         image_url=product.image_url if product else None,
+        frame_product=product.frame_product if product else None,
+        lens_product=product.lens_product if product else None,
+        accessory_product=product.accessory_product if product else None,
     )
 
 
@@ -46,6 +49,7 @@ async def list_inventories(
     search: str | None = Query(default=None, description="Search product name or SKU"),
     category_id: int | None = Query(default=None, description="Filter by category ID"),
     subcategory_id: int | None = Query(default=None, description="Filter by subcategory ID"),
+    brand_id: int | None = Query(default=None, description="Filter by brand ID"),
     stock_status: str | None = Query(
         default=None,
         description="Filter by stock status: in_stock, low_stock, out_of_stock",
@@ -64,6 +68,7 @@ async def list_inventories(
         search=search,
         category_id=category_id,
         subcategory_id=subcategory_id,
+        brand_id=brand_id,
         stock_status=stock_status,
         page=page,
         limit=limit,

@@ -4,6 +4,8 @@ from decimal import Decimal
 from enum import Enum
 from pydantic import BaseModel, Field
 
+from schemas.product import FrameDetailsRead, LensDetailsRead, AccessoryDetailsRead
+
 
 class OwnerTypeEnum(str, Enum):
     ADMIN = "ADMIN"
@@ -72,5 +74,10 @@ class InventoryRead(BaseModel):
     cost_price: Decimal | None = None
     selling_price: Decimal | None = None
     image_url: str | None = None
+
+    # Nested type-specific details
+    frame_product: FrameDetailsRead | None = None
+    lens_product: LensDetailsRead | None = None
+    accessory_product: AccessoryDetailsRead | None = None
 
     model_config = {"from_attributes": True}

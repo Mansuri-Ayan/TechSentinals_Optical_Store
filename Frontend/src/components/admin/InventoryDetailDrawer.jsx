@@ -1,7 +1,7 @@
 import { createPortal } from 'react-dom';
 import {
   X, Package, Tag, Truck, BarChart3, DollarSign,
-  Store, CheckCircle, AlertTriangle, XCircle, Image as ImageIcon,
+  Store, CheckCircle, AlertTriangle, XCircle, Image as ImageIcon, Sliders,
 } from 'lucide-react';
 
 const statusConfig = {
@@ -99,6 +99,46 @@ const InventoryDetailDrawer = ({ item, onClose }) => {
             {item.subcategory && <DetailRow label="Subcategory" value={item.subcategory} />}
             {item.description && <DetailRow label="Description" value={item.description} />}
           </Section>
+
+          {/* Frame Specifications */}
+          {item.frame_product && (
+            <Section icon={Sliders} title="Frame Specifications" color="blue">
+              <DetailRow label="Frame Type" value={item.frame_product.frame_type} />
+              <DetailRow label="Shape" value={item.frame_product.shape} />
+              <DetailRow label="Material" value={item.frame_product.material} />
+              <DetailRow label="Color" value={item.frame_product.color} />
+              <DetailRow label="Lens Width" value={item.frame_product.lens_width ? `${item.frame_product.lens_width} mm` : null} />
+              <DetailRow label="Bridge Width" value={item.frame_product.bridge_width ? `${item.frame_product.bridge_width} mm` : null} />
+              <DetailRow label="Temple Length" value={item.frame_product.temple_length ? `${item.frame_product.temple_length} mm` : null} />
+              <DetailRow label="Gender" value={item.frame_product.gender} />
+              <DetailRow label="Age Group" value={item.frame_product.age_group} />
+            </Section>
+          )}
+
+          {/* Lens Specifications */}
+          {item.lens_product && (
+            <Section icon={Sliders} title="Lens Specifications" color="blue">
+              <DetailRow label="Lens Type" value={item.lens_product.lens_type} />
+              <DetailRow label="Material" value={item.lens_product.material} />
+              <DetailRow label="Index Value" value={item.lens_product.index_value} />
+              <DetailRow label="Coating" value={item.lens_product.coating} />
+              <DetailRow label="Tint Color" value={item.lens_product.tint_color} />
+              <DetailRow label="UV Protection" value={item.lens_product.uv_protection} />
+              <DetailRow label="Blue Cut" value={item.lens_product.blue_cut} />
+              <DetailRow label="Photochromic" value={item.lens_product.photochromic} />
+              <DetailRow label="Polarized" value={item.lens_product.polarized} />
+            </Section>
+          )}
+
+          {/* Accessory Specifications */}
+          {item.accessory_product && (
+            <Section icon={Sliders} title="Accessory Specifications" color="blue">
+              <DetailRow label="Accessory Type" value={item.accessory_product.accessory_type} />
+              <DetailRow label="Material" value={item.accessory_product.material} />
+              <DetailRow label="Color" value={item.accessory_product.color} />
+              <DetailRow label="Size" value={item.accessory_product.size} />
+            </Section>
+          )}
 
           <Section icon={Tag} title="Brand Information" color="blue">
             <DetailRow label="Brand" value={item.brand} />

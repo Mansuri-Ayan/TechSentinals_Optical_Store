@@ -22,5 +22,6 @@ class BrandRead(BaseModel):
     is_active: bool
     created_at: datetime
     updated_at: datetime
+    products_count: int = 0
 
     model_config = {"from_attributes": True}

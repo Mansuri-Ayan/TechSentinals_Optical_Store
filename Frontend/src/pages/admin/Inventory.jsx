@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import {
   Search, Plus, Package, ChevronRight, Eye, Trash2,
@@ -15,6 +15,7 @@ import PlaceOrderModal from '../../components/admin/PlaceOrderModal';
 
 import { useStoreStore } from '../../store/store';
 import { useCategories, useSubcategories } from '../../hooks/useCategories';
+import { useBrands } from '../../hooks/useBrands';
 import { useInventory } from '../../hooks/useInventory';
 import { createProductApi } from '../../api/product/product.api';
 
@@ -207,6 +208,26 @@ const ProductCard = ({ item, onViewProduct, onViewDetails, onDelete }) => {
 const Inventory = () => {
   const { storeId } = useParams();
   const { stores, selectedStore, setSelectedStore } = useStoreStore();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const queryCategoryId = searchParams.get('category_id');
+  const querySubcategoryId = searchParams.get('subcategory_id');
+  const queryBrandId = searchParams.get('brand_id');
+
+  /* Filters & Pagination states */
+  const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [activeCategory, setActiveCategory] = useState(queryCategoryId || 'all');
+  const [activeSubcategory, setActiveSubcategory] = useState(querySubcategoryId || '');
+  const [activeBrand, setActiveBrand] = useState(queryBrandId || '');
+  const [activeStatus, setActiveStatus] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+
+  /* Modal/drawer state */
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [detailItem, setDetailItem] = useState(null);
+  const [viewProductItem, setViewProductItem] = useState(null);
+  const [orderItem, setOrderItem] = useState(null);
 
   /* Sync URL Store ID to store management store */
   useEffect(() => {
@@ -216,19 +237,12 @@ const Inventory = () => {
     }
   }, [selectedStore?.id, setSelectedStore, storeId, stores]);
 
-  /* Filters & Pagination states */
-  const [searchTerm, setSearchTerm] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [activeCategory, setActiveCategory] = useState('all');
-  const [activeSubcategory, setActiveSubcategory] = useState('');
-  const [activeStatus, setActiveStatus] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
-
-  /* Modal/drawer state */
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [detailItem, setDetailItem] = useState(null);
-  const [viewProductItem, setViewProductItem] = useState(null);
-  const [orderItem, setOrderItem] = useState(null);
+  // Synchronize URL query params to state when they change
+  useEffect(() => {
+    setActiveCategory(queryCategoryId || 'all');
+    setActiveSubcategory(querySubcategoryId || '');
+    setActiveBrand(queryBrandId || '');
+  }, [queryCategoryId, querySubcategoryId, queryBrandId]);
 
   /* Debounce search input */
   useEffect(() => {
@@ -241,13 +255,22 @@ const Inventory = () => {
   /* Reset pagination on filter change */
   useEffect(() => {
     setCurrentPage(1);
-  }, [debouncedSearch, activeCategory, activeSubcategory, activeStatus]);
+  }, [debouncedSearch, activeCategory, activeSubcategory, activeBrand, activeStatus]);
 
   /* Fetch database categories & subcategories */
   const { categories } = useCategories();
   const { subcategories } = useSubcategories(
     activeCategory !== 'all' ? Number(activeCategory) : null
   );
+
+  /* Fetch all brands to find active brand name */
+  const { brands } = useBrands(null, { paginate: false });
+
+  const activeBrandName = useMemo(() => {
+    if (!activeBrand || !brands) return '';
+    const found = brands.find((b) => String(b.id) === String(activeBrand));
+    return found ? found.name : '';
+  }, [activeBrand, brands]);
 
   const getStockStatusValue = (statusStr) => {
     if (statusStr === 'In Stock') return 'in_stock';
@@ -272,6 +295,7 @@ const Inventory = () => {
     search: debouncedSearch,
     category_id: activeCategory !== 'all' ? Number(activeCategory) : null,
     subcategory_id: activeSubcategory ? Number(activeSubcategory) : null,
+    brand_id: activeBrand ? Number(activeBrand) : null,
     stock_status: getStockStatusValue(activeStatus),
   });
 
@@ -327,10 +351,33 @@ const Inventory = () => {
   const handleCategoryChange = (key) => {
     setActiveCategory(key);
     setActiveSubcategory('');
+    const newParams = new URLSearchParams(searchParams);
+    if (key === 'all') {
+      newParams.delete('category_id');
+    } else {
+      newParams.set('category_id', key);
+    }
+    newParams.delete('subcategory_id');
+    setSearchParams(newParams);
   };
 
   const handleSubcategoryChange = (subId) => {
-    setActiveSubcategory((prev) => (String(prev) === String(subId) ? '' : subId));
+    const nextSub = String(activeSubcategory) === String(subId) ? '' : subId;
+    setActiveSubcategory(nextSub);
+    const newParams = new URLSearchParams(searchParams);
+    if (nextSub) {
+      newParams.set('subcategory_id', nextSub);
+    } else {
+      newParams.delete('subcategory_id');
+    }
+    setSearchParams(newParams);
+  };
+
+  const handleClearBrand = () => {
+    setActiveBrand('');
+    const newParams = new URLSearchParams(searchParams);
+    newParams.delete('brand_id');
+    setSearchParams(newParams);
   };
 
   const handleSearch = (val) => {
@@ -353,6 +400,9 @@ const Inventory = () => {
       selling_price: Number(data.selling_price),
       image_url: data.image || null,
       description: data.description || null,
+      frame_details: data.frame_details || null,
+      lens_details: data.lens_details || null,
+      accessory_details: data.accessory_details || null,
     };
 
     const product = await createProductApi(productPayload);
@@ -398,7 +448,7 @@ const Inventory = () => {
     [kpiItems]
   );
 
-  const hasActiveFilters = searchTerm || activeSubcategory || activeStatus;
+  const hasActiveFilters = searchTerm || activeSubcategory || activeBrand || activeStatus;
 
   /* KPI Card Configuration */
   const kpiCards = [
@@ -661,6 +711,12 @@ const Inventory = () => {
               <button onClick={() => setActiveSubcategory('')}><XIcon className="w-3 h-3" /></button>
             </span>
           )}
+          {activeBrand && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-100 text-slate-700 rounded-full text-xs font-semibold">
+              Brand: {activeBrandName}
+              <button onClick={handleClearBrand}><XIcon className="w-3 h-3" /></button>
+            </span>
+          )}
           {searchTerm && (
             <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-100 text-slate-700 rounded-full text-xs font-semibold">
               "{searchTerm}"
@@ -672,6 +728,9 @@ const Inventory = () => {
               setSearchTerm('');
               setActiveStatus('');
               setActiveSubcategory('');
+              setActiveBrand('');
+              setActiveCategory('all');
+              setSearchParams(new URLSearchParams());
             }}
             className="text-xs text-slate-400 hover:text-slate-700 font-semibold transition-colors ml-1"
           >

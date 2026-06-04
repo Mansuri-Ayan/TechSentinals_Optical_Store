@@ -1,4 +1,5 @@
 # API: brand/read.py
+import math
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from core.deps import get_current_admin
@@ -12,18 +13,43 @@ router = APIRouter()
 
 @router.get(
     "/",
-    response_model=list[BrandRead],
     summary="List all brands",
 )
 async def list_brands(
-    active_only: bool = Query(False),
+    active_status: str | None = Query(None, description="active, inactive, or None/all"),
+    search: str | None = Query(None),
+    store_id: int | None = Query(None),
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+    paginate: bool = Query(True),
     db: AsyncSession = Depends(get_db),
     current_admin: Admin = Depends(get_current_admin),
-) -> list[BrandRead]:
-    brands = await get_brands_by_admin(
-        db, admin_id=current_admin.id, active_only=active_only,
+):
+    items, total, active_cnt, inactive_cnt = await get_brands_by_admin(
+        db,
+        admin_id=current_admin.id,
+        active_status=active_status,
+        search=search,
+        store_id=store_id,
+        page=page,
+        limit=limit,
+        paginate=paginate,
     )
-    return [BrandRead.model_validate(b) for b in brands]
+
+    validated = [BrandRead.model_validate(item) for item in items]
+
+    if not paginate:
+        return validated
+
+    return {
+        "items": validated,
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "pages": math.ceil(total / limit) if limit else 1,
+        "active_count": active_cnt,
+        "inactive_count": inactive_cnt,
+    }
 
 
 @router.get(

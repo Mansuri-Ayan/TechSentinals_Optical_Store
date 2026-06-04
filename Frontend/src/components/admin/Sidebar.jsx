@@ -54,6 +54,8 @@ const Sidebar = ({ isOpen, onClose }) => {
   const getStoreName = (store) => store?.store_name || store?.name || 'Select Store';
   const staffRoute = currentStore ? `/admin/store/${currentStore.id}/staff` : '/admin/dashboard';
   const inventoryRoute = currentStore ? `/admin/store/${currentStore.id}/inventory` : '/admin/dashboard';
+  const brandsRoute = currentStore ? `/admin/store/${currentStore.id}/brands` : '/admin/dashboard';
+  const categoriesRoute = currentStore ? `/admin/store/${currentStore.id}/categories` : '/admin/dashboard';
 
   const handleStoreSelect = (store) => {
     setSelectedStore(store);
@@ -63,6 +65,10 @@ const Sidebar = ({ isOpen, onClose }) => {
       navigate(`/admin/store/${store.id}/staff`);
     } else if (location.pathname.startsWith('/admin/store/') && location.pathname.endsWith('/inventory')) {
       navigate(`/admin/store/${store.id}/inventory`);
+    } else if (location.pathname.startsWith('/admin/store/') && location.pathname.endsWith('/brands')) {
+      navigate(`/admin/store/${store.id}/brands`);
+    } else if (location.pathname.startsWith('/admin/store/') && location.pathname.endsWith('/categories')) {
+      navigate(`/admin/store/${store.id}/categories`);
     }
   };
 
@@ -191,12 +197,20 @@ const Sidebar = ({ isOpen, onClose }) => {
 
           <NavLink
             to="/admin/brands"
-            className={({ isActive }) =>
-              `flex items-center px-4 py-2.5 rounded-xl transition-all duration-200 group ${isActive
+            end
+            className={({ isActive }) => {
+              const isBrandsActive = isActive || location.pathname.includes('/brands');
+              return `flex items-center px-4 py-2.5 rounded-xl transition-all duration-200 group ${isBrandsActive
                 ? 'bg-emerald-500/10 text-emerald-400 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_0_10px_rgba(16,185,129,0.1)] border border-emerald-500/20'
                 : 'text-slate-400 hover:bg-white/5 hover:text-slate-200 border border-transparent'
-              }`
-            }
+              }`;
+            }}
+            onClick={(e) => {
+              if (currentStore) {
+                e.preventDefault();
+                navigate(brandsRoute);
+              }
+            }}
           >
             <Tag className="w-5 h-5 mr-3 transition-transform group-hover:scale-110" />
             <span className="font-medium text-sm">Brands</span>
@@ -204,12 +218,20 @@ const Sidebar = ({ isOpen, onClose }) => {
 
           <NavLink
             to="/admin/categories"
-            className={({ isActive }) =>
-              `flex items-center px-4 py-2.5 rounded-xl transition-all duration-200 group ${isActive
+            end
+            className={({ isActive }) => {
+              const isCategoriesActive = isActive || location.pathname.includes('/categories');
+              return `flex items-center px-4 py-2.5 rounded-xl transition-all duration-200 group ${isCategoriesActive
                 ? 'bg-emerald-500/10 text-emerald-400 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_0_10px_rgba(16,185,129,0.1)] border border-emerald-500/20'
                 : 'text-slate-400 hover:bg-white/5 hover:text-slate-200 border border-transparent'
-              }`
-            }
+              }`;
+            }}
+            onClick={(e) => {
+              if (currentStore) {
+                e.preventDefault();
+                navigate(categoriesRoute);
+              }
+            }}
           >
             <Layers className="w-5 h-5 mr-3 transition-transform group-hover:scale-110" />
             <span className="font-medium text-sm">Categories</span>

@@ -1,4 +1,5 @@
 # API: category/read.py
+import math
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from core.deps import get_current_admin
@@ -14,25 +15,42 @@ router = APIRouter()
 
 @router.get(
     "/",
-    response_model=list[CategoryRead],
     summary="List all categories",
     description="List all categories for the authenticated admin.",
 )
 async def list_categories(
     active_only: bool = Query(False, description="Only return active categories"),
+    search: str | None = Query(None),
+    store_id: int | None = Query(None),
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+    paginate: bool = Query(True),
     db: AsyncSession = Depends(get_db),
     current_admin: Admin = Depends(get_current_admin),
-) -> list[CategoryRead]:
-    categories = await get_categories_by_admin(
-        db, admin_id=current_admin.id, active_only=active_only,
+):
+    items, total = await get_categories_by_admin(
+        db,
+        admin_id=current_admin.id,
+        active_only=active_only,
+        search=search,
+        store_id=store_id,
+        page=page,
+        limit=limit,
+        paginate=paginate,
     )
-    return [
-        CategoryRead(
-            **{c.key: getattr(cat, c.key) for c in cat.__table__.columns},
-            subcategories_count=len(cat.subcategories) if cat.subcategories else 0,
-        )
-        for cat in categories
-    ]
+
+    validated = [CategoryRead.model_validate(item) for item in items]
+
+    if not paginate:
+        return validated
+
+    return {
+        "items": validated,
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "pages": math.ceil(total / limit) if limit else 1,
+    }
 
 
 @router.get(
@@ -60,16 +78,20 @@ async def get_category_endpoint(
 
 @router.get(
     "/{category_id}/subcategories",
-    response_model=list[SubcategoryRead],
     summary="List subcategories",
     description="List all subcategories under a category.",
 )
 async def list_subcategories(
     category_id: int,
     active_only: bool = Query(False),
+    search: str | None = Query(None),
+    store_id: int | None = Query(None),
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+    paginate: bool = Query(True),
     db: AsyncSession = Depends(get_db),
     current_admin: Admin = Depends(get_current_admin),
-) -> list[SubcategoryRead]:
+):
     # Verify ownership
     category = await get_category(db, category_id)
     if category is None or category.admin_id != current_admin.id:
@@ -77,7 +99,27 @@ async def list_subcategories(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Category not found",
         )
-    subs = await get_subcategories_by_category(
-        db, category_id=category_id, active_only=active_only,
+
+    items, total = await get_subcategories_by_category(
+        db,
+        category_id=category_id,
+        active_only=active_only,
+        search=search,
+        store_id=store_id,
+        page=page,
+        limit=limit,
+        paginate=paginate,
     )
-    return [SubcategoryRead.model_validate(s) for s in subs]
+
+    validated = [SubcategoryRead.model_validate(item) for item in items]
+
+    if not paginate:
+        return validated
+
+    return {
+        "items": validated,
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "pages": math.ceil(total / limit) if limit else 1,
+    }

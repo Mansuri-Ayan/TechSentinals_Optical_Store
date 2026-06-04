@@ -106,6 +106,28 @@ const InventoryRouteRedirect = () => {
   return <Navigate to={`/admin/store/${targetStore.id}/inventory`} replace />;
 };
 
+const BrandsRouteRedirect = () => {
+  const { selectedStore, stores } = useStoreStore();
+  const targetStore = selectedStore || stores[0];
+
+  if (!targetStore) {
+    return <Navigate to="/admin/dashboard" replace />;
+  }
+
+  return <Navigate to={`/admin/store/${targetStore.id}/brands`} replace />;
+};
+
+const CategoriesRouteRedirect = () => {
+  const { selectedStore, stores } = useStoreStore();
+  const targetStore = selectedStore || stores[0];
+
+  if (!targetStore) {
+    return <Navigate to="/admin/dashboard" replace />;
+  }
+
+  return <Navigate to={`/admin/store/${targetStore.id}/categories`} replace />;
+};
+
 function AppRouter() {
   return (
     <Routes>
@@ -145,9 +167,10 @@ function AppRouter() {
         <Route path="store/:storeId/staff" element={<Staff />} />
         <Route path="inventory" element={<InventoryRouteRedirect />} />
         <Route path="store/:storeId/inventory" element={<Inventory />} />
-        <Route path="inventory" element={<Inventory />} />
-        <Route path="brands" element={<Brands />} />
-        <Route path="categories" element={<Categories />} />
+        <Route path="brands" element={<BrandsRouteRedirect />} />
+        <Route path="store/:storeId/brands" element={<Brands />} />
+        <Route path="categories" element={<CategoriesRouteRedirect />} />
+        <Route path="store/:storeId/categories" element={<Categories />} />
       </Route>
 
       {/* Fallback root redirect */}

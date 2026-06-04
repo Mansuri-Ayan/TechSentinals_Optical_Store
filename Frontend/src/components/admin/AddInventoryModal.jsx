@@ -61,6 +61,34 @@ const AddInventoryModal = ({ isOpen, onClose, onSubmit: onSubmitProp }) => {
       selling_price: '',
       description: '',
       is_active: true,
+      frame_details: {
+        frame_type: '',
+        shape: '',
+        material: '',
+        color: '',
+        lens_width: '',
+        bridge_width: '',
+        temple_length: '',
+        gender: '',
+        age_group: '',
+      },
+      lens_details: {
+        lens_type: '',
+        material: '',
+        index_value: '',
+        coating: '',
+        tint_color: '',
+        uv_protection: '',
+        blue_cut: '',
+        photochromic: '',
+        polarized: '',
+      },
+      accessory_details: {
+        accessory_type: '',
+        material: '',
+        color: '',
+        size: '',
+      },
     },
   });
 
@@ -68,6 +96,14 @@ const AddInventoryModal = ({ isOpen, onClose, onSubmit: onSubmitProp }) => {
   const { subcategories, isLoadingSubcategories } = useSubcategories(
     watchedCategoryId ? Number(watchedCategoryId) : null
   );
+
+  const selectedCategoryObj = categories?.find(
+    (c) => c.id === Number(watchedCategoryId)
+  );
+  const categoryName = selectedCategoryObj?.name?.toLowerCase() || '';
+  const isFrame = categoryName === 'frames';
+  const isLens = categoryName === 'lenses';
+  const isAccessory = !!watchedCategoryId && !isFrame && !isLens;
 
   // Auto-reset subcategory field when category changes
   useEffect(() => {
@@ -113,6 +149,32 @@ const AddInventoryModal = ({ isOpen, onClose, onSubmit: onSubmitProp }) => {
         }
       }
 
+      // Clean spec data blocks
+      let frame_details = null;
+      let lens_details = null;
+      let accessory_details = null;
+
+      const cleanObj = (obj) => {
+        if (!obj) return null;
+        const cleaned = {};
+        let hasValue = false;
+        for (const [k, v] of Object.entries(obj)) {
+          if (v !== undefined && v !== null && String(v).trim() !== '') {
+            cleaned[k] = v;
+            hasValue = true;
+          }
+        }
+        return hasValue ? cleaned : null;
+      };
+
+      if (isFrame) {
+        frame_details = cleanObj(data.frame_details);
+      } else if (isLens) {
+        lens_details = cleanObj(data.lens_details);
+      } else if (isAccessory) {
+        accessory_details = cleanObj(data.accessory_details);
+      }
+
       // Await parent submission logic (creating product and inventory on backend)
       await onSubmitProp?.({
         ...data,
@@ -120,6 +182,9 @@ const AddInventoryModal = ({ isOpen, onClose, onSubmit: onSubmitProp }) => {
         subcategory_id: data.subcategory_id ? Number(data.subcategory_id) : null,
         brand_id: brandId,
         image: imagePreview,
+        frame_details,
+        lens_details,
+        accessory_details,
       });
 
       // Clear, reset form, and close modal only on success
@@ -207,7 +272,7 @@ const AddInventoryModal = ({ isOpen, onClose, onSubmit: onSubmitProp }) => {
                     disabled={isPending || isLoadingCategories}
                   >
                     <option value="">{isLoadingCategories ? 'Loading...' : 'Select Category'}</option>
-                    {categories.map((cat) => (
+                    {categories.filter((cat) => cat.is_active).map((cat) => (
                       <option key={cat.id} value={cat.id}>{cat.name}</option>
                     ))}
                   </select>
@@ -228,7 +293,7 @@ const AddInventoryModal = ({ isOpen, onClose, onSubmit: onSubmitProp }) => {
                         ? 'Loading...'
                         : 'Select Subcategory'}
                     </option>
-                    {subcategories.map((sub) => (
+                    {subcategories.filter((sub) => sub.is_active).map((sub) => (
                       <option key={sub.id} value={sub.id}>{sub.name}</option>
                     ))}
                   </select>
@@ -246,7 +311,7 @@ const AddInventoryModal = ({ isOpen, onClose, onSubmit: onSubmitProp }) => {
                     list="brand-datalist"
                   />
                   <datalist id="brand-datalist">
-                    {brands.map((b) => (
+                    {brands.filter((b) => b.is_active).map((b) => (
                       <option key={b.id} value={b.name} />
                     ))}
                   </datalist>
@@ -266,11 +331,200 @@ const AddInventoryModal = ({ isOpen, onClose, onSubmit: onSubmitProp }) => {
               </div>
             </section>
 
+            {/* 2 – Product Specifications (Conditional) */}
+            {watchedCategoryId && (
+              <>
+                <div className="border-t border-slate-100" />
+                <section>
+                  <SectionHeading num="2" label={`${selectedCategoryObj?.name || 'Product'} Specifications`} />
+
+                  {isFrame && (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-4 gap-y-4">
+                      <div>
+                        <label className="block text-sm font-semibold text-slate-700 mb-1.5">Frame Type</label>
+                        <select {...register('frame_details.frame_type')} disabled={isPending} className={inputCls(!!errors.frame_details?.frame_type)}>
+                          <option value="">Select Type</option>
+                          <option value="Full-Rim">Full-Rim</option>
+                          <option value="Half-Rim">Half-Rim</option>
+                          <option value="Rimless">Rimless</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-slate-700 mb-1.5">Shape</label>
+                        <select {...register('frame_details.shape')} disabled={isPending} className={inputCls(!!errors.frame_details?.shape)}>
+                          <option value="">Select Shape</option>
+                          <option value="Rectangle">Rectangle</option>
+                          <option value="Round">Round</option>
+                          <option value="Aviator">Aviator</option>
+                          <option value="Cat-Eye">Cat-Eye</option>
+                          <option value="Oval">Oval</option>
+                          <option value="Square">Square</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-slate-700 mb-1.5">Material</label>
+                        <select {...register('frame_details.material')} disabled={isPending} className={inputCls(!!errors.frame_details?.material)}>
+                          <option value="">Select Material</option>
+                          <option value="Acetate">Acetate</option>
+                          <option value="Metal">Metal</option>
+                          <option value="TR-90">TR-90</option>
+                          <option value="Titanium">Titanium</option>
+                          <option value="Carbon Fiber">Carbon Fiber</option>
+                          <option value="Plastic">Plastic</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-slate-700 mb-1.5">Color</label>
+                        <input {...register('frame_details.color')} type="text" disabled={isPending} placeholder="e.g. Black / Gold" className={inputCls(!!errors.frame_details?.color)} />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-slate-700 mb-1.5">Lens Width (mm)</label>
+                        <input {...register('frame_details.lens_width')} type="text" disabled={isPending} placeholder="e.g. 52" className={inputCls(!!errors.frame_details?.lens_width)} />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-slate-700 mb-1.5">Bridge Width (mm)</label>
+                        <input {...register('frame_details.bridge_width')} type="text" disabled={isPending} placeholder="e.g. 18" className={inputCls(!!errors.frame_details?.bridge_width)} />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-slate-700 mb-1.5">Temple Length (mm)</label>
+                        <input {...register('frame_details.temple_length')} type="text" disabled={isPending} placeholder="e.g. 140" className={inputCls(!!errors.frame_details?.temple_length)} />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-slate-700 mb-1.5">Gender</label>
+                        <select {...register('frame_details.gender')} disabled={isPending} className={inputCls(!!errors.frame_details?.gender)}>
+                          <option value="">Select Gender</option>
+                          <option value="Unisex">Unisex</option>
+                          <option value="Male">Male</option>
+                          <option value="Female">Female</option>
+                          <option value="Kids">Kids</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-slate-700 mb-1.5">Age Group</label>
+                        <select {...register('frame_details.age_group')} disabled={isPending} className={inputCls(!!errors.frame_details?.age_group)}>
+                          <option value="">Select Age Group</option>
+                          <option value="Adult">Adult</option>
+                          <option value="Teens">Teens</option>
+                          <option value="Kids">Kids</option>
+                        </select>
+                      </div>
+                    </div>
+                  )}
+
+                  {isLens && (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-4 gap-y-4">
+                      <div>
+                        <label className="block text-sm font-semibold text-slate-700 mb-1.5">Lens Type</label>
+                        <select {...register('lens_details.lens_type')} disabled={isPending} className={inputCls(!!errors.lens_details?.lens_type)}>
+                          <option value="">Select Type</option>
+                          <option value="Single Vision">Single Vision</option>
+                          <option value="Bifocal">Bifocal</option>
+                          <option value="Progressive">Progressive</option>
+                          <option value="Zero Power">Zero Power</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-slate-700 mb-1.5">Material</label>
+                        <select {...register('lens_details.material')} disabled={isPending} className={inputCls(!!errors.lens_details?.material)}>
+                          <option value="">Select Material</option>
+                          <option value="CR-39">CR-39</option>
+                          <option value="Polycarbonate">Polycarbonate</option>
+                          <option value="Glass">Glass</option>
+                          <option value="Trivex">Trivex</option>
+                          <option value="High-Index Plastic">High-Index Plastic</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-slate-700 mb-1.5">Index Value</label>
+                        <select {...register('lens_details.index_value')} disabled={isPending} className={inputCls(!!errors.lens_details?.index_value)}>
+                          <option value="">Select Index</option>
+                          <option value="1.50">1.50</option>
+                          <option value="1.56">1.56</option>
+                          <option value="1.60">1.60</option>
+                          <option value="1.67">1.67</option>
+                          <option value="1.74">1.74</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-slate-700 mb-1.5">Coating</label>
+                        <select {...register('lens_details.coating')} disabled={isPending} className={inputCls(!!errors.lens_details?.coating)}>
+                          <option value="">Select Coating</option>
+                          <option value="Anti-Reflective">Anti-Reflective</option>
+                          <option value="Scratch-Resistant">Scratch-Resistant</option>
+                          <option value="HMC">HMC (Hard Multi-Coat)</option>
+                          <option value="Blue Cut">Blue Cut</option>
+                          <option value="Hydrophobic">Hydrophobic</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-slate-700 mb-1.5">Tint Color</label>
+                        <input {...register('lens_details.tint_color')} type="text" disabled={isPending} placeholder="Clear / Brown / Grey" className={inputCls(!!errors.lens_details?.tint_color)} />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-slate-700 mb-1.5">UV Protection</label>
+                        <select {...register('lens_details.uv_protection')} disabled={isPending} className={inputCls(!!errors.lens_details?.uv_protection)}>
+                          <option value="">Select UV</option>
+                          <option value="UV400">UV400</option>
+                          <option value="UV380">UV380</option>
+                          <option value="None">None</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-slate-700 mb-1.5">Blue Cut Filter</label>
+                        <select {...register('lens_details.blue_cut')} disabled={isPending} className={inputCls(!!errors.lens_details?.blue_cut)}>
+                          <option value="">Select Blue Cut</option>
+                          <option value="Yes">Yes</option>
+                          <option value="No">No</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-slate-700 mb-1.5">Photochromic</label>
+                        <select {...register('lens_details.photochromic')} disabled={isPending} className={inputCls(!!errors.lens_details?.photochromic)}>
+                          <option value="">Select Transition</option>
+                          <option value="Yes">Yes</option>
+                          <option value="No">No</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-slate-700 mb-1.5">Polarized</label>
+                        <select {...register('lens_details.polarized')} disabled={isPending} className={inputCls(!!errors.lens_details?.polarized)}>
+                          <option value="">Select Polarization</option>
+                          <option value="Yes">Yes</option>
+                          <option value="No">No</option>
+                        </select>
+                      </div>
+                    </div>
+                  )}
+
+                  {isAccessory && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-4">
+                      <div>
+                        <label className="block text-sm font-semibold text-slate-700 mb-1.5">Accessory Type</label>
+                        <input {...register('accessory_details.accessory_type')} type="text" disabled={isPending} placeholder="e.g. Case, Cloth, Chain, Solution" className={inputCls(!!errors.accessory_details?.accessory_type)} />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-slate-700 mb-1.5">Material</label>
+                        <input {...register('accessory_details.material')} type="text" disabled={isPending} placeholder="e.g. Leather, Microfiber, Silicon" className={inputCls(!!errors.accessory_details?.material)} />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-slate-700 mb-1.5">Color</label>
+                        <input {...register('accessory_details.color')} type="text" disabled={isPending} placeholder="e.g. Black, Brown, Transparent" className={inputCls(!!errors.accessory_details?.color)} />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-slate-700 mb-1.5">Size / Dimensions</label>
+                        <input {...register('accessory_details.size')} type="text" disabled={isPending} placeholder="e.g. Medium, 50ml, 15x15cm" className={inputCls(!!errors.accessory_details?.size)} />
+                      </div>
+                    </div>
+                  )}
+                </section>
+              </>
+            )}
+
             <div className="border-t border-slate-100" />
 
-            {/* 2 – Stock Details */}
+            {/* 3 – Stock Details */}
             <section>
-              <SectionHeading num="2" label="Stock Details" />
+              <SectionHeading num="3" label="Stock Details" />
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-4">
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-1.5">Quantity <span className="text-red-500">*</span></label>
@@ -295,9 +549,9 @@ const AddInventoryModal = ({ isOpen, onClose, onSubmit: onSubmitProp }) => {
 
             <div className="border-t border-slate-100" />
 
-            {/* 3 – Pricing */}
+            {/* 4 – Pricing */}
             <section>
-              <SectionHeading num="3" label="Pricing Details" />
+              <SectionHeading num="4" label="Pricing Details" />
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-4">
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-1.5">Cost Price (₹) <span className="text-red-500">*</span></label>
@@ -321,9 +575,9 @@ const AddInventoryModal = ({ isOpen, onClose, onSubmit: onSubmitProp }) => {
 
             <div className="border-t border-slate-100" />
 
-            {/* 4 – Store */}
+            {/* 5 – Store */}
             <section>
-              <SectionHeading num="4" label="Store Information" />
+              <SectionHeading num="5" label="Store Information" />
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-1.5">Store Name</label>
                 <input type="text" disabled value={selectedStore?.store_name || ''} className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-500 text-sm cursor-not-allowed" />

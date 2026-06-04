@@ -12,7 +12,7 @@ export const inventoryQueryKey = ['inventory'];
  * React Query hook for paginated and filtered store inventory.
  *
  * @param {number|string} storeId - The store whose inventory to fetch.
- * @param {Object} filters - { page, limit, search, category_id, subcategory_id, stock_status }
+ * @param {Object} filters - { page, limit, search, category_id, subcategory_id, brand_id, stock_status }
  */
 export const useInventory = (storeId, filters = {}) => {
   const queryClient = useQueryClient();
@@ -26,6 +26,7 @@ export const useInventory = (storeId, filters = {}) => {
     ...(filters.search ? { search: filters.search } : {}),
     ...(filters.category_id ? { category_id: filters.category_id } : {}),
     ...(filters.subcategory_id ? { subcategory_id: filters.subcategory_id } : {}),
+    ...(filters.brand_id ? { brand_id: filters.brand_id } : {}),
     ...(filters.stock_status ? { stock_status: filters.stock_status } : {}),
   };
 

@@ -96,6 +96,7 @@ async def get_inventories_by_owner(
     search: str | None = None,
     category_id: int | None = None,
     subcategory_id: int | None = None,
+    brand_id: int | None = None,
     stock_status: str | None = None,
     page: int = 1,
     limit: int = 20,
@@ -141,6 +142,10 @@ async def get_inventories_by_owner(
     if subcategory_id is not None:
         needs_product_join = True
         join_conditions.append(Product.subcategory_id == subcategory_id)
+
+    if brand_id is not None:
+        needs_product_join = True
+        join_conditions.append(Product.brand_id == brand_id)
 
     # ── Count query ──
     count_stmt = select(sa_func.count(Inventory.id)).where(*base_conditions)
