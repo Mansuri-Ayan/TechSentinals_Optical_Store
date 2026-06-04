@@ -19,21 +19,12 @@ config.set_main_option("sqlalchemy.url", sync_url)
 
 # ── Import all models so Alembic sees them for autogenerate ───
 from db.session import Base
-from models.admin import Admin
-from models.store import Store
-from models.worker import Worker
-from models.optician import Optician
-from models.manager import Manager
-from models.refresh_token import RefreshToken
-from models.brand import Brand
-from models.category import Category
-from models.subcategory import Subcategory
-from models.product import Product
-from models.frame_product import FrameProduct
-from models.lens_product import LensProduct
-from models.accessory_product import AccessoryProduct
-from models.inventory import Inventory
-from models.inventory_transaction import InventoryTransaction
+from models import (
+    Admin, Store, Worker, Optician, Manager, RefreshToken, Role, Brand,
+    Category, Subcategory, Product, FrameProduct, LensProduct, AccessoryProduct,
+    Inventory, InventoryTransaction, Supplier, SupplierStoreLink, SupplierProduct,
+    PurchaseOrder, PurchaseOrderItem, SupplierPayment, Customer, Sale, SaleItem, SalePayment
+)
 
 target_metadata = Base.metadata
 

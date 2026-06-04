@@ -201,6 +201,32 @@ class Admin(Base):
         lazy="noload",
     )
 
+    # ── Supplier & Sales module relationships ──────────────────
+    suppliers = relationship(
+        "Supplier",
+        back_populates="admin",
+        cascade="all, delete-orphan",
+        lazy="noload",
+    )
+    customers = relationship(
+        "Customer",
+        back_populates="admin",
+        cascade="all, delete-orphan",
+        lazy="noload",
+    )
+    sales = relationship(
+        "Sale",
+        back_populates="admin",
+        cascade="all, delete-orphan",
+        lazy="noload",
+    )
+    purchase_orders = relationship(
+        "PurchaseOrder",
+        back_populates="admin",
+        cascade="all, delete-orphan",
+        lazy="noload",
+    )
+
     def __repr__(self) -> str:
         return (
             f"<Admin(id={self.id!r}, email={self.email!r}, "

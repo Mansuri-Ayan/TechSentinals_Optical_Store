@@ -12,6 +12,11 @@ from routes.brand_router import brand_router
 from routes.product_router import product_router
 from routes.inventory_router import inventory_router
 from routes.transfer_router import transfer_router
+from routes.supplier_router import supplier_router
+from routes.purchase_order_router import purchase_order_router
+from routes.customer_router import customer_router
+from routes.sale_router import sale_router
+from routes.report_router import report_router
 from db.session import engine
 
 
@@ -62,6 +67,17 @@ app.include_router(brand_router)
 app.include_router(product_router)
 app.include_router(inventory_router)
 app.include_router(transfer_router)
+
+# ── Supplier Management module ────────────────────────────────
+app.include_router(supplier_router)
+app.include_router(purchase_order_router)
+
+# ── Sales module ──────────────────────────────────────────────
+app.include_router(customer_router)
+app.include_router(sale_router)
+
+# ── Reports & Analysis module ────────────────────────────────
+app.include_router(report_router)
 
 
 @app.get(

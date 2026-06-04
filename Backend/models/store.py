@@ -147,6 +147,24 @@ class Store(Base):
         lazy="noload",
     )
 
+    # ── Supplier & Sales module relationships ──────────────────
+    supplier_links = relationship(
+        "SupplierStoreLink",
+        back_populates="store",
+        cascade="all, delete-orphan",
+        lazy="noload",
+    )
+    purchase_orders = relationship(
+        "PurchaseOrder",
+        back_populates="store",
+        lazy="noload",
+    )
+    sales = relationship(
+        "Sale",
+        back_populates="store",
+        lazy="noload",
+    )
+
     def __repr__(self) -> str:
         return (
             f"<Store(id={self.id!r}, store_name={self.store_name!r}, "

@@ -168,6 +168,13 @@ class Product(Base):
         lazy="noload",
     )
 
+    # Supplier catalogue
+    supplier_products = relationship(
+        "SupplierProduct",
+        back_populates="product",
+        lazy="noload",
+    )
+
     def __repr__(self) -> str:
         return (
             f"<Product(id={self.id!r}, sku={self.sku!r}, "

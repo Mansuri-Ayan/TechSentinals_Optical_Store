@@ -15,3 +15,17 @@ from models.lens_product import LensProduct
 from models.accessory_product import AccessoryProduct
 from models.inventory import Inventory, OwnerType
 from models.inventory_transaction import InventoryTransaction, TransactionType
+
+# ── Supplier Management ───────────────────────────────────────
+from models.supplier import Supplier, SupplierStatus
+from models.supplier_store_link import SupplierStoreLink
+from models.supplier_product import SupplierProduct
+from models.purchase_order import PurchaseOrder, POStatus
+from models.purchase_order_item import PurchaseOrderItem
+from models.supplier_payment import SupplierPayment, SupplierPaymentMethod
+
+# ── Sales ─────────────────────────────────────────────────────
+from models.customer import Customer, CustomerGender
+from models.sale import Sale, SaleStatus, StaffType
+from models.sale_item import SaleItem
+from models.sale_payment import SalePayment, SalePaymentMethod
