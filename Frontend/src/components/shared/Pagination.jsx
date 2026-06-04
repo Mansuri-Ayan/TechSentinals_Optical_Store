@@ -1,132 +1,121 @@
 import React from 'react';
 import { ChevronLeft, ChevronRight, MoreHorizontal } from 'lucide-react';
 
-const Pagination = ({ 
-  totalItems, 
-  itemsPerPage = 10, 
-  currentPage, 
-  onPageChange 
+const Pagination = ({
+  totalItems,
+  itemsPerPage = 10,
+  currentPage,
+  onPageChange,
 }) => {
   const totalPages = Math.ceil(totalItems / itemsPerPage);
 
-  // Do not render pagination if total records are 10 or less
-  if (totalItems <= itemsPerPage || totalPages <= 1) {
-    return null;
-  }
+  // Don't render if only 1 page
+  if (totalPages <= 1) return null;
 
   const handlePrevious = () => {
-    if (currentPage > 1) {
-      onPageChange(currentPage - 1);
-    }
+    if (currentPage > 1) onPageChange(currentPage - 1);
   };
 
   const handleNext = () => {
-    if (currentPage < totalPages) {
-      onPageChange(currentPage + 1);
-    }
+    if (currentPage < totalPages) onPageChange(currentPage + 1);
   };
 
-  // Generate page numbers
+  // Smart page number generation
   const getPageNumbers = () => {
-    const maxVisiblePages = 5;
+    const delta = 1; // pages on each side of current
     const pages = [];
-    
-    if (totalPages <= maxVisiblePages) {
-      for (let i = 1; i <= totalPages; i++) {
-        pages.push(i);
-      }
-    } else {
-      // Always show first, last, and pages around current
-      if (currentPage <= 3) {
-        pages.push(1, 2, 3, 4, '...', totalPages);
-      } else if (currentPage >= totalPages - 2) {
-        pages.push(1, '...', totalPages - 3, totalPages - 2, totalPages - 1, totalPages);
-      } else {
-        pages.push(1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages);
-      }
+
+    if (totalPages <= 7) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+      return pages;
     }
+
+    pages.push(1);
+
+    const left = Math.max(2, currentPage - delta);
+    const right = Math.min(totalPages - 1, currentPage + delta);
+
+    if (left > 2) pages.push('...');
+
+    for (let i = left; i <= right; i++) pages.push(i);
+
+    if (right < totalPages - 1) pages.push('...');
+
+    pages.push(totalPages);
     return pages;
   };
 
+  const startItem = (currentPage - 1) * itemsPerPage + 1;
+  const endItem = Math.min(currentPage * itemsPerPage, totalItems);
+
   return (
-    <div className="flex items-center justify-between px-4 py-3 sm:px-6 mt-4 bg-white border border-slate-100 rounded-xl shadow-sm">
-      <div className="flex flex-1 items-center justify-between sm:hidden">
+    <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-4 bg-white border border-slate-100 rounded-2xl px-4 sm:px-6 py-3.5 shadow-sm">
+      {/* Info text */}
+      <p className="text-sm text-slate-500 font-medium whitespace-nowrap">
+        Showing{' '}
+        <span className="font-bold text-slate-800">{startItem}</span>
+        {' – '}
+        <span className="font-bold text-slate-800">{endItem}</span>
+        {' of '}
+        <span className="font-bold text-slate-800">{totalItems}</span>
+        {' results'}
+      </p>
+
+      {/* Controls */}
+      <div className="flex items-center gap-1.5">
+        {/* Previous */}
         <button
           onClick={handlePrevious}
           disabled={currentPage === 1}
-          className="relative inline-flex items-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex items-center gap-1.5 px-3 py-2 text-sm font-semibold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 hover:border-slate-300 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+          aria-label="Previous page"
         >
-          Previous
+          <ChevronLeft className="w-4 h-4" />
+          <span className="hidden sm:inline">Prev</span>
         </button>
-        <span className="text-sm text-slate-700 font-medium">
-          Page {currentPage} of {totalPages}
-        </span>
+
+        {/* Page numbers */}
+        <div className="flex items-center gap-1">
+          {getPageNumbers().map((page, idx) => {
+            if (page === '...') {
+              return (
+                <span
+                  key={`ellipsis-${idx}`}
+                  className="flex items-center justify-center w-9 h-9 text-slate-400"
+                >
+                  <MoreHorizontal className="w-4 h-4" />
+                </span>
+              );
+            }
+
+            const isActive = page === currentPage;
+            return (
+              <button
+                key={page}
+                onClick={() => onPageChange(page)}
+                aria-current={isActive ? 'page' : undefined}
+                className={`flex items-center justify-center w-9 h-9 rounded-xl text-sm font-bold transition-all ${
+                  isActive
+                    ? 'bg-[#0A0F1F] text-white shadow-md scale-105'
+                    : 'text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 hover:border-slate-300'
+                }`}
+              >
+                {page}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Next */}
         <button
           onClick={handleNext}
           disabled={currentPage === totalPages}
-          className="relative ml-3 inline-flex items-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex items-center gap-1.5 px-3 py-2 text-sm font-semibold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 hover:border-slate-300 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+          aria-label="Next page"
         >
-          Next
+          <span className="hidden sm:inline">Next</span>
+          <ChevronRight className="w-4 h-4" />
         </button>
-      </div>
-      
-      <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
-        <div>
-          <p className="text-sm text-slate-700">
-            Showing <span className="font-semibold text-slate-900">{((currentPage - 1) * itemsPerPage) + 1}</span> to <span className="font-semibold text-slate-900">{Math.min(currentPage * itemsPerPage, totalItems)}</span> of{' '}
-            <span className="font-semibold text-slate-900">{totalItems}</span> results
-          </p>
-        </div>
-        <div>
-          <nav className="isolate inline-flex -space-x-px rounded-lg shadow-sm" aria-label="Pagination">
-            <button
-              onClick={handlePrevious}
-              disabled={currentPage === 1}
-              className="relative inline-flex items-center rounded-l-lg px-2 py-2 text-slate-400 ring-1 ring-inset ring-slate-200 hover:bg-slate-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <span className="sr-only">Previous</span>
-              <ChevronLeft className="h-5 w-5" aria-hidden="true" />
-            </button>
-            
-            {getPageNumbers().map((page, index) => {
-              if (page === '...') {
-                return (
-                  <span
-                    key={`ellipsis-${index}`}
-                    className="relative inline-flex items-center px-4 py-2 text-sm font-semibold text-slate-700 ring-1 ring-inset ring-slate-200 focus:outline-offset-0"
-                  >
-                    <MoreHorizontal className="h-4 w-4 text-slate-400" />
-                  </span>
-                );
-              }
-
-              const isActive = page === currentPage;
-              return (
-                <button
-                  key={page}
-                  onClick={() => onPageChange(page)}
-                  aria-current={isActive ? 'page' : undefined}
-                  className={`relative inline-flex items-center px-4 py-2 text-sm font-semibold focus:z-20 focus:outline-offset-0 ${
-                    isActive
-                      ? 'z-10 bg-emerald-50 text-emerald-600 ring-1 ring-inset ring-emerald-500'
-                      : 'text-slate-900 ring-1 ring-inset ring-slate-200 hover:bg-slate-50'
-                  }`}
-                >
-                  {page}
-                </button>
-              );
-            })}
-
-            <button
-              onClick={handleNext}
-              disabled={currentPage === totalPages}
-              className="relative inline-flex items-center rounded-r-lg px-2 py-2 text-slate-400 ring-1 ring-inset ring-slate-200 hover:bg-slate-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <span className="sr-only">Next</span>
-              <ChevronRight className="h-5 w-5" aria-hidden="true" />
-            </button>
-          </nav>
-        </div>
       </div>
     </div>
   );

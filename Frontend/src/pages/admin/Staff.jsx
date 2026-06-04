@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
+<<<<<<< Updated upstream
 import { useParams } from 'react-router-dom';
 import { Plus, Users, UserCheck, UserMinus, UserPlus, Download, Upload, ChevronRight, Search, Edit2, Trash2, Loader2 } from 'lucide-react';
+=======
+import { useParams, Link } from 'react-router-dom';
+import { Plus, Users, UserCheck, UserMinus, UserPlus, Download, Upload, ChevronRight, Search, Edit2, Trash2 } from 'lucide-react';
+>>>>>>> Stashed changes
 import AddStaffModal from '../../components/admin/AddStaffModal';
 import Pagination from '../../components/shared/Pagination';
 import { useStoreStore } from '../../store/store';
@@ -163,7 +168,7 @@ const Staff = () => {
     <div className="p-4 sm:p-6 lg:p-8 max-w-[1400px] mx-auto animate-fade-in font-sans">
       <div className="mb-6 sm:mb-8">
         <div className="flex items-center text-sm text-slate-500 font-medium mb-3 sm:mb-4 space-x-2">
-          <span className="hover:text-slate-800 cursor-pointer transition-colors">Dashboard</span>
+          <Link to="/admin/dashboard" className="hover:text-slate-800 transition-colors">Dashboard</Link>
           <ChevronRight className="w-4 h-4 flex-shrink-0" />
           <span className="text-slate-900 font-semibold">Staff</span>
         </div>
