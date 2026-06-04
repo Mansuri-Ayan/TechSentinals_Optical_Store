@@ -63,5 +63,14 @@ class InventoryRead(BaseModel):
     # Denormalized product info
     product_name: str | None = None
     product_sku: str | None = None
+    category_id: int | None = None
+    category_name: str | None = None
+    subcategory_id: int | None = None
+    subcategory_name: str | None = None
+    brand_id: int | None = None
+    brand_name: str | None = None
+    cost_price: Decimal | None = None
+    selling_price: Decimal | None = None
+    image_url: str | None = None
 
     model_config = {"from_attributes": True}

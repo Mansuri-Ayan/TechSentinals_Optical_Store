@@ -93,6 +93,17 @@ const StaffRouteRedirect = () => {
   return <Navigate to={`/admin/store/${targetStore.id}/staff`} replace />;
 };
 
+const InventoryRouteRedirect = () => {
+  const { selectedStore, stores } = useStoreStore();
+  const targetStore = selectedStore || stores[0];
+
+  if (!targetStore) {
+    return <Navigate to="/admin/dashboard" replace />;
+  }
+
+  return <Navigate to={`/admin/store/${targetStore.id}/inventory`} replace />;
+};
+
 function AppRouter() {
   return (
     <Routes>
@@ -130,7 +141,8 @@ function AppRouter() {
         <Route path="dashboard" element={<Dashboard />} />
         <Route path="staff" element={<StaffRouteRedirect />} />
         <Route path="store/:storeId/staff" element={<Staff />} />
-        <Route path="inventory" element={<Inventory />} />
+        <Route path="inventory" element={<InventoryRouteRedirect />} />
+        <Route path="store/:storeId/inventory" element={<Inventory />} />
       </Route>
 
       {/* Fallback root redirect */}

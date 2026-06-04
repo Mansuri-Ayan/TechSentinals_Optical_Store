@@ -53,6 +53,7 @@ const Sidebar = ({ isOpen, onClose }) => {
   const currentStore = selectedStore || stores[0];
   const getStoreName = (store) => store?.store_name || store?.name || 'Select Store';
   const staffRoute = currentStore ? `/admin/store/${currentStore.id}/staff` : '/admin/dashboard';
+  const inventoryRoute = currentStore ? `/admin/store/${currentStore.id}/inventory` : '/admin/dashboard';
 
   const handleStoreSelect = (store) => {
     setSelectedStore(store);
@@ -60,6 +61,8 @@ const Sidebar = ({ isOpen, onClose }) => {
 
     if (location.pathname.startsWith('/admin/store/') && location.pathname.endsWith('/staff')) {
       navigate(`/admin/store/${store.id}/staff`);
+    } else if (location.pathname.startsWith('/admin/store/') && location.pathname.endsWith('/inventory')) {
+      navigate(`/admin/store/${store.id}/inventory`);
     }
   };
 
@@ -174,7 +177,7 @@ const Sidebar = ({ isOpen, onClose }) => {
           </NavLink>
 
           <NavLink
-            to="/admin/inventory"
+            to={inventoryRoute}
             className={({ isActive }) =>
               `flex items-center px-4 py-2.5 rounded-xl transition-all duration-200 group ${isActive
                 ? 'bg-emerald-500/10 text-emerald-400 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_0_10px_rgba(16,185,129,0.1)] border border-emerald-500/20'

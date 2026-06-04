@@ -93,24 +93,122 @@ async def get_inventories_by_owner(
     owner_type: str,
     owner_id: int,
     active_only: bool = True,
-    low_stock_only: bool = False,
-    limit: int = 100,
-    offset: int = 0,
-) -> list[Inventory]:
-    """List inventory records for a given owner."""
+    search: str | None = None,
+    category_id: int | None = None,
+    subcategory_id: int | None = None,
+    stock_status: str | None = None,
+    page: int = 1,
+    limit: int = 20,
+    paginate: bool = True,
+) -> tuple[list[Inventory], int]:
+    """List inventory records for a given owner with pagination and filtering.
+    
+    Returns a tuple of (items, total_count).
+    Uses explicit joins + selectinload to avoid N+1 queries.
+    """
+    from sqlalchemy.orm import selectinload, joinedload
+    from sqlalchemy import func as sa_func, or_
+    from models.product import Product
+
     owner_type = owner_type.upper()
-    stmt = select(Inventory).where(
+
+    # ── Base filter conditions ──
+    base_conditions = [
         Inventory.owner_type == owner_type,
         Inventory.owner_id == owner_id,
-    )
+    ]
     if active_only:
-        stmt = stmt.where(Inventory.is_active.is_(True))
-    if low_stock_only:
-        stmt = stmt.where(Inventory.available_quantity <= Inventory.reorder_level)
+        base_conditions.append(Inventory.is_active.is_(True))
 
-    stmt = stmt.order_by(Inventory.product_id).limit(limit).offset(offset)
-    result = await db.execute(stmt)
-    return list(result.scalars().all())
+    # ── Join-dependent filter conditions ──
+    join_conditions = []
+    needs_product_join = False
+
+    if search:
+        needs_product_join = True
+        search_term = f"%{search.strip()}%"
+        join_conditions.append(
+            or_(
+                Product.name.ilike(search_term),
+                Product.sku.ilike(search_term),
+            )
+        )
+
+    if category_id is not None:
+        needs_product_join = True
+        join_conditions.append(Product.category_id == category_id)
+
+    if subcategory_id is not None:
+        needs_product_join = True
+        join_conditions.append(Product.subcategory_id == subcategory_id)
+
+    # ── Count query ──
+    count_stmt = select(sa_func.count(Inventory.id)).where(*base_conditions)
+    if needs_product_join:
+        count_stmt = count_stmt.join(Product, Inventory.product_id == Product.id)
+        if join_conditions:
+            count_stmt = count_stmt.where(*join_conditions)
+
+    # stock_status filter is post-join but pre-count
+    if stock_status:
+        if stock_status == "out_of_stock":
+            count_stmt = count_stmt.where(Inventory.available_quantity == 0)
+        elif stock_status == "low_stock":
+            count_stmt = count_stmt.where(
+                Inventory.available_quantity > 0,
+                Inventory.available_quantity <= Inventory.reorder_level,
+            )
+        elif stock_status == "in_stock":
+            count_stmt = count_stmt.where(
+                Inventory.available_quantity > Inventory.reorder_level,
+            )
+
+    count_result = await db.execute(count_stmt)
+    total = count_result.scalar() or 0
+
+    # ── Data query with eager loading ──
+    data_stmt = (
+        select(Inventory)
+        .where(*base_conditions)
+        .options(
+            selectinload(Inventory.product)
+            .selectinload(Product.category),
+            selectinload(Inventory.product)
+            .selectinload(Product.subcategory),
+            selectinload(Inventory.product)
+            .selectinload(Product.brand),
+        )
+    )
+
+    if needs_product_join:
+        # Use outerjoin so we can filter but still get Inventory rows
+        data_stmt = data_stmt.join(Product, Inventory.product_id == Product.id)
+        if join_conditions:
+            data_stmt = data_stmt.where(*join_conditions)
+
+    if stock_status:
+        if stock_status == "out_of_stock":
+            data_stmt = data_stmt.where(Inventory.available_quantity == 0)
+        elif stock_status == "low_stock":
+            data_stmt = data_stmt.where(
+                Inventory.available_quantity > 0,
+                Inventory.available_quantity <= Inventory.reorder_level,
+            )
+        elif stock_status == "in_stock":
+            data_stmt = data_stmt.where(
+                Inventory.available_quantity > Inventory.reorder_level,
+            )
+
+    data_stmt = data_stmt.order_by(Inventory.id.desc())
+
+    if paginate:
+        offset = (page - 1) * limit
+        data_stmt = data_stmt.offset(offset).limit(limit)
+
+    result = await db.execute(data_stmt)
+    items = list(result.scalars().unique().all())
+
+    return items, total
 
 
 async def get_low_stock_items(
