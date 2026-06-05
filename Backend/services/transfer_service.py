@@ -8,8 +8,9 @@ Core business logic for all inventory movements:
   - Transaction history queries
 """
 from datetime import datetime, timezone
-from sqlalchemy import select, and_, desc
+from sqlalchemy import select, and_, desc, func
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 from fastapi import HTTPException, status
 
 from models.inventory import Inventory, OwnerType
@@ -303,7 +304,7 @@ async def get_transaction_history(
     store_id: int | None = None,
     limit: int = 50,
     offset: int = 0,
-) -> list[InventoryTransaction]:
+) -> tuple[list[InventoryTransaction], int]:
     """
     Fetch transaction history with optional filters.
     Scoped to the admin's inventory records.
@@ -328,27 +329,42 @@ async def get_transaction_history(
     valid_inv_ids = [row[0] for row in inv_result.fetchall()]
 
     if not valid_inv_ids:
-        return []
+        return [], 0
 
-    stmt = select(InventoryTransaction).where(
+    filters = [
         InventoryTransaction.inventory_id.in_(valid_inv_ids)
-    )
+    ]
 
     if product_id is not None:
-        stmt = stmt.where(InventoryTransaction.product_id == product_id)
+        filters.append(InventoryTransaction.product_id == product_id)
     if inventory_id is not None:
-        stmt = stmt.where(InventoryTransaction.inventory_id == inventory_id)
+        filters.append(InventoryTransaction.inventory_id == inventory_id)
     if transaction_type is not None:
-        stmt = stmt.where(InventoryTransaction.transaction_type == transaction_type)
+        filters.append(InventoryTransaction.transaction_type == transaction_type)
     if store_id is not None:
         from sqlalchemy import or_ as or_clause
-        stmt = stmt.where(
+        filters.append(
             or_clause(
                 InventoryTransaction.send_store_id == store_id,
                 InventoryTransaction.receive_store_id == store_id,
             )
         )
 
-    stmt = stmt.order_by(desc(InventoryTransaction.created_at)).limit(limit).offset(offset)
+    count_stmt = select(func.count()).select_from(InventoryTransaction).where(*filters)
+    total_result = await db.execute(count_stmt)
+    total = int(total_result.scalar_one() or 0)
+
+    stmt = (
+        select(InventoryTransaction)
+        .options(
+            selectinload(InventoryTransaction.product),
+            selectinload(InventoryTransaction.send_store),
+            selectinload(InventoryTransaction.receive_store),
+        )
+        .where(*filters)
+        .order_by(desc(InventoryTransaction.created_at))
+        .limit(limit)
+        .offset(offset)
+    )
     result = await db.execute(stmt)
-    return list(result.scalars().all())
+    return list(result.scalars().all()), total

@@ -1,25 +1,19 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  X, Package, ChevronDown, Layers, Hash, FileText, Plus, Check, CreditCard, Calendar, IndianRupee
+  X, Package, ChevronDown, Layers, Hash, FileText, Plus, Check, CreditCard, Calendar, IndianRupee, Store
 } from 'lucide-react';
-
-const CATEGORIES = ['Frames', 'Lenses', 'Contact Lens', 'Accessories', 'Cleaning Kit', 'Cases'];
-
-const SUBCATEGORIES = {
-  Frames:       ['Full Rim', 'Half Rim', 'Rimless', 'Round', 'Square', 'Rectangle', 'Cat Eye', 'Aviator', 'Wayfarer'],
-  Lenses:       ['Single Vision', 'Bifocal', 'Progressive', 'Blue Cut', 'Photochromic', 'Polarized', 'Computer Lens'],
-  'Contact Lens': ['Daily', 'Bi-Weekly', 'Monthly', 'Coloured'],
-  Accessories:  ['Chains', 'Cords', 'Repair Kits', 'Straps', 'Nose Pads'],
-  'Cleaning Kit': ['Microfibre Cloth', 'Spray Cleaner', 'Wet Wipes', 'Ultrasonic Cleaner'],
-  Cases:        ['Hard Case', 'Soft Case', 'Pouch', 'Zip Case'],
-};
+import { useCategories, useSubcategories } from '../../../hooks/useCategories';
+import { useProducts } from '../../../hooks/useProducts';
+import { useStores } from '../../../hooks/useStores';
 
 const PAYMENT_METHODS = ['Cash', 'Bank Transfer', 'Cheque', 'UPI', 'Credit'];
 
 const EMPTY = {
-  category: '',
-  subcategory: '',
+  categoryId: '',
+  subcategoryId: '',
+  productId: '',
+  storeId: '',
   quantity: '',
   amount: '',
   paidAmount: '',
@@ -29,9 +23,37 @@ const EMPTY = {
   remarks: ''
 };
 
-const AddTransactionModal = ({ isOpen, supplierName, onClose, onSubmit }) => {
+const AddTransactionModal = ({ isOpen, supplierName, storeName, activeStoreId, onClose, onSubmit }) => {
   const [form, setForm] = useState(EMPTY);
   const [errors, setErrors] = useState({});
+  const { stores } = useStores();
+
+  // Fetch all categories (using a high limit to get all)
+  const { categories } = useCategories(null, { limit: 100 });
+  
+  // Fetch subcategories for the selected category
+  const { subcategories } = useSubcategories(
+    form.categoryId ? Number(form.categoryId) : null,
+    null,
+    { limit: 100 }
+  );
+
+  // Fetch products in the selected category/subcategory
+  const { products } = useProducts({
+    category_id: form.categoryId ? Number(form.categoryId) : null,
+    subcategory_id: form.subcategoryId ? Number(form.subcategoryId) : null,
+    limit: 500
+  });
+
+  useEffect(() => {
+    if (isOpen) {
+      setForm({
+        ...EMPTY,
+        storeId: activeStoreId ? String(activeStoreId) : '',
+      });
+      setErrors({});
+    }
+  }, [isOpen, activeStoreId]);
 
   if (!isOpen) return null;
 
@@ -40,18 +62,35 @@ const AddTransactionModal = ({ isOpen, supplierName, onClose, onSubmit }) => {
       const next = {
         ...p,
         [k]: v,
-        ...(k === 'category' ? { subcategory: '' } : {})
+        ...(k === 'categoryId' ? { subcategoryId: '', productId: '' } : {}),
+        ...(k === 'subcategoryId' ? { productId: '' } : {})
       };
+
+      // Auto-populate unit price or product default cost if product is selected
+      if (k === 'productId' && v) {
+        const prod = products.find(p => String(p.id) === String(v));
+        if (prod && prod.cost_price) {
+          next.amount = String(Number(prod.cost_price) * (Number(next.quantity) || 1));
+        }
+      }
+
+      // Recompute amount if quantity changes and a product is selected
+      if (k === 'quantity' && v && next.productId) {
+        const prod = products.find(p => String(p.id) === String(next.productId));
+        if (prod && prod.cost_price) {
+          next.amount = String(Number(prod.cost_price) * Number(v));
+        }
+      }
       
-      if (k === 'amount' || k === 'paidAmount') {
-        const totalVal = k === 'amount' ? v : p.amount;
-        const paidVal = k === 'paidAmount' ? v : p.paidAmount;
+      if (k === 'amount' || k === 'paidAmount' || k === 'quantity') {
+        const totalVal = k === 'amount' ? v : next.amount;
+        const paidVal = k === 'paidAmount' ? v : next.paidAmount;
         
         const total = totalVal === '' ? 0 : Number(totalVal);
         const paid = paidVal === '' ? 0 : Number(paidVal);
         
         if (!isNaN(total) && !isNaN(paid)) {
-          next.dueAmount = String(total - paid);
+          next.dueAmount = String(Math.max(0, total - paid));
         } else {
           next.dueAmount = '';
         }
@@ -63,8 +102,10 @@ const AddTransactionModal = ({ isOpen, supplierName, onClose, onSubmit }) => {
 
   const validate = () => {
     const e = {};
-    if (!form.category)    e.category    = 'Category is required';
-    if (!form.subcategory) e.subcategory = 'Sub-category is required';
+    if (!form.categoryId)    e.categoryId    = 'Category is required';
+    if (!form.subcategoryId) e.subcategoryId = 'Sub-category is required';
+    if (!form.productId)     e.productId     = 'Product is required';
+    if (!form.storeId)       e.storeId       = 'Receiving store is required';
     if (!form.quantity || isNaN(form.quantity) || Number(form.quantity) < 1)
       e.quantity = 'Enter a valid quantity (≥ 1)';
     if (form.amount === '' || isNaN(form.amount) || Number(form.amount) < 0)
@@ -84,14 +125,18 @@ const AddTransactionModal = ({ isOpen, supplierName, onClose, onSubmit }) => {
     e.preventDefault();
     if (!validate()) return;
     onSubmit({
-      ...form,
+      categoryId: Number(form.categoryId),
+      subcategoryId: Number(form.subcategoryId),
+      productId: Number(form.productId),
+      storeId: Number(form.storeId),
       quantity: Number(form.quantity),
       amount: Number(form.amount),
       paidAmount: Number(form.paidAmount),
-      dueAmount: Number(form.dueAmount)
+      dueAmount: Number(form.dueAmount),
+      method: form.method,
+      date: form.date,
+      remarks: form.remarks
     });
-    setForm(EMPTY);
-    setErrors({});
   };
 
   const handleClose = () => {
@@ -109,7 +154,7 @@ const AddTransactionModal = ({ isOpen, supplierName, onClose, onSubmit }) => {
         : 'border-slate-200 focus:ring-blue-500/10 focus:border-blue-500 placeholder:text-slate-400'
     }`;
 
-  const subcats = SUBCATEGORIES[form.category] || [];
+  const selectedProduct = products.find(p => String(p.id) === String(form.productId));
 
   return createPortal(
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[1000] p-3 sm:p-4 animate-fade-in">
@@ -145,13 +190,13 @@ const AddTransactionModal = ({ isOpen, supplierName, onClose, onSubmit }) => {
                     <Layers className="w-3.5 h-3.5 text-slate-400" /> Product Category <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
-                    <select value={form.category} onChange={e => set('category', e.target.value)} className={inputCls('category')}>
+                    <select value={form.categoryId} onChange={e => set('categoryId', e.target.value)} className={inputCls('categoryId')}>
                       <option value="">Select category…</option>
-                      {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                      {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
                     <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                   </div>
-                  {errors.category && <p className="text-xs text-red-500 mt-1">{errors.category}</p>}
+                  {errors.categoryId && <p className="text-xs text-red-500 mt-1">{errors.categoryId}</p>}
                 </div>
 
                 {/* Sub-category */}
@@ -160,33 +205,65 @@ const AddTransactionModal = ({ isOpen, supplierName, onClose, onSubmit }) => {
                     <Layers className="w-3.5 h-3.5 text-slate-400" /> Sub Category <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
-                    <select value={form.subcategory} onChange={e => set('subcategory', e.target.value)} className={inputCls('subcategory')} disabled={!form.category}>
-                      <option value="">{form.category ? 'Select sub-category…' : 'Select a category first'}</option>
-                      {subcats.map(s => <option key={s} value={s}>{s}</option>)}
+                    <select value={form.subcategoryId} onChange={e => set('subcategoryId', e.target.value)} className={inputCls('subcategoryId')} disabled={!form.categoryId}>
+                      <option value="">{form.categoryId ? 'Select sub-category…' : 'Select a category first'}</option>
+                      {subcategories.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                     </select>
                     <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                   </div>
-                  {errors.subcategory && <p className="text-xs text-red-500 mt-1">{errors.subcategory}</p>}
+                  {errors.subcategoryId && <p className="text-xs text-red-500 mt-1">{errors.subcategoryId}</p>}
                 </div>
               </div>
 
-              {/* Quantity */}
-              <div>
-                <label className="text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
-                  <Hash className="w-3.5 h-3.5 text-slate-400" /> Quantity <span className="text-red-500">*</span>
-                </label>
-                <input type="number" min="1" value={form.quantity} onChange={e => set('quantity', e.target.value)}
-                  placeholder="e.g. 20" className={inputCls('quantity')} />
-                {errors.quantity && <p className="text-xs text-red-500 mt-1">{errors.quantity}</p>}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {/* Product Selection */}
+                <div>
+                  <label className="text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
+                    <Package className="w-3.5 h-3.5 text-slate-400" /> Product <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <select value={form.productId} onChange={e => set('productId', e.target.value)} className={inputCls('productId')} disabled={!form.subcategoryId}>
+                      <option value="">{form.subcategoryId ? 'Select product…' : 'Select category & sub-category'}</option>
+                      {products.map(p => <option key={p.id} value={p.id}>{p.name} ({p.sku})</option>)}
+                    </select>
+                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                  </div>
+                  {errors.productId && <p className="text-xs text-red-500 mt-1">{errors.productId}</p>}
+                </div>
+
+                {/* Quantity */}
+                <div>
+                  <label className="text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
+                    <Hash className="w-3.5 h-3.5 text-slate-400" /> Quantity <span className="text-red-500">*</span>
+                  </label>
+                  <input type="number" min="1" value={form.quantity} onChange={e => set('quantity', e.target.value)}
+                    placeholder="e.g. 20" className={inputCls('quantity')} />
+                  {errors.quantity && <p className="text-xs text-red-500 mt-1">{errors.quantity}</p>}
+                </div>
               </div>
             </div>
 
             <hr className="border-slate-100" />
 
-            {/* Section: Payment Details */}
-            <div className="space-y-3 font-sans">
-              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">2. Payment details</h3>
-              
+              {/* Destination & Payment Details */}
+              <div className="space-y-3 font-sans">
+                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">2. Destination & Payment details</h3>
+                
+                {/* Receiving Store selection dropdown */}
+                <div>
+                  <label className="text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
+                    <Store className="w-3.5 h-3.5 text-slate-400" /> Receiving Store <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <select value={form.storeId} onChange={e => set('storeId', e.target.value)} className={inputCls('storeId')}>
+                      <option value="">Select receiving store…</option>
+                      {stores.map(st => <option key={st.id} value={st.id}>{st.store_name || st.name || `Store #${st.id}`}</option>)}
+                    </select>
+                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                  </div>
+                  {errors.storeId && <p className="text-xs text-red-500 mt-1">{errors.storeId}</p>}
+                </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {/* Total Amount */}
                 <div>
@@ -280,17 +357,17 @@ const AddTransactionModal = ({ isOpen, supplierName, onClose, onSubmit }) => {
             </div>
 
             {/* Preview chip */}
-            {form.category && form.subcategory && form.quantity && form.amount && form.paidAmount !== '' && form.method && (
-              <div className="flex flex-col gap-1 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-xl font-sans">
+            {form.categoryId && form.subcategoryId && form.productId && form.quantity && form.amount && form.paidAmount !== '' && form.method && (
+              <div className="flex flex-col gap-1 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-xl font-sans animate-fade-in">
                 <div className="flex items-center gap-1.5">
                   <Check className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
                   <span className="text-xs font-semibold text-emerald-700">
-                    {form.category} → {form.subcategory} (Qty: {form.quantity})
+                    {selectedProduct?.name} (Qty: {form.quantity})
                   </span>
                 </div>
                 <div className="text-xs text-emerald-600 font-medium pl-5 space-y-0.5">
                   <div>Total: ₹{Number(form.amount).toLocaleString('en-IN')} | Paid: ₹{Number(form.paidAmount).toLocaleString('en-IN')} | Due: ₹{Number(form.dueAmount || 0).toLocaleString('en-IN')}</div>
-                  <div>Payment: via {form.method}</div>
+                  <div>Payment: via {form.method} | Deliver to: {storeName}</div>
                 </div>
               </div>
             )}

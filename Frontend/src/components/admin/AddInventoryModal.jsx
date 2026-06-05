@@ -5,6 +5,7 @@ import { toast } from 'react-toastify';
 import { X, Package, Image as ImageIcon, Loader2 } from 'lucide-react';
 import { useCategories, useSubcategories } from '../../hooks/useCategories';
 import { useBrands } from '../../hooks/useBrands';
+import { useStores } from '../../hooks/useStores';
 import { useStoreStore } from '../../store/store';
 
 /* ─── helpers ─────────────────────────────────────── */
@@ -35,6 +36,7 @@ const SectionHeading = ({ num, label }) => (
 /* ─── component ───────────────────────────────────── */
 const AddInventoryModal = ({ isOpen, onClose, onSubmit: onSubmitProp }) => {
   const { selectedStore } = useStoreStore();
+  const { stores } = useStores();
   const { categories, isLoadingCategories } = useCategories();
   const { brands, createBrandAsync } = useBrands();
   const [imagePreview, setImagePreview] = useState(null);
@@ -61,6 +63,7 @@ const AddInventoryModal = ({ isOpen, onClose, onSubmit: onSubmitProp }) => {
       selling_price: '',
       description: '',
       is_active: true,
+      store_id: selectedStore?.id ? String(selectedStore.id) : '',
       frame_details: {
         frame_type: '',
         shape: '',
@@ -109,6 +112,13 @@ const AddInventoryModal = ({ isOpen, onClose, onSubmit: onSubmitProp }) => {
   useEffect(() => {
     setValue('subcategory_id', '');
   }, [watchedCategoryId, setValue]);
+
+  // Set store_id when selectedStore changes
+  useEffect(() => {
+    if (selectedStore?.id) {
+      setValue('store_id', String(selectedStore.id));
+    }
+  }, [selectedStore, setValue]);
 
   if (!isOpen) return null;
 
@@ -579,8 +589,18 @@ const AddInventoryModal = ({ isOpen, onClose, onSubmit: onSubmitProp }) => {
             <section>
               <SectionHeading num="5" label="Store Information" />
               <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1.5">Store Name</label>
-                <input type="text" disabled value={selectedStore?.store_name || ''} className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-500 text-sm cursor-not-allowed" />
+                <label className="block text-sm font-semibold text-slate-700 mb-1.5">Store <span className="text-red-500">*</span></label>
+                <select
+                  {...register('store_id', { required: 'Store is required' })}
+                  className={inputCls(!!errors.store_id)}
+                  disabled={isPending}
+                >
+                  <option value="">Select Store</option>
+                  {stores.map((st) => (
+                    <option key={st.id} value={st.id}>{st.store_name || st.name || `Store #${st.id}`}</option>
+                  ))}
+                </select>
+                <FieldError message={errors.store_id?.message} />
               </div>
             </section>
           </div>

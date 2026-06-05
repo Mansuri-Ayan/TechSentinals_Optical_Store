@@ -1,28 +1,24 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import {
   ArrowRightLeft, Plus, Search, ChevronRight,
   X as XIcon, Building2, Store, Package, Filter,
   CheckCircle, Clock, XCircle, AlertTriangle, Tag,
   Layers, RotateCcw, ShoppingCart, TrendingUp, Truck,
-  RefreshCw, Trash2, Eye,
+  RefreshCw, Trash2, Eye, IndianRupee,
 } from 'lucide-react';
 import Pagination from '../../components/shared/Pagination';
+import { useStoreStore, useAuthStore } from '../../store/store';
+import { useInventory } from '../../hooks/useInventory';
+import { useTransactions } from '../../hooks/useTransactions';
+import { useCategories } from '../../hooks/useCategories';
+import { useProducts } from '../../hooks/useProducts';
+import { getInventoryApi } from '../../api/inventory/inventory.api';
 
 /* ─────────────────────────────────────────────────────────
    CONSTANTS & MOCK DATA
 ───────────────────────────────────────────────────────── */
-const STORES = ['Admin Store', 'Main Branch', 'Branch 2', 'Branch 3'];
-
-const CATEGORIES = ['Frames', 'Lenses', 'Contact Lens', 'Accessories', 'Cleaning Kit', 'Cases'];
-
-const PRODUCTS = [
-  'Ray-Ban Aviator Classic', 'Oakley Holbrook Sunglasses', 'Lenskart John Jacobs Round',
-  'Titan Eye+ Metro Rimless', 'Fastrack Geometric Square', 'Essilor Varilux X Progressive',
-  'Crizal Forte UV Lens', 'Hoya Sync III Blue Cut', 'Alcon Daily Total1 Contacts',
-  'Bausch & Lomb Renu Solution', 'Opticlens Microfibre Cloth', 'Protect Hard Case Premium',
-];
-
 const TRANSACTION_TYPES = [
   { value: 'Inventory Transfer', icon: ArrowRightLeft, color: 'text-blue-600 bg-blue-50 border-blue-200' },
   { value: 'Sale', icon: ShoppingCart, color: 'text-emerald-600 bg-emerald-50 border-emerald-200' },
@@ -30,8 +26,6 @@ const TRANSACTION_TYPES = [
   { value: 'Return', icon: RotateCcw, color: 'text-amber-600 bg-amber-50 border-amber-200' },
   { value: 'Damage', icon: Trash2, color: 'text-red-600 bg-red-50 border-red-200' },
 ];
-
-const STATUS_OPTIONS = ['Completed', 'Pending', 'Cancelled', 'Failed'];
 
 const STATUS_CONFIG = {
   Completed: { color: 'text-emerald-700 bg-emerald-50 border-emerald-200', dot: 'bg-emerald-500', icon: CheckCircle },
@@ -58,41 +52,6 @@ const classifyTab = (tx) => {
   return 'other';
 };
 
-// Generate 30 mock transactions
-const generateMockData = () => {
-  const types = TRANSACTION_TYPES.map(t => t.value);
-  const statuses = STATUS_OPTIONS;
-  const pairs = [
-    ['Admin Store', 'Main Branch'],
-    ['Admin Store', 'Branch 2'],
-    ['Admin Store', 'Branch 3'],
-    ['Main Branch', 'Branch 2'],
-    ['Branch 2', 'Main Branch'],
-    ['Branch 2', 'Branch 3'],
-    ['Main Branch', 'Admin Store'],
-    ['Branch 3', 'Admin Store'],
-  ];
-  return Array.from({ length: 30 }, (_, i) => {
-    const pair = pairs[i % pairs.length];
-    const type = types[i % types.length];
-    const status = statuses[i % statuses.length];
-    const date = new Date(2026, 5 - (i % 6), 1 + (i % 28));
-    return {
-      id: `TXN-${String(1000 + i).padStart(4, '0')}`,
-      date: date.toISOString(),
-      sender: pair[0],
-      receiver: pair[1],
-      category: CATEGORIES[i % CATEGORIES.length],
-      product: PRODUCTS[i % PRODUCTS.length],
-      quantity: (i % 10) + 1,
-      type,
-      status,
-      remarks: i % 3 === 0 ? 'Urgent restock required.' : i % 5 === 0 ? 'Regular monthly transfer.' : '',
-    };
-  });
-};
-
-const MOCK_TRANSACTIONS = generateMockData();
 const ITEMS_PER_PAGE = 10;
 
 /* ─────────────────────────────────────────────────────────
@@ -123,42 +82,167 @@ const TypeBadge = ({ type }) => {
    NEW TRANSACTION MODAL
 ───────────────────────────────────────────────────────── */
 const EMPTY_FORM = {
-  sender: '', receiver: '', category: '', product: '', quantity: '',
-  type: 'Inventory Transfer', remarks: '',
+  sender: '',
+  receiver: '',
+  categoryId: '',
+  product: '',
+  quantity: '',
+  type: 'Inventory Transfer',
+  purchasePrice: '',
+  remarks: '',
 };
 
-const NewTransactionModal = ({ isOpen, onClose, onSubmit }) => {
+const TRANSACTION_TYPE_OPTIONS = [
+  { value: 'Inventory Transfer', label: 'Inventory Transfer' },
+  { value: 'Purchase', label: 'Purchase' },
+  { value: 'Damage', label: 'Damage' },
+  { value: 'Loss', label: 'Loss' },
+  { value: 'Sale', label: 'Sale' },
+  { value: 'Return', label: 'Return' },
+];
+
+const NewTransactionModal = ({
+  isOpen,
+  onClose,
+  onSubmit,
+  currentStore,
+  stores,
+  isSubmitting,
+}) => {
+  const { user } = useAuthStore();
   const [form, setForm] = useState(EMPTY_FORM);
   const [errors, setErrors] = useState({});
+
+  const { categories } = useCategories(null, { limit: 100 });
+
+  const senderType = form.sender === 'admin' ? 'ADMIN' : 'STORE';
+  const senderIdVal = form.sender === 'admin' ? user?.id : Number(form.sender);
+
+  const { data: inventoryData, isLoading: isLoadingInventory } = useQuery({
+    queryKey: ['inventory', senderType, senderIdVal],
+    queryFn: () => getInventoryApi({
+      owner_type: senderType,
+      owner_id: senderIdVal,
+      paginate: false
+    }),
+    enabled: isOpen && !!form.sender && (senderType === 'ADMIN' ? !!user?.id : !!senderIdVal) && form.type !== 'Purchase',
+  });
+
+  const inventoryItems = inventoryData?.items || [];
+
+  const { products: catalogProducts } = useProducts({
+    category_id: form.categoryId ? Number(form.categoryId) : null,
+    limit: 500,
+    active_only: true,
+  });
+
+  useEffect(() => {
+    if (isOpen) {
+      setForm({
+        ...EMPTY_FORM,
+        sender: currentStore?.id ? String(currentStore.id) : '',
+      });
+      setErrors({});
+    }
+  }, [isOpen, currentStore]);
 
   if (!isOpen) return null;
 
   const set = (key, val) => {
-    setForm(prev => ({ ...prev, [key]: val }));
+    setForm(prev => {
+      const next = {
+        ...prev,
+        [key]: val,
+        ...(key === 'type' ? { product: '', quantity: '', purchasePrice: '', receiver: '' } : {}),
+        ...(key === 'sender' ? { product: '', quantity: '', receiver: prev.receiver === val ? '' : prev.receiver } : {}),
+        ...(key === 'categoryId' ? { product: '' } : {}),
+      };
+      return next;
+    });
     setErrors(prev => ({ ...prev, [key]: '' }));
   };
 
   const validate = () => {
     const e = {};
-    if (!form.sender) e.sender = 'Sender is required';
-    if (!form.receiver) e.receiver = 'Receiver is required';
-    if (form.sender && form.receiver && form.sender === form.receiver)
-      e.receiver = 'Sender and receiver must be different';
-    if (!form.category) e.category = 'Category is required';
+    const type = form.type;
+
     if (!form.product) e.product = 'Product is required';
-    if (!form.quantity || isNaN(form.quantity) || Number(form.quantity) < 1)
+    if (!form.quantity || isNaN(form.quantity) || Number(form.quantity) < 1) {
       e.quantity = 'Enter a valid quantity (≥ 1)';
-    if (!form.type) e.type = 'Transaction type is required';
+    }
+
+    if (type === 'Inventory Transfer') {
+      if (!form.sender) e.sender = 'Sender store is required';
+      if (!form.receiver) e.receiver = 'Receiver store is required';
+      if (form.sender && form.receiver && form.sender === form.receiver) {
+        e.receiver = 'Sender and receiver must be different';
+      }
+
+      const selectedItem = inventoryItems.find(item => String(item.product_id) === String(form.product));
+      if (selectedItem && Number(form.quantity) > Number(selectedItem.available_quantity || 0)) {
+        e.quantity = `Only ${selectedItem.available_quantity || 0} available in sender stock`;
+      }
+    } else if (type === 'Purchase') {
+      if (!form.purchasePrice || isNaN(form.purchasePrice) || Number(form.purchasePrice) <= 0) {
+        e.purchasePrice = 'Enter a valid purchase price (> 0)';
+      }
+    } else if (['Damage', 'Loss', 'Sale'].includes(type)) {
+      if (!form.sender) e.sender = 'Affected store/owner is required';
+      const selectedItem = inventoryItems.find(item => String(item.product_id) === String(form.product));
+      if (selectedItem && Number(form.quantity) > Number(selectedItem.available_quantity || 0)) {
+        e.quantity = `Only ${selectedItem.available_quantity || 0} available in stock`;
+      }
+    } else if (type === 'Return') {
+      if (!form.sender) e.sender = 'Affected store/owner is required';
+    }
+
     setErrors(e);
     return Object.keys(e).length === 0;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validate()) return;
-    onSubmit(form);
-    setForm(EMPTY_FORM);
-    setErrors({});
+
+    let payload = {};
+    const type = form.type;
+
+    if (type === 'Inventory Transfer') {
+      payload = {
+        product_id: Number(form.product),
+        quantity: Number(form.quantity),
+        from_owner_type: form.sender === 'admin' ? 'ADMIN' : 'STORE',
+        from_owner_id: form.sender === 'admin' ? user?.id : Number(form.sender),
+        to_owner_type: form.receiver === 'admin' ? 'ADMIN' : 'STORE',
+        to_owner_id: form.receiver === 'admin' ? user?.id : Number(form.receiver),
+        remarks: form.remarks || null,
+      };
+    } else if (type === 'Purchase') {
+      payload = {
+        product_id: Number(form.product),
+        quantity: Number(form.quantity),
+        purchase_price: Number(form.purchasePrice),
+        remarks: form.remarks || null,
+      };
+    } else {
+      payload = {
+        product_id: Number(form.product),
+        owner_type: form.sender === 'admin' ? 'ADMIN' : 'STORE',
+        owner_id: form.sender === 'admin' ? user?.id : Number(form.sender),
+        quantity: Number(form.quantity),
+        remarks: form.remarks || null,
+      };
+    }
+
+    try {
+      await onSubmit({
+        type: type === 'Inventory Transfer' ? 'TRANSFER' : type.toUpperCase(),
+        payload,
+      });
+      setForm(EMPTY_FORM);
+      setErrors({});
+    } catch {
+    }
   };
 
   const handleClose = () => {
@@ -173,14 +257,22 @@ const NewTransactionModal = ({ isOpen, onClose, onSubmit }) => {
       : 'border-slate-200 focus:ring-blue-500/10 focus:border-blue-500'
     }`;
 
+  const storeOptions = [
+    { id: 'admin', name: 'Admin Warehouse' },
+    ...stores.map(st => ({ id: String(st.id), name: st.store_name || st.name || `Store #${st.id}` }))
+  ];
+
+  const receiverOptions = storeOptions.filter(opt => opt.id !== form.sender);
+
+  const productOptions = form.type === 'Purchase'
+    ? catalogProducts
+    : inventoryItems.filter(item => !form.categoryId || String(item.category_id) === String(form.categoryId));
+
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-      {/* Backdrop */}
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 font-sans">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={handleClose} />
 
-      {/* Modal */}
       <div className="relative bg-white w-full sm:max-w-2xl sm:rounded-2xl shadow-2xl flex flex-col max-h-[95dvh] overflow-hidden">
-        {/* Header */}
         <div className="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-slate-100 flex-shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center">
@@ -188,7 +280,7 @@ const NewTransactionModal = ({ isOpen, onClose, onSubmit }) => {
             </div>
             <div>
               <h2 className="text-base font-bold text-slate-900">New Transaction</h2>
-              <p className="text-xs text-slate-500">Record a new inventory movement</p>
+              <p className="text-xs text-slate-500">Record a new stock movement or adjustment</p>
             </div>
           </div>
           <button onClick={handleClose} className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors">
@@ -196,103 +288,163 @@ const NewTransactionModal = ({ isOpen, onClose, onSubmit }) => {
           </button>
         </div>
 
-        {/* Body */}
         <form onSubmit={handleSubmit} className="overflow-y-auto flex-1">
           <div className="px-5 sm:px-6 py-5 space-y-4">
-
-            {/* Sender + Receiver */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="text-xs font-semibold text-slate-600 mb-1.5 block">Sender Store <span className="text-red-500">*</span></label>
-                <select value={form.sender} onChange={e => set('sender', e.target.value)} className={inputCls('sender')}>
-                  <option value="">Select sender…</option>
-                  {STORES.map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
-                {errors.sender && <p className="text-xs text-red-500 mt-1">{errors.sender}</p>}
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-slate-600 mb-1.5 block">Receiver Store <span className="text-red-500">*</span></label>
-                <select value={form.receiver} onChange={e => set('receiver', e.target.value)} className={inputCls('receiver')}>
-                  <option value="">Select receiver…</option>
-                  {STORES.map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
-                {errors.receiver && <p className="text-xs text-red-500 mt-1">{errors.receiver}</p>}
-              </div>
+            <div>
+              <label className="text-xs font-semibold text-slate-600 mb-1.5 block">Transaction Type <span className="text-red-500">*</span></label>
+              <select value={form.type} onChange={e => set('type', e.target.value)} className={inputCls('type')}>
+                {TRANSACTION_TYPE_OPTIONS.map(opt => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+              {errors.type && <p className="text-xs text-red-500 mt-1">{errors.type}</p>}
             </div>
 
-            {/* Category + Product */}
+            {form.type !== 'Purchase' ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-semibold text-slate-600 mb-1.5 block">
+                    {form.type === 'Inventory Transfer' ? 'Sender Store' : 'Affected Store/Owner'} <span className="text-red-500">*</span>
+                  </label>
+                  <select value={form.sender} onChange={e => set('sender', e.target.value)} className={inputCls('sender')}>
+                    <option value="">Select store/warehouse...</option>
+                    {storeOptions.map(opt => (
+                      <option key={opt.id} value={opt.id}>{opt.name}</option>
+                    ))}
+                  </select>
+                  {errors.sender && <p className="text-xs text-red-500 mt-1">{errors.sender}</p>}
+                </div>
+
+                {form.type === 'Inventory Transfer' ? (
+                  <div>
+                    <label className="text-xs font-semibold text-slate-600 mb-1.5 block">Receiver Store <span className="text-red-500">*</span></label>
+                    <select value={form.receiver} onChange={e => set('receiver', e.target.value)} className={inputCls('receiver')}>
+                      <option value="">Select receiver...</option>
+                      {receiverOptions.map(opt => (
+                        <option key={opt.id} value={opt.id}>{opt.name}</option>
+                      ))}
+                    </select>
+                    {errors.receiver && <p className="text-xs text-red-500 mt-1">{errors.receiver}</p>}
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <div>
+                <label className="text-xs font-semibold text-slate-600 mb-1.5 block">Destination Store</label>
+                <input
+                  value="Admin Warehouse"
+                  disabled
+                  className={`${inputCls('destination')} disabled:bg-slate-50 disabled:text-slate-500`}
+                />
+              </div>
+            )}
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="text-xs font-semibold text-slate-600 mb-1.5 block">Category <span className="text-red-500">*</span></label>
-                <select value={form.category} onChange={e => set('category', e.target.value)} className={inputCls('category')}>
-                  <option value="">Select category…</option>
-                  {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                <label className="text-xs font-semibold text-slate-600 mb-1.5 block">Category Filter</label>
+                <select value={form.categoryId} onChange={e => set('categoryId', e.target.value)} className={inputCls('categoryId')}>
+                  <option value="">All Categories</option>
+                  {categories.map(cat => (
+                    <option key={cat.id} value={cat.id}>{cat.name}</option>
+                  ))}
                 </select>
-                {errors.category && <p className="text-xs text-red-500 mt-1">{errors.category}</p>}
               </div>
+
               <div>
-                <label className="text-xs font-semibold text-slate-600 mb-1.5 block">Product / Inventory <span className="text-red-500">*</span></label>
-                <select value={form.product} onChange={e => set('product', e.target.value)} className={inputCls('product')}>
-                  <option value="">Select product…</option>
-                  {PRODUCTS.map(p => <option key={p} value={p}>{p}</option>)}
+                <label className="text-xs font-semibold text-slate-600 mb-1.5 block">Product / Item <span className="text-red-500">*</span></label>
+                <select
+                  value={form.product}
+                  onChange={e => set('product', e.target.value)}
+                  className={inputCls('product')}
+                  disabled={form.type !== 'Purchase' && !form.sender}
+                >
+                  <option value="">
+                    {form.type !== 'Purchase' && !form.sender
+                      ? 'Select store first'
+                      : isLoadingInventory
+                      ? 'Loading inventory...'
+                      : 'Select product...'
+                    }
+                  </option>
+                  {form.type === 'Purchase' ? (
+                    productOptions.map(p => (
+                      <option key={p.id} value={p.id}>{p.name} ({p.sku})</option>
+                    ))
+                  ) : (
+                    productOptions.map(item => (
+                      <option key={item.id} value={item.product_id}>
+                        {item.product_name || item.product_sku || `Product #${item.product_id}`} ({item.available_quantity || 0} available)
+                      </option>
+                    ))
+                  )}
                 </select>
                 {errors.product && <p className="text-xs text-red-500 mt-1">{errors.product}</p>}
               </div>
             </div>
 
-            {/* Quantity + Transaction Type */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="text-xs font-semibold text-slate-600 mb-1.5 block">Quantity <span className="text-red-500">*</span></label>
                 <input
-                  type="number" min="1" value={form.quantity}
+                  type="number"
+                  min="1"
+                  value={form.quantity}
                   onChange={e => set('quantity', e.target.value)}
                   placeholder="e.g. 5"
                   className={inputCls('quantity')}
                 />
                 {errors.quantity && <p className="text-xs text-red-500 mt-1">{errors.quantity}</p>}
               </div>
-              <div>
-                <label className="text-xs font-semibold text-slate-600 mb-1.5 block">Transaction Type <span className="text-red-500">*</span></label>
-                <select value={form.type} onChange={e => set('type', e.target.value)} className={inputCls('type')}>
-                  {TRANSACTION_TYPES.map(t => <option key={t.value} value={t.value}>{t.value}</option>)}
-                </select>
-                {errors.type && <p className="text-xs text-red-500 mt-1">{errors.type}</p>}
-              </div>
+
+              {form.type === 'Purchase' ? (
+                <div>
+                  <label className="text-xs font-semibold text-slate-600 mb-1.5 block flex items-center gap-1">
+                    <IndianRupee className="w-3.5 h-3.5" /> Unit Purchase Price (₹) <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    value={form.purchasePrice}
+                    onChange={e => set('purchasePrice', e.target.value)}
+                    placeholder="e.g. 299.99"
+                    className={inputCls('purchasePrice')}
+                  />
+                  {errors.purchasePrice && <p className="text-xs text-red-500 mt-1">{errors.purchasePrice}</p>}
+                </div>
+              ) : null}
             </div>
 
-            {/* Remarks */}
             <div>
               <label className="text-xs font-semibold text-slate-600 mb-1.5 block">Remarks <span className="text-slate-400">(optional)</span></label>
               <textarea
-                rows={3} value={form.remarks}
+                rows={2}
+                value={form.remarks}
                 onChange={e => set('remarks', e.target.value)}
-                placeholder="Add any notes or remarks…"
+                placeholder="Add any notes, audit reference, damage details or remarks…"
                 className="w-full px-3 py-2.5 text-sm font-medium border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all bg-white resize-none"
               />
             </div>
 
-            {/* Transfer preview pill */}
-            {form.sender && form.receiver && form.sender !== form.receiver && (
+            {form.type === 'Inventory Transfer' && form.sender && form.receiver && form.product && form.quantity && (
               <div className="flex items-center gap-2 px-4 py-3 bg-blue-50 border border-blue-200 rounded-xl text-sm font-semibold text-blue-700">
                 <Store className="w-4 h-4 flex-shrink-0" />
-                <span className="truncate">{form.sender}</span>
+                <span className="truncate">{storeOptions.find(o => o.id === form.sender)?.name}</span>
                 <ArrowRightLeft className="w-4 h-4 flex-shrink-0" />
-                <span className="truncate">{form.receiver}</span>
+                <span className="truncate">{storeOptions.find(o => o.id === form.receiver)?.name}</span>
               </div>
             )}
           </div>
 
-          {/* Footer */}
           <div className="px-5 sm:px-6 py-4 border-t border-slate-100 flex items-center justify-end gap-3 flex-shrink-0 bg-slate-50">
             <button type="button" onClick={handleClose}
               className="px-4 py-2 text-sm font-semibold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors">
               Cancel
             </button>
-            <button type="submit"
-              className="px-5 py-2 text-sm font-semibold text-white bg-[#0A0F1F] rounded-xl hover:bg-slate-800 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 flex items-center gap-2">
+            <button type="submit" disabled={isSubmitting}
+              className="px-5 py-2 text-sm font-semibold text-white bg-[#0A0F1F] rounded-xl hover:bg-slate-800 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed">
               <Plus className="w-4 h-4" />
-              Create Transaction
+              {isSubmitting ? 'Creating...' : 'Create Transaction'}
             </button>
           </div>
         </form>
@@ -395,14 +547,8 @@ const ViewDetailModal = ({ transaction, onClose }) => {
    MAIN PAGE
 ───────────────────────────────────────────────────────── */
 const Transactions = () => {
-  const [transactions, setTransactions] = useState(() => {
-    const saved = localStorage.getItem('transactions');
-    return saved ? JSON.parse(saved) : MOCK_TRANSACTIONS;
-  });
-
-  useEffect(() => {
-    localStorage.setItem('transactions', JSON.stringify(transactions));
-  }, [transactions]);
+  const { storeId } = useParams();
+  const { selectedStore, setSelectedStore, stores } = useStoreStore();
   const [activeTab, setActiveTab] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterSender, setFilterSender] = useState('');
@@ -412,7 +558,40 @@ const Transactions = () => {
   const [showNewModal, setShowNewModal] = useState(false);
   const [viewTx, setViewTx] = useState(null);
   const [showFilters, setShowFilters] = useState(false);
+  const {
+    transactions: backendTransactions,
+    totalTransactions,
+    isLoadingTransactions,
+    isTransactionsError,
+    createTransactionAsync,
+    isCreatingTransaction,
+  } = useTransactions(storeId, {
+    page: currentPage,
+    limit: ITEMS_PER_PAGE,
+  });
+  const { kpiItems: inventoryItems } = useInventory(storeId);
+  const transactions = useMemo(() => backendTransactions.map((tx) => ({
+    id: `TXN-${String(tx.id).padStart(6, '0')}`,
+    rawId: tx.id,
+    date: tx.created_at,
+    sender: tx.send_store_name || 'Admin Warehouse',
+    receiver: tx.receive_store_name || 'Admin Warehouse',
+    category: 'Inventory',
+    product: tx.product_name || tx.product_sku || `Product #${tx.product_id}`,
+    quantity: tx.quantity,
+    type: tx.transaction_type.replaceAll('_', ' '),
+    status: 'Completed',
+    remarks: tx.remarks || '',
+  })), [backendTransactions]);
 
+  useEffect(() => {
+    if (storeId && stores.length > 0) {
+      const urlStore = stores.find(s => String(s.id) === String(storeId));
+      if (urlStore && (!selectedStore || String(selectedStore.id) !== String(storeId))) {
+        setSelectedStore(urlStore);
+      }
+    }
+  }, [storeId, stores, selectedStore, setSelectedStore]);
   /* ── Filtered list ── */
   const filtered = useMemo(() => {
     const q = searchTerm.toLowerCase().trim();
@@ -434,10 +613,7 @@ const Transactions = () => {
     });
   }, [transactions, activeTab, searchTerm, filterSender, filterReceiver, filterType]);
 
-  const paginated = useMemo(() => {
-    const start = (currentPage - 1) * ITEMS_PER_PAGE;
-    return filtered.slice(start, start + ITEMS_PER_PAGE);
-  }, [filtered, currentPage]);
+  const paginated = filtered;
 
   /* ── Tab counts ── */
   const tabCounts = useMemo(() => {
@@ -461,15 +637,11 @@ const Transactions = () => {
     resetPage();
   };
 
-  const handleNewTransaction = (data) => {
-    const newTx = {
-      ...data,
-      id: `TXN-${String(1000 + transactions.length + 1).padStart(4, '0')}`,
-      date: new Date().toISOString(),
-      quantity: Number(data.quantity),
-      status: 'Pending',
-    };
-    setTransactions(prev => [newTx, ...prev]);
+  const handleNewTransaction = async (data) => {
+    await createTransactionAsync({
+      type: data.type,
+      payload: data.payload,
+    });
     setShowNewModal(false);
   };
 
@@ -597,14 +769,20 @@ const Transactions = () => {
             <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5 block">Sender</label>
             <select value={filterSender} onChange={e => { setFilterSender(e.target.value); resetPage(); }} className={selectCls}>
               <option value="">All Senders</option>
-              {STORES.map(s => <option key={s} value={s}>{s}</option>)}
+              {stores.map(store => {
+                const name = store.store_name || store.name || `Store #${store.id}`;
+                return <option key={store.id} value={name}>{name}</option>;
+              })}
             </select>
           </div>
           <div className="flex-1 min-w-[160px]">
             <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5 block">Receiver</label>
             <select value={filterReceiver} onChange={e => { setFilterReceiver(e.target.value); resetPage(); }} className={selectCls}>
               <option value="">All Receivers</option>
-              {STORES.map(s => <option key={s} value={s}>{s}</option>)}
+              {stores.map(store => {
+                const name = store.store_name || store.name || `Store #${store.id}`;
+                return <option key={store.id} value={name}>{name}</option>;
+              })}
             </select>
           </div>
           <div className="flex-1 min-w-[160px]">
@@ -659,7 +837,15 @@ const Transactions = () => {
       )}
 
       {/* ── Table / Card listing ── */}
-      {filtered.length === 0 ? (
+      {isLoadingTransactions ? (
+        <div className="bg-white border border-slate-100 rounded-2xl p-12 text-center text-slate-500 font-semibold">
+          Loading transactions...
+        </div>
+      ) : isTransactionsError ? (
+        <div className="bg-red-50 border border-red-100 rounded-2xl p-12 text-center text-red-700 font-semibold">
+          Unable to load transactions for this store.
+        </div>
+      ) : filtered.length === 0 ? (
         <div className="bg-white border border-dashed border-slate-200 rounded-2xl p-12 flex flex-col items-center justify-center text-center">
           <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4 border border-slate-100">
             <ArrowRightLeft className="w-8 h-8 text-slate-300" />
@@ -784,7 +970,7 @@ const Transactions = () => {
           </div>
 
           <Pagination
-            totalItems={filtered.length}
+            totalItems={totalTransactions}
             itemsPerPage={ITEMS_PER_PAGE}
             currentPage={currentPage}
             onPageChange={setCurrentPage}
@@ -797,6 +983,9 @@ const Transactions = () => {
         isOpen={showNewModal}
         onClose={() => setShowNewModal(false)}
         onSubmit={handleNewTransaction}
+        currentStore={selectedStore}
+        stores={stores}
+        isSubmitting={isCreatingTransaction}
       />
       <ViewDetailModal
         transaction={viewTx}
@@ -807,3 +996,4 @@ const Transactions = () => {
 };
 
 export default Transactions;
+

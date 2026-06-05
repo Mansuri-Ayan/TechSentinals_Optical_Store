@@ -87,6 +87,8 @@ async def get_categories_by_admin(
 
     # ── Base conditions ──
     conditions = [Category.admin_id == admin_id]
+    if store_id is not None:
+        conditions.append(Category.id.in_(select(prod_sq.c.category_id)))
     if active_only:
         conditions.append(Category.is_active.is_(True))
     if search:
@@ -216,6 +218,8 @@ async def get_subcategories_by_category(
 
     # ── Base conditions ──
     conditions = [Subcategory.category_id == category_id]
+    if store_id is not None:
+        conditions.append(Subcategory.id.in_(select(prod_sq.c.subcategory_id)))
     if active_only:
         conditions.append(Subcategory.is_active.is_(True))
     if search:

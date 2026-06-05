@@ -4,7 +4,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.deps import get_current_admin
 from db.session import get_db
 from models.admin import Admin
+from schemas.pagination import PaginatedResponse
 from schemas.inventory_transaction import TransactionRead
+from services.store_service import get_store
 from services.transfer_service import get_transaction_history
 
 router = APIRouter()
@@ -22,7 +24,7 @@ def _txn_to_read(txn) -> TransactionRead:
 
 @router.get(
     "/history",
-    response_model=list[TransactionRead],
+    response_model=PaginatedResponse[TransactionRead],
     summary="Transaction history",
     description="Fetch inventory transaction history with optional filters.",
 )
@@ -31,12 +33,22 @@ async def transaction_history_endpoint(
     inventory_id: int | None = Query(None),
     transaction_type: str | None = Query(None),
     store_id: int | None = Query(None),
-    limit: int = Query(50, ge=1, le=500),
-    offset: int = Query(0, ge=0),
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
     current_admin: Admin = Depends(get_current_admin),
-) -> list[TransactionRead]:
-    transactions = await get_transaction_history(
+) -> PaginatedResponse[TransactionRead]:
+    if store_id is not None:
+        store = await get_store(db, store_id)
+        if store is None or store.admin_id != current_admin.id:
+            from fastapi import HTTPException, status
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Store not found",
+            )
+
+    offset = (page - 1) * limit
+    transactions, total = await get_transaction_history(
         db,
         admin_id=current_admin.id,
         product_id=product_id,
@@ -46,4 +58,11 @@ async def transaction_history_endpoint(
         limit=limit,
         offset=offset,
     )
-    return [_txn_to_read(txn) for txn in transactions]
+    pages = (total + limit - 1) // limit if limit > 0 else 1
+    return PaginatedResponse[TransactionRead](
+        items=[_txn_to_read(txn) for txn in transactions],
+        total=total,
+        page=page,
+        pages=pages,
+        limit=limit,
+    )

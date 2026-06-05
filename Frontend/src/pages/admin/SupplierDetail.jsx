@@ -4,13 +4,15 @@ import {
   ChevronLeft, ChevronRight, User, Mail, Phone, MapPin, Package,
   ShoppingCart, TrendingUp, Calendar, Building2, ArrowRightLeft,
   CheckCircle, Clock, XCircle, AlertTriangle, Layers, Tag, Edit2,
-  Trash2, PackagePlus, CreditCard,
+  Trash2, PackagePlus, CreditCard, Loader2,
 } from 'lucide-react';
-import { MOCK_SUPPLIERS } from '../../data/suppliersData';
 import AddTransactionModal from '../../components/admin/suppliers/AddTransactionModal';
 import TransactionDetailModal from '../../components/admin/suppliers/TransactionDetailModal';
 import AddEditSupplierModal from '../../components/admin/suppliers/AddEditSupplierModal';
 import DeleteConfirmModal from '../../components/admin/suppliers/DeleteConfirmModal';
+import { useStoreStore } from '../../store/store';
+import { useSupplier, useSupplierProducts, useSuppliers } from '../../hooks/useSuppliers';
+import { usePurchaseOrders } from '../../hooks/usePurchaseOrders';
 
 /* ── Helpers ── */
 const fmt = (n) => `₹${Number(n).toLocaleString('en-IN')}`;
@@ -55,13 +57,34 @@ const TABS = [
 ];
 
 const SupplierDetail = () => {
-  const { id } = useParams();
+  const { storeId, id } = useParams();
   const navigate = useNavigate();
 
-  const [suppliers, setSuppliers] = useState(() => {
-    const saved = localStorage.getItem('suppliers');
-    return saved ? JSON.parse(saved) : MOCK_SUPPLIERS;
+  const { stores, selectedStore, setSelectedStore } = useStoreStore();
+  
+  // Active store check and auto-sync
+  useEffect(() => {
+    if (storeId && stores.length > 0) {
+      const urlStore = stores.find(st => String(st.id) === String(storeId));
+      if (urlStore && (!selectedStore || String(selectedStore.id) !== String(storeId))) {
+        setSelectedStore(urlStore);
+      }
+    }
+  }, [storeId, stores, selectedStore, setSelectedStore]);
+
+  const activeStoreName = useMemo(() => {
+    const matched = stores.find(st => String(st.id) === String(storeId));
+    return matched ? matched.store_name : 'Active Store';
+  }, [stores, storeId]);
+
+  // React Query queries
+  const { supplier, isLoadingSupplier, isSupplierError } = useSupplier(id);
+  const { products: catalogueProducts, addProductAsync } = useSupplierProducts(id);
+  const { purchaseOrders, recordPurchaseAsync, isLoadingPurchaseOrders } = usePurchaseOrders({
+    supplier_id: id,
+    store_id: storeId,
   });
+  const { updateSupplierAsync, deleteSupplierAsync } = useSuppliers(storeId);
 
   const [activeTab, setActiveTab] = useState('info');
   const [showAddTransaction, setShowAddTransaction] = useState(false);
@@ -69,101 +92,166 @@ const SupplierDetail = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 
-  // Sync back to localStorage if list changes
-  useEffect(() => {
-    localStorage.setItem('suppliers', JSON.stringify(suppliers));
-  }, [suppliers]);
-
-  // Find supplier in state list
+  // Map API Supplier to UI Model
   const s = useMemo(() => {
-    return suppliers.find(item => String(item.id) === String(id));
-  }, [suppliers, id]);
+    if (!supplier) return null;
+    return {
+      ...supplier,
+      name: supplier.company_name,
+      contactPerson: supplier.contact_person || 'No contact person',
+      status: supplier.status === 'ACTIVE' ? 'Active' : supplier.status,
+      createdAt: supplier.created_at,
+    };
+  }, [supplier]);
 
-  if (!s) {
+  // Compute PO Stats
+  const { totalAmount, lastPurchase, totalOrders } = useMemo(() => {
+    if (!purchaseOrders || purchaseOrders.length === 0) {
+      return { totalAmount: 0, lastPurchase: null, totalOrders: 0 };
+    }
+    const sumAmount = purchaseOrders.reduce((a, t) => a + Number(t.total_amount || 0), 0);
+    const lastDate = purchaseOrders.reduce((l, t) => t.order_date > l ? t.order_date : l, purchaseOrders[0].order_date);
+    return { totalAmount: sumAmount, lastPurchase: lastDate, totalOrders: purchaseOrders.length };
+  }, [purchaseOrders]);
+
+  // Map API Products catalogue to UI Products
+  const productsList = useMemo(() => {
+    if (!catalogueProducts) return [];
+    return catalogueProducts.map((p, idx) => {
+      // Sum the quantity received for this product across all POs
+      const qtySupplied = purchaseOrders
+        .filter(po => po.status === 'RECEIVED' || po.status === 'PARTIALLY_RECEIVED')
+        .flatMap(po => po.items || [])
+        .filter(item => Number(item.product_id) === Number(p.product_id))
+        .reduce((sum, item) => sum + (item.quantity_received || 0), 0);
+
+      // Latest purchase date for this product
+      const matchingPos = purchaseOrders
+        .filter(po => (po.status === 'RECEIVED' || po.status === 'PARTIALLY_RECEIVED') &&
+                      (po.items || []).some(item => Number(item.product_id) === Number(p.product_id)));
+      const lastDate = matchingPos.length > 0
+        ? matchingPos.reduce((latest, po) => po.order_date > latest ? po.order_date : latest, matchingPos[0].order_date)
+        : null;
+
+      return {
+        id: p.id,
+        name: p.product_name || `Product #${p.product_id}`,
+        category: p.category_name || 'Generic',
+        brand: p.brand_name || 'Generic',
+        quantitySupplied: qtySupplied,
+        lastPurchaseDate: lastDate,
+      };
+    });
+  }, [catalogueProducts, purchaseOrders]);
+
+  // Map API Purchase Orders to UI Transactions
+  const transactionsList = useMemo(() => {
+    if (!purchaseOrders) return [];
+    return purchaseOrders.map(po => {
+      let mappedStatus = 'Pending';
+      if (po.status === 'RECEIVED') mappedStatus = 'Completed';
+      else if (po.status === 'CANCELLED') mappedStatus = 'Cancelled';
+
+      const firstItem = po.items?.[0];
+      return {
+        id: po.po_number,
+        rawId: po.id,
+        date: po.order_date,
+        product: firstItem?.product_name || 'Multiple Products',
+        category: firstItem?.category_name || '—',
+        quantity: firstItem?.quantity_ordered || 0,
+        amount: Number(po.total_amount),
+        paidAmount: Number(po.paid_amount),
+        dueAmount: Number(po.due_amount),
+        paymentMethod: po.payments?.[0]?.payment_method || 'Credit',
+        paymentDate: po.payments?.[0]?.payment_date || po.order_date,
+        sentTo: po.store_name || 'Store Warehouse',
+        status: mappedStatus,
+        remarks: po.notes,
+      };
+    });
+  }, [purchaseOrders]);
+
+  const handleAddTransaction = async (data) => {
+    // 1. If product is not in supplier catalogue, register it dynamically first
+    const exists = catalogueProducts.some(p => Number(p.product_id) === Number(data.productId));
+    if (!exists) {
+      await addProductAsync({
+        product_id: data.productId,
+        unit_price: data.amount / data.quantity,
+        minimum_order_quantity: 1,
+        lead_time_days: 1,
+      });
+    }
+
+    // 2. Raise, receive, and pay for purchase order
+    await recordPurchaseAsync({
+      supplierId: id,
+      storeId: data.storeId || storeId,
+      productId: data.productId,
+      quantity: data.quantity,
+      totalAmount: data.amount,
+      paidAmount: data.paidAmount,
+      paymentMethod: data.method,
+      date: data.date,
+      remarks: data.remarks,
+    });
+
+    setShowAddTransaction(false);
+  };
+
+  const handleEditSupplier = async (data) => {
+    const payload = {
+      company_name: data.name.trim(),
+      contact_person: data.contactPerson?.trim() || null,
+      email: data.email?.trim() || null,
+      phone: data.phone?.trim() || null,
+      city: data.city?.trim() || null,
+      state: data.state || null,
+      pincode: data.pincode?.trim() || null,
+      alternate_phone: data.alternate_phone?.trim() || null,
+      gst_number: data.gst_number?.trim() || null,
+      pan_number: data.pan_number?.trim() || null,
+      bank_name: data.bank_name?.trim() || null,
+      bank_account_number: data.bank_account_number?.trim() || null,
+      bank_ifsc: data.bank_ifsc?.trim() || null,
+      credit_days: data.credit_days !== '' && data.credit_days !== undefined && data.credit_days !== null ? Number(data.credit_days) : 0,
+      notes: data.notes?.trim() || null,
+      status: 'ACTIVE',
+    };
+    await updateSupplierAsync({ id, payload });
+    setShowEditModal(false);
+  };
+
+  const handleDeleteConfirm = async () => {
+    await deleteSupplierAsync(id);
+    setShowDeleteModal(false);
+    navigate(`/admin/store/${storeId}/suppliers`);
+  };
+
+  if (isLoadingSupplier) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3 font-sans">
+        <Loader2 className="w-10 h-10 text-blue-600 animate-spin" />
+        <p className="text-slate-500 font-semibold text-sm">Loading supplier details…</p>
+      </div>
+    );
+  }
+
+  if (isSupplierError || !s) {
     return (
       <div className="p-8 max-w-[1600px] mx-auto text-center font-sans">
         <div className="bg-white border border-dashed border-slate-200 rounded-2xl p-12 max-w-md mx-auto">
           <AlertTriangle className="w-12 h-12 text-red-500 mx-auto mb-4" />
           <h2 className="text-lg font-bold text-slate-900 mb-1">Supplier Not Found</h2>
           <p className="text-slate-500 text-sm mb-6">The supplier you are looking for does not exist or has been deleted.</p>
-          <Link to="/admin/suppliers" className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#0A0F1F] text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-colors">
+          <Link to={`/admin/store/${storeId}/suppliers`} className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#0A0F1F] text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-colors">
             <ChevronLeft className="w-4 h-4" /> Back to Suppliers
           </Link>
         </div>
       </div>
     );
   }
-
-  const lastPurchase = s.transactions?.length
-    ? s.transactions.reduce((l, t) => t.date > l ? t.date : l, s.transactions[0].date)
-    : null;
-
-  const totalAmount = s.transactions?.reduce((a, t) => a + (t.amount || 0), 0) ?? 0;
-
-  const handleAddTransaction = (data) => {
-    const newEntry = {
-      id: `TX-${Date.now()}`,
-      date: data.date,
-      product: data.subcategory,
-      category: data.category,
-      quantity: data.quantity,
-      amount: data.amount,
-      paidAmount: data.paidAmount,
-      dueAmount: data.dueAmount,
-      paymentMethod: data.method,
-      paymentDate: data.date,
-      sentTo: 'Admin Store',
-      status: data.dueAmount > 0 ? 'Pending' : 'Completed',
-      remarks: data.remarks,
-    };
-
-    // Update products list
-    let updatedProducts = [...(s.products || [])];
-    const prodIndex = updatedProducts.findIndex(p => p.name === data.subcategory);
-    if (prodIndex >= 0) {
-      updatedProducts[prodIndex] = {
-        ...updatedProducts[prodIndex],
-        quantitySupplied: updatedProducts[prodIndex].quantitySupplied + data.quantity,
-        lastPurchaseDate: data.date
-      };
-    } else {
-      updatedProducts.push({
-        id: Date.now(),
-        name: data.subcategory,
-        category: data.category,
-        brand: 'Generic',
-        quantitySupplied: data.quantity,
-        lastPurchaseDate: data.date
-      });
-    }
-
-    const updatedSupplier = {
-      ...s,
-      transactions: [newEntry, ...(s.transactions || [])],
-      products: updatedProducts,
-      totalProducts: updatedProducts.length,
-      totalOrders: (s.totalOrders || 0) + 1,
-      totalAmount: (s.totalAmount || 0) + data.amount
-    };
-
-    setSuppliers(prev => prev.map(item => String(item.id) === String(id) ? updatedSupplier : item));
-    setShowAddTransaction(false);
-  };
-
-  const handleEditSupplier = (data) => {
-    const updatedSupplier = {
-      ...s,
-      ...data
-    };
-    setSuppliers(prev => prev.map(item => String(item.id) === String(id) ? updatedSupplier : item));
-    setShowEditModal(false);
-  };
-
-  const handleDeleteConfirm = () => {
-    setSuppliers(prev => prev.filter(item => String(item.id) !== String(id)));
-    setShowDeleteModal(false);
-    navigate('/admin/suppliers');
-  };
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto animate-fade-in font-sans">
@@ -172,7 +260,7 @@ const SupplierDetail = () => {
         <div className="flex items-center text-sm text-slate-500 font-medium mb-3 space-x-2 flex-wrap">
           <Link to="/admin/dashboard" className="hover:text-slate-800 transition-colors">Dashboard</Link>
           <ChevronRight className="w-4 h-4 flex-shrink-0" />
-          <Link to="/admin/suppliers" className="hover:text-slate-800 transition-colors">Suppliers</Link>
+          <Link to={`/admin/store/${storeId}/suppliers`} className="hover:text-slate-800 transition-colors">Suppliers</Link>
           <ChevronRight className="w-4 h-4 flex-shrink-0" />
           <span className="text-slate-900 font-semibold truncate max-w-[150px] sm:max-w-xs">{s.name}</span>
         </div>
@@ -182,7 +270,7 @@ const SupplierDetail = () => {
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6 sm:mb-8 pb-6 border-b border-slate-100">
         <div className="flex items-center gap-4 min-w-0">
           <button
-            onClick={() => navigate('/admin/suppliers')}
+            onClick={() => navigate(`/admin/store/${storeId}/suppliers`)}
             className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm flex-shrink-0"
             title="Back to list"
           >
@@ -203,7 +291,7 @@ const SupplierDetail = () => {
                 </span>
               </div>
               <p className="text-slate-500 mt-1 text-xs sm:text-sm font-semibold truncate">
-                {s.contactPerson} &middot; {s.city}, {s.state}
+                {s.contactPerson} · {s.city}, {s.state}
               </p>
             </div>
           </div>
@@ -292,7 +380,7 @@ const SupplierDetail = () => {
                 {[['City', s.city], ['State', s.state], ['Pincode', s.pincode]].map(([lbl, val]) => (
                   <div key={lbl} className="bg-white p-4 rounded-xl border border-slate-200/60 shadow-sm">
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">{lbl}</p>
-                    <p className="text-sm sm:text-base font-bold text-slate-800">{val}</p>
+                    <p className="text-sm sm:text-base font-bold text-slate-800">{val || '—'}</p>
                   </div>
                 ))}
               </div>
@@ -300,7 +388,7 @@ const SupplierDetail = () => {
 
             <div className="flex items-center gap-3 text-xs text-slate-400 font-semibold px-1">
               <span>Supplier Created: {fmtDate(s.createdAt)}</span>
-              <span>&middot;</span>
+              <span>·</span>
               <span>Status: <span className={s.status === 'Active' ? 'text-emerald-600' : 'text-slate-500'}>{s.status}</span></span>
             </div>
           </div>
@@ -309,7 +397,7 @@ const SupplierDetail = () => {
         {/* ── PRODUCTS TAB ── */}
         {activeTab === 'products' && (
           <div>
-            {!s.products?.length ? (
+            {productsList.length === 0 ? (
               <div className="text-center py-16 text-slate-400">
                 <Package className="w-12 h-12 mx-auto mb-4 text-slate-200" />
                 <p className="font-bold text-base text-slate-700">No products on record</p>
@@ -330,7 +418,7 @@ const SupplierDetail = () => {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
-                      {s.products.map((p, idx) => (
+                      {productsList.map((p, idx) => (
                         <tr key={p.id} className="hover:bg-slate-50/50 transition-colors">
                           <td className="px-5 py-4">
                             <div className="flex items-center gap-3">
@@ -364,14 +452,14 @@ const SupplierDetail = () => {
 
                 {/* Mobile Product List */}
                 <div className="md:hidden space-y-3">
-                  {s.products.map((p, idx) => (
+                  {productsList.map((p, idx) => (
                     <div key={p.id} className="p-4 bg-slate-50 border border-slate-100 rounded-2xl flex items-center gap-3">
                       <ProductAvatar name={p.name} idx={idx} />
                       <div className="flex-1 min-w-0">
                         <p className="font-bold text-sm text-slate-900 truncate">{p.name}</p>
                         <div className="flex items-center gap-2 mt-1">
                           <span className="text-[10px] font-semibold text-slate-500">{p.category}</span>
-                          <span className="text-slate-300">&middot;</span>
+                          <span className="text-slate-300">·</span>
                           <span className="text-[10px] font-semibold text-slate-500">{p.brand}</span>
                         </div>
                       </div>
@@ -391,11 +479,11 @@ const SupplierDetail = () => {
         {/* ── HISTORY TAB ── */}
         {activeTab === 'history' && (
           <div>
-            {!s.transactions?.length ? (
+            {transactionsList.length === 0 ? (
               <div className="text-center py-16 text-slate-400">
                 <ArrowRightLeft className="w-12 h-12 mx-auto mb-4 text-slate-200" />
                 <p className="font-bold text-base text-slate-700">No transactions recorded</p>
-                <p className="text-xs text-slate-400 mt-1">Click "Add Goods" or "Add Payment" to register history.</p>
+                <p className="text-xs text-slate-400 mt-1">Click "Record Purchase" to register history.</p>
               </div>
             ) : (
               <>
@@ -412,7 +500,7 @@ const SupplierDetail = () => {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
-                      {s.transactions.map(tx => (
+                      {transactionsList.map(tx => (
                         <tr
                           key={tx.id}
                           onClick={() => setSelectedTransaction(tx)}
@@ -458,7 +546,7 @@ const SupplierDetail = () => {
 
                 {/* Mobile History Cards */}
                 <div className="md:hidden space-y-3">
-                  {s.transactions.map(tx => (
+                  {transactionsList.map(tx => (
                     <div
                       key={tx.id}
                       onClick={() => setSelectedTransaction(tx)}
@@ -494,7 +582,7 @@ const SupplierDetail = () => {
                         </div>
                       </div>
                       <div className="flex items-center justify-between text-xs text-slate-400 pt-2 border-t border-slate-200/50">
-                        <span>{fmtDate(tx.date)} &middot; {tx.paymentMethod}</span>
+                        <span>{fmtDate(tx.date)} · {tx.paymentMethod}</span>
                         <span className="flex items-center gap-1 font-semibold text-slate-500">
                           <Building2 className="w-3.5 h-3.5" />
                           {tx.sentTo}
@@ -513,8 +601,8 @@ const SupplierDetail = () => {
           <div className="space-y-8">
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
               {[
-                { label: 'Total Products',      value: s.totalProducts,    icon: Package,     color: 'text-blue-700 bg-blue-50 border-blue-200'          },
-                { label: 'Total Orders',        value: s.totalOrders,      icon: ShoppingCart, color: 'text-purple-700 bg-purple-50 border-purple-200'    },
+                { label: 'Total Products',      value: productsList.length, icon: Package,     color: 'text-blue-700 bg-blue-50 border-blue-200'          },
+                { label: 'Total Orders',        value: totalOrders,        icon: ShoppingCart, color: 'text-purple-700 bg-purple-50 border-purple-200'    },
                 { label: 'Total Purchase Amt.', value: fmt(totalAmount),   icon: TrendingUp,  color: 'text-emerald-700 bg-emerald-50 border-emerald-200'  },
                 { label: 'Last Purchase',       value: fmtDate(lastPurchase), icon: Calendar, color: 'text-amber-700 bg-amber-50 border-amber-200'        },
               ].map(kpi => {
@@ -532,12 +620,12 @@ const SupplierDetail = () => {
             </div>
 
             {/* Spend Breakdown Graph */}
-            {s.transactions?.length > 0 && (() => {
+            {transactionsList.length > 0 && (() => {
               const byCategory = {};
-              s.transactions.forEach(t => {
+              transactionsList.forEach(t => {
                 if (t.amount > 0) byCategory[t.category] = (byCategory[t.category] || 0) + t.amount;
               });
-              const total = Object.values(byCategory).reduce((a, b) => a + b, 0);
+              const total = Object.values(byCategory).reduce((a, b) => a + Number(b), 0);
               if (!total) return null;
               return (
                 <div className="bg-slate-50 rounded-2xl border border-slate-100 p-6">
@@ -571,6 +659,8 @@ const SupplierDetail = () => {
       <AddTransactionModal
         isOpen={showAddTransaction}
         supplierName={s.name}
+        storeName={activeStoreName}
+        activeStoreId={storeId}
         onClose={() => setShowAddTransaction(false)}
         onSubmit={handleAddTransaction}
       />

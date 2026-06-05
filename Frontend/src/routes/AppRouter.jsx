@@ -53,25 +53,6 @@ const PrivateRoute = ({ children }) => {
   return children;
 };
 
-// Route specifically for Admins
-const AdminRoute = ({ children }) => {
-  const { isAuthenticated, user, isLoading } = useAuthStore();
-
-  if (isLoading) {
-    return <LoadingSpinner />;
-  }
-
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
-  }
-
-  if (user && user.role !== 'admin') {
-    return <Navigate to="/" replace />;
-  }
-
-  return children;
-};
-
 // Route specifically for Home (Redirects admin to dashboard, others to ProfileHome)
 const HomeRoute = () => {
   const { user, isLoading } = useAuthStore();
@@ -131,6 +112,28 @@ const CategoriesRouteRedirect = () => {
   return <Navigate to={`/admin/store/${targetStore.id}/categories`} replace />;
 };
 
+const TransactionsRouteRedirect = () => {
+  const { selectedStore, stores } = useStoreStore();
+  const targetStore = selectedStore || stores[0];
+
+  if (!targetStore) {
+    return <Navigate to="/admin/dashboard" replace />;
+  }
+
+  return <Navigate to={`/admin/store/${targetStore.id}/transactions`} replace />;
+};
+
+const SuppliersRouteRedirect = () => {
+  const { selectedStore, stores } = useStoreStore();
+  const targetStore = selectedStore || stores[0];
+
+  if (!targetStore) {
+    return <Navigate to="/admin/dashboard" replace />;
+  }
+
+  return <Navigate to={`/admin/store/${targetStore.id}/suppliers`} replace />;
+};
+
 function AppRouter() {
   return (
     <Routes>
@@ -174,12 +177,11 @@ function AppRouter() {
         <Route path="store/:storeId/brands" element={<Brands />} />
         <Route path="categories" element={<CategoriesRouteRedirect />} />
         <Route path="store/:storeId/categories" element={<Categories />} />
-        <Route path="inventory" element={<Inventory />} />
-        <Route path="brands" element={<Brands />} />
-        <Route path="categories" element={<Categories />} />
-        <Route path="transactions" element={<Transactions />} />
-        <Route path="suppliers" element={<Suppliers />} />
-        <Route path="suppliers/:id" element={<SupplierDetail />} />
+        <Route path="transactions" element={<TransactionsRouteRedirect />} />
+        <Route path="store/:storeId/transactions" element={<Transactions />} />
+        <Route path="suppliers" element={<SuppliersRouteRedirect />} />
+        <Route path="store/:storeId/suppliers" element={<Suppliers />} />
+        <Route path="store/:storeId/suppliers/:id" element={<SupplierDetail />} />
       </Route>
 
       {/* Fallback root redirect */}

@@ -5,7 +5,7 @@ from core.deps import get_current_admin
 from db.session import get_db
 from models.admin import Admin
 from schemas.purchase_order import PurchaseOrderCreate, PurchaseOrderRead, PurchaseOrderItemRead
-from services.purchase_order_service import create_purchase_order
+from services.purchase_order_service import create_purchase_order, get_purchase_order
 
 router = APIRouter()
 
@@ -46,4 +46,6 @@ async def create_po_endpoint(
         created_by=current_admin.id,
         payload=payload,
     )
+    # Reload with all relations
+    po = await get_purchase_order(db, po.id)
     return _po_to_read(po)

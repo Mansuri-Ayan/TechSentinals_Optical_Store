@@ -25,6 +25,8 @@ def _sp_to_read(sp) -> SupplierProductRead:
         **{c.key: getattr(sp, c.key) for c in sp.__table__.columns},
         product_name=sp.product.name if sp.product else None,
         product_sku=sp.product.sku if sp.product else None,
+        category_name=sp.product.category.name if sp.product and sp.product.category else None,
+        brand_name=sp.product.brand.name if sp.product and sp.product.brand else None,
     )
 
 

@@ -1,5 +1,5 @@
 # Service: brand_service.py
-from sqlalchemy import select, func as sa_func, or_
+from sqlalchemy import select, func as sa_func
 from sqlalchemy.ext.asyncio import AsyncSession
 from models.brand import Brand
 from models.product import Product
@@ -70,6 +70,8 @@ async def get_brands_by_admin(
 
     # ── Base conditions ──
     conditions = [Brand.admin_id == admin_id]
+    if store_id is not None:
+        conditions.append(Brand.id.in_(select(count_sq.c.brand_id)))
     if active_status == "active":
         conditions.append(Brand.is_active.is_(True))
     elif active_status == "inactive":
@@ -82,8 +84,11 @@ async def get_brands_by_admin(
     total = (await db.execute(count_stmt)).scalar() or 0
 
     # ── Global count statistics ──
-    active_stmt = select(sa_func.count(Brand.id)).where(Brand.admin_id == admin_id, Brand.is_active.is_(True))
-    inactive_stmt = select(sa_func.count(Brand.id)).where(Brand.admin_id == admin_id, Brand.is_active.is_(False))
+    count_conditions = [Brand.admin_id == admin_id]
+    if store_id is not None:
+        count_conditions.append(Brand.id.in_(select(count_sq.c.brand_id)))
+    active_stmt = select(sa_func.count(Brand.id)).where(*count_conditions, Brand.is_active.is_(True))
+    inactive_stmt = select(sa_func.count(Brand.id)).where(*count_conditions, Brand.is_active.is_(False))
     active_cnt = (await db.execute(active_stmt)).scalar() or 0
     inactive_cnt = (await db.execute(inactive_stmt)).scalar() or 0
 

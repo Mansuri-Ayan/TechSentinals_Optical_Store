@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   Search, Plus, Truck, ChevronRight,
   Edit2, Trash2, X as XIcon,
@@ -9,7 +9,8 @@ import {
 import Pagination from '../../components/shared/Pagination';
 import AddEditSupplierModal from '../../components/admin/suppliers/AddEditSupplierModal';
 import DeleteConfirmModal from '../../components/admin/suppliers/DeleteConfirmModal';
-import { MOCK_SUPPLIERS } from '../../data/suppliersData';
+import { useStoreStore } from '../../store/store';
+import { useSuppliers } from '../../hooks/useSuppliers';
 
 const ITEMS_PER_PAGE = 12;
 
@@ -108,78 +109,100 @@ const SupplierCard = ({ supplier: s, onClick, onEdit, onDelete }) => (
 ───────────────────────────────────────────────────────── */
 const Suppliers = () => {
   const navigate = useNavigate();
-  const [suppliers, setSuppliers] = useState(() => {
-    const saved = localStorage.getItem('suppliers');
-    return saved ? JSON.parse(saved) : MOCK_SUPPLIERS;
-  });
+  const { storeId } = useParams();
+  const { selectedStore, setSelectedStore, stores } = useStoreStore();
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState('All');
+  const {
+    suppliers: backendSuppliers,
+    totalSuppliers,
+    isLoadingSuppliers,
+    isSuppliersError,
+    createSupplierAsync,
+    updateSupplierAsync,
+    deleteSupplierAsync,
+  } = useSuppliers(storeId, {
+    page: currentPage,
+    limit: ITEMS_PER_PAGE,
+    search: searchTerm.trim(),
+    status: statusFilter === 'Active' ? 'ACTIVE' : undefined,
+  });
+  const suppliers = useMemo(() => backendSuppliers.map((supplier) => ({
+    ...supplier,
+    name: supplier.company_name,
+    contactPerson: supplier.contact_person || 'No contact person',
+    status: supplier.status === 'ACTIVE' ? 'Active' : supplier.status,
+    totalProducts: supplier.totalProducts || 0,
+    totalOrders: supplier.totalOrders || 0,
+    totalAmount: supplier.totalAmount || 0,
+  })), [backendSuppliers]);
 
   const [editSupplier, setEditSupplier]   = useState(null);
   const [deleteSupplier, setDeleteSupplier] = useState(null);
   const [showAddModal, setShowAddModal]   = useState(false);
 
   useEffect(() => {
-    localStorage.setItem('suppliers', JSON.stringify(suppliers));
-  }, [suppliers]);
+    if (storeId && stores.length > 0) {
+      const urlStore = stores.find(s => String(s.id) === String(storeId));
+      if (urlStore && (!selectedStore || String(selectedStore.id) !== String(storeId))) {
+        setSelectedStore(urlStore);
+      }
+    }
+  }, [storeId, stores, selectedStore, setSelectedStore]);
 
   /* ── Filter ── */
-  const filtered = useMemo(() => {
-    let list = suppliers;
-    if (statusFilter === 'Active') {
-      list = list.filter(s => s.status === 'Active');
-    }
-    const q = searchTerm.toLowerCase().trim();
-    if (!q) return list;
-    return list.filter(s =>
-      s.name.toLowerCase().includes(q) ||
-      s.contactPerson.toLowerCase().includes(q) ||
-      s.email.toLowerCase().includes(q) ||
-      s.city.toLowerCase().includes(q) ||
-      s.state.toLowerCase().includes(q) ||
-      s.status.toLowerCase().includes(q)
-    );
-  }, [suppliers, searchTerm, statusFilter]);
-
-  const paginated = useMemo(() => {
-    const start = (currentPage - 1) * ITEMS_PER_PAGE;
-    return filtered.slice(start, start + ITEMS_PER_PAGE);
-  }, [filtered, currentPage]);
+  const toSupplierPayload = (data) => ({
+    company_name: data.name.trim(),
+    contact_person: data.contactPerson?.trim() || null,
+    email: data.email?.trim() || null,
+    phone: data.phone?.trim() || null,
+    city: data.city?.trim() || null,
+    state: data.state || null,
+    pincode: data.pincode?.trim() || null,
+    alternate_phone: data.alternate_phone?.trim() || null,
+    gst_number: data.gst_number?.trim() || null,
+    pan_number: data.pan_number?.trim() || null,
+    bank_name: data.bank_name?.trim() || null,
+    bank_account_number: data.bank_account_number?.trim() || null,
+    bank_ifsc: data.bank_ifsc?.trim() || null,
+    credit_days: data.credit_days !== '' && data.credit_days !== undefined && data.credit_days !== null ? Number(data.credit_days) : 0,
+    notes: data.notes?.trim() || null,
+    status: 'ACTIVE',
+  });
 
   /* ── Handlers ── */
-  const handleSave = (data) => {
-    if (data.id) {
-      setSuppliers(prev => prev.map(s => s.id === data.id ? { ...s, ...data } : s));
-    } else {
-      setSuppliers(prev => [{
-        ...data,
-        id: Date.now(),
-        status: 'Active',
-        totalProducts: 0,
-        totalOrders: 0,
-        totalAmount: 0,
-        createdAt: new Date().toISOString().split('T')[0],
-        products: [],
-        transactions: [],
-      }, ...prev]);
+  const handleSave = async (data) => {
+    try {
+      const payload = toSupplierPayload(data);
+      if (data.id) {
+        await updateSupplierAsync({ id: data.id, payload });
+      } else {
+        await createSupplierAsync({ payload });
+      }
+      setShowAddModal(false);
+      setEditSupplier(null);
+    } catch {
+      // Toast is handled in the mutation hook.
     }
-    setShowAddModal(false);
-    setEditSupplier(null);
   };
 
-  const handleDelete = (id) => {
-    setSuppliers(prev => prev.filter(s => s.id !== id));
-    setDeleteSupplier(null);
+  const handleDelete = async (id) => {
+    try {
+      await deleteSupplierAsync(id);
+      setDeleteSupplier(null);
+    } catch {
+      // Toast is handled in the mutation hook.
+    }
   };
 
   /* ── KPI stats ── */
   const kpi = useMemo(() => ({
-    total: suppliers.length,
+    total: totalSuppliers,
     active: suppliers.filter(s => s.status === 'Active').length,
     products: suppliers.reduce((sum, s) => sum + s.totalProducts, 0),
     orders: suppliers.reduce((sum, s) => sum + s.totalOrders, 0),
-  }), [suppliers]);
+  }), [suppliers, totalSuppliers]);
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto animate-fade-in font-sans">
@@ -216,8 +239,8 @@ const Suppliers = () => {
         {[
           { label: 'Total Suppliers', value: kpi.total, icon: Truck, color: 'text-blue-600 bg-blue-50 border-blue-200', activeColor: 'ring-2 ring-blue-500 bg-blue-100/80', onClick: () => { setStatusFilter('All'); setCurrentPage(1); }, active: statusFilter === 'All' },
           { label: 'Active', value: kpi.active, icon: CheckCircle, color: 'text-emerald-600 bg-emerald-50 border-emerald-200', activeColor: 'ring-2 ring-emerald-500 bg-emerald-100/80', onClick: () => { setStatusFilter('Active'); setCurrentPage(1); }, active: statusFilter === 'Active' },
-          { label: 'Products Tracked', value: kpi.products, icon: Package, color: 'text-purple-600 bg-purple-50 border-purple-200', link: '/admin/inventory' },
-          { label: 'Total Orders', value: kpi.orders, icon: ShoppingCart, color: 'text-amber-600 bg-amber-50 border-amber-200', link: '/admin/transactions' },
+          { label: 'Products Tracked', value: kpi.products, icon: Package, color: 'text-purple-600 bg-purple-50 border-purple-200', link: storeId ? `/admin/store/${storeId}/inventory` : '/admin/inventory' },
+          { label: 'Total Orders', value: kpi.orders, icon: ShoppingCart, color: 'text-amber-600 bg-amber-50 border-amber-200', link: storeId ? `/admin/store/${storeId}/transactions` : '/admin/transactions' },
         ].map(card => {
           const Icon = card.icon;
           const content = (
@@ -273,12 +296,20 @@ const Suppliers = () => {
       {/* ── Results info ── */}
       {searchTerm && (
         <p className="text-xs text-slate-500 font-medium mb-4">
-          {filtered.length} supplier{filtered.length !== 1 ? 's' : ''} found for "{searchTerm}"
+          {totalSuppliers} supplier{totalSuppliers !== 1 ? 's' : ''} found for "{searchTerm}"
         </p>
       )}
 
       {/* ── Grid/Table Listing ── */}
-      {filtered.length === 0 ? (
+      {isLoadingSuppliers ? (
+        <div className="bg-white border border-slate-100 rounded-2xl p-12 text-center text-slate-500 font-semibold">
+          Loading suppliers...
+        </div>
+      ) : isSuppliersError ? (
+        <div className="bg-red-50 border border-red-100 rounded-2xl p-12 text-center text-red-700 font-semibold">
+          Unable to load suppliers for this store.
+        </div>
+      ) : suppliers.length === 0 ? (
         <div className="bg-white border border-dashed border-slate-200 rounded-2xl p-12 flex flex-col items-center justify-center text-center">
           <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4 border border-slate-100">
             <Truck className="w-8 h-8 text-slate-300" />
@@ -290,11 +321,11 @@ const Suppliers = () => {
         <>
           {/* Card-based Grid Layout for all screen sizes */}
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 mb-6">
-            {paginated.map(s => (
+            {suppliers.map(s => (
               <SupplierCard
                 key={s.id}
                 supplier={s}
-                onClick={() => navigate(`/admin/suppliers/${s.id}`)}
+                onClick={() => navigate(`/admin/store/${storeId}/suppliers/${s.id}`)}
                 onEdit={setEditSupplier}
                 onDelete={setDeleteSupplier}
               />
@@ -302,7 +333,7 @@ const Suppliers = () => {
           </div>
 
           <Pagination
-            totalItems={filtered.length}
+            totalItems={totalSuppliers}
             itemsPerPage={ITEMS_PER_PAGE}
             currentPage={currentPage}
             onPageChange={setCurrentPage}

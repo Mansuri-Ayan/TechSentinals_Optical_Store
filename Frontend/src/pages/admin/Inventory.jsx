@@ -410,7 +410,7 @@ const Inventory = () => {
     // 2. Create the Inventory record
     await createInventoryAsync({
       owner_type: 'STORE',
-      owner_id: Number(storeId),
+      owner_id: data.store_id ? Number(data.store_id) : Number(storeId),
       product_id: product.id,
       quantity: Number(data.quantity),
       reorder_level: Number(data.reorder_level),

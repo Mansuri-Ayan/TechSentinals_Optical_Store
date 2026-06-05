@@ -60,6 +60,8 @@ class PurchaseOrderItemRead(BaseModel):
     # Denormalized
     product_name: str | None = None
     product_sku: str | None = None
+    category_name: str | None = None
+    brand_name: str | None = None
 
     model_config = {"from_attributes": True}
 

@@ -4,7 +4,7 @@ Endpoints for all inventory movement operations:
   - Purchase, Admin↔Store transfer, Store↔Store transfer
   - Damage, Loss, Sale, Return
 """
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from core.deps import get_current_admin
 from db.session import get_db
@@ -83,6 +83,12 @@ async def transfer_endpoint(
     from_type = payload.from_owner_type.upper()
     to_type = payload.to_owner_type.upper()
 
+    if from_type == to_type and payload.from_owner_id == payload.to_owner_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Source and destination must be different",
+        )
+
     if from_type == "ADMIN" and to_type == "STORE":
         txn_out, txn_in = await admin_to_store_transfer(
             db,
@@ -114,7 +120,6 @@ async def transfer_endpoint(
             remarks=payload.remarks,
         )
     else:
-        from fastapi import HTTPException
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Unsupported transfer direction: {from_type} → {to_type}",

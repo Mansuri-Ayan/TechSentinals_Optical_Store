@@ -60,7 +60,9 @@ async def receive_goods_endpoint(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Purchase order not found",
         )
-    updated_po = await receive_goods(
+    await receive_goods(
         db, po, payload, created_by=current_admin.id,
     )
+    # Reload with all relations
+    updated_po = await get_purchase_order(db, po_id)
     return _po_to_read(updated_po)

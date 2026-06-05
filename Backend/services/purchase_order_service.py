@@ -153,12 +153,17 @@ async def get_purchase_order(
     db: AsyncSession,
     po_id: int,
 ) -> PurchaseOrder | None:
-    """Fetch a PO by ID with items and payments eagerly loaded."""
+    """Fetch a PO by ID with items, payments, supplier, store, and item products eagerly loaded."""
+    from models.purchase_order_item import PurchaseOrderItem
+    from models.product import Product
     stmt = (
         select(PurchaseOrder)
         .options(
-            selectinload(PurchaseOrder.items),
+            selectinload(PurchaseOrder.items).selectinload(PurchaseOrderItem.product).selectinload(Product.category),
+            selectinload(PurchaseOrder.items).selectinload(PurchaseOrderItem.product).selectinload(Product.brand),
             selectinload(PurchaseOrder.payments),
+            selectinload(PurchaseOrder.supplier),
+            selectinload(PurchaseOrder.store),
         )
         .where(PurchaseOrder.id == po_id)
     )
@@ -174,9 +179,25 @@ async def list_purchase_orders(
     status_filter: str | None = None,
     limit: int = 100,
     offset: int = 0,
+    include_nested: bool = False,
 ) -> list[PurchaseOrder]:
     """List POs for an admin with optional filters."""
+    from models.purchase_order_item import PurchaseOrderItem
+    from models.product import Product
     stmt = select(PurchaseOrder).where(PurchaseOrder.admin_id == admin_id)
+    
+    # supplier and store are always needed by _po_to_read
+    stmt = stmt.options(
+        selectinload(PurchaseOrder.supplier),
+        selectinload(PurchaseOrder.store),
+    )
+    
+    if include_nested:
+        stmt = stmt.options(
+            selectinload(PurchaseOrder.items).selectinload(PurchaseOrderItem.product).selectinload(Product.category),
+            selectinload(PurchaseOrder.items).selectinload(PurchaseOrderItem.product).selectinload(Product.brand),
+            selectinload(PurchaseOrder.payments),
+        )
     if supplier_id:
         stmt = stmt.where(PurchaseOrder.supplier_id == supplier_id)
     if store_id:

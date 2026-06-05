@@ -19,6 +19,8 @@ def _po_item_to_read(item) -> PurchaseOrderItemRead:
         **{c.key: getattr(item, c.key) for c in item.__table__.columns},
         product_name=item.product.name if item.product else None,
         product_sku=item.product.sku if item.product else None,
+        category_name=item.product.category.name if item.product and item.product.category else None,
+        brand_name=item.product.brand.name if item.product and item.product.brand else None,
     )
 
 
@@ -52,6 +54,7 @@ async def list_po_endpoint(
     status_filter: str | None = Query(default=None, alias="status"),
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
+    include_nested: bool = Query(default=False),
     db: AsyncSession = Depends(get_db),
     current_admin: Admin = Depends(get_current_admin),
 ) -> list[PurchaseOrderRead]:
@@ -63,8 +66,9 @@ async def list_po_endpoint(
         status_filter=status_filter,
         limit=limit,
         offset=offset,
+        include_nested=include_nested,
     )
-    return [_po_to_read(po, include_nested=False) for po in pos]
+    return [_po_to_read(po, include_nested=include_nested) for po in pos]
 
 
 @router.get(

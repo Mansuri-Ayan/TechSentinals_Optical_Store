@@ -56,6 +56,8 @@ const Sidebar = ({ isOpen, onClose }) => {
   const inventoryRoute = currentStore ? `/admin/store/${currentStore.id}/inventory` : '/admin/dashboard';
   const brandsRoute = currentStore ? `/admin/store/${currentStore.id}/brands` : '/admin/dashboard';
   const categoriesRoute = currentStore ? `/admin/store/${currentStore.id}/categories` : '/admin/dashboard';
+  const transactionsRoute = currentStore ? `/admin/store/${currentStore.id}/transactions` : '/admin/dashboard';
+  const suppliersRoute = currentStore ? `/admin/store/${currentStore.id}/suppliers` : '/admin/dashboard';
 
   const handleStoreSelect = (store) => {
     setSelectedStore(store);
@@ -69,6 +71,10 @@ const Sidebar = ({ isOpen, onClose }) => {
       navigate(`/admin/store/${store.id}/brands`);
     } else if (location.pathname.startsWith('/admin/store/') && location.pathname.endsWith('/categories')) {
       navigate(`/admin/store/${store.id}/categories`);
+    } else if (location.pathname.startsWith('/admin/store/') && location.pathname.includes('/transactions')) {
+      navigate(`/admin/store/${store.id}/transactions`);
+    } else if (location.pathname.startsWith('/admin/store/') && location.pathname.includes('/suppliers')) {
+      navigate(`/admin/store/${store.id}/suppliers`);
     }
   };
 
@@ -238,7 +244,7 @@ const Sidebar = ({ isOpen, onClose }) => {
           </NavLink>
 
           <NavLink
-            to="/admin/transactions"
+            to={transactionsRoute}
             className={({ isActive }) =>
               `flex items-center px-4 py-2.5 rounded-xl transition-all duration-200 group ${isActive
                 ? 'bg-emerald-500/10 text-emerald-400 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_0_10px_rgba(16,185,129,0.1)] border border-emerald-500/20'
@@ -251,7 +257,7 @@ const Sidebar = ({ isOpen, onClose }) => {
           </NavLink>
 
           <NavLink
-            to="/admin/suppliers"
+            to={suppliersRoute}
             className={({ isActive }) =>
               `flex items-center px-4 py-2.5 rounded-xl transition-all duration-200 group ${isActive
                 ? 'bg-emerald-500/10 text-emerald-400 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_0_10px_rgba(16,185,129,0.1)] border border-emerald-500/20'

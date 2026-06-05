@@ -4,7 +4,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.deps import get_current_admin
 from db.session import get_db
 from models.admin import Admin
+from schemas.pagination import PaginatedResponse
 from schemas.supplier import SupplierRead
+from services.store_service import get_store
 from services.supplier_service import get_supplier, list_suppliers
 
 router = APIRouter()
@@ -18,27 +20,45 @@ def _supplier_to_read(s) -> SupplierRead:
 
 @router.get(
     "/",
-    response_model=list[SupplierRead],
+    response_model=PaginatedResponse[SupplierRead],
     summary="List suppliers",
     description="List all suppliers for the current admin with optional filters.",
 )
 async def list_suppliers_endpoint(
     status_filter: str | None = Query(default=None, alias="status"),
     search: str | None = Query(default=None),
-    limit: int = Query(100, ge=1, le=500),
-    offset: int = Query(0, ge=0),
+    store_id: int | None = Query(default=None),
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
     current_admin: Admin = Depends(get_current_admin),
-) -> list[SupplierRead]:
-    suppliers = await list_suppliers(
+) -> PaginatedResponse[SupplierRead]:
+    if store_id is not None:
+        store = await get_store(db, store_id)
+        if store is None or store.admin_id != current_admin.id:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Store not found",
+            )
+
+    offset = (page - 1) * limit
+    suppliers, total = await list_suppliers(
         db,
         admin_id=current_admin.id,
+        store_id=store_id,
         status_filter=status_filter,
         search=search,
         limit=limit,
         offset=offset,
     )
-    return [_supplier_to_read(s) for s in suppliers]
+    pages = (total + limit - 1) // limit if limit > 0 else 1
+    return PaginatedResponse[SupplierRead](
+        items=[_supplier_to_read(s) for s in suppliers],
+        total=total,
+        page=page,
+        pages=pages,
+        limit=limit,
+    )
 
 
 @router.get(

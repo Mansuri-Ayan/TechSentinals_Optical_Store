@@ -3,7 +3,7 @@
 Business logic for Supplier, SupplierStoreLink, and SupplierProduct CRUD.
 """
 from datetime import datetime, timezone
-from sqlalchemy import select, and_
+from sqlalchemy import select, func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -53,25 +53,54 @@ async def get_supplier(
 async def list_suppliers(
     db: AsyncSession,
     admin_id: int,
+    store_id: int | None = None,
     status_filter: str | None = None,
     search: str | None = None,
     limit: int = 100,
     offset: int = 0,
-) -> list[Supplier]:
+) -> tuple[list[Supplier], int]:
     """List suppliers belonging to an admin with optional filters."""
-    stmt = select(Supplier).where(
+    filters = [
         Supplier.admin_id == admin_id,
         Supplier.deleted_at.is_(None),
-    )
-    if status_filter:
-        stmt = stmt.where(Supplier.status == status_filter.upper())
-    if search:
-        stmt = stmt.where(
-            Supplier.company_name.ilike(f"%{search}%")
+    ]
+    if store_id is not None:
+        linked_supplier_ids = (
+            select(SupplierStoreLink.supplier_id)
+            .where(
+                SupplierStoreLink.store_id == store_id,
+                SupplierStoreLink.is_active.is_(True),
+            )
         )
-    stmt = stmt.order_by(Supplier.company_name).limit(limit).offset(offset)
+        filters.append(Supplier.id.in_(linked_supplier_ids))
+    if status_filter:
+        filters.append(Supplier.status == status_filter.upper())
+    if search:
+        pattern = f"%{search}%"
+        filters.append(
+            or_(
+                Supplier.company_name.ilike(pattern),
+                Supplier.contact_person.ilike(pattern),
+                Supplier.email.ilike(pattern),
+                Supplier.phone.ilike(pattern),
+                Supplier.city.ilike(pattern),
+                Supplier.state.ilike(pattern),
+            )
+        )
+
+    count_stmt = select(func.count()).select_from(Supplier).where(*filters)
+    total_result = await db.execute(count_stmt)
+    total = int(total_result.scalar_one() or 0)
+
+    stmt = (
+        select(Supplier)
+        .where(*filters)
+        .order_by(Supplier.company_name)
+        .limit(limit)
+        .offset(offset)
+    )
     result = await db.execute(stmt)
-    return list(result.scalars().all())
+    return list(result.scalars().all()), total
 
 
 async def update_supplier(
