@@ -4,14 +4,15 @@
 #   5 inventories, 5 inventory transactions
 import asyncio
 import sys
-from datetime import date
+from datetime import date, datetime, timedelta
+import uuid
 from pathlib import Path
 
 _backend_dir = Path(__file__).resolve().parent.parent
 if str(_backend_dir) not in sys.path:
     sys.path.insert(0, str(_backend_dir))
 
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.security import hash_password
@@ -31,6 +32,19 @@ from models.lens_product import LensProduct
 from models.accessory_product import AccessoryProduct
 from models.inventory import Inventory, OwnerType
 from models.inventory_transaction import InventoryTransaction, TransactionType
+
+from models.supplier import Supplier, SupplierStatus
+from models.supplier_store_link import SupplierStoreLink
+from models.supplier_product import SupplierProduct
+from models.purchase_order import PurchaseOrder, POStatus
+from models.purchase_order_item import PurchaseOrderItem
+from models.supplier_payment import SupplierPayment, SupplierPaymentMethod
+from models.customer import Customer, CustomerGender
+from models.prescription import Prescription
+from models.sale import Sale, SaleStatus, StaffType
+from models.sale_item import SaleItem
+from models.sale_payment import SalePayment, SalePaymentMethod
+from models.refresh_token import RefreshToken
 
 # ===============================================================
 #  SEED DATA DEFINITIONS
@@ -108,7 +122,7 @@ ADMINS = [
         "pincode": "600002",
     },
 ]
-
+    
 # Each store maps by index to the admin above
 STORES = [
     {
@@ -349,6 +363,7 @@ SUBCATEGORIES = [
 
 # ── Products — 2 frames, 2 lenses, 1 accessory ────────────────
 PRODUCTS = [
+    # Frames (5)
     {
         "sku": "FRM-RB-001",
         "name": "Ray-Ban Aviator Classic",
@@ -392,6 +407,70 @@ PRODUCTS = [
         },
     },
     {
+        "sku": "FRM-RB-002",
+        "name": "Ray-Ban Wayfarer Classic",
+        "category_index": 0,
+        "subcategory_index": 0,
+        "brand_index": 0,
+        "cost_price": 3500.00,
+        "selling_price": 6499.00,
+        "type": "frame",
+        "details": {
+            "frame_type": "Full-Rim",
+            "shape": "Wayfarer",
+            "material": "Acetate",
+            "color": "Glossy Black",
+            "lens_width": "50",
+            "bridge_width": "22",
+            "temple_length": "150",
+            "gender": "Unisex",
+            "age_group": "Adult",
+        },
+    },
+    {
+        "sku": "FRM-JJ-001",
+        "name": "John Jacobs Round Metal",
+        "category_index": 0,
+        "subcategory_index": 0,
+        "brand_index": 3,
+        "cost_price": 2200.00,
+        "selling_price": 4199.00,
+        "type": "frame",
+        "details": {
+            "frame_type": "Full-Rim",
+            "shape": "Round",
+            "material": "Metal",
+            "color": "Rose Gold",
+            "lens_width": "48",
+            "bridge_width": "20",
+            "temple_length": "145",
+            "gender": "Female",
+            "age_group": "Adult",
+        },
+    },
+    {
+        "sku": "FRM-VC-001",
+        "name": "Vincent Chase Cat-Eye Classic",
+        "category_index": 0,
+        "subcategory_index": 0,
+        "brand_index": 4,
+        "cost_price": 1200.00,
+        "selling_price": 2499.00,
+        "type": "frame",
+        "details": {
+            "frame_type": "Full-Rim",
+            "shape": "Cat-Eye",
+            "material": "TR-90",
+            "color": "Red",
+            "lens_width": "51",
+            "bridge_width": "16",
+            "temple_length": "138",
+            "gender": "Female",
+            "age_group": "Adult",
+        },
+    },
+    # Lenses (5)
+    {
         "sku": "LNS-SV-001",
         "name": "CR-39 Single Vision 1.56",
         "category_index": 1,
@@ -407,7 +486,7 @@ PRODUCTS = [
             "coating": "Anti-Reflective",
             "tint_color": "Clear",
             "uv_protection": "UV400",
-            "blue_cut": "Yes",
+            "blue_cut": "No",
             "photochromic": "No",
             "polarized": "No",
         },
@@ -434,6 +513,70 @@ PRODUCTS = [
         },
     },
     {
+        "sku": "LNS-SV-002",
+        "name": "CR-39 Single Vision Blue-Cut 1.56",
+        "category_index": 1,
+        "subcategory_index": 2,
+        "brand_index": 2,
+        "cost_price": 600.00,
+        "selling_price": 1499.00,
+        "type": "lens",
+        "details": {
+            "lens_type": "Single Vision",
+            "material": "CR-39",
+            "index_value": "1.56",
+            "coating": "Anti-Reflective",
+            "tint_color": "Clear",
+            "uv_protection": "UV400",
+            "blue_cut": "Yes",
+            "photochromic": "No",
+            "polarized": "No",
+        },
+    },
+    {
+        "sku": "LNS-PG-002",
+        "name": "High Index Progressive 1.67",
+        "category_index": 1,
+        "subcategory_index": 3,
+        "brand_index": 2,
+        "cost_price": 2800.00,
+        "selling_price": 5999.00,
+        "type": "lens",
+        "details": {
+            "lens_type": "Progressive",
+            "material": "High Index Plastic",
+            "index_value": "1.67",
+            "coating": "Super Hydrophobic",
+            "tint_color": "Clear",
+            "uv_protection": "UV400",
+            "blue_cut": "Yes",
+            "photochromic": "Yes",
+            "polarized": "No",
+        },
+    },
+    {
+        "sku": "LNS-BF-001",
+        "name": "Bifocal D-Segment 1.50",
+        "category_index": 1,
+        "subcategory_index": 2,
+        "brand_index": 2,
+        "cost_price": 800.00,
+        "selling_price": 1999.00,
+        "type": "lens",
+        "details": {
+            "lens_type": "Bifocal",
+            "material": "CR-39",
+            "index_value": "1.50",
+            "coating": "Scratch-Resistant",
+            "tint_color": "Clear",
+            "uv_protection": "UV380",
+            "blue_cut": "No",
+            "photochromic": "No",
+            "polarized": "No",
+        },
+    },
+    # Accessories (5)
+    {
         "sku": "ACC-CS-001",
         "name": "Premium Leather Hard Case",
         "category_index": 4,
@@ -449,6 +592,70 @@ PRODUCTS = [
             "size": "Standard (160x70x40 mm)",
         },
     },
+    {
+        "sku": "ACC-CS-002",
+        "name": "Microfiber Cleaning Cloth",
+        "category_index": 4,
+        "subcategory_index": 4,
+        "brand_index": 3,
+        "cost_price": 20.00,
+        "selling_price": 99.00,
+        "type": "accessory",
+        "details": {
+            "accessory_type": "Cleaning Cloth",
+            "material": "Microfiber",
+            "color": "Blue",
+            "size": "150x150 mm",
+        },
+    },
+    {
+        "sku": "ACC-CS-003",
+        "name": "Anti-Fog Spray Solution",
+        "category_index": 4,
+        "subcategory_index": 4,
+        "brand_index": 3,
+        "cost_price": 50.00,
+        "selling_price": 199.00,
+        "type": "accessory",
+        "details": {
+            "accessory_type": "Cleaning Spray",
+            "material": "Liquid Solution",
+            "color": "Clear",
+            "size": "50 ml",
+        },
+    },
+    {
+        "sku": "ACC-CS-004",
+        "name": "Eyeglass Repair Kit",
+        "category_index": 4,
+        "subcategory_index": 4,
+        "brand_index": 3,
+        "cost_price": 80.00,
+        "selling_price": 299.00,
+        "type": "accessory",
+        "details": {
+            "accessory_type": "Repair Kit",
+            "material": "Mixed Metal/Plastic",
+            "color": "Silver",
+            "size": "Pocket Size",
+        },
+    },
+    {
+        "sku": "ACC-CS-005",
+        "name": "Sport Eyewear Strap",
+        "category_index": 4,
+        "subcategory_index": 4,
+        "brand_index": 3,
+        "cost_price": 40.00,
+        "selling_price": 149.00,
+        "type": "accessory",
+        "details": {
+            "accessory_type": "Strap",
+            "material": "Neoprene",
+            "color": "Black",
+            "size": "Adjustable",
+        },
+    },
 ]
 
 # ── Inventories — admin warehouse + store stock for each product
@@ -457,6 +664,162 @@ PRODUCTS = [
 # ── Inventory Transactions — purchase + admin-to-store transfers
 # These will be created programmatically in the seed function.
 
+
+# ── Suppliers Data ─────────────────────────────────────────────
+SUPPLIERS_DATA = [
+    {
+        "company_name": "Visionary Optical Supplies",
+        "contact_person": "Vikram Patel",
+        "email": "contact@visionarysupplies.com",
+        "phone": "9998887771",
+        "address": "101 Industrial Area, Phase II",
+        "city": "Ahmedabad",
+        "state": "Gujarat",
+        "pincode": "380009",
+    },
+    {
+        "company_name": "Delhi Lens Distributors",
+        "contact_person": "Ramesh Gupta",
+        "email": "sales@delhilens.com",
+        "phone": "9998887772",
+        "address": "42 Darya Ganj",
+        "city": "New Delhi",
+        "state": "Delhi",
+        "pincode": "110002",
+    },
+    {
+        "company_name": "Karnataka Frame Tech",
+        "contact_person": "Sharat Hegde",
+        "email": "info@frametech.in",
+        "phone": "9998887773",
+        "address": "15/B Peenya Industrial Area",
+        "city": "Bengaluru",
+        "state": "Karnataka",
+        "pincode": "560058",
+    },
+    {
+        "company_name": "Mumbai Opti-Tech Accessories",
+        "contact_person": "Anjali Mehta",
+        "email": "orders@mumbaioptitech.com",
+        "phone": "9998887774",
+        "address": "Shreeji Chambers, Opera House",
+        "city": "Mumbai",
+        "state": "Maharashtra",
+        "pincode": "400004",
+    },
+    {
+        "company_name": "Chennai LensCraft Wholesale",
+        "contact_person": "M. Kumar",
+        "email": "kumar@chennailenscraft.com",
+        "phone": "9998887775",
+        "address": "88 Mount Road",
+        "city": "Chennai",
+        "state": "Tamil Nadu",
+        "pincode": "600002",
+    },
+]
+
+# ── Customers Data ─────────────────────────────────────────────
+CUSTOMERS_DATA = [
+    {
+        "first_name": "Aarav",
+        "last_name": "Mehta",
+        "email": "aarav.mehta@gmail.com",
+        "phone": "9876500001",
+        "gender": CustomerGender.MALE,
+        "date_of_birth": date(1990, 5, 15),
+        "address": "101, Residency Road",
+        "city": "Mumbai",
+        "state": "Maharashtra",
+        "pincode": "400001",
+        "remark": "Customer prefers contact via email"
+    },
+    {
+        "first_name": "Diya",
+        "last_name": "Patel",
+        "email": "diya.patel@gmail.com",
+        "phone": "9876500002",
+        "gender": CustomerGender.FEMALE,
+        "date_of_birth": date(1985, 10, 22),
+        "address": "202, SV Road, Bandra",
+        "city": "Mumbai",
+        "state": "Maharashtra",
+        "pincode": "400050",
+        "remark": "Needs progressives with high addition power"
+    },
+    {
+        "first_name": "Kabir",
+        "last_name": "Sharma",
+        "email": "kabir.sharma@gmail.com",
+        "phone": "9876500003",
+        "gender": CustomerGender.MALE,
+        "date_of_birth": date(1995, 3, 3),
+        "address": "Flat 4A, Green Glades",
+        "city": "Pune",
+        "state": "Maharashtra",
+        "pincode": "411001",
+        "remark": "Requires lightweight frames (titanium)"
+    },
+    {
+        "first_name": "Ira",
+        "last_name": "Singh",
+        "email": "ira.singh@gmail.com",
+        "phone": "9876500004",
+        "gender": CustomerGender.FEMALE,
+        "date_of_birth": date(2000, 12, 1),
+        "address": "Sector 15, Vashi",
+        "city": "Navi Mumbai",
+        "state": "Maharashtra",
+        "pincode": "400703",
+        "remark": "Student discount applies"
+    },
+    {
+        "first_name": "Reyansh",
+        "last_name": "Joshi",
+        "email": "reyansh.joshi@gmail.com",
+        "phone": "9876500005",
+        "gender": CustomerGender.MALE,
+        "date_of_birth": date(1978, 7, 8),
+        "address": "78, Mahatma Gandhi Road",
+        "city": "Bangalore",
+        "state": "Karnataka",
+        "pincode": "560001",
+        "remark": "Prefers photochromic lenses"
+    },
+]
+
+PRESCRIPTIONS_DATA = [
+    {
+        "sph_right": "-1.50", "cyl_right": "-0.50", "axis_right": "180",
+        "sph_left": "-1.75", "cyl_left": "-0.25", "axis_left": "170",
+        "addition": "+1.50", "pupillary_distance": "63",
+        "prescription_date": date(2025, 1, 10), "notes": "Initial prescription"
+    },
+    {
+        "sph_right": "-2.00", "cyl_right": "-0.75", "axis_right": "180",
+        "sph_left": "-2.25", "cyl_left": "-0.50", "axis_left": "170",
+        "addition": "+1.75", "pupillary_distance": "63",
+        "prescription_date": date(2025, 6, 5), "notes": "Updated prescription, spherical power increased slightly"
+    },
+    {
+        "sph_right": "+0.50", "cyl_right": "0.00", "axis_right": "0",
+        "sph_left": "+0.50", "cyl_left": "0.00", "axis_left": "0",
+        "addition": "+2.00", "pupillary_distance": "64",
+        "prescription_date": date(2025, 2, 20), "notes": "Reading glasses prescription"
+    },
+    {
+        "sph_right": "-0.75", "cyl_right": "-0.25", "axis_right": "90",
+        "sph_left": "-0.75", "cyl_left": "-0.25", "axis_left": "90",
+        "addition": None, "pupillary_distance": "62",
+        "prescription_date": date(2025, 3, 15), "notes": "Distance vision prescription"
+    },
+    {
+        "sph_right": "-3.00", "cyl_right": "-1.25", "axis_right": "165",
+        "sph_left": "-2.75", "cyl_left": "-1.00", "axis_left": "15",
+        "addition": "+2.25", "pupillary_distance": "65",
+        "prescription_date": date(2025, 4, 1), "notes": "Progressive lens recommendation"
+    },
+]
 
 # ===============================================================
 #  SEED FUNCTIONS
@@ -472,7 +835,7 @@ async def seed() -> None:
         print("  Seeding Roles")
         print("=" * 60)
         role_map = {}
-        for role_name in ["admin", "manager", "worker", "optician"]:
+        for role_name in ["admin", "manager", "worker", "optician", "cashier"]:
             stmt = select(Role).where(Role.role == role_name)
             result = await session.execute(stmt)
             existing = result.scalar_one_or_none()
@@ -776,8 +1139,8 @@ async def seed() -> None:
         print("=" * 60)
         admin_inv_map = {}
         store_inv_map = {}
-        warehouse_quantities = [50, 40, 200, 100, 150]
-        store_quantities     = [10,  8,  50,  20,  30]
+        warehouse_quantities = [50, 40, 60, 70, 80, 200, 100, 150, 120, 180, 150, 300, 250, 100, 80]
+        store_quantities     = [10,  8, 12, 14, 16,  50,  20,  30,  24,  36,  30,  60,  50,  20, 16]
 
         for idx, admin_id in enumerate(admin_ids):
             product_ids = admin_product_map[admin_id]
@@ -918,6 +1281,338 @@ async def seed() -> None:
 
             await session.commit()
 
+        # ── 12. Seed RefreshTokens ─────────────────────────────
+        print("\n" + "=" * 60)
+        print("  Seeding Refresh Tokens")
+        print("=" * 60)
+        stmt = select(func.count()).select_from(RefreshToken)
+        res = await session.execute(stmt)
+        token_count = res.scalar()
+        if token_count >= 5:
+            print(f"  [SKIP] Refresh tokens already exist (count={token_count})")
+        else:
+            for idx in range(5 - token_count):
+                admin_id = admin_ids[idx % len(admin_ids)]
+                token = RefreshToken(
+                    admin_id=admin_id,
+                    token_hash=f"token_hash_admin_{admin_id}_{uuid.uuid4().hex[:8]}",
+                    expires_at=datetime.utcnow() + timedelta(days=7),
+                    device_fingerprint=f"device_fingerprint_{idx}"
+                )
+                session.add(token)
+            print(f"  [OK] seeded {5 - token_count} refresh tokens to reach at least 5")
+
+        # ── 13. Seed Suppliers ─────────────────────────────────
+        print("\n" + "=" * 60)
+        print("  Seeding Suppliers")
+        print("=" * 60)
+        admin_supplier_map = {}
+        for admin_id in admin_ids:
+            supplier_ids = []
+            for data in SUPPLIERS_DATA:
+                stmt = select(Supplier).where(
+                    Supplier.company_name == data["company_name"],
+                    Supplier.admin_id == admin_id
+                )
+                res = await session.execute(stmt)
+                existing = res.scalar_one_or_none()
+                if existing:
+                    supplier_ids.append(existing.id)
+                    continue
+                
+                supplier = Supplier(
+                    admin_id=admin_id,
+                    company_name=data["company_name"],
+                    contact_person=data["contact_person"],
+                    email=data["email"],
+                    phone=data["phone"],
+                    address=data["address"],
+                    city=data["city"],
+                    state=data["state"],
+                    pincode=data["pincode"],
+                    status=SupplierStatus.ACTIVE
+                )
+                session.add(supplier)
+                await session.flush()
+                supplier_ids.append(supplier.id)
+            admin_supplier_map[admin_id] = supplier_ids
+            print(f"  [OK] seeded 5 suppliers for Admin {admin_id}")
+
+        # ── 14. Seed SupplierStoreLinks ────────────────────────
+        print("\n" + "=" * 60)
+        print("  Seeding Supplier Store Links")
+        print("=" * 60)
+        for idx, admin_id in enumerate(admin_ids):
+            store_id = store_ids[idx]
+            supplier_ids = admin_supplier_map[admin_id]
+            for s_id in supplier_ids:
+                stmt = select(SupplierStoreLink).where(
+                    SupplierStoreLink.supplier_id == s_id,
+                    SupplierStoreLink.store_id == store_id
+                )
+                res = await session.execute(stmt)
+                existing = res.scalar_one_or_none()
+                if existing:
+                    continue
+                
+                link = SupplierStoreLink(
+                    supplier_id=s_id,
+                    store_id=store_id,
+                    is_primary=True,
+                    is_active=True
+                )
+                session.add(link)
+            print(f"  [OK] seeded supplier store links for Store {store_id}")
+
+        # ── 15. Seed SupplierProducts ──────────────────────────
+        print("\n" + "=" * 60)
+        print("  Seeding Supplier Products")
+        print("=" * 60)
+        for admin_id in admin_ids:
+            p_ids = admin_product_map[admin_id]
+            s_ids = admin_supplier_map[admin_id]
+            for i in range(5):
+                stmt = select(SupplierProduct).where(
+                    SupplierProduct.supplier_id == s_ids[i],
+                    SupplierProduct.product_id == p_ids[i]
+                )
+                res = await session.execute(stmt)
+                existing = res.scalar_one_or_none()
+                if existing:
+                    continue
+                
+                sp = SupplierProduct(
+                    supplier_id=s_ids[i],
+                    product_id=p_ids[i],
+                    supplier_sku=f"SUP-SKU-{i}",
+                    unit_price=PRODUCTS[i]["cost_price"] * 0.9,
+                    minimum_order_quantity=1,
+                    lead_time_days=3,
+                    is_active=True
+                )
+                session.add(sp)
+            print(f"  [OK] seeded supplier products for Admin {admin_id}")
+
+        # ── 16. Seed PurchaseOrders & Items & Payments ──────────
+        print("\n" + "=" * 60)
+        print("  Seeding Purchase Orders, Items, Payments")
+        print("=" * 60)
+        for idx, admin_id in enumerate(admin_ids):
+            store_id = store_ids[idx]
+            s_ids = admin_supplier_map[admin_id]
+            p_ids = admin_product_map[admin_id]
+            admin_inv_ids = admin_inv_map[admin_id]
+            
+            for i in range(5):
+                po_num = f"PO-A{admin_id}-00{i+1}"
+                stmt = select(PurchaseOrder).where(PurchaseOrder.po_number == po_num)
+                res = await session.execute(stmt)
+                existing = res.scalar_one_or_none()
+                if existing:
+                    continue
+                
+                po = PurchaseOrder(
+                    po_number=po_num,
+                    admin_id=admin_id,
+                    store_id=store_id,
+                    supplier_id=s_ids[i],
+                    status=POStatus.RECEIVED,
+                    order_date=date(2025, 6, 1),
+                    expected_delivery_date=date(2025, 6, 4),
+                    received_date=date(2025, 6, 4),
+                    subtotal=PRODUCTS[i]["cost_price"] * 10,
+                    tax_amount=(PRODUCTS[i]["cost_price"] * 10) * 0.18,
+                    discount_amount=0,
+                    total_amount=(PRODUCTS[i]["cost_price"] * 10) * 1.18,
+                    paid_amount=(PRODUCTS[i]["cost_price"] * 10) * 1.18,
+                    due_amount=0,
+                    created_by=admin_id
+                )
+                session.add(po)
+                await session.flush()
+                
+                po_item = PurchaseOrderItem(
+                    purchase_order_id=po.id,
+                    product_id=p_ids[i],
+                    inventory_id=admin_inv_ids[i],
+                    quantity_ordered=10,
+                    quantity_received=10,
+                    unit_price=PRODUCTS[i]["cost_price"],
+                    tax_percent=18.00,
+                    discount_percent=0.00,
+                    line_total=po.total_amount
+                )
+                session.add(po_item)
+                
+                payment = SupplierPayment(
+                    purchase_order_id=po.id,
+                    supplier_id=s_ids[i],
+                    admin_id=admin_id,
+                    payment_date=date(2025, 6, 5),
+                    amount=po.total_amount,
+                    payment_method=SupplierPaymentMethod.BANK_TRANSFER,
+                    reference_number=f"UTR-{uuid.uuid4().hex[:8].upper()}",
+                    created_by=admin_id
+                )
+                session.add(payment)
+            print(f"  [OK] seeded 5 purchase orders, items, and payments for Admin {admin_id}")
+
+        # ── 17. Seed Customers ─────────────────────────────────
+        print("\n" + "=" * 60)
+        print("  Seeding Customers")
+        print("=" * 60)
+        admin_customer_map = {}
+        for idx, admin_id in enumerate(admin_ids):
+            store_id = store_ids[idx]
+            cust_ids = []
+            for data in CUSTOMERS_DATA:
+                stmt = select(Customer).where(
+                    Customer.phone == data["phone"],
+                    Customer.admin_id == admin_id
+                )
+                res = await session.execute(stmt)
+                existing = res.scalar_one_or_none()
+                if existing:
+                    cust_ids.append(existing.id)
+                    continue
+                
+                customer = Customer(
+                    admin_id=admin_id,
+                    store_id=store_id,
+                    first_visit_store_id=store_id,
+                    first_name=data["first_name"],
+                    last_name=data["last_name"],
+                    email=data["email"],
+                    phone=data["phone"],
+                    gender=data["gender"],
+                    date_of_birth=data["date_of_birth"],
+                    address=data["address"],
+                    city=data["city"],
+                    state=data["state"],
+                    pincode=data["pincode"],
+                    remark=data["remark"],
+                    is_active=True
+                )
+                session.add(customer)
+                await session.flush()
+                cust_ids.append(customer.id)
+            admin_customer_map[admin_id] = cust_ids
+            print(f"  [OK] seeded 5 customers for Admin {admin_id}")
+
+        # ── 18. Seed Sales & Items & Payments ──────────────────
+        print("\n" + "=" * 60)
+        print("  Seeding Sales, Items, Payments")
+        print("=" * 60)
+        for idx, admin_id in enumerate(admin_ids):
+            store_id = store_ids[idx]
+            cust_ids = admin_customer_map[admin_id]
+            p_ids = admin_product_map[admin_id]
+            store_inv_ids = store_inv_map[store_id]
+            
+            stmt = select(Manager).where(Manager.store_id == store_id).limit(1)
+            res = await session.execute(stmt)
+            mgr = res.scalar_one_or_none()
+            sold_by_id = mgr.id if mgr else 1
+            sold_by_type = StaffType.MANAGER if mgr else StaffType.WORKER
+            
+            for i in range(5):
+                inv_num = f"INV-A{admin_id}-00{i+1}"
+                stmt = select(Sale).where(Sale.invoice_number == inv_num)
+                res = await session.execute(stmt)
+                existing = res.scalar_one_or_none()
+                if existing:
+                    continue
+                
+                sale = Sale(
+                    invoice_number=inv_num,
+                    admin_id=admin_id,
+                    store_id=store_id,
+                    customer_id=cust_ids[i],
+                    sold_by_type=sold_by_type,
+                    sold_by_id=sold_by_id,
+                    sale_date=date(2025, 6, 5),
+                    status=SaleStatus.COMPLETED,
+                    subtotal=PRODUCTS[i]["selling_price"],
+                    discount_amount=0,
+                    tax_amount=PRODUCTS[i]["selling_price"] * 0.18,
+                    total_amount=PRODUCTS[i]["selling_price"] * 1.18,
+                    paid_amount=PRODUCTS[i]["selling_price"] * 1.18,
+                    due_amount=0
+                )
+                session.add(sale)
+                await session.flush()
+                
+                sale_item = SaleItem(
+                    sale_id=sale.id,
+                    product_id=p_ids[i],
+                    inventory_id=store_inv_ids[i],
+                    quantity=1,
+                    unit_price=PRODUCTS[i]["selling_price"],
+                    unit_cost=PRODUCTS[i]["cost_price"],
+                    discount_percent=0.00,
+                    tax_percent=18.00,
+                    line_total=sale.total_amount
+                )
+                session.add(sale_item)
+                
+                payment = SalePayment(
+                    sale_id=sale.id,
+                    amount=sale.total_amount,
+                    payment_method=SalePaymentMethod.UPI,
+                    reference_number=f"TXN-{uuid.uuid4().hex[:8].upper()}"
+                )
+                session.add(payment)
+            print(f"  [OK] seeded 5 sales, items, and payments for Store {store_id}")
+
+        # ── 19. Seed Prescriptions ────────────────────────────
+        print("\n" + "=" * 60)
+        print("  Seeding Prescriptions")
+        print("=" * 60)
+        for idx, admin_id in enumerate(admin_ids):
+            store_id = store_ids[idx]
+            cust_ids = admin_customer_map[admin_id]
+
+            # Fetch optician for this store
+            stmt = select(Optician).where(Optician.store_id == store_id).limit(1)
+            res = await session.execute(stmt)
+            opt = res.scalar_one_or_none()
+            optician_id = opt.id if opt else None
+
+            # Seed 5 prescriptions for the customer(s)
+            for i in range(5):
+                cust_id = cust_ids[i]
+                p_data = PRESCRIPTIONS_DATA[i]
+
+                stmt = select(Prescription).where(
+                    Prescription.customer_id == cust_id,
+                    Prescription.prescription_date == p_data["prescription_date"]
+                )
+                res = await session.execute(stmt)
+                existing = res.scalar_one_or_none()
+                if existing:
+                    continue
+
+                prescription = Prescription(
+                    customer_id=cust_id,
+                    store_id=store_id,
+                    optician_id=optician_id,
+                    sph_right=p_data["sph_right"],
+                    cyl_right=p_data["cyl_right"],
+                    axis_right=p_data["axis_right"],
+                    sph_left=p_data["sph_left"],
+                    cyl_left=p_data["cyl_left"],
+                    axis_left=p_data["axis_left"],
+                    addition=p_data["addition"],
+                    pupillary_distance=p_data["pupillary_distance"],
+                    prescription_date=p_data["prescription_date"],
+                    notes=p_data["notes"],
+                    is_active=True
+                )
+                session.add(prescription)
+            print(f"  [OK] seeded 5 prescriptions for Admin {admin_id}")
+
+        await session.commit()
+
     print("\n" + "=" * 60)
     print("  [DONE] Seed completed successfully!")
     print("=" * 60)
@@ -932,9 +1627,10 @@ async def seed() -> None:
     print(f"  Brands:        {len(BRANDS)}")
     print(f"  Categories:    {len(CATEGORIES)}")
     print(f"  Subcategories: {len(SUBCATEGORIES)}")
-    print(f"  Products:      {len(PRODUCTS)} (2 frames, 2 lenses, 1 accessory)")
+    print(f"  Products:      {len(PRODUCTS)} (5 frames, 5 lenses, 5 accessories)")
     print(f"  Inventories:   {len(PRODUCTS) * 2} (admin warehouse + store)")
     print(f"  Transactions:  5 (2 purchases, 2 transfers, 1 sale)")
+    print(f"  Prescriptions: 5")
     print()
 
 

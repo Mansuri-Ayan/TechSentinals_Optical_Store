@@ -1,8 +1,8 @@
 # Model: customer.py
 """
 Customer — a person who buys from a store.
-Customers are scoped to an Admin's business but can visit any of their stores.
-The CRM module enriches customers with loyalty, interactions, and appointments.
+Customers are scoped to an Admin's business and mapped to a specific Store.
+Prescription data is stored in a separate `prescriptions` table.
 """
 import enum
 from sqlalchemy import (
@@ -44,6 +44,14 @@ class Customer(Base):
         nullable=False,
         index=True,
         comment="FK → admins.id — the business this customer belongs to",
+    )
+
+    store_id = Column(
+        BigInteger,
+        ForeignKey("stores.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+        comment="FK → stores.id — the store this customer is mapped to",
     )
 
     # The store where the customer first registered / was created
@@ -119,57 +127,10 @@ class Customer(Base):
         comment="Pincode",
     )
 
-    # Optical prescription fields — critical for an optics business
-    prescription_sph_right = Column(
-        String(10),
-        nullable=True,
-        comment="Right eye sphere power (e.g. -2.50)",
-    )
-    prescription_cyl_right = Column(
-        String(10),
-        nullable=True,
-        comment="Right eye cylinder power",
-    )
-    prescription_axis_right = Column(
-        String(10),
-        nullable=True,
-        comment="Right eye axis",
-    )
-    prescription_sph_left = Column(
-        String(10),
-        nullable=True,
-        comment="Left eye sphere power",
-    )
-    prescription_cyl_left = Column(
-        String(10),
-        nullable=True,
-        comment="Left eye cylinder power",
-    )
-    prescription_axis_left = Column(
-        String(10),
-        nullable=True,
-        comment="Left eye axis",
-    )
-    prescription_add = Column(
-        String(10),
-        nullable=True,
-        comment="Addition (near vision) power",
-    )
-    prescription_date = Column(
-        Date,
-        nullable=True,
-        comment="Date of the prescription",
-    )
-    prescription_notes = Column(
+    remark = Column(
         Text,
         nullable=True,
-        comment="Optician notes on the prescription",
-    )
-
-    notes = Column(
-        Text,
-        nullable=True,
-        comment="Internal CRM notes about this customer",
+        comment="Internal CRM remark / notes about this customer",
     )
 
     is_active = Column(
@@ -206,6 +167,12 @@ class Customer(Base):
         back_populates="customers",
         lazy="selectin",
     )
+    store = relationship(
+        "Store",
+        foreign_keys=[store_id],
+        back_populates="customers",
+        lazy="selectin",
+    )
     first_visit_store = relationship(
         "Store",
         foreign_keys=[first_visit_store_id],
@@ -216,8 +183,12 @@ class Customer(Base):
         back_populates="customer",
         lazy="noload",
     )
-    # NOTE: loyalty, interactions, and appointments relationships
-    # will be added when those models are created in a future phase.
+    prescriptions = relationship(
+        "Prescription",
+        back_populates="customer",
+        cascade="all, delete-orphan",
+        lazy="noload",
+    )
 
     def __repr__(self) -> str:
         return (

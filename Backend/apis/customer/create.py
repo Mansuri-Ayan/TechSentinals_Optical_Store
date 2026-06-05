@@ -13,6 +13,9 @@ router = APIRouter()
 def _customer_to_read(c) -> CustomerRead:
     return CustomerRead(
         **{col.key: getattr(c, col.key) for col in c.__table__.columns},
+        store_name=(
+            c.store.store_name if c.store else None
+        ),
         first_visit_store_name=(
             c.first_visit_store.store_name if c.first_visit_store else None
         ),

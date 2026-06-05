@@ -4,11 +4,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.deps import get_current_admin
 from db.session import get_db
 from models.admin import Admin
-from schemas.customer import CustomerUpdate, PrescriptionUpdate, CustomerRead
+from schemas.customer import CustomerUpdate, CustomerRead
 from services.customer_service import (
     get_customer,
     update_customer,
-    update_prescription,
     soft_delete_customer,
 )
 
@@ -18,6 +17,9 @@ router = APIRouter()
 def _customer_to_read(c) -> CustomerRead:
     return CustomerRead(
         **{col.key: getattr(c, col.key) for col in c.__table__.columns},
+        store_name=(
+            c.store.store_name if c.store else None
+        ),
         first_visit_store_name=(
             c.first_visit_store.store_name if c.first_visit_store else None
         ),
@@ -43,28 +45,6 @@ async def update_customer_endpoint(
             detail="Customer not found",
         )
     updated = await update_customer(db, customer, payload)
-    return _customer_to_read(updated)
-
-
-@router.put(
-    "/{customer_id}/prescription",
-    response_model=CustomerRead,
-    summary="Update prescription",
-    description="Update the optical prescription for a customer.",
-)
-async def update_prescription_endpoint(
-    customer_id: int,
-    payload: PrescriptionUpdate,
-    db: AsyncSession = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin),
-) -> CustomerRead:
-    customer = await get_customer(db, customer_id)
-    if not customer or customer.admin_id != current_admin.id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Customer not found",
-        )
-    updated = await update_prescription(db, customer, payload)
     return _customer_to_read(updated)
 
 

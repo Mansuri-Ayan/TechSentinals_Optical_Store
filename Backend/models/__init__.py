@@ -26,6 +26,7 @@ from models.supplier_payment import SupplierPayment, SupplierPaymentMethod
 
 # ── Sales ─────────────────────────────────────────────────────
 from models.customer import Customer, CustomerGender
+from models.prescription import Prescription
 from models.sale import Sale, SaleStatus, StaffType
 from models.sale_item import SaleItem
 from models.sale_payment import SalePayment, SalePaymentMethod

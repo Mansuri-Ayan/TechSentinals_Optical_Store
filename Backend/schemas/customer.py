@@ -1,6 +1,6 @@
 # Schema: customer.py
 """
-Pydantic schemas for Customer with optical prescription support.
+Pydantic schemas for Customer (without prescription — now in separate table).
 """
 from datetime import date, datetime
 from enum import Enum
@@ -29,20 +29,13 @@ class CustomerCreate(BaseModel):
     city: str | None = Field(default=None, max_length=100)
     state: str | None = Field(default=None, max_length=100)
     pincode: str | None = Field(default=None, max_length=6)
+    store_id: int | None = Field(
+        default=None, description="FK → stores.id — store this customer is mapped to",
+    )
     first_visit_store_id: int | None = Field(
         default=None, description="FK → stores.id — store of first visit",
     )
-    # Prescription
-    prescription_sph_right: str | None = Field(default=None, max_length=10)
-    prescription_cyl_right: str | None = Field(default=None, max_length=10)
-    prescription_axis_right: str | None = Field(default=None, max_length=10)
-    prescription_sph_left: str | None = Field(default=None, max_length=10)
-    prescription_cyl_left: str | None = Field(default=None, max_length=10)
-    prescription_axis_left: str | None = Field(default=None, max_length=10)
-    prescription_add: str | None = Field(default=None, max_length=10)
-    prescription_date: date | None = None
-    prescription_notes: str | None = None
-    notes: str | None = None
+    remark: str | None = None
 
 
 class CustomerUpdate(BaseModel):
@@ -56,26 +49,15 @@ class CustomerUpdate(BaseModel):
     city: str | None = Field(default=None, max_length=100)
     state: str | None = Field(default=None, max_length=100)
     pincode: str | None = Field(default=None, max_length=6)
+    store_id: int | None = None
     is_active: bool | None = None
-    notes: str | None = None
-
-
-class PrescriptionUpdate(BaseModel):
-    """Dedicated schema for updating optical prescription."""
-    prescription_sph_right: str | None = Field(default=None, max_length=10)
-    prescription_cyl_right: str | None = Field(default=None, max_length=10)
-    prescription_axis_right: str | None = Field(default=None, max_length=10)
-    prescription_sph_left: str | None = Field(default=None, max_length=10)
-    prescription_cyl_left: str | None = Field(default=None, max_length=10)
-    prescription_axis_left: str | None = Field(default=None, max_length=10)
-    prescription_add: str | None = Field(default=None, max_length=10)
-    prescription_date: date | None = None
-    prescription_notes: str | None = None
+    remark: str | None = None
 
 
 class CustomerRead(BaseModel):
     id: int
     admin_id: int
+    store_id: int | None = None
     first_visit_store_id: int | None = None
     first_name: str
     last_name: str | None = None
@@ -87,32 +69,24 @@ class CustomerRead(BaseModel):
     city: str | None = None
     state: str | None = None
     pincode: str | None = None
-    # Prescription
-    prescription_sph_right: str | None = None
-    prescription_cyl_right: str | None = None
-    prescription_axis_right: str | None = None
-    prescription_sph_left: str | None = None
-    prescription_cyl_left: str | None = None
-    prescription_axis_left: str | None = None
-    prescription_add: str | None = None
-    prescription_date: date | None = None
-    prescription_notes: str | None = None
-    notes: str | None = None
+    remark: str | None = None
     is_active: bool
     created_at: datetime
     updated_at: datetime
     deleted_at: datetime | None = None
 
     # Denormalized
+    store_name: str | None = None
     first_visit_store_name: str | None = None
 
     model_config = {"from_attributes": True}
 
 
 class CustomerListRead(BaseModel):
-    """Lighter schema for list views (no prescription details)."""
+    """Lighter schema for list views."""
     id: int
     admin_id: int
+    store_id: int | None = None
     first_name: str
     last_name: str | None = None
     email: str | None = None
@@ -121,5 +95,8 @@ class CustomerListRead(BaseModel):
     city: str | None = None
     is_active: bool
     created_at: datetime
+
+    # Denormalized
+    store_name: str | None = None
 
     model_config = {"from_attributes": True}

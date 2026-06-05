@@ -17,6 +17,9 @@ router = APIRouter()
 def _customer_to_read(c) -> CustomerRead:
     return CustomerRead(
         **{col.key: getattr(c, col.key) for col in c.__table__.columns},
+        store_name=(
+            c.store.store_name if c.store else None
+        ),
         first_visit_store_name=(
             c.first_visit_store.store_name if c.first_visit_store else None
         ),
@@ -30,6 +33,9 @@ def _customer_to_list(c) -> CustomerListRead:
             for col in c.__table__.columns
             if col.key in CustomerListRead.model_fields
         },
+        store_name=(
+            c.store.store_name if c.store else None
+        ),
     )
 
 
@@ -37,10 +43,11 @@ def _customer_to_list(c) -> CustomerListRead:
     "/",
     response_model=list[CustomerListRead],
     summary="List customers",
-    description="List customers with optional search (name, phone, email).",
+    description="List customers with optional search (name, phone, email). Filter by store_id.",
 )
 async def list_customers_endpoint(
     search: str | None = Query(default=None),
+    store_id: int | None = Query(default=None, description="Filter by store ID"),
     active_only: bool = Query(True),
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
@@ -50,6 +57,7 @@ async def list_customers_endpoint(
     customers = await list_customers(
         db,
         admin_id=current_admin.id,
+        store_id=store_id,
         search=search,
         active_only=active_only,
         limit=limit,
@@ -82,7 +90,7 @@ async def get_by_phone_endpoint(
     "/{customer_id}",
     response_model=CustomerRead,
     summary="Get customer",
-    description="Get full customer details including prescription.",
+    description="Get full customer details.",
 )
 async def get_customer_endpoint(
     customer_id: int,

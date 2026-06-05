@@ -15,17 +15,14 @@ from routes.transfer_router import transfer_router
 from routes.supplier_router import supplier_router
 from routes.purchase_order_router import purchase_order_router
 from routes.customer_router import customer_router
+from routes.prescription_router import prescription_router
 from routes.sale_router import sale_router
 from routes.report_router import report_router
 from db.session import engine
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     yield
     await engine.dispose()
-
-
 app = FastAPI(
     title="TechSentinals Optical Store API",
     description=(
@@ -36,7 +33,6 @@ app = FastAPI(
     version="2.0.0",
     lifespan=lifespan,
 )
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -53,41 +49,22 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 # ── Register routers ──────────────────────────────────────────
 app.include_router(auth_router)
 app.include_router(store_router)
 app.include_router(worker_router)
 app.include_router(optician_router)
 app.include_router(manager_router)
-
 # ── Inventory Management module ───────────────────────────────
 app.include_router(category_router)
 app.include_router(brand_router)
 app.include_router(product_router)
 app.include_router(inventory_router)
 app.include_router(transfer_router)
-
 # ── Supplier Management module ────────────────────────────────
 app.include_router(supplier_router)
 app.include_router(purchase_order_router)
-
 # ── Sales module ──────────────────────────────────────────────
 app.include_router(customer_router)
+app.include_router(prescription_router)
 app.include_router(sale_router)
-
-# ── Reports & Analysis module ────────────────────────────────
-app.include_router(report_router)
-
-
-@app.get(
-    "/",
-    tags=["Health"],
-    summary="Health check",
-)
-def read_root():
-    return {
-        "status": "healthy",
-        "service": "TechSentinals Optical Store API",
-        "version": "2.0.0",
-    }

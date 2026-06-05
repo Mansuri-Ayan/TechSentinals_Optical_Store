@@ -164,6 +164,12 @@ class Store(Base):
         back_populates="store",
         lazy="noload",
     )
+    customers = relationship(
+        "Customer",
+        back_populates="store",
+        foreign_keys="Customer.store_id",
+        lazy="noload",
+    )
 
     def __repr__(self) -> str:
         return (

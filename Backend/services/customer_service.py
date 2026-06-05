@@ -1,13 +1,14 @@
 # Service: customer_service.py
 """
-Business logic for Customer CRUD and optical prescription management.
+Business logic for Customer CRUD.
+Prescription management has been moved to prescription_service.py.
 """
 from datetime import datetime, timezone
 from sqlalchemy import select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.customer import Customer
-from schemas.customer import CustomerCreate, CustomerUpdate, PrescriptionUpdate
+from schemas.customer import CustomerCreate, CustomerUpdate
 
 
 # ── Create ─────────────────────────────────────────────────────
@@ -61,6 +62,7 @@ async def get_customer_by_phone(
 async def list_customers(
     db: AsyncSession,
     admin_id: int,
+    store_id: int | None = None,
     search: str | None = None,
     active_only: bool = True,
     limit: int = 100,
@@ -68,6 +70,7 @@ async def list_customers(
 ) -> list[Customer]:
     """
     List customers for an admin.
+    Optionally filter by store_id.
     Search matches against first_name, last_name, phone, or email.
     """
     stmt = select(Customer).where(
@@ -76,6 +79,8 @@ async def list_customers(
     )
     if active_only:
         stmt = stmt.where(Customer.is_active.is_(True))
+    if store_id is not None:
+        stmt = stmt.where(Customer.store_id == store_id)
     if search:
         pattern = f"%{search}%"
         stmt = stmt.where(
@@ -99,20 +104,6 @@ async def update_customer(
     payload: CustomerUpdate,
 ) -> Customer:
     """Apply partial updates to a customer."""
-    update_data = payload.model_dump(exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(customer, field, value)
-    await db.commit()
-    await db.refresh(customer)
-    return customer
-
-
-async def update_prescription(
-    db: AsyncSession,
-    customer: Customer,
-    payload: PrescriptionUpdate,
-) -> Customer:
-    """Update only the optical prescription fields."""
     update_data = payload.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(customer, field, value)
