@@ -114,6 +114,7 @@ const Suppliers = () => {
   });
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+  const [statusFilter, setStatusFilter] = useState('All');
 
   const [editSupplier, setEditSupplier]   = useState(null);
   const [deleteSupplier, setDeleteSupplier] = useState(null);
@@ -125,9 +126,13 @@ const Suppliers = () => {
 
   /* ── Filter ── */
   const filtered = useMemo(() => {
+    let list = suppliers;
+    if (statusFilter === 'Active') {
+      list = list.filter(s => s.status === 'Active');
+    }
     const q = searchTerm.toLowerCase().trim();
-    if (!q) return suppliers;
-    return suppliers.filter(s =>
+    if (!q) return list;
+    return list.filter(s =>
       s.name.toLowerCase().includes(q) ||
       s.contactPerson.toLowerCase().includes(q) ||
       s.email.toLowerCase().includes(q) ||
@@ -135,7 +140,7 @@ const Suppliers = () => {
       s.state.toLowerCase().includes(q) ||
       s.status.toLowerCase().includes(q)
     );
-  }, [suppliers, searchTerm]);
+  }, [suppliers, searchTerm, statusFilter]);
 
   const paginated = useMemo(() => {
     const start = (currentPage - 1) * ITEMS_PER_PAGE;
@@ -207,23 +212,39 @@ const Suppliers = () => {
       </div>
 
       {/* ── KPI Cards ── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4 mb-6">
         {[
-          { label: 'Total Suppliers', value: kpi.total, icon: Truck, color: 'text-blue-600 bg-blue-50 border-blue-200' },
-          { label: 'Active', value: kpi.active, icon: CheckCircle, color: 'text-emerald-600 bg-emerald-50 border-emerald-200' },
-          { label: 'Products Tracked', value: kpi.products, icon: Package, color: 'text-purple-600 bg-purple-50 border-purple-200' },
-          { label: 'Total Orders', value: kpi.orders, icon: ShoppingCart, color: 'text-amber-600 bg-amber-50 border-amber-200' },
+          { label: 'Total Suppliers', value: kpi.total, icon: Truck, color: 'text-blue-600 bg-blue-50 border-blue-200', activeColor: 'ring-2 ring-blue-500 bg-blue-100/80', onClick: () => { setStatusFilter('All'); setCurrentPage(1); }, active: statusFilter === 'All' },
+          { label: 'Active', value: kpi.active, icon: CheckCircle, color: 'text-emerald-600 bg-emerald-50 border-emerald-200', activeColor: 'ring-2 ring-emerald-500 bg-emerald-100/80', onClick: () => { setStatusFilter('Active'); setCurrentPage(1); }, active: statusFilter === 'Active' },
+          { label: 'Products Tracked', value: kpi.products, icon: Package, color: 'text-purple-600 bg-purple-50 border-purple-200', link: '/admin/inventory' },
+          { label: 'Total Orders', value: kpi.orders, icon: ShoppingCart, color: 'text-amber-600 bg-amber-50 border-amber-200', link: '/admin/transactions' },
         ].map(card => {
           const Icon = card.icon;
+          const content = (
+            <>
+              <div className="p-2 sm:p-2.5 rounded-xl bg-white/60 flex-shrink-0">
+                <Icon className="w-4 h-4 sm:w-5 sm:h-5" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] sm:text-xs font-semibold opacity-70 truncate">{card.label}</p>
+                <p className="text-lg sm:text-2xl font-bold text-slate-900 leading-tight">{card.value}</p>
+              </div>
+            </>
+          );
+          
+          const cardCls = `flex items-center gap-2 sm:gap-4 p-3 sm:p-5 rounded-2xl border shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md cursor-pointer ${card.color} ${card.active ? card.activeColor : ''}`;
+
+          if (card.link) {
+            return (
+              <Link key={card.label} to={card.link} className={cardCls}>
+                {content}
+              </Link>
+            );
+          }
+
           return (
-            <div key={card.label} className={`flex items-center gap-4 p-4 sm:p-5 rounded-2xl border shadow-sm ${card.color}`}>
-              <div className="p-2.5 rounded-xl bg-white/60 flex-shrink-0">
-                <Icon className="w-5 h-5" />
-              </div>
-              <div>
-                <p className="text-xs font-semibold opacity-70">{card.label}</p>
-                <p className="text-2xl font-bold text-slate-900">{card.value}</p>
-              </div>
+            <div key={card.label} onClick={card.onClick} className={cardCls}>
+              {content}
             </div>
           );
         })}
@@ -267,81 +288,8 @@ const Suppliers = () => {
         </div>
       ) : (
         <>
-          {/* Desktop Table View */}
-          <div className="hidden lg:block bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden mb-6">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-slate-50 border-b border-slate-100">
-                    {['Supplier Name', 'Contact Person', 'Phone', 'Email', 'City & State', 'Products', 'Orders', 'Status', 'Actions'].map(col => (
-                      <th key={col} className="px-5 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">
-                        {col}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50">
-                  {paginated.map(s => (
-                    <tr
-                      key={s.id}
-                      onClick={() => navigate(`/admin/suppliers/${s.id}`)}
-                      className="hover:bg-blue-50/40 transition-colors cursor-pointer group"
-                    >
-                      <td className="px-5 py-4">
-                        <div className="flex items-center gap-3 min-w-0">
-                          {/* Avatar */}
-                          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-slate-700 to-slate-900 flex items-center justify-center text-white font-black text-base shadow-sm flex-shrink-0">
-                            {s.name[0]}
-                          </div>
-                          <span className="font-bold text-slate-900 truncate">{s.name}</span>
-                        </div>
-                      </td>
-                      <td className="px-5 py-4 text-slate-700 font-semibold">{s.contactPerson}</td>
-                      <td className="px-5 py-4 text-slate-500 font-medium whitespace-nowrap">{s.phone}</td>
-                      <td className="px-5 py-4 text-slate-500 font-medium truncate max-w-[180px]">{s.email}</td>
-                      <td className="px-5 py-4 text-slate-600 font-semibold">{s.city}, {s.state}</td>
-                      <td className="px-5 py-4">
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-purple-50 border border-purple-100 rounded-lg text-purple-700 text-xs font-bold">
-                          <Package className="w-3.5 h-3.5" />
-                          {s.totalProducts}
-                        </span>
-                      </td>
-                      <td className="px-5 py-4">
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-50 border border-blue-100 rounded-lg text-blue-700 text-xs font-bold">
-                          <ShoppingCart className="w-3.5 h-3.5" />
-                          {s.totalOrders}
-                        </span>
-                      </td>
-                      <td className="px-5 py-4">
-                        <StatusBadge status={s.status} />
-                      </td>
-                      <td className="px-5 py-4">
-                        <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
-                          <button
-                            onClick={() => setEditSupplier(s)}
-                            className="w-8 h-8 flex items-center justify-center bg-slate-50 border border-slate-200 rounded-lg text-slate-500 hover:text-amber-600 hover:border-amber-300 hover:bg-amber-50 transition-colors"
-                            title="Edit supplier"
-                          >
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => setDeleteSupplier(s)}
-                            className="w-8 h-8 flex items-center justify-center bg-slate-50 border border-slate-200 rounded-lg text-slate-500 hover:text-red-600 hover:border-red-300 hover:bg-red-50 transition-colors"
-                            title="Delete supplier"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Mobile/Tablet Card View */}
-          <div className="lg:hidden grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Card-based Grid Layout for all screen sizes */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 mb-6">
             {paginated.map(s => (
               <SupplierCard
                 key={s.id}

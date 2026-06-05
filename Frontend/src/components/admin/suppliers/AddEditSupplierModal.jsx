@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Building2, User, Mail, Phone, MapPin, Save, Plus } from 'lucide-react';
 
 const EMPTY = {
@@ -85,11 +86,9 @@ const AddEditSupplierModal = ({ isOpen, supplier, onClose, onSubmit }) => {
     </div>
   );
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-white w-full sm:max-w-2xl sm:rounded-2xl shadow-2xl flex flex-col max-h-[95dvh] overflow-hidden">
-
+  return createPortal(
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[1000] p-3 sm:p-4 animate-fade-in font-sans">
+      <div className="relative bg-white w-full sm:max-w-2xl rounded-2xl shadow-2xl flex flex-col max-h-[90vh] min-h-0 border border-slate-100 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
         {/* Header */}
         <div className="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-slate-100 flex-shrink-0">
           <div className="flex items-center gap-3">
@@ -107,7 +106,7 @@ const AddEditSupplierModal = ({ isOpen, supplier, onClose, onSubmit }) => {
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="overflow-y-auto flex-1">
+        <form onSubmit={handleSubmit} className="overflow-y-auto flex-1 min-h-0">
           <div className="px-5 sm:px-6 py-5 space-y-4">
 
             {/* Section: Supplier Info */}
@@ -164,7 +163,8 @@ const AddEditSupplierModal = ({ isOpen, supplier, onClose, onSubmit }) => {
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 

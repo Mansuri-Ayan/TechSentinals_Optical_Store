@@ -7,8 +7,8 @@ import {
   Trash2, PackagePlus, CreditCard,
 } from 'lucide-react';
 import { MOCK_SUPPLIERS } from '../../data/suppliersData';
-import AddGoodsModal from '../../components/admin/suppliers/AddGoodsModal';
-import AddPaymentModal from '../../components/admin/suppliers/AddPaymentModal';
+import AddTransactionModal from '../../components/admin/suppliers/AddTransactionModal';
+import TransactionDetailModal from '../../components/admin/suppliers/TransactionDetailModal';
 import AddEditSupplierModal from '../../components/admin/suppliers/AddEditSupplierModal';
 import DeleteConfirmModal from '../../components/admin/suppliers/DeleteConfirmModal';
 
@@ -64,8 +64,8 @@ const SupplierDetail = () => {
   });
 
   const [activeTab, setActiveTab] = useState('info');
-  const [showAddGoods, setShowAddGoods] = useState(false);
-  const [showAddPayment, setShowAddPayment] = useState(false);
+  const [showAddTransaction, setShowAddTransaction] = useState(false);
+  const [selectedTransaction, setSelectedTransaction] = useState(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 
@@ -100,18 +100,20 @@ const SupplierDetail = () => {
 
   const totalAmount = s.transactions?.reduce((a, t) => a + (t.amount || 0), 0) ?? 0;
 
-  const handleAddGoods = (data) => {
+  const handleAddTransaction = (data) => {
     const newEntry = {
-      id: `PO-${Date.now()}`,
-      date: new Date().toISOString().split('T')[0],
+      id: `TX-${Date.now()}`,
+      date: data.date,
       product: data.subcategory,
       category: data.category,
       quantity: data.quantity,
-      amount: 0,
-      paymentMethod: '—',
-      paymentDate: '—',
+      amount: data.amount,
+      paidAmount: data.paidAmount,
+      dueAmount: data.dueAmount,
+      paymentMethod: data.method,
+      paymentDate: data.date,
       sentTo: 'Admin Store',
-      status: 'Pending',
+      status: data.dueAmount > 0 ? 'Pending' : 'Completed',
       remarks: data.remarks,
     };
 
@@ -122,7 +124,7 @@ const SupplierDetail = () => {
       updatedProducts[prodIndex] = {
         ...updatedProducts[prodIndex],
         quantitySupplied: updatedProducts[prodIndex].quantitySupplied + data.quantity,
-        lastPurchaseDate: new Date().toISOString().split('T')[0]
+        lastPurchaseDate: data.date
       };
     } else {
       updatedProducts.push({
@@ -131,7 +133,7 @@ const SupplierDetail = () => {
         category: data.category,
         brand: 'Generic',
         quantitySupplied: data.quantity,
-        lastPurchaseDate: new Date().toISOString().split('T')[0]
+        lastPurchaseDate: data.date
       });
     }
 
@@ -140,36 +142,12 @@ const SupplierDetail = () => {
       transactions: [newEntry, ...(s.transactions || [])],
       products: updatedProducts,
       totalProducts: updatedProducts.length,
-      totalOrders: (s.totalOrders || 0) + 1
-    };
-
-    setSuppliers(prev => prev.map(item => String(item.id) === String(id) ? updatedSupplier : item));
-    setShowAddGoods(false);
-  };
-
-  const handleAddPayment = (data) => {
-    const newPayment = {
-      id: `PAY-${Date.now()}`,
-      date: data.date,
-      product: 'Payment Record',
-      category: 'Payment',
-      quantity: 0,
-      amount: data.amount,
-      paymentMethod: data.method,
-      paymentDate: data.date,
-      sentTo: '—',
-      status: 'Completed',
-      remarks: data.remarks || '',
-    };
-
-    const updatedSupplier = {
-      ...s,
-      transactions: [newPayment, ...(s.transactions || [])],
+      totalOrders: (s.totalOrders || 0) + 1,
       totalAmount: (s.totalAmount || 0) + data.amount
     };
 
     setSuppliers(prev => prev.map(item => String(item.id) === String(id) ? updatedSupplier : item));
-    setShowAddPayment(false);
+    setShowAddTransaction(false);
   };
 
   const handleEditSupplier = (data) => {
@@ -234,18 +212,11 @@ const SupplierDetail = () => {
         {/* Header Action Buttons */}
         <div className="flex items-center gap-2 w-full lg:w-auto justify-end flex-wrap sm:flex-nowrap">
           <button
-            onClick={() => setShowAddGoods(true)}
-            className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs sm:text-sm font-semibold transition-all shadow-sm hover:shadow-md whitespace-nowrap"
+            onClick={() => setShowAddTransaction(true)}
+            className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs sm:text-sm font-semibold transition-all shadow-sm hover:shadow-md whitespace-nowrap animate-in fade-in duration-200"
           >
             <PackagePlus className="w-4 h-4" />
-            Add Goods
-          </button>
-          <button
-            onClick={() => setShowAddPayment(true)}
-            className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs sm:text-sm font-semibold transition-all shadow-sm hover:shadow-md whitespace-nowrap"
-          >
-            <CreditCard className="w-4 h-4" />
-            Add Payment
+            Record Purchase
           </button>
           <button
             onClick={() => setShowEditModal(true)}
@@ -433,7 +404,7 @@ const SupplierDetail = () => {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="bg-slate-50 border-b border-slate-100">
-                        {['Date', 'Reference ID', 'Product / Description', 'Category', 'Qty', 'Amount', 'Payment Method', 'Store', 'Status'].map(col => (
+                        {['Date', 'Reference ID', 'Product / Description', 'Category', 'Qty', 'Total Amount', 'Paid', 'Due', 'Payment Method', 'Store', 'Status'].map(col => (
                           <th key={col} className="px-4 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">
                             {col}
                           </th>
@@ -442,7 +413,11 @@ const SupplierDetail = () => {
                     </thead>
                     <tbody className="divide-y divide-slate-50">
                       {s.transactions.map(tx => (
-                        <tr key={tx.id} className="hover:bg-slate-50/50 transition-colors">
+                        <tr
+                          key={tx.id}
+                          onClick={() => setSelectedTransaction(tx)}
+                          className="hover:bg-blue-50/40 transition-colors cursor-pointer"
+                        >
                           <td className="px-4 py-3.5 text-xs font-semibold text-slate-600 whitespace-nowrap">{fmtDate(tx.date)}</td>
                           <td className="px-4 py-3.5 text-xs font-mono font-bold text-slate-700 whitespace-nowrap">{tx.id}</td>
                           <td className="px-4 py-3.5 font-bold text-slate-900 max-w-[160px] truncate">{tx.product}</td>
@@ -458,6 +433,12 @@ const SupplierDetail = () => {
                           </td>
                           <td className="px-4 py-3.5 text-xs font-bold text-slate-800">
                             {tx.amount > 0 ? fmt(tx.amount) : <span className="text-slate-300">—</span>}
+                          </td>
+                          <td className="px-4 py-3.5 text-xs font-bold text-emerald-700">
+                            {tx.paidAmount !== undefined ? fmt(tx.paidAmount) : (tx.amount > 0 ? fmt(tx.amount) : <span className="text-slate-300">—</span>)}
+                          </td>
+                          <td className="px-4 py-3.5 text-xs font-bold text-amber-700">
+                            {tx.dueAmount !== undefined ? fmt(tx.dueAmount) : <span className="text-slate-300">₹0</span>}
                           </td>
                           <td className="px-4 py-3.5 text-xs text-slate-500">{tx.paymentMethod}</td>
                           <td className="px-4 py-3.5">
@@ -478,7 +459,11 @@ const SupplierDetail = () => {
                 {/* Mobile History Cards */}
                 <div className="md:hidden space-y-3">
                   {s.transactions.map(tx => (
-                    <div key={tx.id} className="p-4 bg-slate-50 border border-slate-100 rounded-2xl space-y-3">
+                    <div
+                      key={tx.id}
+                      onClick={() => setSelectedTransaction(tx)}
+                      className="p-4 bg-slate-50 border border-slate-100 rounded-2xl space-y-3 cursor-pointer hover:border-slate-300 hover:bg-slate-100/50 transition-all"
+                    >
                       <div className="flex items-start justify-between">
                         <div>
                           <p className="font-bold text-slate-900 text-sm truncate">{tx.product}</p>
@@ -489,15 +474,23 @@ const SupplierDetail = () => {
                       <div className="grid grid-cols-3 gap-2 text-xs">
                         <div>
                           <p className="text-slate-400 font-semibold mb-0.5">Category</p>
-                          <p className="font-bold text-slate-700">{tx.category}</p>
+                          <p className="font-bold text-slate-700 truncate">{tx.category}</p>
                         </div>
                         <div>
                           <p className="text-slate-400 font-semibold mb-0.5">Qty</p>
                           <p className="font-bold text-slate-900">{tx.quantity > 0 ? tx.quantity : '—'}</p>
                         </div>
                         <div>
-                          <p className="text-slate-400 font-semibold mb-0.5">Amount</p>
+                          <p className="text-slate-400 font-semibold mb-0.5">Total Amount</p>
                           <p className="font-bold text-slate-900">{tx.amount > 0 ? fmt(tx.amount) : '—'}</p>
+                        </div>
+                        <div>
+                          <p className="text-slate-400 font-semibold mb-0.5">Paid Amount</p>
+                          <p className="font-bold text-emerald-700">{tx.paidAmount !== undefined ? fmt(tx.paidAmount) : (tx.amount > 0 ? fmt(tx.amount) : '—')}</p>
+                        </div>
+                        <div>
+                          <p className="text-slate-400 font-semibold mb-0.5">Due Amount</p>
+                          <p className="font-bold text-amber-700">{tx.dueAmount !== undefined ? fmt(tx.dueAmount) : '₹0'}</p>
                         </div>
                       </div>
                       <div className="flex items-center justify-between text-xs text-slate-400 pt-2 border-t border-slate-200/50">
@@ -518,7 +511,7 @@ const SupplierDetail = () => {
         {/* ── ANALYTICS TAB ── */}
         {activeTab === 'analytics' && (
           <div className="space-y-8">
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
               {[
                 { label: 'Total Products',      value: s.totalProducts,    icon: Package,     color: 'text-blue-700 bg-blue-50 border-blue-200'          },
                 { label: 'Total Orders',        value: s.totalOrders,      icon: ShoppingCart, color: 'text-purple-700 bg-purple-50 border-purple-200'    },
@@ -527,12 +520,12 @@ const SupplierDetail = () => {
               ].map(kpi => {
                 const Icon = kpi.icon;
                 return (
-                  <div key={kpi.label} className={`p-5 rounded-2xl border ${kpi.color} space-y-3 transition-transform hover:-translate-y-0.5`}>
-                    <div className="flex items-center justify-between">
-                      <p className="text-xs font-bold opacity-75">{kpi.label}</p>
-                      <div className="p-2 rounded-xl bg-white/70 shadow-sm"><Icon className="w-4 h-4" /></div>
+                  <div key={kpi.label} className={`p-3 sm:p-5 rounded-2xl border ${kpi.color} space-y-1.5 sm:space-y-3 transition-transform hover:-translate-y-0.5`}>
+                    <div className="flex items-center justify-between gap-1">
+                      <p className="text-[10px] sm:text-xs font-bold opacity-75 truncate">{kpi.label}</p>
+                      <div className="p-1.5 sm:p-2 rounded-xl bg-white/70 shadow-sm flex-shrink-0"><Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4" /></div>
                     </div>
-                    <p className="text-xl sm:text-2xl font-black text-slate-900">{kpi.value}</p>
+                    <p className="text-base sm:text-2xl font-black text-slate-900 leading-none">{kpi.value}</p>
                   </div>
                 );
               })}
@@ -575,18 +568,17 @@ const SupplierDetail = () => {
       </div>
 
       {/* Sub-modals */}
-      <AddGoodsModal
-        isOpen={showAddGoods}
+      <AddTransactionModal
+        isOpen={showAddTransaction}
         supplierName={s.name}
-        onClose={() => setShowAddGoods(false)}
-        onSubmit={handleAddGoods}
+        onClose={() => setShowAddTransaction(false)}
+        onSubmit={handleAddTransaction}
       />
 
-      <AddPaymentModal
-        isOpen={showAddPayment}
-        supplierName={s.name}
-        onClose={() => setShowAddPayment(false)}
-        onSubmit={handleAddPayment}
+      <TransactionDetailModal
+        isOpen={Boolean(selectedTransaction)}
+        transaction={selectedTransaction}
+        onClose={() => setSelectedTransaction(null)}
       />
 
       <AddEditSupplierModal
@@ -596,11 +588,13 @@ const SupplierDetail = () => {
         onSubmit={handleEditSupplier}
       />
 
-      <DeleteConfirmModal
-        supplier={s}
-        onClose={() => setShowDeleteModal(false)}
-        onConfirm={handleDeleteConfirm}
-      />
+      {showDeleteModal && (
+        <DeleteConfirmModal
+          supplier={s}
+          onClose={() => setShowDeleteModal(false)}
+          onConfirm={handleDeleteConfirm}
+        />
+      )}
     </div>
   );
 };

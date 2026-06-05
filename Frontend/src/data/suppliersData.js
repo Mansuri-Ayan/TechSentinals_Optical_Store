@@ -30,10 +30,10 @@ export const MOCK_SUPPLIERS = [
       { id: 6, name: 'Hoya Sync III Blue Cut', category: 'Lenses', brand: 'Hoya', quantitySupplied: 25, lastPurchaseDate: '2026-04-05' },
     ],
     transactions: [
-      { id: 'PO-001', date: '2026-05-15', product: 'Ray-Ban Aviator Classic', category: 'Frames', quantity: 10, amount: 32000, paymentMethod: 'Bank Transfer', paymentDate: '2026-05-16', sentTo: 'Main Branch', status: 'Completed' },
-      { id: 'PO-002', date: '2026-04-20', product: 'Ray-Ban Wayfarer Polarized', category: 'Frames', quantity: 8, amount: 40000, paymentMethod: 'Cheque', paymentDate: '2026-04-22', sentTo: 'Branch 2', status: 'Completed' },
-      { id: 'PO-003', date: '2026-03-10', product: 'Vogue Half Rim Metal Frame', category: 'Frames', quantity: 12, amount: 25200, paymentMethod: 'UPI', paymentDate: '2026-03-10', sentTo: 'Admin Store', status: 'Completed' },
-      { id: 'PO-004', date: '2026-02-28', product: 'Fastrack Geometric Square', category: 'Frames', quantity: 15, amount: 10500, paymentMethod: 'Cash', paymentDate: '2026-02-28', sentTo: 'Branch 3', status: 'Completed' },
+      { id: 'PO-001', date: '2026-05-15', product: 'Ray-Ban Aviator Classic', category: 'Frames', quantity: 10, amount: 32000, paidAmount: 32000, dueAmount: 0, paymentMethod: 'Bank Transfer', paymentDate: '2026-05-16', sentTo: 'Main Branch', status: 'Completed' },
+      { id: 'PO-002', date: '2026-04-20', product: 'Ray-Ban Wayfarer Polarized', category: 'Frames', quantity: 8, amount: 40000, paidAmount: 40000, dueAmount: 0, paymentMethod: 'Cheque', paymentDate: '2026-04-22', sentTo: 'Branch 2', status: 'Completed' },
+      { id: 'PO-003', date: '2026-03-10', product: 'Vogue Half Rim Metal Frame', category: 'Frames', quantity: 12, amount: 25200, paidAmount: 25200, dueAmount: 0, paymentMethod: 'UPI', paymentDate: '2026-03-10', sentTo: 'Admin Store', status: 'Completed' },
+      { id: 'PO-004', date: '2026-02-28', product: 'Fastrack Geometric Square', category: 'Frames', quantity: 15, amount: 10500, paidAmount: 10500, dueAmount: 0, paymentMethod: 'Cash', paymentDate: '2026-02-28', sentTo: 'Branch 3', status: 'Completed' },
     ],
   },
   {
@@ -57,9 +57,9 @@ export const MOCK_SUPPLIERS = [
       { id: 10, name: 'Gucci GG0396O Frames', category: 'Frames', brand: 'Gucci', quantitySupplied: 8, lastPurchaseDate: '2026-02-10' },
     ],
     transactions: [
-      { id: 'PO-005', date: '2026-05-10', product: 'Oakley Holbrook Sunglasses', category: 'Frames', quantity: 12, amount: 95988, paymentMethod: 'Bank Transfer', paymentDate: '2026-05-11', sentTo: 'Main Branch', status: 'Completed' },
-      { id: 'PO-006', date: '2026-04-15', product: 'Carrera Rectangle Full Rim', category: 'Frames', quantity: 8, amount: 39992, paymentMethod: 'Credit', paymentDate: '2026-05-01', sentTo: 'Admin Store', status: 'Completed' },
-      { id: 'PO-007', date: '2026-03-20', product: 'Police Rectangle Frame', category: 'Frames', quantity: 5, amount: 17000, paymentMethod: 'Cheque', paymentDate: '2026-03-22', sentTo: 'Branch 2', status: 'Pending' },
+      { id: 'PO-005', date: '2026-05-10', product: 'Oakley Holbrook Sunglasses', category: 'Frames', quantity: 12, amount: 95988, paidAmount: 95988, dueAmount: 0, paymentMethod: 'Bank Transfer', paymentDate: '2026-05-11', sentTo: 'Main Branch', status: 'Completed' },
+      { id: 'PO-006', date: '2026-04-15', product: 'Carrera Rectangle Full Rim', category: 'Frames', quantity: 8, amount: 39992, paidAmount: 39992, dueAmount: 0, paymentMethod: 'Credit', paymentDate: '2026-05-01', sentTo: 'Admin Store', status: 'Completed' },
+      { id: 'PO-007', date: '2026-03-20', product: 'Police Rectangle Frame', category: 'Frames', quantity: 5, amount: 17000, paidAmount: 5000, dueAmount: 12000, paymentMethod: 'Cheque', paymentDate: '2026-03-22', sentTo: 'Branch 2', status: 'Pending' },
     ],
   },
   {
@@ -84,10 +84,10 @@ export const MOCK_SUPPLIERS = [
       { id: 15, name: 'Essilor Single Vision Digital', category: 'Lenses', brand: 'Essilor', quantitySupplied: 60, lastPurchaseDate: '2026-02-15' },
     ],
     transactions: [
-      { id: 'PO-008', date: '2026-05-18', product: 'Essilor Varilux X Progressive', category: 'Lenses', quantity: 10, amount: 99990, paymentMethod: 'Bank Transfer', paymentDate: '2026-05-19', sentTo: 'Admin Store', status: 'Completed' },
-      { id: 'PO-009', date: '2026-05-05', product: 'Crizal Forte UV Lens', category: 'Lenses', quantity: 20, amount: 43980, paymentMethod: 'UPI', paymentDate: '2026-05-05', sentTo: 'Main Branch', status: 'Completed' },
-      { id: 'PO-010', date: '2026-04-10', product: 'Rodenstock Bifocal Round', category: 'Lenses', quantity: 15, amount: 74985, paymentMethod: 'Cheque', paymentDate: '2026-04-12', sentTo: 'Branch 2', status: 'Completed' },
-      { id: 'PO-011', date: '2026-03-25', product: 'Essilor Transitions Photochromic', category: 'Lenses', quantity: 8, amount: 63992, paymentMethod: 'Credit', paymentDate: '2026-04-10', sentTo: 'Branch 3', status: 'Pending' },
+      { id: 'PO-008', date: '2026-05-18', product: 'Essilor Varilux X Progressive', category: 'Lenses', quantity: 10, amount: 99990, paidAmount: 99990, dueAmount: 0, paymentMethod: 'Bank Transfer', paymentDate: '2026-05-19', sentTo: 'Admin Store', status: 'Completed' },
+      { id: 'PO-009', date: '2026-05-05', product: 'Crizal Forte UV Lens', category: 'Lenses', quantity: 20, amount: 43980, paidAmount: 43980, dueAmount: 0, paymentMethod: 'UPI', paymentDate: '2026-05-05', sentTo: 'Main Branch', status: 'Completed' },
+      { id: 'PO-010', date: '2026-04-10', product: 'Rodenstock Bifocal Round', category: 'Lenses', quantity: 15, amount: 74985, paidAmount: 74985, dueAmount: 0, paymentMethod: 'Cheque', paymentDate: '2026-04-12', sentTo: 'Branch 2', status: 'Completed' },
+      { id: 'PO-011', date: '2026-03-25', product: 'Essilor Transitions Photochromic', category: 'Lenses', quantity: 8, amount: 63992, paidAmount: 20000, dueAmount: 43992, paymentMethod: 'Credit', paymentDate: '2026-04-10', sentTo: 'Branch 3', status: 'Pending' },
     ],
   },
   {
@@ -110,8 +110,8 @@ export const MOCK_SUPPLIERS = [
       { id: 18, name: 'Opticlens Microfibre Cloth', category: 'Cleaning Kit', brand: 'Opticlens', quantitySupplied: 200, lastPurchaseDate: '2026-03-15' },
     ],
     transactions: [
-      { id: 'PO-012', date: '2026-05-12', product: 'Lenskart John Jacobs Round', category: 'Frames', quantity: 20, amount: 45980, paymentMethod: 'Bank Transfer', paymentDate: '2026-05-13', sentTo: 'Admin Store', status: 'Completed' },
-      { id: 'PO-013', date: '2026-04-08', product: 'Vincent Chase Cat Eye Frame', category: 'Frames', quantity: 15, amount: 26985, paymentMethod: 'UPI', paymentDate: '2026-04-08', sentTo: 'Branch 2', status: 'Completed' },
+      { id: 'PO-012', date: '2026-05-12', product: 'Lenskart John Jacobs Round', category: 'Frames', quantity: 20, amount: 45980, paidAmount: 45980, dueAmount: 0, paymentMethod: 'Bank Transfer', paymentDate: '2026-05-13', sentTo: 'Admin Store', status: 'Completed' },
+      { id: 'PO-013', date: '2026-04-08', product: 'Vincent Chase Cat Eye Frame', category: 'Frames', quantity: 15, amount: 26985, paidAmount: 26985, dueAmount: 0, paymentMethod: 'UPI', paymentDate: '2026-04-08', sentTo: 'Branch 2', status: 'Completed' },
     ],
   },
   {
@@ -133,8 +133,8 @@ export const MOCK_SUPPLIERS = [
       { id: 20, name: 'Hoya Workstyle Computer Lens', category: 'Lenses', brand: 'Hoya', quantitySupplied: 55, lastPurchaseDate: '2026-04-22' },
     ],
     transactions: [
-      { id: 'PO-014', date: '2026-05-20', product: 'Hoya Sync III Blue Cut', category: 'Lenses', quantity: 18, amount: 62982, paymentMethod: 'Bank Transfer', paymentDate: '2026-05-21', sentTo: 'Main Branch', status: 'Completed' },
-      { id: 'PO-015', date: '2026-04-22', product: 'Hoya Workstyle Computer Lens', category: 'Lenses', quantity: 22, amount: 63778, paymentMethod: 'Credit', paymentDate: '2026-05-07', sentTo: 'Admin Store', status: 'Completed' },
+      { id: 'PO-014', date: '2026-05-20', product: 'Hoya Sync III Blue Cut', category: 'Lenses', quantity: 18, amount: 62982, paidAmount: 62982, dueAmount: 0, paymentMethod: 'Bank Transfer', paymentDate: '2026-05-21', sentTo: 'Main Branch', status: 'Completed' },
+      { id: 'PO-015', date: '2026-04-22', product: 'Hoya Workstyle Computer Lens', category: 'Lenses', quantity: 22, amount: 63778, paidAmount: 63778, dueAmount: 0, paymentMethod: 'Credit', paymentDate: '2026-05-07', sentTo: 'Admin Store', status: 'Completed' },
     ],
   },
   {
@@ -157,8 +157,8 @@ export const MOCK_SUPPLIERS = [
       { id: 23, name: 'Johnson Acuvue Oasys Contacts', category: 'Contact Lens', brand: 'J&J', quantitySupplied: 150, lastPurchaseDate: '2026-04-18' },
     ],
     transactions: [
-      { id: 'PO-016', date: '2026-05-22', product: 'Alcon Daily Total1 Contacts', category: 'Contact Lens', quantity: 50, amount: 74950, paymentMethod: 'UPI', paymentDate: '2026-05-22', sentTo: 'Admin Store', status: 'Completed' },
-      { id: 'PO-017', date: '2026-05-10', product: 'Bausch & Lomb Renu Solution', category: 'Lens Solution', quantity: 80, amount: 14400, paymentMethod: 'Cash', paymentDate: '2026-05-10', sentTo: 'Branch 3', status: 'Completed' },
+      { id: 'PO-016', date: '2026-05-22', product: 'Alcon Daily Total1 Contacts', category: 'Contact Lens', quantity: 50, amount: 74950, paidAmount: 74950, dueAmount: 0, paymentMethod: 'UPI', paymentDate: '2026-05-22', sentTo: 'Admin Store', status: 'Completed' },
+      { id: 'PO-017', date: '2026-05-10', product: 'Bausch & Lomb Renu Solution', category: 'Lens Solution', quantity: 80, amount: 14400, paidAmount: 14400, dueAmount: 0, paymentMethod: 'Cash', paymentDate: '2026-05-10', sentTo: 'Branch 3', status: 'Completed' },
     ],
   },
   {
@@ -179,8 +179,8 @@ export const MOCK_SUPPLIERS = [
       { id: 24, name: 'Titan Eye+ Metro Rimless Frame', category: 'Frames', brand: 'Titan', quantitySupplied: 40, lastPurchaseDate: '2025-11-20' },
     ],
     transactions: [
-      { id: 'PO-018', date: '2025-11-20', product: 'Titan Eye+ Metro Rimless Frame', category: 'Frames', quantity: 10, amount: 18000, paymentMethod: 'Bank Transfer', paymentDate: '2025-11-22', sentTo: 'Main Branch', status: 'Completed' },
-      { id: 'PO-019', date: '2025-08-15', product: 'Titan Eye+ Metro Rimless Frame', category: 'Frames', quantity: 5, amount: 9000, paymentMethod: 'Cash', paymentDate: '2025-08-15', sentTo: 'Branch 2', status: 'Completed' },
+      { id: 'PO-018', date: '2025-11-20', product: 'Titan Eye+ Metro Rimless Frame', category: 'Frames', quantity: 10, amount: 18000, paidAmount: 18000, dueAmount: 0, paymentMethod: 'Bank Transfer', paymentDate: '2025-11-22', sentTo: 'Main Branch', status: 'Completed' },
+      { id: 'PO-019', date: '2025-08-15', product: 'Titan Eye+ Metro Rimless Frame', category: 'Frames', quantity: 5, amount: 9000, paidAmount: 9000, dueAmount: 0, paymentMethod: 'Cash', paymentDate: '2025-08-15', sentTo: 'Branch 2', status: 'Completed' },
     ],
   },
   {
@@ -203,9 +203,9 @@ export const MOCK_SUPPLIERS = [
       { id: 27, name: 'Opticlens Microfibre Cloth', category: 'Cleaning Kit', brand: 'Opticlens', quantitySupplied: 500, lastPurchaseDate: '2026-03-30' },
     ],
     transactions: [
-      { id: 'PO-020', date: '2026-05-08', product: 'Protect Hard Case Premium', category: 'Cases', quantity: 100, amount: 24900, paymentMethod: 'Cash', paymentDate: '2026-05-08', sentTo: 'Admin Store', status: 'Completed' },
-      { id: 'PO-021', date: '2026-04-25', product: 'Eyeglass Strap Sporty', category: 'Accessories', quantity: 150, amount: 22350, paymentMethod: 'UPI', paymentDate: '2026-04-25', sentTo: 'Branch 2', status: 'Completed' },
-      { id: 'PO-022', date: '2026-03-30', product: 'Opticlens Microfibre Cloth', category: 'Cleaning Kit', quantity: 200, amount: 16000, paymentMethod: 'Bank Transfer', paymentDate: '2026-04-01', sentTo: 'Branch 3', status: 'Completed' },
+      { id: 'PO-020', date: '2026-05-08', product: 'Protect Hard Case Premium', category: 'Cases', quantity: 100, amount: 24900, paidAmount: 24900, dueAmount: 0, paymentMethod: 'Cash', paymentDate: '2026-05-08', sentTo: 'Admin Store', status: 'Completed' },
+      { id: 'PO-021', date: '2026-04-25', product: 'Eyeglass Strap Sporty', category: 'Accessories', quantity: 150, amount: 22350, paidAmount: 22350, dueAmount: 0, paymentMethod: 'UPI', paymentDate: '2026-04-25', sentTo: 'Branch 2', status: 'Completed' },
+      { id: 'PO-022', date: '2026-03-30', product: 'Opticlens Microfibre Cloth', category: 'Cleaning Kit', quantity: 200, amount: 16000, paidAmount: 16000, dueAmount: 0, paymentMethod: 'Bank Transfer', paymentDate: '2026-04-01', sentTo: 'Branch 3', status: 'Completed' },
     ],
   },
   {
@@ -227,8 +227,8 @@ export const MOCK_SUPPLIERS = [
       { id: 29, name: 'Zeiss Single Vision SmartLife', category: 'Lenses', brand: 'Zeiss', quantitySupplied: 40, lastPurchaseDate: '2026-04-12' },
     ],
     transactions: [
-      { id: 'PO-023', date: '2026-05-17', product: 'Zeiss Progressive DriveSafe', category: 'Lenses', quantity: 8, amount: 107992, paymentMethod: 'Bank Transfer', paymentDate: '2026-05-18', sentTo: 'Main Branch', status: 'Completed' },
-      { id: 'PO-024', date: '2026-04-12', product: 'Zeiss Single Vision SmartLife', category: 'Lenses', quantity: 12, amount: 89988, paymentMethod: 'Credit', paymentDate: '2026-04-27', sentTo: 'Admin Store', status: 'Completed' },
+      { id: 'PO-023', date: '2026-05-17', product: 'Zeiss Progressive DriveSafe', category: 'Lenses', quantity: 8, amount: 107992, paidAmount: 107992, dueAmount: 0, paymentMethod: 'Bank Transfer', paymentDate: '2026-05-18', sentTo: 'Main Branch', status: 'Completed' },
+      { id: 'PO-024', date: '2026-04-12', product: 'Zeiss Single Vision SmartLife', category: 'Lenses', quantity: 12, amount: 89988, paidAmount: 89988, dueAmount: 0, paymentMethod: 'Credit', paymentDate: '2026-04-27', sentTo: 'Admin Store', status: 'Completed' },
     ],
   },
   {
@@ -249,7 +249,7 @@ export const MOCK_SUPPLIERS = [
       { id: 30, name: 'Optho Eye Drops Lubricant', category: 'Eye Drops', brand: 'Optho', quantitySupplied: 300, lastPurchaseDate: '2025-12-10' },
     ],
     transactions: [
-      { id: 'PO-025', date: '2025-12-10', product: 'Optho Eye Drops Lubricant', category: 'Eye Drops', quantity: 80, amount: 4800, paymentMethod: 'Cash', paymentDate: '2025-12-10', sentTo: 'Admin Store', status: 'Completed' },
+      { id: 'PO-025', date: '2025-12-10', product: 'Optho Eye Drops Lubricant', category: 'Eye Drops', quantity: 80, amount: 4800, paidAmount: 4800, dueAmount: 0, paymentMethod: 'Cash', paymentDate: '2025-12-10', sentTo: 'Admin Store', status: 'Completed' },
     ],
   },
   {
@@ -270,8 +270,8 @@ export const MOCK_SUPPLIERS = [
       { id: 31, name: 'Gucci GG0396O Frames', category: 'Frames', brand: 'Gucci', quantitySupplied: 10, lastPurchaseDate: '2026-04-30' },
     ],
     transactions: [
-      { id: 'PO-026', date: '2026-04-30', product: 'Gucci GG0396O Frames', category: 'Frames', quantity: 3, amount: 86997, paymentMethod: 'Bank Transfer', paymentDate: '2026-05-01', sentTo: 'Main Branch', status: 'Completed' },
-      { id: 'PO-027', date: '2025-12-20', product: 'Gucci GG0396O Frames', category: 'Frames', quantity: 2, amount: 57998, paymentMethod: 'Credit', paymentDate: '2026-01-05', sentTo: 'Admin Store', status: 'Completed' },
+      { id: 'PO-026', date: '2026-04-30', product: 'Gucci GG0396O Frames', category: 'Frames', quantity: 3, amount: 86997, paidAmount: 86997, dueAmount: 0, paymentMethod: 'Bank Transfer', paymentDate: '2026-05-01', sentTo: 'Main Branch', status: 'Completed' },
+      { id: 'PO-027', date: '2025-12-20', product: 'Gucci GG0396O Frames', category: 'Frames', quantity: 2, amount: 57998, paidAmount: 57998, dueAmount: 0, paymentMethod: 'Credit', paymentDate: '2026-01-05', sentTo: 'Admin Store', status: 'Completed' },
     ],
   },
   {
@@ -292,8 +292,8 @@ export const MOCK_SUPPLIERS = [
       { id: 32, name: 'Nikon Polarized SeeMax', category: 'Lenses', brand: 'Nikon', quantitySupplied: 35, lastPurchaseDate: '2026-05-14' },
     ],
     transactions: [
-      { id: 'PO-028', date: '2026-05-14', product: 'Nikon Polarized SeeMax', category: 'Lenses', quantity: 6, amount: 53994, paymentMethod: 'Bank Transfer', paymentDate: '2026-05-15', sentTo: 'Main Branch', status: 'Completed' },
-      { id: 'PO-029', date: '2026-02-18', product: 'Nikon Polarized SeeMax', category: 'Lenses', quantity: 6, amount: 53988, paymentMethod: 'Cheque', paymentDate: '2026-02-20', sentTo: 'Admin Store', status: 'Completed' },
+      { id: 'PO-028', date: '2026-05-14', product: 'Nikon Polarized SeeMax', category: 'Lenses', quantity: 6, amount: 53994, paidAmount: 53994, dueAmount: 0, paymentMethod: 'Bank Transfer', paymentDate: '2026-05-15', sentTo: 'Main Branch', status: 'Completed' },
+      { id: 'PO-029', date: '2026-02-18', product: 'Nikon Polarized SeeMax', category: 'Lenses', quantity: 6, amount: 53988, paidAmount: 53988, dueAmount: 0, paymentMethod: 'Cheque', paymentDate: '2026-02-20', sentTo: 'Admin Store', status: 'Completed' },
     ],
   },
 ];
