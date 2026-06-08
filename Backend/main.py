@@ -18,6 +18,7 @@ from routes.customer_router import customer_router
 from routes.prescription_router import prescription_router
 from routes.sale_router import sale_router
 from routes.report_router import report_router
+from routes.expense_router import expense_router
 from db.session import engine
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -68,3 +69,5 @@ app.include_router(purchase_order_router)
 app.include_router(customer_router)
 app.include_router(prescription_router)
 app.include_router(sale_router)
+# ── Expenses module ───────────────────────────────────────────
+app.include_router(expense_router)

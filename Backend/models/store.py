@@ -170,6 +170,15 @@ class Store(Base):
         foreign_keys="Customer.store_id",
         lazy="noload",
     )
+    expenses = relationship(
+        "Expense",
+        primaryjoin=(
+            "and_(foreign(Expense.owner_id) == Store.id, "
+            "Expense.owner_type == 'STORE')"
+        ),
+        viewonly=True,
+        lazy="noload",
+    )
 
     def __repr__(self) -> str:
         return (

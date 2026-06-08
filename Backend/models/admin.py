@@ -226,6 +226,18 @@ class Admin(Base):
         cascade="all, delete-orphan",
         lazy="noload",
     )
+    expense_categories = relationship(
+        "ExpenseCategory",
+        back_populates="admin",
+        cascade="all, delete-orphan",
+        lazy="noload",
+    )
+    expenses = relationship(
+        "Expense",
+        back_populates="admin",
+        cascade="all, delete-orphan",
+        lazy="noload",
+    )
 
     def __repr__(self) -> str:
         return (

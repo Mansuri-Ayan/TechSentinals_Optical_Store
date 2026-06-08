@@ -4,7 +4,7 @@
 #   5 inventories, 5 inventory transactions
 import asyncio
 import sys
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 import uuid
 from pathlib import Path
 
@@ -45,6 +45,8 @@ from models.sale import Sale, SaleStatus, StaffType
 from models.sale_item import SaleItem
 from models.sale_payment import SalePayment, SalePaymentMethod
 from models.refresh_token import RefreshToken
+from models.expense import Expense, ExpenseOwnerType, ExpensePaymentMethod, ExpenseRecordedByType
+from models.expense_category import ExpenseCategory
 
 # ===============================================================
 #  SEED DATA DEFINITIONS
@@ -818,6 +820,84 @@ PRESCRIPTIONS_DATA = [
         "sph_left": "-2.75", "cyl_left": "-1.00", "axis_left": "15",
         "addition": "+2.25", "pupillary_distance": "65",
         "prescription_date": date(2025, 4, 1), "notes": "Progressive lens recommendation"
+    },
+]
+
+EXPENSE_CATEGORIES_DATA = [
+    {"name": "Rent", "description": "Monthly office or store retail space rental payments"},
+    {"name": "Electricity", "description": "Utility bill payments for power consumption"},
+    {"name": "Staff Salaries", "description": "Monthly wages, salary, or advances paid to store staff"},
+    {"name": "Marketing & Ads", "description": "Local offline flyer distribution or online ad campaigns"},
+    {"name": "Store Supplies & Stationery", "description": "Purchase of notebooks, pens, cleaning supplies, etc."},
+]
+
+EXPENSES_DATA = [
+    {
+        "title": "Monthly Retail Store Rent",
+        "description": "Paid to landlord for retail store space",
+        "amount": 25000.00,
+        "expense_date": date(2025, 6, 1),
+        "payment_method": ExpensePaymentMethod.BANK_TRANSFER,
+        "reference_number": "TXN-RENT-001",
+        "is_recurring": True,
+        "recurring_interval": "MONTHLY",
+        "owner_type": ExpenseOwnerType.STORE,
+        "recorded_by_type": ExpenseRecordedByType.MANAGER,
+        "incurred_by_type": None,
+        "is_approved": True,
+    },
+    {
+        "title": "May Electricity Bill",
+        "description": "Utility power payment for store branch",
+        "amount": 4250.00,
+        "expense_date": date(2025, 6, 5),
+        "payment_method": ExpensePaymentMethod.UPI,
+        "reference_number": "TXN-ELEC-002",
+        "is_recurring": False,
+        "owner_type": ExpenseOwnerType.STORE,
+        "recorded_by_type": ExpenseRecordedByType.WORKER,
+        "incurred_by_type": None,
+        "is_approved": False,
+    },
+    {
+        "title": "Monthly Optician Wage",
+        "description": "Salary payout for primary store optician",
+        "amount": 35000.00,
+        "expense_date": date(2025, 6, 5),
+        "payment_method": ExpensePaymentMethod.BANK_TRANSFER,
+        "reference_number": "TXN-SAL-003",
+        "is_recurring": True,
+        "recurring_interval": "MONTHLY",
+        "owner_type": ExpenseOwnerType.STORE,
+        "recorded_by_type": ExpenseRecordedByType.ADMIN,
+        "incurred_by_type": ExpenseRecordedByType.OPTICIAN,
+        "is_approved": True,
+    },
+    {
+        "title": "Local Ad Banner Campaign",
+        "description": "Head office marketing expenditure for business branding",
+        "amount": 12500.00,
+        "expense_date": date(2025, 6, 2),
+        "payment_method": ExpensePaymentMethod.CARD,
+        "reference_number": "TXN-MKT-004",
+        "is_recurring": False,
+        "owner_type": ExpenseOwnerType.ADMIN,
+        "recorded_by_type": ExpenseRecordedByType.ADMIN,
+        "incurred_by_type": None,
+        "is_approved": True,
+    },
+    {
+        "title": "Stationery & Cleaning Supplies",
+        "description": "Reimbursement for store purchase of stationery and floor cleaner",
+        "amount": 750.00,
+        "expense_date": date(2025, 6, 8),
+        "payment_method": ExpensePaymentMethod.CASH,
+        "reference_number": "TXN-SUP-005",
+        "is_recurring": False,
+        "owner_type": ExpenseOwnerType.STORE,
+        "recorded_by_type": ExpenseRecordedByType.WORKER,
+        "incurred_by_type": ExpenseRecordedByType.WORKER,
+        "is_approved": False,
     },
 ]
 
@@ -1611,6 +1691,113 @@ async def seed() -> None:
                 session.add(prescription)
             print(f"  [OK] seeded 5 prescriptions for Admin {admin_id}")
 
+        # ── 20. Seed Expense Categories & Expenses ────────────
+        print("\n" + "=" * 60)
+        print("  Seeding Expense Categories & Expenses")
+        print("=" * 60)
+        for idx, admin_id in enumerate(admin_ids):
+            store_id = store_ids[idx]
+
+            # 1. Seed Categories
+            cat_map = {}
+            for c_data in EXPENSE_CATEGORIES_DATA:
+                stmt = select(ExpenseCategory).where(
+                    ExpenseCategory.admin_id == admin_id,
+                    ExpenseCategory.name == c_data["name"]
+                )
+                res = await session.execute(stmt)
+                existing = res.scalar_one_or_none()
+                if existing:
+                    cat_map[c_data["name"]] = existing.id
+                else:
+                    category = ExpenseCategory(
+                        admin_id=admin_id,
+                        name=c_data["name"],
+                        description=c_data["description"],
+                        is_active=True
+                    )
+                    session.add(category)
+                    await session.flush()
+                    cat_map[c_data["name"]] = category.id
+
+            # 2. Fetch staff for store-level expense mappings
+            stmt_mgr = select(Manager).where(Manager.store_id == store_id).limit(1)
+            mgr_res = await session.execute(stmt_mgr)
+            mgr = mgr_res.scalar_one_or_none()
+            manager_id = mgr.id if mgr else admin_id
+
+            stmt_wrk = select(Worker).where(Worker.store_id == store_id).limit(1)
+            wrk_res = await session.execute(stmt_wrk)
+            wrk = wrk_res.scalar_one_or_none()
+            worker_id = wrk.id if wrk else admin_id
+
+            stmt_opt = select(Optician).where(Optician.store_id == store_id).limit(1)
+            opt_res = await session.execute(stmt_opt)
+            opt = opt_res.scalar_one_or_none()
+            optician_id = opt.id if opt else admin_id
+
+            # 3. Seed Expenses
+            category_names = list(cat_map.keys())
+            for i, exp_tpl in enumerate(EXPENSES_DATA):
+                cat_name = category_names[i % len(category_names)]
+                category_id = cat_map[cat_name]
+
+                owner_id = admin_id if exp_tpl["owner_type"] == ExpenseOwnerType.ADMIN else store_id
+
+                if exp_tpl["recorded_by_type"] == ExpenseRecordedByType.ADMIN:
+                    recorded_by_id = admin_id
+                elif exp_tpl["recorded_by_type"] == ExpenseRecordedByType.MANAGER:
+                    recorded_by_id = manager_id
+                else:
+                    recorded_by_id = worker_id
+
+                incurred_by_id = None
+                if exp_tpl["incurred_by_type"] is not None:
+                    if exp_tpl["incurred_by_type"] == ExpenseRecordedByType.OPTICIAN:
+                        incurred_by_id = optician_id
+                    elif exp_tpl["incurred_by_type"] == ExpenseRecordedByType.WORKER:
+                        incurred_by_id = worker_id
+                    elif exp_tpl["incurred_by_type"] == ExpenseRecordedByType.MANAGER:
+                        incurred_by_id = manager_id
+                    else:
+                        incurred_by_id = admin_id
+
+                stmt_exp = select(Expense).where(
+                    Expense.admin_id == admin_id,
+                    Expense.title == exp_tpl["title"]
+                )
+                exp_res = await session.execute(stmt_exp)
+                existing_exp = exp_res.scalar_one_or_none()
+                if existing_exp:
+                    continue
+
+                approved_by_admin = admin_id if exp_tpl["is_approved"] else None
+                approved_at_dt = datetime.now(timezone.utc) if exp_tpl["is_approved"] else None
+
+                expense = Expense(
+                    admin_id=admin_id,
+                    owner_type=exp_tpl["owner_type"],
+                    owner_id=owner_id,
+                    category_id=category_id,
+                    title=exp_tpl["title"],
+                    description=exp_tpl["description"],
+                    amount=exp_tpl["amount"],
+                    expense_date=exp_tpl["expense_date"],
+                    payment_method=exp_tpl["payment_method"],
+                    reference_number=exp_tpl["reference_number"],
+                    is_recurring=exp_tpl.get("is_recurring", False),
+                    recurring_interval=exp_tpl.get("recurring_interval"),
+                    is_approved=exp_tpl["is_approved"],
+                    approved_by=approved_by_admin,
+                    approved_at=approved_at_dt,
+                    recorded_by_type=exp_tpl["recorded_by_type"],
+                    recorded_by_id=recorded_by_id,
+                    incurred_by_type=exp_tpl["incurred_by_type"],
+                    incurred_by_id=incurred_by_id
+                )
+                session.add(expense)
+            print(f"  [OK] seeded 5 expense categories and 5 expenses for Admin {admin_id}")
+
         await session.commit()
 
     print("\n" + "=" * 60)
@@ -1631,6 +1818,8 @@ async def seed() -> None:
     print(f"  Inventories:   {len(PRODUCTS) * 2} (admin warehouse + store)")
     print(f"  Transactions:  5 (2 purchases, 2 transfers, 1 sale)")
     print(f"  Prescriptions: 5")
+    print(f"  Expense Categories: 5")
+    print(f"  Expenses:      5")
     print()
 
 

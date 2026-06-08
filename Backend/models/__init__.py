@@ -30,3 +30,7 @@ from models.prescription import Prescription
 from models.sale import Sale, SaleStatus, StaffType
 from models.sale_item import SaleItem
 from models.sale_payment import SalePayment, SalePaymentMethod
+
+# ── Expense ───────────────────────────────────────────────────
+from models.expense import Expense, ExpenseOwnerType, ExpensePaymentMethod, ExpenseRecordedByType
+from models.expense_category import ExpenseCategory

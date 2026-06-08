@@ -12,7 +12,8 @@ from models import (
     AccessoryProduct, Inventory, InventoryTransaction, Prescription,
     Supplier, SupplierStoreLink, SupplierProduct,
     PurchaseOrder, PurchaseOrderItem, SupplierPayment,
-    Customer, Sale, SaleItem, SalePayment
+    Customer, Sale, SaleItem, SalePayment,
+    Expense, ExpenseCategory
 )
 from db.seed_data import seed
 async def recreate_db():
