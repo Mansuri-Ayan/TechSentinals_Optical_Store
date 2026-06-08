@@ -254,24 +254,83 @@ async def list_sales(
     status_filter: str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
-    limit: int = 100,
-    offset: int = 0,
-) -> list[Sale]:
-    """List sales for an admin with optional filters."""
-    stmt = select(Sale).where(Sale.admin_id == admin_id)
+    search: str | None = None,
+    page: int = 1,
+    limit: int = 20,
+    paginate: bool = True,
+) -> tuple[list[Sale], int]:
+    """List sales for an admin with optional filters, search, and pagination."""
+    from models.customer import Customer
+    from models.sale_item import SaleItem
+    from models.product import Product
+    from sqlalchemy import exists, or_
+
+    conditions = [Sale.admin_id == admin_id]
     if store_id:
-        stmt = stmt.where(Sale.store_id == store_id)
+        conditions.append(Sale.store_id == store_id)
     if customer_id:
-        stmt = stmt.where(Sale.customer_id == customer_id)
+        conditions.append(Sale.customer_id == customer_id)
     if status_filter:
-        stmt = stmt.where(Sale.status == status_filter.upper())
+        sf = status_filter.upper().replace(" ", "_")
+        if sf == "LAB_PENDING":
+            conditions.append(Sale.status.in_([SaleStatus.PENDING, SaleStatus.PARTIALLY_PAID]))
+        elif sf == "RETURNED":
+            conditions.append(Sale.status == SaleStatus.REFUNDED)
+        else:
+            conditions.append(Sale.status == sf)
     if date_from:
-        stmt = stmt.where(Sale.sale_date >= date_from)
+        conditions.append(Sale.sale_date >= date_from)
     if date_to:
-        stmt = stmt.where(Sale.sale_date <= date_to)
-    stmt = stmt.order_by(Sale.created_at.desc()).limit(limit).offset(offset)
+        conditions.append(Sale.sale_date <= date_to)
+
+    if search:
+        search_term = f"%{search.strip()}%"
+        invoice_cond = Sale.invoice_number.ilike(search_term)
+        
+        customer_exists = exists().where(
+            Customer.id == Sale.customer_id,
+            or_(
+                Customer.first_name.ilike(search_term),
+                Customer.last_name.ilike(search_term),
+                Customer.phone.ilike(search_term)
+            )
+        )
+        
+        product_exists = exists().where(
+            SaleItem.sale_id == Sale.id,
+            Product.id == SaleItem.product_id,
+            or_(
+                Product.name.ilike(search_term),
+                Product.sku.ilike(search_term)
+            )
+        )
+        conditions.append(or_(invoice_cond, customer_exists, product_exists))
+
+    # Count query
+    count_stmt = select(sa_func.count(Sale.id)).where(*conditions)
+    total = (await db.execute(count_stmt)).scalar() or 0
+
+    # Data query
+    stmt = (
+        select(Sale)
+        .options(
+            selectinload(Sale.items),
+            selectinload(Sale.payments),
+            selectinload(Sale.customer),
+            selectinload(Sale.store),
+        )
+        .where(*conditions)
+        .order_by(Sale.created_at.desc())
+    )
+
+    if paginate:
+        offset = (page - 1) * limit
+        stmt = stmt.offset(offset).limit(limit)
+
     result = await db.execute(stmt)
-    return list(result.scalars().all())
+    sales = list(result.scalars().all())
+    return sales, total
+
 
 
 # ── Update Sale ───────────────────────────────────────────────

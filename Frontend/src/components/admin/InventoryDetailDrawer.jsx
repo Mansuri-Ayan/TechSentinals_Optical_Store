@@ -117,13 +117,43 @@ const InventoryDetailDrawer = ({ item, onClose }) => {
             </Section>
 
             {/* Product Information */}
-            <Section icon={Package} title="Product Information" color="blue">
-              <DetailRow label="Product Name" value={item.productName} />
-              <DetailRow label="Category"     value={item.productCategory} />
-              <DetailRow label="Sub Category" value={item.productSubcategory} />
-              <DetailRow label="Quantity"     value={item.productQuantity} />
-              <DetailRow label="Price"        value={`₹${Number(item.productPrice).toLocaleString('en-IN')}`} />
-            </Section>
+            {item.items && item.items.length > 0 ? (
+              <Section icon={Package} title="Order Items Breakdown" color="blue">
+                <div className="space-y-3 pt-2.5 pb-1">
+                  {item.items.map((subItem, idx) => (
+                    <div key={subItem.id || idx} className="p-3 bg-slate-50 border border-slate-100 rounded-xl space-y-1.5">
+                      <div className="flex justify-between items-start">
+                        <span className="font-bold text-slate-800 text-xs sm:text-sm leading-tight pr-4">
+                          {subItem.product_name || 'Unknown Product'}
+                        </span>
+                        <span className="text-xs font-semibold text-slate-500 whitespace-nowrap">
+                          Qty: {subItem.quantity}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-xs text-slate-500">
+                        <span>Unit Price: {`₹${Number(subItem.unit_price).toLocaleString('en-IN')}`}</span>
+                        <span className="font-bold text-slate-700">
+                          Total: {`₹${Number(subItem.line_total).toLocaleString('en-IN')}`}
+                        </span>
+                      </div>
+                      {Number(subItem.discount_percent || 0) > 0 && (
+                        <div className="text-[10px] font-semibold text-emerald-600">
+                          Discount: {subItem.discount_percent}% off
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </Section>
+            ) : (
+              <Section icon={Package} title="Product Information" color="blue">
+                <DetailRow label="Product Name" value={item.productName} />
+                <DetailRow label="Category"     value={item.productCategory} />
+                <DetailRow label="Sub Category" value={item.productSubcategory} />
+                <DetailRow label="Quantity"     value={item.productQuantity} />
+                <DetailRow label="Price"        value={`₹${Number(item.productPrice).toLocaleString('en-IN')}`} />
+              </Section>
+            )}
 
             {/* Staff Information */}
             <Section icon={UserCheck} title="Staff Information" color="purple">

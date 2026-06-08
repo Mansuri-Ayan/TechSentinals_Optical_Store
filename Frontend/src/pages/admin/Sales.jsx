@@ -1,10 +1,11 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
-  Search, Store, ShoppingCart, TrendingUp, UserCheck, ChevronRight,
-  Layers, Calendar, DollarSign, X, Package, Clock, Users
+  Search, Store, ShoppingCart, UserCheck, ChevronRight,
+  X, Package, Clock, Users, DollarSign
 } from 'lucide-react';
-import { SALES_MOCK_DATA } from '../../data/salesData';
+import { useSales } from '../../hooks/useSales';
+import { useStores } from '../../hooks/useStores';
 import Pagination from '../../components/shared/Pagination';
 import InventoryDetailDrawer from '../../components/admin/InventoryDetailDrawer';
 
@@ -13,8 +14,6 @@ const STATUS_CFG = {
   Cancelled: { color: 'text-slate-600 bg-slate-100 border-slate-200', dot: 'bg-slate-400' },
   Returned:  { color: 'text-red-700 bg-red-50 border-red-200', dot: 'bg-red-500' },
   'Lab Pending': { color: 'text-amber-700 bg-amber-50 border-amber-200', dot: 'bg-amber-500' },
-  Repair:    { color: 'text-indigo-700 bg-indigo-50 border-indigo-200', dot: 'bg-indigo-500' },
-  Exchange:  { color: 'text-purple-700 bg-purple-50 border-purple-200', dot: 'bg-purple-500' },
 };
 
 const STATUS_FILTERS = [
@@ -23,11 +22,7 @@ const STATUS_FILTERS = [
   { key: 'Cancelled', label: 'Cancelled Orders' },
   { key: 'Returned', label: 'Returned Orders' },
   { key: 'Lab Pending', label: 'Lab Pending' },
-  { key: 'Repair', label: 'Repair Orders' },
-  { key: 'Exchange', label: 'Exchange Orders' },
 ];
-
-const ITEMS_PER_PAGE = 8;
 
 const StatusBadge = ({ status }) => {
   const cfg = STATUS_CFG[status] || STATUS_CFG.Completed;
@@ -46,9 +41,20 @@ const Sales = () => {
 
   const [selectedBranch, setSelectedBranch] = useState(queryBranch || 'All');
   const [selectedStatus, setSelectedStatus] = useState(queryStatus || 'All');
+  const [searchInput, setSearchInput] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedSale, setSelectedSale] = useState(null);
+
+  const { stores } = useStores();
+
+  // Debounce search term
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setSearchTerm(searchInput);
+    }, 400);
+    return () => clearTimeout(handler);
+  }, [searchInput]);
 
   useEffect(() => {
     if (queryBranch) setSelectedBranch(queryBranch);
@@ -60,54 +66,14 @@ const Sales = () => {
     setCurrentPage(1);
   }, [selectedBranch, selectedStatus, searchTerm]);
 
-  // Extract unique branches from mock data
-  const branches = useMemo(() => {
-    const set = new Set(SALES_MOCK_DATA.map(s => s.branchName));
-    return ['All', ...Array.from(set)];
-  }, []);
-
-  // Filtered sales
-  const filteredSales = useMemo(() => {
-    let result = SALES_MOCK_DATA;
-
-    if (selectedBranch !== 'All') {
-      result = result.filter(s => s.branchName === selectedBranch);
-    }
-
-    if (selectedStatus !== 'All') {
-      result = result.filter(s => s.status === selectedStatus);
-    }
-
-    if (searchTerm.trim() !== '') {
-      const q = searchTerm.toLowerCase();
-      result = result.filter(s =>
-        s.orderId.toLowerCase().includes(q) ||
-        s.customerName.toLowerCase().includes(q) ||
-        s.productName.toLowerCase().includes(q)
-      );
-    }
-
-    return result;
-  }, [selectedBranch, selectedStatus, searchTerm]);
-
-  // Paginated list
-  const paginatedSales = useMemo(() => {
-    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-    return filteredSales.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-  }, [filteredSales, currentPage]);
-
-  // KPIs
-  const kpis = useMemo(() => {
-    const list = selectedBranch === 'All' ? SALES_MOCK_DATA : SALES_MOCK_DATA.filter(s => s.branchName === selectedBranch);
-    const revenue = list.filter(s => s.status !== 'Cancelled').reduce((sum, s) => sum + s.totalAmount, 0);
-    const activeCount = list.filter(s => s.status === 'Lab Pending' || s.status === 'Repair').length;
-    return {
-      revenue,
-      totalOrders: list.length,
-      completed: list.filter(s => s.status === 'Completed').length,
-      active: activeCount
-    };
-  }, [selectedBranch]);
+  // Fetch sales from backend
+  const { sales, total, pages, kpis, isLoading } = useSales({
+    page: currentPage,
+    limit: 8,
+    storeId: selectedBranch,
+    status: selectedStatus,
+    search: searchTerm,
+  });
 
   const fmt = (n) => `₹${Number(n).toLocaleString('en-IN')}`;
   const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
@@ -167,8 +133,9 @@ const Sales = () => {
               onChange={(e) => setSelectedBranch(e.target.value)}
               className="w-full px-3 py-2 text-sm font-medium border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 bg-white appearance-none"
             >
-              {branches.map(b => (
-                <option key={b} value={b}>{b === 'All' ? 'All Branches' : b}</option>
+              <option value="All">All Branches</option>
+              {stores.map(store => (
+                <option key={store.id} value={store.id}>{store.store_name}</option>
               ))}
             </select>
             <ChevronRight className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none rotate-90" />
@@ -182,13 +149,13 @@ const Sales = () => {
           </span>
           <input
             type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
             placeholder="Search by customer, product, order ID..."
             className="w-full pl-10 pr-9 py-2 text-sm font-medium border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 bg-white transition-all placeholder:text-slate-400 shadow-sm"
           />
-          {searchTerm && (
-            <button onClick={() => setSearchTerm('')} className="absolute inset-y-0 right-3 flex items-center text-slate-400 hover:text-slate-700 transition-colors">
+          {searchInput && (
+            <button onClick={() => setSearchInput('')} className="absolute inset-y-0 right-3 flex items-center text-slate-400 hover:text-slate-700 transition-colors">
               <X className="w-3.5 h-3.5" />
             </button>
           )}
@@ -217,7 +184,12 @@ const Sales = () => {
       </div>
 
       {/* Sales List / Table View */}
-      {filteredSales.length === 0 ? (
+      {isLoading ? (
+        <div className="flex flex-col items-center justify-center py-20 bg-white border border-slate-100 rounded-2xl shadow-sm">
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-emerald-500"></div>
+          <p className="text-slate-500 text-sm mt-4">Loading sales history...</p>
+        </div>
+      ) : sales.length === 0 ? (
         <div className="bg-white border border-slate-100 rounded-2xl p-12 flex flex-col items-center justify-center text-center shadow-sm">
           <div className="w-14 h-14 bg-slate-50 rounded-full flex items-center justify-center mb-4 border border-slate-100">
             <Package className="w-6 h-6 text-slate-300" />
@@ -228,6 +200,7 @@ const Sales = () => {
             onClick={() => {
               setSelectedBranch('All');
               setSelectedStatus('All');
+              setSearchInput('');
               setSearchTerm('');
             }}
             className="text-emerald-600 font-bold hover:text-emerald-700 transition-colors text-sm"
@@ -251,7 +224,7 @@ const Sales = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {paginatedSales.map((sale) => (
+                {sales.map((sale) => (
                   <tr
                     key={sale.id}
                     onClick={() => setSelectedSale(sale)}
@@ -259,21 +232,21 @@ const Sales = () => {
                   >
                     <td className="px-5 py-4 text-xs font-mono font-bold text-slate-700 whitespace-nowrap">{sale.orderId}</td>
                     <td className="px-5 py-4 font-bold text-slate-900">{sale.customerName}</td>
-                    <td className="px-5 py-4 font-medium text-slate-600 max-w-[200px] truncate">{sale.productName}</td>
+                    <td className="px-5 py-4 font-medium text-slate-600 max-w-[200px] truncate">{sale.productName || '—'}</td>
                     <td className="px-5 py-4 text-xs font-semibold text-slate-500 whitespace-nowrap">
                       <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-50 border border-slate-100 rounded-lg">
                         <Store className="w-3.5 h-3.5 text-slate-400" />
-                        {sale.branchName}
+                        {sale.branchName || '—'}
                       </span>
                     </td>
                     <td className="px-5 py-4 text-xs font-semibold text-slate-600 whitespace-nowrap">
                       <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-50 border border-slate-100 rounded-lg">
                         <Users className="w-3.5 h-3.5 text-slate-400" />
-                        {sale.staffName}
+                        {sale.staffName || '—'}
                       </span>
                     </td>
                     <td className="px-5 py-4 text-xs font-semibold text-slate-500 whitespace-nowrap">{fmtDate(sale.orderDate)}</td>
-                    <td className="px-5 py-4 text-sm font-black text-slate-900">{fmt(sale.totalAmount)}</td>
+                    <td className="px-5 py-4 text-sm font-black text-slate-900">{fmt(sale.total_amount)}</td>
                     <td className="px-5 py-4">
                       <StatusBadge status={sale.status} />
                     </td>
@@ -285,7 +258,7 @@ const Sales = () => {
 
           {/* Mobile/Tablet Card View */}
           <div className="lg:hidden space-y-3">
-            {paginatedSales.map((sale) => (
+            {sales.map((sale) => (
               <div
                 key={sale.id}
                 onClick={() => setSelectedSale(sale)}
@@ -300,17 +273,17 @@ const Sales = () => {
                 </div>
                 
                 <div className="text-xs text-slate-600">
-                  <span className="font-semibold text-slate-800">Product:</span> {sale.productName}
+                  <span className="font-semibold text-slate-800">Product:</span> {sale.productName || '—'}
                 </div>
 
                 <div className="grid grid-cols-2 gap-2.5 pt-2.5 border-t border-slate-100 text-xs">
                   <div>
                     <span className="text-slate-400 font-semibold block">Branch</span>
-                    <span className="font-bold text-slate-700">{sale.branchName}</span>
+                    <span className="font-bold text-slate-700">{sale.branchName || '—'}</span>
                   </div>
                   <div>
                     <span className="text-slate-400 font-semibold block">Staff</span>
-                    <span className="font-bold text-slate-700">{sale.staffName}</span>
+                    <span className="font-bold text-slate-700">{sale.staffName || '—'}</span>
                   </div>
                   <div>
                     <span className="text-slate-400 font-semibold block">Date</span>
@@ -318,7 +291,7 @@ const Sales = () => {
                   </div>
                   <div>
                     <span className="text-slate-400 font-semibold block">Amount</span>
-                    <span className="font-black text-slate-900">{fmt(sale.totalAmount)}</span>
+                    <span className="font-black text-slate-900">{fmt(sale.total_amount)}</span>
                   </div>
                 </div>
               </div>
@@ -327,8 +300,8 @@ const Sales = () => {
 
           {/* Pagination */}
           <Pagination
-            totalItems={filteredSales.length}
-            itemsPerPage={ITEMS_PER_PAGE}
+            totalItems={total}
+            itemsPerPage={8}
             currentPage={currentPage}
             onPageChange={setCurrentPage}
           />

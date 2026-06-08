@@ -130,7 +130,7 @@ class SaleRead(BaseModel):
     sold_by_type: StaffTypeEnum
     sold_by_id: int
     sale_date: date
-    status: SaleStatusEnum
+    status: str
     subtotal: Decimal
     discount_amount: Decimal
     tax_amount: Decimal
@@ -150,5 +150,17 @@ class SaleRead(BaseModel):
     # Denormalized
     store_name: str | None = None
     customer_name: str | None = None
+    customer_phone: str | None = None
+    customer_address: str | None = None
+    staff_name: str | None = None
+    staff_code: str | None = None
+    staff_role: str | None = None
+
+    # Product summary fields
+    product_name: str | None = None
+    product_category: str | None = None
+    product_subcategory: str | None = None
+    product_quantity: int = 0
+    product_price: Decimal = Decimal("0")
 
     model_config = {"from_attributes": True}
