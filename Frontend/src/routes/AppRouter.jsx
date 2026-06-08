@@ -14,6 +14,15 @@ import SupplierDetail from '../pages/admin/SupplierDetail';
 import Sales from '../pages/admin/Sales';
 import Expenses from '../pages/admin/Expenses';
 
+// Shopkeeper imports
+import ShopKeeperLayout from '../layouts/ShopKeeperLayout';
+import ShopkeeperDashboard from '../pages/shopkeeper/Dashboard';
+import Customers from '../pages/shopkeeper/Customers';
+import CustomerDetail from '../pages/shopkeeper/CustomerDetail';
+import Products from '../pages/shopkeeper/Products';
+import ProductDetail from '../pages/shopkeeper/ProductDetail';
+import Shopkeeper from '../pages/shopkeeper/Shopkeeper';
+
 // Responsive loading spinner component
 const LoadingSpinner = () => (
   <div className="min-h-screen bg-navy flex items-center justify-center text-slate-300 px-4">
@@ -33,7 +42,7 @@ const GuestRoute = ({ children }) => {
     return user.role === 'admin' ? (
       <Navigate to="/admin/dashboard" replace />
     ) : (
-      <Navigate to="/" replace />
+      <Navigate to="/shopkeeper" replace />
     );
   }
 
@@ -55,6 +64,29 @@ const PrivateRoute = ({ children }) => {
   return children;
 };
 
+<<<<<<< Updated upstream
+=======
+// Route specifically for Admins
+/* eslint-disable-next-line no-unused-vars */
+const AdminRoute = ({ children }) => {
+  const { isAuthenticated, user, isLoading } = useAuthStore();
+
+  if (isLoading) {
+    return <LoadingSpinner />;
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (user && user.role !== 'admin') {
+    return <Navigate to="/" replace />;
+  }
+
+  return children;
+};
+
+>>>>>>> Stashed changes
 // Route specifically for Home (Redirects admin to dashboard, others to ProfileHome)
 const HomeRoute = () => {
   const { user, isLoading } = useAuthStore();
@@ -67,7 +99,7 @@ const HomeRoute = () => {
     return <Navigate to="/admin/dashboard" replace />;
   }
 
-  return <ProfileHome />;
+  return <Navigate to="/shopkeeper" replace />;
 };
 
 const StaffRouteRedirect = () => {
@@ -186,6 +218,20 @@ function AppRouter() {
         <Route path="store/:storeId/suppliers/:id" element={<SupplierDetail />} />
         <Route path="sales" element={<Sales />} />
         <Route path="expenses" element={<Expenses />} />
+      </Route>
+
+      {/* Shopkeeper Routes */}
+      <Route
+        path="/shopkeeper"
+        element={<ShopKeeperLayout />}
+      >
+        {/* Redirect /shopkeeper to /shopkeeper/dashboard */}
+        <Route index element={<Shopkeeper />} />
+        <Route path="dashboard" element={<ShopkeeperDashboard />} />
+        <Route path="customers" element={<Customers />} />
+        <Route path="customers/:customerId" element={<CustomerDetail />} />
+        <Route path="products" element={<Products />} />
+        <Route path="products/:productId" element={<ProductDetail />} />
       </Route>
 
       {/* Fallback root redirect */}

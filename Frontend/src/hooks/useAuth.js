@@ -27,7 +27,7 @@ export const useAuth = () => {
         if (userProfile.role === "admin") {
           navigate("/admin/dashboard", { replace: true });
         } else {
-          navigate("/", { replace: true });
+          navigate("/shopkeeper", { replace: true });
         }
       } catch (error) {
         toast.error("Failed to retrieve user profile after login.");
