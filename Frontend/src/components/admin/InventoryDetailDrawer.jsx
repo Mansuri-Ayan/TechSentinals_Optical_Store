@@ -1,8 +1,10 @@
-import { createPortal } from 'react-dom';
+import { useState } from 'react';
+import { createPortal as portal } from 'react-dom';
 import {
   X, Package, Tag, Truck, BarChart3, DollarSign,
   Store, CheckCircle, AlertTriangle, XCircle, Image as ImageIcon, Sliders,
-  User, Users, CreditCard, UserCheck, Calendar, IndianRupee, ShoppingCart
+  User, Users, CreditCard, UserCheck, Calendar, IndianRupee, ShoppingCart,
+  Receipt, FileText, RefreshCw, Shield, ThumbsUp, ThumbsDown,
 } from 'lucide-react';
 
 const statusConfig = {
@@ -14,9 +16,11 @@ const statusConfig = {
 const categoryLabel = { frames: 'Frames', lenses: 'Lenses', other: 'Other Products' };
 
 const DetailRow = ({ label, value, mono }) => (
-  <div className="flex items-start justify-between py-2.5 border-b border-slate-50 last:border-0">
-    <span className="text-sm text-slate-500 font-medium shrink-0 pr-4">{label}</span>
-    <span className={`text-sm font-semibold text-slate-900 text-right ${mono ? 'font-mono' : ''}`}>{value ?? '—'}</span>
+  <div className="flex items-start justify-between py-2.5 border-b border-slate-50 last:border-0 gap-3">
+    <span className="text-sm text-slate-500 font-medium shrink-0">{label}</span>
+    <span className={`text-sm font-semibold text-slate-900 text-right break-words min-w-0 ${mono ? 'font-mono' : ''}`}>
+      {value ?? '—'}
+    </span>
   </div>
 );
 
@@ -28,6 +32,7 @@ const Section = ({ icon: Icon, title, children, color = 'emerald' }) => {
     amber:   'bg-amber-500/10 border-amber-500/20 text-amber-600',
     rose:    'bg-rose-500/10 border-rose-500/20 text-rose-600',
     slate:   'bg-slate-500/10 border-slate-500/20 text-slate-600',
+    violet:  'bg-violet-500/10 border-violet-500/20 text-violet-600',
   };
   return (
     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
@@ -42,17 +47,70 @@ const Section = ({ icon: Icon, title, children, color = 'emerald' }) => {
   );
 };
 
-const InventoryDetailDrawer = ({ item, onClose }) => {
+/* ─────────────────────────────────────────────────────────
+   INLINE REJECTION REASON PROMPT (shown inside drawer footer)
+───────────────────────────────────────────────────────── */
+const RejectReasonPrompt = ({ onConfirm, onCancel }) => {
+  const [reason, setReason] = useState('');
+  const [error, setError] = useState('');
+
+  const handleConfirm = () => {
+    if (!reason.trim()) { setError('Rejection reason is required.'); return; }
+    onConfirm(reason.trim());
+  };
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <label className="text-xs font-semibold text-slate-600 mb-1.5 block">
+          Rejection Reason <span className="text-red-500">*</span>
+        </label>
+        <textarea
+          rows={3}
+          value={reason}
+          onChange={e => { setReason(e.target.value); setError(''); }}
+          placeholder="Provide a reason for rejecting this expense..."
+          className={`w-full px-3 py-2.5 text-sm font-medium border rounded-xl focus:outline-none focus:ring-4 resize-none transition-all bg-white ${
+            error
+              ? 'border-red-400 focus:ring-red-100 focus:border-red-500'
+              : 'border-slate-200 focus:ring-red-500/10 focus:border-red-500'
+          }`}
+        />
+        {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
+      </div>
+      <div className="flex gap-2">
+        <button
+          onClick={onCancel}
+          className="flex-1 py-2.5 text-sm font-semibold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={handleConfirm}
+          className="flex-1 py-2.5 text-sm font-semibold text-white bg-red-600 rounded-xl hover:bg-red-700 transition-all shadow-sm"
+        >
+          Confirm Rejection
+        </button>
+      </div>
+    </div>
+  );
+};
+
+/* ─────────────────────────────────────────────────────────
+   MAIN DRAWER COMPONENT
+   Props: item, onClose, onApprove(item), onReject(item, reason)
+───────────────────────────────────────────────────────── */
+const InventoryDetailDrawer = ({ item, onClose, onApprove, onReject }) => {
+  const [showRejectPrompt, setShowRejectPrompt] = useState(false);
+
   if (!item) return null;
 
+  /* ── SALES DRAWER ──────────────────────────────────────── */
   if (item.type === 'sales') {
-    return createPortal(
+    return portal(
       <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[999] flex justify-end animate-fade-in font-sans">
-        {/* Click-outside close */}
         <div className="absolute inset-0" onClick={onClose} aria-hidden />
-
-        {/* Drawer panel */}
-        <div className="relative w-full max-w-md h-full bg-slate-50 shadow-2xl flex flex-col animate-slide-up">
+        <div className="relative w-full sm:max-w-md h-full bg-slate-50 shadow-2xl flex flex-col animate-slide-up">
 
           {/* Header */}
           <div className="flex items-center justify-between px-5 py-4 bg-white border-b border-slate-100 flex-shrink-0">
@@ -76,13 +134,13 @@ const InventoryDetailDrawer = ({ item, onClose }) => {
             <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${
               item.status === 'Completed' ? 'text-emerald-700 bg-emerald-50 border-emerald-200' :
               item.status === 'Cancelled' ? 'text-slate-600 bg-slate-100 border-slate-200' :
-              item.status === 'Returned' ? 'text-red-700 bg-red-50 border-red-200' :
+              item.status === 'Returned'  ? 'text-red-700 bg-red-50 border-red-200' :
               'text-amber-700 bg-amber-50 border-amber-200'
             }`}>
               <span className={`w-1.5 h-1.5 rounded-full ${
                 item.status === 'Completed' ? 'bg-emerald-500' :
                 item.status === 'Cancelled' ? 'bg-slate-400' :
-                item.status === 'Returned' ? 'bg-red-500' :
+                item.status === 'Returned'  ? 'bg-red-500' :
                 'bg-amber-500'
               }`} />
               {item.status}
@@ -92,19 +150,16 @@ const InventoryDetailDrawer = ({ item, onClose }) => {
 
           {/* Scrollable content */}
           <div className="flex-1 overflow-y-auto hide-scrollbar px-4 py-4 space-y-3">
-            {/* Customer Information */}
             <Section icon={User} title="Customer Information" color="emerald">
               <DetailRow label="Customer Name" value={item.customerName} />
               <DetailRow label="Phone Number"  value={item.customerPhone} />
               <DetailRow label="Address"       value={item.customerAddress} />
             </Section>
-
-            {/* Payment Information */}
             <Section icon={CreditCard} title="Payment Information" color="rose">
-              <DetailRow label="Total Amount"    value={`₹${Number(item.totalAmount).toLocaleString('en-IN')}`} />
-              <DetailRow label="Paid Amount"     value={`₹${Number(item.paidAmount).toLocaleString('en-IN')}`} />
-              <DetailRow label="Due Amount"      value={`₹${Number(item.dueAmount).toLocaleString('en-IN')}`} />
-              <DetailRow label="Payment Status"  value={
+              <DetailRow label="Total Amount"   value={`₹${Number(item.totalAmount).toLocaleString('en-IN')}`} />
+              <DetailRow label="Paid Amount"    value={`₹${Number(item.paidAmount).toLocaleString('en-IN')}`} />
+              <DetailRow label="Due Amount"     value={`₹${Number(item.dueAmount).toLocaleString('en-IN')}`} />
+              <DetailRow label="Payment Status" value={
                 <span className={`inline-flex px-2 py-0.5 rounded text-[11px] font-bold ${
                   item.paymentStatus === 'Paid' ? 'bg-emerald-50 text-emerald-700' :
                   item.paymentStatus === 'Partially Paid' ? 'bg-amber-50 text-amber-700' :
@@ -113,56 +168,20 @@ const InventoryDetailDrawer = ({ item, onClose }) => {
                   {item.paymentStatus}
                 </span>
               } />
-              <DetailRow label="Payment Method"  value={item.paymentMethod} />
+              <DetailRow label="Payment Method" value={item.paymentMethod} />
             </Section>
-
-            {/* Product Information */}
-            {item.items && item.items.length > 0 ? (
-              <Section icon={Package} title="Order Items Breakdown" color="blue">
-                <div className="space-y-3 pt-2.5 pb-1">
-                  {item.items.map((subItem, idx) => (
-                    <div key={subItem.id || idx} className="p-3 bg-slate-50 border border-slate-100 rounded-xl space-y-1.5">
-                      <div className="flex justify-between items-start">
-                        <span className="font-bold text-slate-800 text-xs sm:text-sm leading-tight pr-4">
-                          {subItem.product_name || 'Unknown Product'}
-                        </span>
-                        <span className="text-xs font-semibold text-slate-500 whitespace-nowrap">
-                          Qty: {subItem.quantity}
-                        </span>
-                      </div>
-                      <div className="flex justify-between text-xs text-slate-500">
-                        <span>Unit Price: {`₹${Number(subItem.unit_price).toLocaleString('en-IN')}`}</span>
-                        <span className="font-bold text-slate-700">
-                          Total: {`₹${Number(subItem.line_total).toLocaleString('en-IN')}`}
-                        </span>
-                      </div>
-                      {Number(subItem.discount_percent || 0) > 0 && (
-                        <div className="text-[10px] font-semibold text-emerald-600">
-                          Discount: {subItem.discount_percent}% off
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </Section>
-            ) : (
-              <Section icon={Package} title="Product Information" color="blue">
-                <DetailRow label="Product Name" value={item.productName} />
-                <DetailRow label="Category"     value={item.productCategory} />
-                <DetailRow label="Sub Category" value={item.productSubcategory} />
-                <DetailRow label="Quantity"     value={item.productQuantity} />
-                <DetailRow label="Price"        value={`₹${Number(item.productPrice).toLocaleString('en-IN')}`} />
-              </Section>
-            )}
-
-            {/* Staff Information */}
+            <Section icon={Package} title="Product Information" color="blue">
+              <DetailRow label="Product Name" value={item.productName} />
+              <DetailRow label="Category"     value={item.productCategory} />
+              <DetailRow label="Sub Category" value={item.productSubcategory} />
+              <DetailRow label="Quantity"     value={item.productQuantity} />
+              <DetailRow label="Price"        value={`₹${Number(item.productPrice).toLocaleString('en-IN')}`} />
+            </Section>
             <Section icon={UserCheck} title="Staff Information" color="purple">
               <DetailRow label="Staff Name"    value={item.staffName} />
               <DetailRow label="Employee Code" value={item.staffCode} mono />
               <DetailRow label="Role"          value={item.staffRole} />
             </Section>
-
-            {/* Delivery Information */}
             <Section icon={Truck} title="Delivery Information" color="amber">
               <DetailRow label="Store/Branch Name" value={item.branchName} />
               <DetailRow label="Delivery Date"     value={item.deliveryDate ? new Date(item.deliveryDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'} />
@@ -170,7 +189,6 @@ const InventoryDetailDrawer = ({ item, onClose }) => {
             </Section>
           </div>
 
-          {/* Footer */}
           <div className="px-5 py-4 bg-white border-t border-slate-100 flex-shrink-0">
             <button onClick={onClose}
               className="w-full py-2.5 bg-slate-900 text-white rounded-xl font-semibold text-sm hover:bg-slate-700 transition-all shadow-md hover:shadow-lg">
@@ -183,6 +201,197 @@ const InventoryDetailDrawer = ({ item, onClose }) => {
     );
   }
 
+  /* ── EXPENSE DRAWER ──────────────────────────────────────── */
+  if (item.type === 'expense') {
+    const APPROVAL_CFG = {
+      Approved: { color: 'text-emerald-700 bg-emerald-50 border-emerald-200', dot: 'bg-emerald-500' },
+      Pending:  { color: 'text-amber-700 bg-amber-50 border-amber-200',       dot: 'bg-amber-500'   },
+      Rejected: { color: 'text-red-700 bg-red-50 border-red-200',             dot: 'bg-red-500'     },
+    };
+    const PAY_CFG = {
+      Paid:    { color: 'text-emerald-700 bg-emerald-50 border-emerald-200', dot: 'bg-emerald-500' },
+      Pending: { color: 'text-amber-700 bg-amber-50 border-amber-200',       dot: 'bg-amber-500'   },
+      Failed:  { color: 'text-red-700 bg-red-50 border-red-200',             dot: 'bg-red-500'     },
+    };
+    const approvalCfg = APPROVAL_CFG[item.approvalStatus] || APPROVAL_CFG.Pending;
+    const payCfg      = PAY_CFG[item.paymentStatus]       || PAY_CFG.Pending;
+    const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+    const fmt     = (n) => n != null ? `₹${Number(n).toLocaleString('en-IN')}` : '—';
+
+    const isPending  = item.approvalStatus === 'Pending';
+    const isApproved = item.approvalStatus === 'Approved';
+    const isRejected = item.approvalStatus === 'Rejected';
+
+    const handleApprove = () => {
+      if (onApprove) onApprove(item);
+    };
+    const handleRejectConfirm = (reason) => {
+      setShowRejectPrompt(false);
+      if (onReject) onReject(item, reason);
+    };
+
+    return portal(
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[999] flex justify-end animate-fade-in font-sans">
+        <div className="absolute inset-0" onClick={() => { setShowRejectPrompt(false); onClose(); }} aria-hidden />
+
+        <div className="relative w-full sm:max-w-md h-full bg-slate-50 shadow-2xl flex flex-col animate-slide-up">
+
+          {/* Header */}
+          <div className="flex items-center justify-between px-5 py-4 bg-white border-b border-slate-100 flex-shrink-0">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 rounded-xl bg-violet-50 border border-violet-100 flex items-center justify-center flex-shrink-0">
+                <Receipt className="w-5 h-5 text-violet-600" />
+              </div>
+              <div className="min-w-0">
+                <h2 className="text-base font-bold text-slate-900 truncate">Expense Details</h2>
+                <p className="text-xs text-slate-500 font-mono mt-0.5">{item.expenseId}</p>
+              </div>
+            </div>
+            <button
+              onClick={() => { setShowRejectPrompt(false); onClose(); }}
+              className="p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 rounded-full transition-colors flex-shrink-0 ml-2">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Status strip */}
+          <div className="px-5 py-3 bg-white border-b border-slate-100 flex-shrink-0 flex items-center justify-between gap-3 flex-wrap">
+            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${approvalCfg.color}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${approvalCfg.dot}`} />
+              {item.approvalStatus === 'Pending' ? 'Pending Approval' : item.approvalStatus}
+            </span>
+            <span className="text-xs text-slate-400 font-semibold">{fmtDate(item.expenseDate)}</span>
+          </div>
+
+          {/* Scrollable content */}
+          <div className="flex-1 overflow-y-auto hide-scrollbar px-4 py-4 space-y-3">
+
+            {/* Info */}
+            <Section icon={FileText} title="Info" color="violet">
+              <DetailRow label="Expense Title" value={item.title} />
+              <DetailRow label="Category"      value={item.category} />
+              {item.description && <DetailRow label="Description" value={item.description} />}
+              <DetailRow label="Amount"        value={fmt(item.amount)} />
+              <DetailRow label="Expense Date"  value={fmtDate(item.expenseDate)} />
+              <DetailRow label="Store / Branch" value={item.store} />
+              {item.isRecurring && (
+                <DetailRow label="Recurring" value={
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-violet-50 text-violet-700 border border-violet-200 rounded-full text-[11px] font-bold">
+                    <RefreshCw className="w-3 h-3" /> {item.recurringInterval}
+                  </span>
+                } />
+              )}
+            </Section>
+
+            {/* Payment */}
+            <Section icon={CreditCard} title="Payment" color="blue">
+              <DetailRow label="Payment Method" value={item.paymentMethod} />
+              <DetailRow label="Reference No."  value={item.referenceNumber || '—'} mono />
+              <DetailRow label="Payment Status" value={
+                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border ${payCfg.color}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${payCfg.dot}`} />
+                  {item.paymentStatus}
+                </span>
+              } />
+              <DetailRow label="Amount" value={fmt(item.amount)} />
+            </Section>
+
+            {/* Receipt */}
+            <Section icon={ImageIcon} title="Receipt" color="amber">
+              {item.receiptUrl ? (
+                <div className="py-2">
+                  <img src={item.receiptUrl} alt="Receipt" className="w-full rounded-xl object-cover max-h-48 border border-slate-100" />
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-6 gap-2">
+                  <ImageIcon className="w-8 h-8 text-slate-200" />
+                  <p className="text-xs font-medium text-slate-400">No receipt uploaded</p>
+                </div>
+              )}
+            </Section>
+
+            {/* Approval section */}
+            <Section icon={Shield} title="Approval" color="emerald">
+              {/* Status badge row */}
+              <div className="py-2.5 border-b border-slate-50">
+                <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${approvalCfg.color}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${approvalCfg.dot}`} />
+                  {item.approvalStatus === 'Pending' ? 'Pending Approval' : item.approvalStatus}
+                </span>
+              </div>
+
+              {/* Pending: show action buttons */}
+              {isPending && !showRejectPrompt && (
+                <div className="pt-3 pb-1 space-y-2">
+                  <p className="text-xs text-slate-500 font-medium mb-3">Review and take action on this expense:</p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleApprove}
+                      className="flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-semibold text-white bg-emerald-600 rounded-xl hover:bg-emerald-700 transition-all shadow-sm"
+                    >
+                      <ThumbsUp className="w-4 h-4" />
+                      Approve
+                    </button>
+                    <button
+                      onClick={() => setShowRejectPrompt(true)}
+                      className="flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-semibold text-white bg-red-600 rounded-xl hover:bg-red-700 transition-all shadow-sm"
+                    >
+                      <ThumbsDown className="w-4 h-4" />
+                      Reject
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Inline reject reason form */}
+              {isPending && showRejectPrompt && (
+                <div className="pt-3 pb-1">
+                  <RejectReasonPrompt
+                    onConfirm={handleRejectConfirm}
+                    onCancel={() => setShowRejectPrompt(false)}
+                  />
+                </div>
+              )}
+
+              {/* Approved details */}
+              {isApproved && (
+                <>
+                  <DetailRow label="Approved By"   value={item.approvedBy   || '—'} />
+                  <DetailRow label="Approved Date" value={fmtDate(item.approvedDate)} />
+                </>
+              )}
+
+              {/* Rejected details */}
+              {isRejected && (
+                <>
+                  <DetailRow label="Rejected By"     value={item.rejectedBy   || '—'} />
+                  <DetailRow label="Rejected Date"   value={fmtDate(item.rejectedDate)} />
+                  <DetailRow label="Rejection Reason" value={item.rejectionReason || '—'} />
+                </>
+              )}
+
+              {/* Always show Recorded By */}
+              <DetailRow label="Recorded By" value={item.recordedBy} />
+            </Section>
+
+          </div>
+
+          {/* Footer */}
+          <div className="px-5 py-4 bg-white border-t border-slate-100 flex-shrink-0">
+            <button
+              onClick={() => { setShowRejectPrompt(false); onClose(); }}
+              className="w-full py-2.5 bg-slate-900 text-white rounded-xl font-semibold text-sm hover:bg-slate-700 transition-all shadow-md hover:shadow-lg"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>,
+      document.body
+    );
+  }
+
+  /* ── INVENTORY DRAWER ──────────────────────────────────── */
   const status = item.status || 'In Stock';
   const sc = statusConfig[status] || statusConfig['In Stock'];
   const profit = item.selling_price && item.cost_price
@@ -192,13 +401,10 @@ const InventoryDetailDrawer = ({ item, onClose }) => {
     ? ((profit / item.selling_price) * 100).toFixed(1)
     : null;
 
-  return createPortal(
+  return portal(
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[999] flex justify-end animate-fade-in">
-      {/* Click-outside close */}
       <div className="absolute inset-0" onClick={onClose} aria-hidden />
-
-      {/* Drawer panel */}
-      <div className="relative w-full max-w-md h-full bg-slate-50 shadow-2xl flex flex-col animate-slide-up">
+      <div className="relative w-full sm:max-w-md h-full bg-slate-50 shadow-2xl flex flex-col animate-slide-up">
 
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 bg-white border-b border-slate-100 flex-shrink-0">
@@ -230,52 +436,48 @@ const InventoryDetailDrawer = ({ item, onClose }) => {
 
         {/* Scrollable content */}
         <div className="flex-1 overflow-y-auto hide-scrollbar px-4 py-4 space-y-3">
-
           <Section icon={Package} title="Product Information" color="emerald">
             <DetailRow label="Product Name" value={item.product_name} />
             <DetailRow label="SKU"          value={item.sku}          mono />
             <DetailRow label="Category"     value={categoryLabel[item.category] || item.category} />
-            {item.subcategory && <DetailRow label="Subcategory" value={item.subcategory} />}
-            {item.description && <DetailRow label="Description" value={item.description} />}
+            {item.subcategory  && <DetailRow label="Subcategory" value={item.subcategory} />}
+            {item.description  && <DetailRow label="Description" value={item.description} />}
           </Section>
 
-          {/* Frame Specifications */}
           {item.frame_product && (
             <Section icon={Sliders} title="Frame Specifications" color="blue">
-              <DetailRow label="Frame Type" value={item.frame_product.frame_type} />
-              <DetailRow label="Shape" value={item.frame_product.shape} />
-              <DetailRow label="Material" value={item.frame_product.material} />
-              <DetailRow label="Color" value={item.frame_product.color} />
-              <DetailRow label="Lens Width" value={item.frame_product.lens_width ? `${item.frame_product.lens_width} mm` : null} />
-              <DetailRow label="Bridge Width" value={item.frame_product.bridge_width ? `${item.frame_product.bridge_width} mm` : null} />
+              <DetailRow label="Frame Type"    value={item.frame_product.frame_type} />
+              <DetailRow label="Shape"         value={item.frame_product.shape} />
+              <DetailRow label="Material"      value={item.frame_product.material} />
+              <DetailRow label="Color"         value={item.frame_product.color} />
+              <DetailRow label="Lens Width"    value={item.frame_product.lens_width    ? `${item.frame_product.lens_width} mm`    : null} />
+              <DetailRow label="Bridge Width"  value={item.frame_product.bridge_width  ? `${item.frame_product.bridge_width} mm`  : null} />
               <DetailRow label="Temple Length" value={item.frame_product.temple_length ? `${item.frame_product.temple_length} mm` : null} />
-              <DetailRow label="Gender" value={item.frame_product.gender} />
-              <DetailRow label="Age Group" value={item.frame_product.age_group} />
+              <DetailRow label="Gender"        value={item.frame_product.gender} />
+              <DetailRow label="Age Group"     value={item.frame_product.age_group} />
             </Section>
           )}
 
-          {/* Lens Specifications */}
           {item.lens_product && (
             <Section icon={Sliders} title="Lens Specifications" color="blue">
-              <DetailRow label="Lens Type" value={item.lens_product.lens_type} />
-              <DetailRow label="Material" value={item.lens_product.material} />
-              <DetailRow label="Index Value" value={item.lens_product.index_value} />
-              <DetailRow label="Coating" value={item.lens_product.coating} />
-              <DetailRow label="Tint Color" value={item.lens_product.tint_color} />
+              <DetailRow label="Lens Type"     value={item.lens_product.lens_type} />
+              <DetailRow label="Material"      value={item.lens_product.material} />
+              <DetailRow label="Index Value"   value={item.lens_product.index_value} />
+              <DetailRow label="Coating"       value={item.lens_product.coating} />
+              <DetailRow label="Tint Color"    value={item.lens_product.tint_color} />
               <DetailRow label="UV Protection" value={item.lens_product.uv_protection} />
-              <DetailRow label="Blue Cut" value={item.lens_product.blue_cut} />
-              <DetailRow label="Photochromic" value={item.lens_product.photochromic} />
-              <DetailRow label="Polarized" value={item.lens_product.polarized} />
+              <DetailRow label="Blue Cut"      value={item.lens_product.blue_cut} />
+              <DetailRow label="Photochromic"  value={item.lens_product.photochromic} />
+              <DetailRow label="Polarized"     value={item.lens_product.polarized} />
             </Section>
           )}
 
-          {/* Accessory Specifications */}
           {item.accessory_product && (
             <Section icon={Sliders} title="Accessory Specifications" color="blue">
               <DetailRow label="Accessory Type" value={item.accessory_product.accessory_type} />
-              <DetailRow label="Material" value={item.accessory_product.material} />
-              <DetailRow label="Color" value={item.accessory_product.color} />
-              <DetailRow label="Size" value={item.accessory_product.size} />
+              <DetailRow label="Material"        value={item.accessory_product.material} />
+              <DetailRow label="Color"           value={item.accessory_product.color} />
+              <DetailRow label="Size"            value={item.accessory_product.size} />
             </Section>
           )}
 
@@ -307,7 +509,6 @@ const InventoryDetailDrawer = ({ item, onClose }) => {
           )}
         </div>
 
-        {/* Footer */}
         <div className="px-5 py-4 bg-white border-t border-slate-100 flex-shrink-0">
           <button onClick={onClose}
             className="w-full py-2.5 bg-slate-900 text-white rounded-xl font-semibold text-sm hover:bg-slate-700 transition-all shadow-md hover:shadow-lg">

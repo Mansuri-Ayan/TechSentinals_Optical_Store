@@ -12,6 +12,7 @@ import Transactions from '../pages/admin/Transactions';
 import Suppliers from '../pages/admin/Suppliers';
 import SupplierDetail from '../pages/admin/SupplierDetail';
 import Sales from '../pages/admin/Sales';
+import Expenses from '../pages/admin/Expenses';
 
 // Responsive loading spinner component
 const LoadingSpinner = () => (
@@ -184,6 +185,7 @@ function AppRouter() {
         <Route path="store/:storeId/suppliers" element={<Suppliers />} />
         <Route path="store/:storeId/suppliers/:id" element={<SupplierDetail />} />
         <Route path="sales" element={<Sales />} />
+        <Route path="expenses" element={<Expenses />} />
       </Route>
 
       {/* Fallback root redirect */}
