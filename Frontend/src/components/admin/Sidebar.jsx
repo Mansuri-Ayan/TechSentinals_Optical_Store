@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Users, LogOut, Glasses, ChevronDown, Check, X, Archive, Tag, Layers, ArrowRightLeft, Truck } from 'lucide-react';
+import { LayoutDashboard, Users, LogOut, Glasses, ChevronDown, Check, X, Archive, Tag, Layers, ArrowRightLeft, Truck, ShoppingCart } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useAuthStore, useStoreStore } from '../../store/store';
 import { useStores } from '../../hooks/useStores';
@@ -199,6 +199,19 @@ const Sidebar = ({ isOpen, onClose }) => {
           >
             <Archive className="w-5 h-5 mr-3 transition-transform group-hover:scale-110" />
             <span className="font-medium text-sm">Inventory</span>
+          </NavLink>
+
+          <NavLink
+            to="/admin/sales"
+            className={({ isActive }) =>
+              `flex items-center px-4 py-2.5 rounded-xl transition-all duration-200 group ${isActive
+                ? 'bg-emerald-500/10 text-emerald-400 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_0_10px_rgba(16,185,129,0.1)] border border-emerald-500/20'
+                : 'text-slate-400 hover:bg-white/5 hover:text-slate-200 border border-transparent'
+              }`
+            }
+          >
+            <ShoppingCart className="w-5 h-5 mr-3 transition-transform group-hover:scale-110" />
+            <span className="font-medium text-sm">Sales</span>
           </NavLink>
 
           <NavLink

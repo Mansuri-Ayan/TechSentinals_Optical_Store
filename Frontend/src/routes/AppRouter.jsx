@@ -11,6 +11,7 @@ import Categories from '../pages/admin/Categories';
 import Transactions from '../pages/admin/Transactions';
 import Suppliers from '../pages/admin/Suppliers';
 import SupplierDetail from '../pages/admin/SupplierDetail';
+import Sales from '../pages/admin/Sales';
 
 // Responsive loading spinner component
 const LoadingSpinner = () => (
@@ -182,6 +183,7 @@ function AppRouter() {
         <Route path="suppliers" element={<SuppliersRouteRedirect />} />
         <Route path="store/:storeId/suppliers" element={<Suppliers />} />
         <Route path="store/:storeId/suppliers/:id" element={<SupplierDetail />} />
+        <Route path="sales" element={<Sales />} />
       </Route>
 
       {/* Fallback root redirect */}

@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   ArrowRightLeft, Plus, Search, ChevronRight,
@@ -549,11 +549,19 @@ const ViewDetailModal = ({ transaction, onClose }) => {
 const Transactions = () => {
   const { storeId } = useParams();
   const { selectedStore, setSelectedStore, stores } = useStoreStore();
+  const [searchParams] = useSearchParams();
+  const queryType = searchParams.get('type');
   const [activeTab, setActiveTab] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterSender, setFilterSender] = useState('');
   const [filterReceiver, setFilterReceiver] = useState('');
-  const [filterType, setFilterType] = useState('');
+  const [filterType, setFilterType] = useState(queryType || '');
+
+  useEffect(() => {
+    if (queryType) {
+      setFilterType(queryType);
+    }
+  }, [queryType]);
   const [currentPage, setCurrentPage] = useState(1);
   const [showNewModal, setShowNewModal] = useState(false);
   const [viewTx, setViewTx] = useState(null);
