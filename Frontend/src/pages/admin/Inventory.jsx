@@ -213,6 +213,7 @@ const Inventory = () => {
   const queryCategoryId = searchParams.get('category_id');
   const querySubcategoryId = searchParams.get('subcategory_id');
   const queryBrandId = searchParams.get('brand_id');
+  const queryStockStatus = searchParams.get('stock_status');
 
   /* Filters & Pagination states */
   const [searchTerm, setSearchTerm] = useState('');
@@ -220,7 +221,7 @@ const Inventory = () => {
   const [activeCategory, setActiveCategory] = useState(queryCategoryId || 'all');
   const [activeSubcategory, setActiveSubcategory] = useState(querySubcategoryId || '');
   const [activeBrand, setActiveBrand] = useState(queryBrandId || '');
-  const [activeStatus, setActiveStatus] = useState('');
+  const [activeStatus, setActiveStatus] = useState(queryStockStatus || '');
   const [currentPage, setCurrentPage] = useState(1);
 
   /* Modal/drawer state */
@@ -242,7 +243,10 @@ const Inventory = () => {
     setActiveCategory(queryCategoryId || 'all');
     setActiveSubcategory(querySubcategoryId || '');
     setActiveBrand(queryBrandId || '');
-  }, [queryCategoryId, querySubcategoryId, queryBrandId]);
+    if (queryStockStatus !== null) {
+      setActiveStatus(queryStockStatus);
+    }
+  }, [queryCategoryId, querySubcategoryId, queryBrandId, queryStockStatus]);
 
   /* Debounce search input */
   useEffect(() => {
