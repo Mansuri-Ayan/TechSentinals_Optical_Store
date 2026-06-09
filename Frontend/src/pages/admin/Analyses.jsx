@@ -1,0 +1,616 @@
+import { useState, useMemo, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import {
+  TrendingUp, BarChart3, PieChart, RefreshCw, Sliders,
+  Database, Filter, Activity, Store, Archive, ArrowRightLeft, Truck, Tag,
+  Download, Clock, ArrowUpRight, DollarSign, ShoppingBag, Users, AlertTriangle, Calendar
+} from 'lucide-react';
+import { useStoreStore } from '../../store/store';
+import StoreSwitcher from '../../components/admin/stores/StoreSwitcher';
+import { SALES_MOCK_DATA } from '../../data/salesData';
+
+/* ─────────────────────────────────────────────────────────
+   STORE SPECIFIC KPI METRIC CALCULATIONS
+   ───────────────────────────────────────────────────────── */
+const STORE_METRICS = {
+  All:          { revenue: 1245000, orders: 1245, customers: 4250, profit: 747000, inventoryVal: 845000, stores: 4, mult: 1.0 },
+  'Main Branch': { revenue: 435750, orders: 436,  customers: 1487, profit: 261450, inventoryVal: 295750, stores: 1, mult: 0.35 },
+  'Branch 2':    { revenue: 298800, orders: 299,  customers: 1020, profit: 179280, inventoryVal: 202800, stores: 1, mult: 0.24 },
+  'Branch 3':    { revenue: 149400, orders: 149,  customers: 510,  profit: 89640,  inventoryVal: 101400, stores: 1, mult: 0.12 },
+  'Admin Store': { revenue: 224100, orders: 224,  customers: 765,  profit: 134465, inventoryVal: 152100, stores: 1, mult: 0.18 }
+};
+
+/* ─────────────────────────────────────────────────────────
+   PREMIUM WIDGET CARD (STRIPE-LIKE NOTION AESTHETICS)
+   ───────────────────────────────────────────────────────── */
+const AnalyticsCard = ({ title, subtitle, children, actions, className = "" }) => (
+  <div className={`bg-white rounded-3xl border border-slate-200/60 shadow-sm p-6 sm:p-8 flex flex-col hover:shadow-md transition-all duration-300 ${className}`}>
+    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 mb-6 flex-shrink-0">
+      <div>
+        <h3 className="text-sm font-bold text-slate-800 tracking-tight">{title}</h3>
+        {subtitle && <p className="text-xs text-slate-400 font-medium mt-0.5">{subtitle}</p>}
+      </div>
+      {actions && <div className="flex items-center gap-2 flex-shrink-0">{actions}</div>}
+    </div>
+    <div className="flex-1 min-h-0 flex flex-col justify-center relative">
+      {children}
+    </div>
+  </div>
+);
+
+/* ─────────────────────────────────────────────────────────
+   PURE SVG CHART RENDERING COMPONENTS
+   ───────────────────────────────────────────────────────── */
+
+// 1. Line Chart: Sales Trend (12 Months representation)
+const SalesTrendChart = ({ data }) => {
+  const maxValue = Math.max(...data.map(item => item.value), 1);
+  const points = data.map((item, i) => {
+    const x = 40 + i * (250 / 11);
+    const y = 135 - (item.value / maxValue) * 105;
+    return `${x},${y}`;
+  }).join(' ');
+
+  const areaD = points ? `M 40,135 L ${points} L 290,135 Z` : '';
+
+  return (
+    <div className="w-full h-72 sm:h-80 px-2 pt-2">
+      <svg viewBox="0 0 300 160" className="w-full h-full">
+        <defs>
+          <linearGradient id="salesGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#10B981" stopOpacity="0.08" />
+            <stop offset="100%" stopColor="#10B981" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <line x1="40" y1="30" x2="290" y2="30" stroke="#F1F5F9" strokeWidth="1" strokeDasharray="3 3" />
+        <line x1="40" y1="65" x2="290" y2="65" stroke="#F1F5F9" strokeWidth="1" strokeDasharray="3 3" />
+        <line x1="40" y1="100" x2="290" y2="100" stroke="#F1F5F9" strokeWidth="1" strokeDasharray="3 3" />
+        <line x1="40" y1="135" x2="290" y2="135" stroke="#E2E8F0" strokeWidth="1.25" />
+
+        {areaD && <path d={areaD} fill="url(#salesGrad)" />}
+        {points && <path d={`M 40,135 L ${points}`} fill="none" stroke="#10B981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />}
+
+        {data.map((p, i) => {
+          const x = 40 + i * (250 / 11);
+          const y = 135 - (p.value / maxValue) * 105;
+          return (
+            <g key={i} className="group cursor-pointer">
+              <circle cx={x} cy={y} r="2.5" fill="#FFFFFF" stroke="#10B981" strokeWidth="1.5" className="transition-all duration-200 group-hover:r-4.5 group-hover:stroke-emerald-600" />
+              <text x={x} y={y - 8} textAnchor="middle" className="text-[7.5px] font-extrabold fill-slate-800 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                ₹{(p.value / 1000).toFixed(0)}k
+              </text>
+              <text x={x} y="145" textAnchor="middle" className="text-[8px] font-bold fill-slate-400 pointer-events-none">{p.label}</text>
+              <title>{`${p.label}: ₹${p.value.toLocaleString()}`}</title>
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+};
+
+// 2. Donut Chart (General Visual implementation)
+const DonutChart = ({ data, totalLabel = "Total" }) => {
+  const total = data.reduce((sum, item) => sum + item.value, 0);
+  let currentOffset = 0;
+
+  return (
+    <div className="relative w-full h-48 flex flex-col sm:flex-row items-center justify-around gap-4 px-2">
+      <div className="relative w-32 h-32 flex-shrink-0">
+        <svg viewBox="0 0 140 140" className="w-full h-full transform -rotate-90">
+          <circle cx="70" cy="70" r="50" fill="transparent" stroke="#F8FAFC" strokeWidth="12" />
+          {data.map((slice, i) => {
+            const percentage = total > 0 ? (slice.value / total) * 100 : 0;
+            const strokeLength = (percentage / 100) * 314.16;
+            const strokeOffset = 314.16 - strokeLength + currentOffset;
+            currentOffset -= strokeLength;
+
+            return (
+              <circle
+                key={i}
+                cx="70"
+                cy="70"
+                r="50"
+                fill="transparent"
+                stroke={slice.color}
+                strokeWidth="12"
+                strokeDasharray={`${strokeLength} 314.16`}
+                strokeDashoffset={strokeOffset}
+                className="transition-all duration-200 cursor-pointer hover:stroke-[14px]"
+                style={{ transformOrigin: 'center' }}
+              >
+                <title>{`${slice.name}: ${slice.value.toLocaleString()} (${Math.round(percentage)}%)`}</title>
+              </circle>
+            );
+          })}
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+          <span className="text-[8px] text-slate-400 font-extrabold uppercase tracking-wider">{totalLabel}</span>
+          <span className="text-base font-black text-slate-800 leading-none mt-0.5">{total.toLocaleString()}</span>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-1.5 text-xs text-slate-650 w-full max-w-[130px] overflow-y-auto max-h-36 pr-1 hide-scrollbar">
+        {data.map((slice, i) => (
+          <div key={i} className="flex items-center justify-between gap-1.5 bg-slate-50 p-2 rounded-xl border border-slate-100/50">
+            <div className="flex items-center gap-1 min-w-0">
+              <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: slice.color }} />
+              <span className="font-extrabold truncate text-[9px] text-slate-700">{slice.name}</span>
+            </div>
+            <span className="font-black text-[9px] text-slate-900 ml-auto">{slice.value.toLocaleString()}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// 3. Bar Chart (General Visual implementation)
+const BarChart = ({ data }) => {
+  const maxValue = Math.max(...data.map(item => item.value), 1);
+
+  return (
+    <div className="w-full h-48 px-2 pt-2">
+      <svg viewBox="0 0 300 160" className="w-full h-full">
+        <line x1="40" y1="20" x2="290" y2="20" stroke="#F8FAFC" strokeWidth="1" strokeDasharray="3 3" />
+        <line x1="40" y1="60" x2="290" y2="60" stroke="#F8FAFC" strokeWidth="1" strokeDasharray="3 3" />
+        <line x1="40" y1="100" x2="290" y2="100" stroke="#F8FAFC" strokeWidth="1" strokeDasharray="3 3" />
+        <line x1="40" y1="130" x2="290" y2="130" stroke="#E2E8F0" strokeWidth="1.25" />
+
+        {data.map((bar, i) => {
+          const barWidth = Math.max(10, Math.min(20, 130 / data.length));
+          const spacing = (250 - (data.length * barWidth)) / (data.length + 1);
+          const x = 40 + spacing + i * (barWidth + spacing);
+          const height = (bar.value / maxValue) * 105;
+          const y = 130 - height;
+
+          return (
+            <g key={i} className="group cursor-pointer">
+              <rect
+                x={x}
+                y={y}
+                width={barWidth}
+                height={height}
+                rx="3"
+                fill={bar.color}
+                className="opacity-90 hover:opacity-100 transition-all duration-350"
+              />
+              <text x={x + barWidth / 2} y={y - 6} textAnchor="middle" className="text-[7.5px] font-extrabold fill-slate-800 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                {bar.value.toLocaleString()}
+              </text>
+              <text x={x + barWidth / 2} y="143" textAnchor="middle" className="text-[8px] font-extrabold fill-slate-400 pointer-events-none">
+                {bar.label.length > 9 ? `${bar.label.substring(0, 6)}..` : bar.label}
+              </text>
+              <title>{`${bar.label}: ${bar.value.toLocaleString()}`}</title>
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+};
+
+// 4. Line Chart: Customer Growth (Jan -> Dec)
+const CustomerGrowthChart = ({ data }) => {
+  const maxValue = Math.max(...data.map(item => item.value), 1);
+  const points = data.map((item, i) => {
+    const x = 40 + i * (250 / 11);
+    const y = 130 - (item.value / maxValue) * 105;
+    return `${x},${y}`;
+  }).join(' ');
+
+  return (
+    <div className="w-full h-48 px-2 pt-2">
+      <svg viewBox="0 0 300 160" className="w-full h-full">
+        <line x1="40" y1="20" x2="290" y2="20" stroke="#F8FAFC" strokeWidth="1" strokeDasharray="3 3" />
+        <line x1="40" y1="60" x2="290" y2="60" stroke="#F8FAFC" strokeWidth="1" strokeDasharray="3 3" />
+        <line x1="40" y1="100" x2="290" y2="100" stroke="#F8FAFC" strokeWidth="1" strokeDasharray="3 3" />
+        <line x1="40" y1="130" x2="290" y2="130" stroke="#E2E8F0" strokeWidth="1.25" />
+
+        {points && <path d={`M 40,130 L ${points}`} fill="none" stroke="#6366F1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />}
+
+        {data.map((p, i) => {
+          const x = 40 + i * (250 / 11);
+          const y = 130 - (p.value / maxValue) * 105;
+          return (
+            <g key={i} className="group cursor-pointer">
+              <circle cx={x} cy={y} r="2.5" fill="#FFFFFF" stroke="#6366F1" strokeWidth="1.5" className="transition-all duration-200 group-hover:r-4 group-hover:stroke-indigo-600" />
+              <text x={x} y={y - 8} textAnchor="middle" className="text-[7.5px] font-extrabold fill-indigo-700 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                {p.value}
+              </text>
+              <text x={x} y="143" textAnchor="middle" className="text-[8px] font-extrabold fill-slate-400 pointer-events-none">{p.label}</text>
+              <title>{`${p.label}: ${p.value} Customers`}</title>
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+};
+
+const Analyses = () => {
+  const navigate = useNavigate();
+  const { stores, selectedStore, setSelectedStore } = useStoreStore();
+  const [selectedStoreFilter, setSelectedStoreFilter] = useState('All');
+  const [dateRange, setDateRange] = useState('This Year');
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Sync state if selectedStore changes from sidebar selector
+  useEffect(() => {
+    if (selectedStore) {
+      setSelectedStoreFilter(selectedStore.store_name || selectedStore.name);
+    }
+  }, [selectedStore]);
+
+  const activeMetrics = useMemo(() => {
+    return STORE_METRICS[selectedStoreFilter] || {
+      revenue: Math.round(1245000 * 0.15),
+      orders: Math.round(1245 * 0.15),
+      customers: Math.round(4250 * 0.15),
+      profit: Math.round(747000 * 0.15),
+      inventoryVal: Math.round(845000 * 0.15),
+      stores: 1,
+      mult: 0.15
+    };
+  }, [selectedStoreFilter]);
+
+  const mult = activeMetrics.mult;
+
+  const handleRefresh = () => {
+    setIsLoading(true);
+    setTimeout(() => setIsLoading(false), 500);
+  };
+
+  const handleExport = () => {
+    alert("Exporting analytics report as CSV/PDF...");
+  };
+
+  /* ── 1. Sales Trend Data (Jan -> Dec) ── */
+  const salesTrendData = useMemo(() => {
+    const raw = [
+      { label: 'Jan', value: 85000 },
+      { label: 'Feb', value: 95000 },
+      { label: 'Mar', value: 110000 },
+      { label: 'Apr', value: 105000 },
+      { label: 'May', value: 145000 },
+      { label: 'Jun', value: 168000 },
+      { label: 'Jul', value: 155000 },
+      { label: 'Aug', value: 162000 },
+      { label: 'Sep', value: 178000 },
+      { label: 'Oct', value: 190000 },
+      { label: 'Nov', value: 215000 },
+      { label: 'Dec', value: 245000 },
+    ];
+    return raw.map(item => ({ ...item, value: Math.round(item.value * mult) }));
+  }, [mult]);
+
+  /* ── 2. Sales Status Data ── */
+  const salesStatusData = useMemo(() => {
+    return [
+      { name: 'Completed', value: Math.round(980 * mult), color: '#10B981' },
+      { name: 'Pending', value: Math.round(180 * mult), color: '#3B82F6' },
+      { name: 'Cancelled', value: Math.round(65 * mult), color: '#EF4444' },
+      { name: 'Refunded', value: Math.round(20 * mult), color: '#F59E0B' },
+    ];
+  }, [mult]);
+
+  /* ── 3. Revenue Breakdown Data ── */
+  const revenueBreakdownData = useMemo(() => {
+    return [
+      { name: 'Frames', value: Math.round(584000 * mult), color: '#3B82F6' },
+      { name: 'Lenses', value: Math.round(445000 * mult), color: '#10B981' },
+      { name: 'Accessories', value: Math.round(216000 * mult), color: '#8B5CF6' },
+    ];
+  }, [mult]);
+
+  /* ── 4. Inventory Status Data ── */
+  const inventoryStatusData = useMemo(() => {
+    return [
+      { label: 'In Stock', value: Math.round(480 * mult), color: '#10B981' },
+      { label: 'Low Stock', value: Math.round(35 * mult), color: '#F59E0B' },
+      { label: 'Out Of Stock', value: Math.round(15 * mult), color: '#EF4444' },
+    ];
+  }, [mult]);
+
+  /* ── 5. Branch Performance Data ── */
+  const branchPerformanceData = useMemo(() => {
+    return [
+      { label: 'Main Branch', value: Math.round(435 * mult), color: '#3B82F6' },
+      { label: 'Branch 2', value: Math.round(298 * mult), color: '#10B981' },
+      { label: 'Admin Store', value: Math.round(224 * mult), color: '#6366F1' },
+      { label: 'Branch 3', value: Math.round(149 * mult), color: '#F59E0B' },
+    ];
+  }, [mult]);
+
+  /* ── 6. Best Performing Stores Data ── */
+  const bestPerformingStores = useMemo(() => {
+    const list = [
+      { rank: 1, name: 'Main Branch', revenue: 435750, growth: 12.5 },
+      { rank: 2, name: 'Branch 2', revenue: 298800, growth: 8.2 },
+      { rank: 3, name: 'Admin Store', revenue: 224100, growth: 5.4 },
+      { rank: 4, name: 'Branch 3', revenue: 149400, growth: -2.1 }
+    ];
+    return list.sort((a, b) => b.revenue - a.revenue);
+  }, []);
+
+  /* ── 7. Store-wise Inventory Distribution Data ── */
+  const storeInventoryDistribution = useMemo(() => {
+    return [
+      { name: 'Main Branch', value: Math.round(1450 * mult), color: '#3B82F6' },
+      { name: 'Branch 2', value: Math.round(1100 * mult), color: '#10B981' },
+      { name: 'Admin Store', value: Math.round(820 * mult), color: '#6366F1' },
+      { name: 'Branch 3', value: Math.round(550 * mult), color: '#F59E0B' },
+    ].filter(d => d.value > 0);
+  }, [mult]);
+
+  /* ── 8. Supplier Analytics Data ── */
+  const supplierAnalyticsData = useMemo(() => {
+    return [
+      { label: 'Vision Supply', value: Math.round(24 * mult), color: '#3B82F6' },
+      { label: 'Eyewear Depot', value: Math.round(18 * mult), color: '#10B981' },
+      { label: 'Lens World', value: Math.round(32 * mult), color: '#8B5CF6' },
+      { label: 'Zeiss India', value: Math.round(12 * mult), color: '#EC4899' },
+      { label: 'OpticEssential', value: Math.round(22 * mult), color: '#F59E0B' },
+    ];
+  }, [mult]);
+
+  /* ── 9. Transaction Analytics Data ── */
+  const transactionAnalyticsData = useMemo(() => {
+    return [
+      { name: 'Cash', value: Math.round(280 * mult), color: '#8B5CF6' },
+      { name: 'UPI', value: Math.round(520 * mult), color: '#10B981' },
+      { name: 'Card', value: Math.round(345 * mult), color: '#3B82F6' },
+      { name: 'Credit', value: Math.round(100 * mult), color: '#F59E0B' },
+    ];
+  }, [mult]);
+
+  /* ── 10. Brand Performance Data ── */
+  const brandPerformanceData = useMemo(() => {
+    return [
+      { label: 'Ray-Ban', value: Math.round(120 * mult), color: '#3B82F6' },
+      { label: 'Oakley', value: Math.round(85 * mult), color: '#6366F1' },
+      { label: 'Crizal', value: Math.round(70 * mult), color: '#10B981' },
+      { label: 'Hoya', value: Math.round(65 * mult), color: '#F59E0B' },
+      { label: 'Essilor', value: Math.round(50 * mult), color: '#8B5CF6' },
+    ];
+  }, [mult]);
+
+  /* ── 11. Customer Growth Data (Jan -> Dec) ── */
+  const customerGrowthData = useMemo(() => {
+    const raw = [
+      { label: 'Jan', value: 80 },
+      { label: 'Feb', value: 120 },
+      { label: 'Mar', value: 190 },
+      { label: 'Apr', value: 290 },
+      { label: 'May', value: 410 },
+      { label: 'Jun', value: 580 },
+      { label: 'Jul', value: 750 },
+      { label: 'Aug', value: 920 },
+      { label: 'Sep', value: 1110 },
+      { label: 'Oct', value: 1350 },
+      { label: 'Nov', value: 1620 },
+      { label: 'Dec', value: 1950 },
+    ];
+    return raw.map(item => ({ ...item, value: Math.round(item.value * mult) }));
+  }, [mult]);
+
+  const fmtCurrency = (val) => {
+    return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(val);
+  };
+
+  return (
+    <div className="p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto animate-fade-in font-sans overflow-x-hidden space-y-6 sm:space-y-8 bg-transparent">
+      
+      {/* Analytics Page Header */}
+      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 border-b border-slate-100 pb-5 flex-shrink-0">
+        <div className="space-y-1.5">
+          <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+            <BarChart3 className="w-7 h-7 text-slate-800" /> Analytics Dashboard
+          </h1>
+          <p className="text-slate-500 text-xs sm:text-sm font-semibold">
+            Business insights and performance tracking
+          </p>
+        </div>
+
+        {/* Filters and actions row */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full xl:w-auto">
+          {/* Date Range Filter */}
+          <div className="relative flex-1 sm:flex-initial min-w-[150px]">
+            <select
+              value={dateRange}
+              onChange={(e) => setDateRange(e.target.value)}
+              className="w-full bg-white text-slate-700 text-xs font-bold py-2.5 px-4 rounded-xl border border-slate-200 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 cursor-pointer appearance-none pr-8 shadow-sm"
+            >
+              <option value="Last 30 Days">Last 30 Days</option>
+              <option value="This Month">This Month</option>
+              <option value="This Quarter">This Quarter</option>
+              <option value="This Year">This Year</option>
+            </select>
+            <Calendar className="w-3.5 h-3.5 text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+          </div>
+
+          {/* Store Switcher */}
+          <StoreSwitcher
+            selectedStoreFilter={selectedStoreFilter}
+            onStoreChange={(val) => {
+              setSelectedStoreFilter(val);
+              const matchedStore = stores.find(s => (s.store_name || s.name) === val);
+              if (matchedStore) {
+                setSelectedStore(matchedStore);
+              } else if (val === 'All') {
+                setSelectedStore(null);
+              }
+            }}
+          />
+
+          {/* Buttons */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleExport}
+              className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-4 py-2.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-sm active:scale-95 whitespace-nowrap"
+            >
+              <Download className="w-3.5 h-3.5 text-slate-400" /> Export
+            </button>
+            <button
+              onClick={handleRefresh}
+              className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-sm active:scale-95 whitespace-nowrap"
+            >
+              <RefreshCw className="w-3.5 h-3.5" /> Refresh
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Analytics Cards at Top */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
+        {[
+          { title: 'Total Revenue', value: fmtCurrency(activeMetrics.revenue), icon: DollarSign, color: 'text-slate-400' },
+          { title: 'Total Orders', value: activeMetrics.orders.toLocaleString(), icon: ShoppingBag, color: 'text-slate-400' },
+          { title: 'Total Customers', value: activeMetrics.customers.toLocaleString(), icon: Users, color: 'text-slate-400' },
+          { title: 'Profit (60% Margin)', value: fmtCurrency(activeMetrics.profit), icon: TrendingUp, color: 'text-slate-400' },
+          { title: 'Inventory Value', value: fmtCurrency(activeMetrics.inventoryVal), icon: Archive, color: 'text-slate-400' },
+          { title: 'Total Stores', value: activeMetrics.stores.toString(), icon: Store, color: 'text-slate-400' }
+        ].map((stat, i) => (
+          <div
+            key={i}
+            className="bg-white p-6 rounded-2xl border border-slate-200/60 shadow-sm flex flex-col justify-between h-36 hover:shadow-md transition-all duration-300"
+          >
+            <div className="flex justify-between items-start">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{stat.title}</p>
+              <stat.icon className={`w-4.5 h-4.5 ${stat.color}`} />
+            </div>
+            <h3 className="text-xl sm:text-2xl font-black text-slate-800 tracking-tight leading-none mt-4 truncate">{stat.value}</h3>
+          </div>
+        ))}
+      </div>
+
+      {isLoading ? (
+        <div className="min-h-[50vh] flex flex-col items-center justify-center p-20 bg-white rounded-3xl border border-slate-100 shadow-sm">
+          <RefreshCw className="w-10 h-10 animate-spin text-emerald-500 mb-3" />
+          <p className="text-slate-500 text-sm font-semibold">Updating analyses report metrics...</p>
+        </div>
+      ) : (
+        <div className="space-y-6 sm:space-y-8">
+          
+          {/* Row 1: Sales Trend (Large 2/3) + Sales Status (Medium 1/3) */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2">
+              <AnalyticsCard
+                title="Sales Trend Analysis"
+                subtitle="Annualized gross revenue growth trends charted across 12 calendar months."
+              >
+                <SalesTrendChart data={salesTrendData} />
+              </AnalyticsCard>
+            </div>
+            <div className="lg:col-span-1">
+              <AnalyticsCard
+                title="Sales Status Breakdown"
+                subtitle="Proportion of parsed sales transactions categorized by order state."
+              >
+                <DonutChart data={salesStatusData} totalLabel="Orders" />
+              </AnalyticsCard>
+            </div>
+          </div>
+
+          {/* Row 2: Revenue Breakdown (1/3) + Inventory Status (1/3) + Branch Performance (1/3) */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <AnalyticsCard
+              title="Revenue Breakdown"
+              subtitle="Product category contributions to overall gross sales numbers."
+            >
+              <DonutChart data={revenueBreakdownData} totalLabel="Revenue" />
+            </AnalyticsCard>
+
+            <AnalyticsCard
+              title="Inventory Status Breakdown"
+              subtitle="Comparison of active catalog counts categorized by availability levels."
+            >
+              <BarChart data={inventoryStatusData} />
+            </AnalyticsCard>
+
+            <AnalyticsCard
+              title="Branch Performance comparison"
+              subtitle="Relative order values processed by active store locations."
+            >
+              <BarChart data={branchPerformanceData} />
+            </AnalyticsCard>
+          </div>
+
+          {/* Row 3: Best Performing Stores (1/3) + Store-wise Inventory (1/3) + Supplier Analytics (1/3) */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {/* Best Performing Stores ranked list */}
+            <div className="bg-white rounded-3xl border border-slate-200/60 p-6 sm:p-8 flex flex-col hover:shadow-md transition-all duration-300 h-full">
+              <div className="mb-6 flex-shrink-0">
+                <h3 className="text-sm font-bold text-slate-800 tracking-tight">Best Performing Stores</h3>
+                <p className="text-xs text-slate-400 font-medium mt-0.5">Ranked branches by gross revenue output.</p>
+              </div>
+              <div className="flex-1 space-y-3 overflow-y-auto max-h-[176px] hide-scrollbar pr-1">
+                {bestPerformingStores.map((store, idx) => (
+                  <div key={store.name} className="flex items-center justify-between gap-3 p-2.5 hover:bg-slate-50 rounded-2xl border border-transparent hover:border-slate-100/50 transition-all">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className={`w-5 h-5 rounded flex items-center justify-center font-black text-[10px] flex-shrink-0 ${
+                        idx === 0 ? 'bg-amber-50 text-amber-700 border border-amber-100' :
+                        idx === 1 ? 'bg-slate-50 text-slate-700 border border-slate-200/50' : 'bg-orange-50 text-orange-700 border border-orange-100'
+                      }`}>
+                        {idx + 1}
+                      </span>
+                      <span className="text-xs font-bold text-slate-800 truncate">{store.name}</span>
+                    </div>
+                    <div className="flex items-center gap-3 flex-shrink-0">
+                      <span className="text-xs font-black text-slate-900">{fmtCurrency(store.revenue)}</span>
+                      <span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded ${store.growth >= 0 ? 'text-emerald-700 bg-emerald-50 border border-emerald-100' : 'text-red-700 bg-red-50 border-red-100'}`}>
+                        {store.growth >= 0 ? '+' : ''}{store.growth}%
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <AnalyticsCard
+              title="Store-wise Inventory Level"
+              subtitle="Comparison of relative catalog volume allocations mapped across stores."
+            >
+              <DonutChart data={storeInventoryDistribution} totalLabel="Stock" />
+            </AnalyticsCard>
+
+            <AnalyticsCard
+              title="Supplier Lead Order Volumes"
+              subtitle="Aggregate order allocations distributed among connected suppliers."
+            >
+              <BarChart data={supplierAnalyticsData} />
+            </AnalyticsCard>
+          </div>
+
+          {/* Row 4: Transaction Analytics (1/3) + Brand Performance (1/3) + Customer Growth (1/3) */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <AnalyticsCard
+              title="Transaction Payment Analytics"
+              subtitle="Relative breakdown of payment methods utilized across orders."
+            >
+              <DonutChart data={transactionAnalyticsData} totalLabel="Sales" />
+            </AnalyticsCard>
+
+            <AnalyticsCard
+              title="Brand Revenue comparison"
+              subtitle="Comparison of sales revenue volumes generated by eyewear brands."
+            >
+              <BarChart data={brandPerformanceData} />
+            </AnalyticsCard>
+
+            <AnalyticsCard
+              title="Monthly Customer Growth"
+              subtitle="Cumulative customer registrations tracked monthly."
+            >
+              <CustomerGrowthChart data={customerGrowthData} />
+            </AnalyticsCard>
+          </div>
+
+        </div>
+      )}
+
+    </div>
+  );
+};
+
+export default Analyses;

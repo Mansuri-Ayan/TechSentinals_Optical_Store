@@ -1,214 +1,51 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  TrendingUp, Activity, BarChart3, PieChart,
-  RefreshCw, Database, Filter, Store, AlertTriangle,
-  Users, DollarSign, ShoppingBag, Plus, ChevronDown, Check,
-  Sliders, Package, ArrowRightLeft, Truck
+  TrendingUp, BarChart3, Clock, DollarSign, Users, ShoppingBag,
+  AlertTriangle, Plus, ArrowUpRight, IndianRupee, Store, Calendar,
+  Package, Truck, Award, Briefcase, ShoppingCart
 } from 'lucide-react';
 import { useStoreStore } from '../../store/store';
 import AddStoreModal from '../../components/admin/AddStoreModal';
-
-/* ─────────────────────────────────────────────────────────
-   REUSABLE LAYOUT CARD
-   ───────────────────────────────────────────────────────── */
-const ChartCard = ({ id, title, children, actions, onRefresh, isHighlighted }) => (
-  <div
-    id={id}
-    className={`bg-white rounded-2xl border overflow-hidden p-4 sm:p-5 flex flex-col h-full transition-all duration-500 ${
-      isHighlighted
-        ? 'border-emerald-500 shadow-[0_0_20px_rgba(16,185,129,0.35)] ring-4 ring-emerald-500/20 scale-[1.01]'
-        : 'border-slate-100 shadow-sm hover:shadow-md'
-    }`}
-  >
-    <div className="flex items-center justify-between gap-3 mb-4 flex-shrink-0">
-      <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">{title}</h3>
-      <div className="flex items-center gap-2">
-        {actions}
-        {onRefresh && (
-          <button onClick={onRefresh} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-50 rounded-lg transition-all" title="Refresh Chart">
-            <RefreshCw className="w-3.5 h-3.5" />
-          </button>
-        )}
-      </div>
-    </div>
-    <div className="flex-1 min-h-0 flex items-center justify-center relative">
-      {children}
-    </div>
-  </div>
-);
-
-/* ─────────────────────────────────────────────────────────
-   NATIVE CHART COMPONENTS (PURE SVG)
-   ───────────────────────────────────────────────────────── */
-
-// 1. Line Chart: Sales Trend
-const LineChart = ({ data, onPointClick }) => {
-  const maxValue = Math.max(...data.map(item => item.value), 1);
-  const points = data.map((item, i) => {
-    const x = 50 + (i * (230 / (data.length - 1 || 1)));
-    const y = 130 - (item.value / maxValue) * 100;
-    return { x, y, val: item.value, label: item.label, raw: item };
-  });
-
-  const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
-  const areaD = points.length > 0
-    ? `${pathD} L ${points[points.length - 1].x} 130 L ${points[0].x} 130 Z`
-    : '';
-
-  return (
-    <div className="w-full h-60 px-2">
-      <svg viewBox="0 0 300 160" className="w-full h-full">
-        <defs>
-          <linearGradient id="lineGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#10B981" stopOpacity="0.3" />
-            <stop offset="100%" stopColor="#10B981" stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        <line x1="50" y1="30" x2="280" y2="30" stroke="#F1F5F9" strokeWidth="1" strokeDasharray="4 4" />
-        <line x1="50" y1="80" x2="280" y2="80" stroke="#F1F5F9" strokeWidth="1" strokeDasharray="4 4" />
-        <line x1="50" y1="130" x2="280" y2="130" stroke="#E2E8F0" strokeWidth="1.5" />
-
-        {areaD && <path d={areaD} fill="url(#lineGrad)" />}
-        {pathD && <path d={pathD} fill="none" stroke="#10B981" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />}
-
-        {points.map((p, i) => (
-          <g key={i} className="group cursor-pointer" onClick={() => onPointClick(p.raw)}>
-            <circle cx={p.x} cy={p.y} r="4" fill="#FFFFFF" stroke="#10B981" strokeWidth="2.5" className="transition-all duration-200 group-hover:r-6 group-hover:stroke-emerald-600" />
-            <text x={p.x} y={p.y - 8} textAnchor="middle" className="text-[9px] font-bold fill-slate-800 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-              ₹{p.val.toLocaleString()}
-            </text>
-            <text x={p.x} y="145" textAnchor="middle" className="text-[9px] font-semibold fill-slate-500 pointer-events-none">{p.label}</text>
-            <title>{`${p.label}: ₹${p.val.toLocaleString()}`}</title>
-          </g>
-        ))}
-      </svg>
-    </div>
-  );
-};
-
-// 2. Donut Chart
-const DonutChart = ({ data, onSliceClick }) => {
-  const total = data.reduce((sum, item) => sum + item.value, 0);
-  let currentOffset = 0;
-
-  return (
-    <div className="relative w-full h-52 flex flex-col sm:flex-row items-center justify-around gap-4 px-2">
-      <div className="relative w-36 h-36 flex-shrink-0">
-        <svg viewBox="0 0 140 140" className="w-full h-full transform -rotate-90">
-          <circle cx="70" cy="70" r="50" fill="transparent" stroke="#F8FAFC" strokeWidth="16" />
-          {data.map((slice, i) => {
-            const percentage = total > 0 ? (slice.value / total) * 100 : 0;
-            const strokeLength = (percentage / 100) * 314.16;
-            const strokeOffset = 314.16 - strokeLength + currentOffset;
-            currentOffset -= strokeLength;
-
-            return (
-              <circle
-                key={i}
-                cx="70"
-                cy="70"
-                r="50"
-                fill="transparent"
-                stroke={slice.color}
-                strokeWidth="16"
-                strokeDasharray={`${strokeLength} 314.16`}
-                strokeDashoffset={strokeOffset}
-                className="transition-all duration-200 cursor-pointer hover:stroke-[19px]"
-                onClick={() => onSliceClick(slice)}
-                style={{ transformOrigin: 'center' }}
-              >
-                <title>{`${slice.name}: ${slice.value.toLocaleString()} (${Math.round(percentage)}%)`}</title>
-              </circle>
-            );
-          })}
-        </svg>
-        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none font-sans">
-          <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Total</span>
-          <span className="text-sm font-extrabold text-slate-800">{total.toLocaleString()}</span>
-        </div>
-      </div>
-
-      <div className="flex flex-col gap-1.5 text-xs text-slate-600 max-h-36 overflow-y-auto w-full max-w-[150px] hide-scrollbar pr-1">
-        {data.map((slice, i) => (
-          <div key={i} className="flex items-center justify-between gap-2 cursor-pointer hover:bg-slate-50 p-1 rounded-lg transition-colors" onClick={() => onSliceClick(slice)}>
-            <div className="flex items-center gap-1.5 min-w-0">
-              <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: slice.color }} />
-              <span className="font-semibold truncate text-[11px] text-slate-700">{slice.name}</span>
-            </div>
-            <span className="font-bold text-[11px] text-slate-900">{slice.value.toLocaleString()}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-};
-
-// 3. Bar Chart
-const BarChart = ({ data, onBarClick }) => {
-  const maxValue = Math.max(...data.map(item => item.value), 1);
-
-  return (
-    <div className="w-full h-52 px-2">
-      <svg viewBox="0 0 300 160" className="w-full h-full">
-        <line x1="40" y1="20" x2="290" y2="20" stroke="#F1F5F9" strokeWidth="1" strokeDasharray="4 4" />
-        <line x1="40" y1="60" x2="290" y2="60" stroke="#F1F5F9" strokeWidth="1" strokeDasharray="4 4" />
-        <line x1="40" y1="100" x2="290" y2="100" stroke="#F1F5F9" strokeWidth="1" strokeDasharray="4 4" />
-        <line x1="40" y1="130" x2="290" y2="130" stroke="#E2E8F0" strokeWidth="1.5" />
-
-        {data.map((bar, i) => {
-          const barWidth = Math.max(12, Math.min(24, 150 / data.length));
-          const spacing = (250 - (data.length * barWidth)) / (data.length + 1);
-          const x = 40 + spacing + i * (barWidth + spacing);
-          const height = (bar.value / maxValue) * 110;
-          const y = 130 - height;
-
-          return (
-            <g key={i} className="group cursor-pointer" onClick={() => onBarClick(bar)}>
-              <rect
-                x={x}
-                y={y}
-                width={barWidth}
-                height={height}
-                rx="3"
-                fill={bar.color}
-                className="transition-all duration-300 hover:brightness-95 hover:opacity-90"
-              />
-              <text x={x + barWidth / 2} y={y - 6} textAnchor="middle" className="text-[9px] font-extrabold fill-slate-800 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                {bar.value.toLocaleString()}
-              </text>
-              <text x={x + barWidth / 2} y="145" textAnchor="middle" className="text-[9px] font-semibold fill-slate-500 pointer-events-none">
-                {bar.label.length > 9 ? `${bar.label.substring(0, 7)}..` : bar.label}
-              </text>
-              <title>{`${bar.label}: ${bar.value.toLocaleString()}`}</title>
-            </g>
-          );
-        })}
-      </svg>
-    </div>
-  );
-};
+import StoreSwitcher from '../../components/admin/stores/StoreSwitcher';
+import { SALES_MOCK_DATA } from '../../data/salesData';
+import { MOCK_CUSTOMERS } from '../../data/customersData';
 
 /* ─────────────────────────────────────────────────────────
    STORE SPECIFIC KPI METRIC CALCULATIONS
    ───────────────────────────────────────────────────────── */
 const STORE_METRICS = {
-  All:          { revenue: '₹8,15,400', staff: 24, orders: 1240, lowStock: 35, mult: 1.0 },
-  'Main Branch': { revenue: '₹2,84,000', staff: 8,  orders: 420,  lowStock: 12, mult: 0.35 },
-  'Branch 2':    { revenue: '₹1,97,000', staff: 6,  orders: 310,  lowStock: 8,  mult: 0.24 },
-  'Branch 3':    { revenue: '₹98,500',  staff: 5,  orders: 190,  lowStock: 4,  mult: 0.12 },
-  'Admin Store': { revenue: '₹1,50,000', staff: 5,  orders: 320,  lowStock: 6,  mult: 0.18 }
+  All:          { revenue: 1245000, todayRevenue: 45000, orders: 1245, pendingOrders: 86, customers: 4250, staff: 125, inventoryVal: 845000, outstanding: 125000, mult: 1.0, lowStock: 35 },
+  'Main Branch': { revenue: 435750, todayRevenue: 15750, orders: 436,  pendingOrders: 30, customers: 1487, staff: 44,  inventoryVal: 295750, outstanding: 43750,  mult: 0.35, lowStock: 12 },
+  'Branch 2':    { revenue: 298800, todayRevenue: 10800, orders: 299,  pendingOrders: 21, customers: 1020, staff: 30,  inventoryVal: 202800, outstanding: 30000,  mult: 0.24, lowStock: 8 },
+  'Branch 3':    { revenue: 149400, todayRevenue: 5400,  orders: 149,  pendingOrders: 10, customers: 510,  staff: 15,  inventoryVal: 101400, outstanding: 15000,  mult: 0.12, lowStock: 4 },
+  'Admin Store': { revenue: 224100, todayRevenue: 8100,  orders: 224,  pendingOrders: 15, customers: 765,  staff: 22,  inventoryVal: 152100, outstanding: 22500,  mult: 0.18, lowStock: 6 }
 };
+
+/* ─────────────────────────────────────────────────────────
+   PREMIUM WIDGET CARD (STRIPE-LIKE NOTION AESTHETICS)
+   ───────────────────────────────────────────────────────── */
+const DashboardCard = ({ title, subtitle, children, actions, className = "" }) => (
+  <div className={`bg-white rounded-3xl border border-slate-200/60 shadow-sm p-6 sm:p-8 flex flex-col hover:shadow-md transition-all duration-300 ${className}`}>
+    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 mb-6 flex-shrink-0">
+      <div>
+        <h3 className="text-sm font-bold text-slate-800 tracking-tight">{title}</h3>
+        {subtitle && <p className="text-xs text-slate-400 font-medium mt-0.5">{subtitle}</p>}
+      </div>
+      {actions && <div className="flex items-center gap-2 flex-shrink-0">{actions}</div>}
+    </div>
+    <div className="flex-1 min-h-0 flex flex-col justify-center relative">
+      {children}
+    </div>
+  </div>
+);
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  const { stores, selectedStore } = useStoreStore();
+  const { stores, selectedStore, setSelectedStore } = useStoreStore();
   const [showAddStore, setShowAddStore] = useState(false);
   const [selectedStoreFilter, setSelectedStoreFilter] = useState('All');
-  const [trendFilter, setTrendFilter] = useState('Month');
-  const [isLoading, setIsLoading] = useState(false);
-  const [isEmpty, setIsEmpty] = useState(false);
-  const [highlightedChart, setHighlightedChart] = useState(null);
+  const [activityTab, setActivityTab] = useState('orders'); // orders, transactions, customers
 
   const activeStoreId = selectedStore?.id || stores[0]?.id || 1;
 
@@ -220,403 +57,785 @@ const Dashboard = () => {
   }, [selectedStore]);
 
   const activeMetrics = useMemo(() => {
-    return STORE_METRICS[selectedStoreFilter] || STORE_METRICS.All;
+    if (STORE_METRICS[selectedStoreFilter]) {
+      return STORE_METRICS[selectedStoreFilter];
+    }
+    return {
+      revenue: Math.round(1245000 * 0.15),
+      todayRevenue: Math.round(45000 * 0.15),
+      orders: Math.round(1245 * 0.15),
+      pendingOrders: Math.round(86 * 0.15),
+      customers: Math.round(4250 * 0.15),
+      staff: Math.round(125 * 0.15),
+      inventoryVal: Math.round(845000 * 0.15),
+      outstanding: Math.round(125000 * 0.15),
+      mult: 0.15,
+      lowStock: 5
+    };
   }, [selectedStoreFilter]);
 
-  const showSupplier = selectedStoreFilter === 'All' || selectedStoreFilter === 'Admin Store';
+  const mult = activeMetrics.mult;
 
-  const scrollToChart = (chartId) => {
-    const element = document.getElementById(chartId);
-    if (element) {
-      element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      setHighlightedChart(chartId);
-      setTimeout(() => {
-        setHighlightedChart(null);
-      }, 2000);
-    }
-  };
+  // Get current date string
+  const currentDateString = useMemo(() => {
+    const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+    return new Date().toLocaleDateString('en-IN', options);
+  }, []);
 
-  const scaleValue = (val) => {
-    return Math.round(val * activeMetrics.mult);
-  };
-
-  const handleRefresh = () => {
-    setIsLoading(true);
-    setTimeout(() => setIsLoading(false), 600);
-  };
-
-  // 1. Sales Trend
+  /* ── 1. Line Chart: Sales Trend (12 Months representation) ── */
   const salesTrendData = useMemo(() => {
-    let raw = [];
-    if (trendFilter === 'Today') {
-      raw = [
-        { label: '09:00', value: 8500 },
-        { label: '11:00', value: 24000 },
-        { label: '13:00', value: 18500 },
-        { label: '15:00', value: 32000 },
-        { label: '17:00', value: 41000 },
-        { label: '19:00', value: 29000 },
-      ];
-    } else if (trendFilter === 'Week') {
-      raw = [
-        { label: 'Mon', value: 48000 },
-        { label: 'Tue', value: 54000 },
-        { label: 'Wed', value: 39000 },
-        { label: 'Thu', value: 68000 },
-        { label: 'Fri', value: 82000 },
-        { label: 'Sat', value: 95000 },
-        { label: 'Sun', value: 41000 },
-      ];
-    } else if (trendFilter === 'Year') {
-      raw = [
-        { label: 'Jan', value: 340000 },
-        { label: 'Feb', value: 420000 },
-        { label: 'Mar', value: 510000 },
-        { label: 'Apr', value: 480000 },
-        { label: 'May', value: 620000 },
-        { label: 'Jun', value: 710000 },
-      ];
-    } else {
-      raw = [
-        { label: 'Wk 1', value: 125000 },
-        { label: 'Wk 2', value: 168000 },
-        { label: 'Wk 3', value: 145000 },
-        { label: 'Wk 4', value: 195000 },
-      ];
-    }
-    return raw.map(item => ({ ...item, value: scaleValue(item.value) }));
-  }, [trendFilter, activeMetrics]);
+    const raw = [
+      { label: 'Jan', value: 85000 },
+      { label: 'Feb', value: 95000 },
+      { label: 'Mar', value: 110000 },
+      { label: 'Apr', value: 105000 },
+      { label: 'May', value: 145000 },
+      { label: 'Jun', value: 168000 },
+      { label: 'Jul', value: 155000 },
+      { label: 'Aug', value: 162000 },
+      { label: 'Sep', value: 178000 },
+      { label: 'Oct', value: 190000 },
+      { label: 'Nov', value: 215000 },
+      { label: 'Dec', value: 245000 },
+    ];
+    return raw.map(item => ({ ...item, value: Math.round(item.value * mult) }));
+  }, [mult]);
 
-  // 2. Sales Status
+  const salesTrendMax = Math.max(...salesTrendData.map(d => d.value), 1);
+  const salesTrendPoints = salesTrendData.map((d, i) => {
+    const x = 40 + i * (250 / 11);
+    const y = 135 - (d.value / salesTrendMax) * 105;
+    return `${x},${y}`;
+  }).join(' ');
+
+  const salesTrendAreaPath = salesTrendPoints
+    ? `M 40,135 L ${salesTrendPoints} L 290,135 Z`
+    : '';
+
+  /* ── 2. Donut Chart: Sales Status ── */
   const salesStatusData = useMemo(() => {
     return [
-      { name: 'Completed', value: scaleValue(1240), color: '#10B981' },
-      { name: 'Cancelled', value: scaleValue(120), color: '#64748B' },
-      { name: 'Returned', value: scaleValue(45), color: '#EF4444' },
-      { name: 'Repair', value: scaleValue(32), color: '#6366F1' },
-      { name: 'Lab Pending', value: scaleValue(88), color: '#F59E0B' },
-      { name: 'Exchange', value: scaleValue(15), color: '#A855F7' },
-    ].filter(item => item.value > 0 || selectedStoreFilter === 'All');
-  }, [activeMetrics, selectedStoreFilter]);
-
-  // 3. Revenue Breakdown
-  const revenueBreakdownData = useMemo(() => {
-    return [
-      { name: 'Frames', value: scaleValue(284000), categoryId: 1, color: '#3B82F6' },
-      { name: 'Lenses', value: scaleValue(197000), categoryId: 2, color: '#10B981' },
-      { name: 'Other Products', value: scaleValue(98500), categoryId: 3, color: '#8B5CF6' },
+      { name: 'Completed', value: Math.round(980 * mult), color: '#10B981' },
+      { name: 'Pending', value: Math.round(180 * mult), color: '#3B82F6' },
+      { name: 'Cancelled', value: Math.round(65 * mult), color: '#EF4444' },
+      { name: 'Refunded', value: Math.round(20 * mult), color: '#F59E0B' },
     ];
-  }, [activeMetrics]);
+  }, [mult]);
 
-  // 4. Inventory Status
-  const inventoryStatusData = useMemo(() => {
-    return [
-      { label: 'In Stock', value: scaleValue(420), color: '#10B981' },
-      { label: 'Low Stock', value: activeMetrics.lowStock, color: '#F59E0B' },
-      { label: 'Out Of Stock', value: scaleValue(8), color: '#EF4444' },
-    ];
-  }, [activeMetrics]);
+  const salesStatusTotal = salesStatusData.reduce((acc, d) => acc + d.value, 0);
+  let accumulatedPercent = 0;
 
-  // 5. Branch Performance
+  /* ── 3. Bar Chart: Branch Performance (Sales vs Orders) ── */
   const branchPerformanceData = useMemo(() => {
     return [
-      { label: 'Admin Store', value: 150000, color: selectedStoreFilter === 'Admin Store' ? '#10B981' : '#475569' },
-      { label: 'Main Branch', value: 284000, color: selectedStoreFilter === 'Main Branch' ? '#10B981' : '#6366F1' },
-      { label: 'Branch 2', value: 197000, color: selectedStoreFilter === 'Branch 2' ? '#10B981' : '#3B82F6' },
-      { label: 'Branch 3', value: 98500, color: selectedStoreFilter === 'Branch 3' ? '#10B981' : '#F59E0B' },
-    ];
-  }, [selectedStoreFilter]);
-
-  // 6. Store Inventory Distribution
-  const storeInventoryDistributionData = useMemo(() => {
-    return [
-      { name: 'Admin Store', value: 1200, id: 1, color: '#475569' },
-      { name: 'Main Branch', value: 850, id: 2, color: '#6366F1' },
-      { name: 'Branch 2', value: 640, id: 3, color: '#3B82F6' },
-      { name: 'Branch 3', value: 430, id: 4, color: '#F59E0B' },
+      { name: 'Main Branch', sales: 435, orders: 436, color: '#3B82F6' },
+      { name: 'Branch 2', sales: 298, orders: 299, color: '#10B981' },
+      { name: 'Admin Store', sales: 224, orders: 224, color: '#6366F1' },
+      { name: 'Branch 3', sales: 149, orders: 149, color: '#F59E0B' },
     ];
   }, []);
 
-  // 7. Supplier Analytics
-  const supplierAnalyticsData = useMemo(() => {
-    return [
-      { label: 'Vision Supply', value: scaleValue(24), id: 1, color: '#3B82F6' },
-      { label: 'Eyewear Depot', value: scaleValue(18), id: 2, color: '#6366F1' },
-      { label: 'Lens World', value: scaleValue(32), id: 3, color: '#8B5CF6' },
-      { label: 'Zeiss India', value: scaleValue(12), id: 9, color: '#EC4899' },
-      { label: 'OpticEssential', value: scaleValue(22), id: 8, color: '#F59E0B' },
-    ];
-  }, [activeMetrics]);
+  const branchPerformanceMax = Math.max(...branchPerformanceData.map(d => d.sales), 1);
 
-  // 8. Transaction Analytics
-  const transactionAnalyticsData = useMemo(() => {
-    return [
-      { name: 'Transfer', value: scaleValue(145), type: 'Inventory Transfer', color: '#3B82F6' },
-      { name: 'Purchase', value: scaleValue(90), type: 'Purchase', color: '#8B5CF6' },
-      { name: 'Sale', value: scaleValue(220), type: 'Sale', color: '#10B981' },
-      { name: 'Return', value: scaleValue(45), type: 'Return', color: '#F59E0B' },
-      { name: 'Damage', value: scaleValue(12), type: 'Damage', color: '#EF4444' },
+  /* ── 4. Ranked List: Best Performing Stores ── */
+  const bestPerformingStores = useMemo(() => {
+    const performance = [
+      { rank: 1, name: 'Main Branch', revenue: 435750, orders: 436, growth: 12.5 },
+      { rank: 2, name: 'Branch 2', revenue: 298800, orders: 299, growth: 8.2 },
+      { rank: 3, name: 'Admin Store', revenue: 224100, orders: 224, growth: 5.4 },
+      { rank: 4, name: 'Branch 3', revenue: 149400, orders: 149, growth: -2.1 }
     ];
-  }, [activeMetrics]);
+    return performance.sort((a, b) => b.revenue - a.revenue);
+  }, []);
 
-  // 9. Brand Performance
-  const brandPerformanceData = useMemo(() => {
+  /* ── 5. Bar Chart: Inventory Status ── */
+  const inventoryStatusData = useMemo(() => {
     return [
-      { label: 'Ray-Ban', value: scaleValue(120), color: '#3B82F6' },
-      { label: 'Oakley', value: scaleValue(85), color: '#6366F1' },
-      { label: 'Crizal', value: scaleValue(70), color: '#10B981' },
-      { label: 'Hoya', value: scaleValue(65), color: '#F59E0B' },
-      { label: 'Essilor', value: scaleValue(50), color: '#8B5CF6' },
+      { label: 'In Stock', value: Math.round(480 * mult), color: '#10B981' },
+      { label: 'Low Stock', value: activeMetrics.lowStock, color: '#F59E0B' },
+      { label: 'Out Of Stock', value: Math.round(15 * mult), color: '#EF4444' },
     ];
-  }, [activeMetrics]);
+  }, [mult, activeMetrics]);
+
+  const inventoryStatusMax = Math.max(...inventoryStatusData.map(d => d.value), 1);
+
+  /* ── 6. Donut Chart: Store-wise Inventory Distribution ── */
+  const storeInventoryDistribution = useMemo(() => {
+    return [
+      { name: 'Main Branch', value: 1450, color: '#3B82F6' },
+      { name: 'Branch 2', value: 1100, color: '#10B981' },
+      { name: 'Admin Store', value: 820, color: '#6366F1' },
+      { name: 'Branch 3', value: 550, color: '#F59E0B' },
+    ];
+  }, []);
+
+  const storeInventoryDistributionTotal = storeInventoryDistribution.reduce((acc, d) => acc + d.value, 0);
+  let accumInventoryPercent = 0;
+
+  /* ── 7. RECENT DATA MATRICES ── */
+  const recentSalesData = useMemo(() => {
+    let sales = SALES_MOCK_DATA;
+    if (selectedStoreFilter !== 'All') {
+      sales = sales.filter(s => s.branchName === selectedStoreFilter);
+    }
+    return [...sales].sort((a, b) => new Date(b.orderDate) - new Date(a.orderDate)).slice(0, 5);
+  }, [selectedStoreFilter]);
+
+  const recentTransactions = useMemo(() => {
+    let transactions = SALES_MOCK_DATA.filter(s => s.paidAmount > 0);
+    if (selectedStoreFilter !== 'All') {
+      transactions = transactions.filter(s => s.branchName === selectedStoreFilter);
+    }
+    return [...transactions].sort((a, b) => new Date(b.orderDate) - new Date(a.orderDate)).slice(0, 5);
+  }, [selectedStoreFilter]);
+
+  const recentCustomers = useMemo(() => {
+    return MOCK_CUSTOMERS.slice(0, 5);
+  }, []);
+
+  const getStatusColor = (status) => {
+    const normalized = (status || '').toLowerCase();
+    switch (normalized) {
+      case 'completed':
+      case 'delivered':
+        return 'text-emerald-700 bg-emerald-50/70 border-emerald-200/50';
+      case 'lab pending':
+      case 'processing':
+      case 'repair':
+      case 'exchange':
+        return 'text-blue-700 bg-blue-50/70 border-blue-200/50';
+      case 'pending':
+        return 'text-amber-700 bg-amber-50/70 border-amber-200/50';
+      case 'cancelled':
+        return 'text-red-700 bg-red-50/70 border-red-200/50';
+      default:
+        return 'text-slate-700 bg-slate-50 border-slate-200/55';
+    }
+  };
+
+  const fmtCurrency = (val) => {
+    return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(val);
+  };
+
+  const fmtDate = (d) => d
+    ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+    : '—';
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto animate-fade-in font-sans overflow-x-hidden">
-      
-      {/* Top Header Panel */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 sm:mb-8 flex-shrink-0">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-            Dashboard Overview
+    <div className="p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto animate-fade-in font-sans overflow-x-hidden space-y-6 sm:space-y-8 bg-transparent">
+
+      {/* SECTION 1 - Welcome Header (Stripe/Notion Clean aesthetic) */}
+      <div className="bg-white rounded-3xl p-6 sm:p-8 text-slate-800 shadow-sm border border-slate-200/60 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-1.5 text-slate-400 font-extrabold text-[10px] uppercase tracking-widest">
+            <Calendar className="w-3.5 h-3.5 text-slate-400" />
+            <span>{currentDateString}</span>
+          </div>
+          <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+            Welcome back, Admin!
           </h1>
-          <p className="text-slate-500 text-sm mt-1">
-            Real-time analytics, sales KPIs, store comparisons, and stock levels.
+          <p className="text-slate-500 text-xs sm:text-sm font-semibold max-w-xl">
+            You are logged into the central Optical Store ERP. View live branch analytics and manage cross-store activity.
           </p>
         </div>
 
-        {/* Global Store Selector, Add Store Button */}
-        <div className="flex items-center gap-3 w-full md:w-auto flex-wrap sm:flex-nowrap">
-          
-          {/* Dropdown Branch Filter */}
-          <div className="relative w-full sm:w-56">
-            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
-              <Store className="w-4 h-4" />
-            </span>
-            <select
-              value={selectedStoreFilter}
-              onChange={(e) => setSelectedStoreFilter(e.target.value)}
-              className="w-full pl-9 pr-9 py-2.5 text-sm font-semibold border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 bg-white appearance-none cursor-pointer"
-            >
-              <option value="All">All Stores</option>
-              <option value="Main Branch">Main Branch</option>
-              <option value="Branch 2">Branch 2</option>
-              <option value="Branch 3">Branch 3</option>
-              <option value="Admin Store">Admin Store</option>
-            </select>
-            <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-          </div>
-
-          {/* Add Store Button */}
-          <button
-            onClick={() => setShowAddStore(true)}
-            className="flex items-center justify-center gap-2 px-5 py-2.5 bg-[#0A0F1F] text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 flex-shrink-0 w-full sm:w-auto"
-          >
-            <Plus className="w-4 h-4" />
-            Add Store
-          </button>
-        </div>
-      </div>
-
-      {/* Reintroduced 4 Small KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
-        {[
-          { title: 'Total Revenue', value: activeMetrics.revenue, icon: DollarSign, color: 'text-emerald-600 bg-emerald-50', border: 'border-emerald-100', chartId: 'sales-trend' },
-          { title: 'Active Staff', value: activeMetrics.staff, icon: Users, color: 'text-blue-600 bg-blue-50', border: 'border-blue-100', chartId: 'branch-performance' },
-          { title: 'Total Orders', value: activeMetrics.orders.toLocaleString(), icon: ShoppingBag, color: 'text-purple-600 bg-purple-50', border: 'border-purple-100', chartId: 'sales-status' },
-          { title: 'Low Stock Alert', value: activeMetrics.lowStock, icon: AlertTriangle, color: 'text-amber-600 bg-amber-50', border: 'border-amber-100', chartId: 'inventory-status' },
-        ].map((stat, i) => (
-          <button
-            key={i}
-            onClick={() => scrollToChart(stat.chartId)}
-            className="w-full text-left bg-white p-4 sm:p-5 rounded-2xl shadow-sm border border-slate-100 flex items-center transition-all hover:shadow-md hover:-translate-y-0.5 active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
-          >
-            <div className={`p-3 sm:p-4 rounded-xl ${stat.color} mr-4 flex-shrink-0 border ${stat.border}`}>
-              <stat.icon className="w-5 h-5 sm:w-6 sm:h-6" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-xs sm:text-sm font-semibold text-slate-400 mb-0.5 truncate uppercase tracking-wider">{stat.title}</p>
-              <h3 className="text-xl sm:text-2xl font-black text-slate-800">{stat.value}</h3>
-            </div>
-          </button>
-        ))}
-      </div>
-
-      {/* Analytics Content Area */}
-      {isLoading ? (
-        <div className="min-h-[40vh] flex flex-col items-center justify-center p-20 bg-white rounded-3xl border border-slate-100 shadow-sm">
-          <RefreshCw className="w-10 h-10 animate-spin text-emerald-500 mb-3" />
-          <p className="text-slate-500 text-sm font-semibold">Updating chart comparisons...</p>
-        </div>
-      ) : isEmpty ? (
-        <div className="min-h-[40vh] flex flex-col items-center justify-center text-center p-12 bg-white rounded-3xl border border-dashed border-slate-200 shadow-sm max-w-xl mx-auto">
-          <div className="w-16 h-16 bg-slate-50 border border-slate-100 rounded-full flex items-center justify-center mb-4">
-            <Activity className="w-7 h-7 text-slate-300" />
-          </div>
-          <h3 className="text-base font-bold text-slate-900 mb-1">Analytical database is empty</h3>
-          <p className="text-slate-500 text-sm mb-6">No inventory changes were registered for the active selection.</p>
-          <button
-            onClick={() => setIsEmpty(false)}
-            className="px-5 py-2.5 bg-slate-950 text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition-all shadow-md"
-          >
-            Load Simulated Database Records
-          </button>
-        </div>
-      ) : (
-        <div className="space-y-6">
-          
-          {/* Row 1: Sales Trend (Full Width - Highest Importance) */}
-          <div className="w-full">
-            <ChartCard
-              id="sales-trend"
-              isHighlighted={highlightedChart === 'sales-trend'}
-              title="Sales Trend (Line Chart)"
-              onRefresh={handleRefresh}
-              actions={
-                <div className="flex gap-1 bg-slate-100 p-0.5 rounded-lg">
-                  {['Today', 'Week', 'Month', 'Year'].map(filter => (
-                    <button
-                      key={filter}
-                      onClick={() => setTrendFilter(filter)}
-                      className={`px-2.5 py-1 rounded-md text-[10px] font-bold transition-all ${
-                        trendFilter === filter
-                          ? 'bg-white text-slate-900 shadow-sm'
-                          : 'text-slate-400 hover:text-slate-600'
-                      }`}
-                    >
-                      {filter}
-                    </button>
-                  ))}
-                </div>
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 w-full lg:w-auto">
+          {/* Store switcher */}
+          <StoreSwitcher
+            selectedStoreFilter={selectedStoreFilter}
+            onStoreChange={(val) => {
+              setSelectedStoreFilter(val);
+              const matchedStore = stores.find(s => (s.store_name || s.name) === val);
+              if (matchedStore) {
+                setSelectedStore(matchedStore);
+              } else if (val === 'All') {
+                setSelectedStore(null);
               }
+            }}
+          />
+
+          {/* Quick Actions Group */}
+          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+            <button
+              onClick={() => setShowAddStore(true)}
+              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3.5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all shadow-sm active:scale-95 whitespace-nowrap cursor-pointer"
             >
-              <LineChart
-                data={salesTrendData}
-                onPointClick={() => navigate('/admin/sales')}
-              />
-            </ChartCard>
+              <Plus className="w-3.5 h-3.5" /> Store
+            </button>
+            <button
+              onClick={() => navigate(`/admin/store/${activeStoreId}/staff`)}
+              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3.5 py-2.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition-all shadow-sm active:scale-95 whitespace-nowrap cursor-pointer"
+            >
+              <Users className="w-3.5 h-3.5 text-slate-400" /> Staff
+            </button>
+            <button
+              onClick={() => navigate(`/admin/store/${activeStoreId}/inventory`)}
+              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3.5 py-2.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition-all shadow-sm active:scale-95 whitespace-nowrap cursor-pointer"
+            >
+              <Package className="w-3.5 h-3.5 text-slate-400" /> Product
+            </button>
+            <button
+              onClick={() => navigate(`/admin/store/${activeStoreId}/suppliers`)}
+              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3.5 py-2.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition-all shadow-sm active:scale-95 whitespace-nowrap cursor-pointer"
+            >
+              <Truck className="w-3.5 h-3.5 text-slate-400" /> Supplier
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* SECTION 2 - KPI Cards */}
+      <div className="space-y-6">
+        {/* Row 1 */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          {[
+            { title: 'Total Revenue', value: fmtCurrency(activeMetrics.revenue), icon: DollarSign, trend: '+14.2% MoM', trendColor: 'text-emerald-600 bg-emerald-50 border-emerald-100' },
+            { title: "Today's Revenue", value: fmtCurrency(activeMetrics.todayRevenue), icon: IndianRupee, trend: '+8.1% vs yesterday', trendColor: 'text-emerald-600 bg-emerald-50 border-emerald-100' },
+            { title: 'Total Orders', value: activeMetrics.orders.toLocaleString(), icon: ShoppingBag, trend: '+12.5% MoM', trendColor: 'text-emerald-600 bg-emerald-50 border-emerald-100' },
+            { title: 'Pending Orders', value: activeMetrics.pendingOrders.toLocaleString(), icon: Clock, trend: 'Requires attention', trendColor: 'text-amber-600 bg-amber-50 border-amber-100' }
+          ].map((stat, i) => (
+            <div
+              key={i}
+              className="bg-white p-6 rounded-2xl border border-slate-200/60 shadow-sm hover:shadow-md transition-all duration-300 flex flex-col justify-between h-40"
+            >
+              <div className="flex justify-between items-start">
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{stat.title}</p>
+                <stat.icon className="w-4.5 h-4.5 text-slate-400" />
+              </div>
+              <div className="space-y-2 mt-2">
+                <h3 className="text-2xl sm:text-3xl font-black text-slate-800 tracking-tight leading-none">{stat.value}</h3>
+                <span className={`inline-block text-[10px] font-extrabold px-2 py-0.5 rounded border ${stat.trendColor}`}>
+                  {stat.trend}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Row 2 */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          {[
+            { title: 'Total Customers', value: activeMetrics.customers.toLocaleString(), icon: Users, trend: '+24 new today', trendColor: 'text-emerald-600 bg-emerald-50 border-emerald-100' },
+            { title: 'Active Staff', value: activeMetrics.staff.toLocaleString(), icon: Briefcase, trend: '5 active branches', trendColor: 'text-slate-600 bg-slate-50 border-slate-250/50' },
+            { title: 'Inventory Value', value: fmtCurrency(activeMetrics.inventoryVal), icon: Package, trend: '85% stock level', trendColor: 'text-slate-600 bg-slate-50 border-slate-250/50' },
+            { title: 'Outstanding Payments', value: fmtCurrency(activeMetrics.outstanding), icon: AlertTriangle, trend: 'Action required', trendColor: 'text-rose-600 bg-rose-50 border-rose-100' }
+          ].map((stat, i) => (
+            <div
+              key={i}
+              className="bg-white p-6 rounded-2xl border border-slate-200/60 shadow-sm hover:shadow-md transition-all duration-300 flex flex-col justify-between h-40"
+            >
+              <div className="flex justify-between items-start">
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{stat.title}</p>
+                <stat.icon className="w-4.5 h-4.5 text-slate-400" />
+              </div>
+              <div className="space-y-2 mt-2">
+                <h3 className="text-2xl sm:text-3xl font-black text-slate-800 tracking-tight leading-none">{stat.value}</h3>
+                <span className={`inline-block text-[10px] font-extrabold px-2 py-0.5 rounded border ${stat.trendColor}`}>
+                  {stat.trend}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* SECTION 3 - Revenue Analytics (Sales Trend & Status charts) */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Sales Trend Chart (Visually Dominant) */}
+        <div className="lg:col-span-2">
+          <DashboardCard
+            title="Sales Performance Trend"
+            subtitle="Annualized gross revenue growth trends charted across 12 calendar months."
+            actions={
+              <button
+                onClick={() => navigate('/admin/analyses')}
+                className="text-[11px] font-extrabold text-slate-700 hover:text-slate-900 bg-white hover:bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200 transition-colors flex items-center gap-1 cursor-pointer shadow-sm"
+              >
+                Detailed Analytics <ArrowUpRight className="w-3 h-3 text-slate-400" />
+              </button>
+            }
+          >
+            <div className="w-full h-72 sm:h-80 pt-4 px-2">
+              <svg viewBox="0 0 300 160" className="w-full h-full">
+                <defs>
+                  <linearGradient id="trendGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#10B981" stopOpacity="0.08" />
+                    <stop offset="100%" stopColor="#10B981" stopOpacity="0.0" />
+                  </linearGradient>
+                </defs>
+                <line x1="40" y1="30" x2="290" y2="30" stroke="#F1F5F9" strokeWidth="1" strokeDasharray="3 3" />
+                <line x1="40" y1="65" x2="290" y2="65" stroke="#F1F5F9" strokeWidth="1" strokeDasharray="3 3" />
+                <line x1="40" y1="100" x2="290" y2="100" stroke="#F1F5F9" strokeWidth="1" strokeDasharray="3 3" />
+                <line x1="40" y1="135" x2="290" y2="135" stroke="#E2E8F0" strokeWidth="1.25" />
+
+                {salesTrendAreaPath && <path d={salesTrendAreaPath} fill="url(#trendGrad)" />}
+                {salesTrendPoints && <path d={`M 40,135 L ${salesTrendPoints}`} fill="none" stroke="#10B981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />}
+
+                {salesTrendData.map((d, i) => {
+                  const x = 40 + i * (250 / 11);
+                  const y = 135 - (d.value / salesTrendMax) * 105;
+                  return (
+                    <g key={i} className="group cursor-pointer">
+                      <circle cx={x} cy={y} r="2.5" fill="#FFFFFF" stroke="#10B981" strokeWidth="1.5" className="transition-all duration-200 group-hover:r-4 group-hover:stroke-emerald-600" />
+                      <text x={x} y={y - 8} textAnchor="middle" className="text-[7.5px] font-extrabold fill-slate-800 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                        ₹{(d.value / 1000).toFixed(0)}k
+                      </text>
+                      <text x={x} y="146" textAnchor="middle" className="text-[8px] font-bold fill-slate-400 pointer-events-none">{d.label}</text>
+                      <title>{`${d.label}: ₹${d.value.toLocaleString()}`}</title>
+                    </g>
+                  );
+                })}
+              </svg>
+            </div>
+          </DashboardCard>
+        </div>
+
+        {/* Sales Status Chart */}
+        <div className="lg:col-span-1">
+          <DashboardCard
+            title="Sales Status Breakdown"
+            subtitle="Categorization of order statuses logged during the operational period."
+          >
+            <div className="relative w-full h-72 flex flex-col items-center justify-center gap-6 pt-2">
+              <div className="relative w-36 h-36 flex-shrink-0">
+                <svg viewBox="0 0 140 140" className="w-full h-full transform -rotate-90">
+                  <circle cx="70" cy="70" r="50" fill="transparent" stroke="#F8FAFC" strokeWidth="12" />
+                  {salesStatusData.map((d, i) => {
+                    const percentage = salesStatusTotal > 0 ? (d.value / salesStatusTotal) * 100 : 0;
+                    const strokeLength = (percentage / 100) * 314.16;
+                    const strokeOffset = 314.16 - strokeLength + accumulatedPercent;
+                    accumulatedPercent -= strokeLength;
+                    return (
+                      <circle
+                        key={i}
+                        cx="70"
+                        cy="70"
+                        r="50"
+                        fill="transparent"
+                        stroke={d.color}
+                        strokeWidth="12"
+                        strokeDasharray={`${strokeLength} 314.16`}
+                        strokeDashoffset={strokeOffset}
+                        className="transition-all duration-200 cursor-pointer hover:stroke-[14px]"
+                        style={{ transformOrigin: 'center' }}
+                      >
+                        <title>{`${d.name}: ${d.value} (${Math.round(percentage)}%)`}</title>
+                      </circle>
+                    );
+                  })}
+                </svg>
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                  <span className="text-[9px] text-slate-400 font-extrabold uppercase tracking-wider">Orders</span>
+                  <span className="text-xl font-black text-slate-800 leading-none mt-0.5">{salesStatusTotal}</span>
+                </div>
+              </div>
+
+              <div className="w-full grid grid-cols-2 gap-2 text-xs">
+                {salesStatusData.map((d, i) => (
+                  <div key={i} className="flex items-center gap-1.5 min-w-0 bg-slate-50/50 p-2 rounded-xl border border-slate-100">
+                    <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: d.color }} />
+                    <span className="font-bold text-slate-500 truncate text-[10px]">{d.name}</span>
+                    <span className="font-black text-slate-800 text-[10px] ml-auto">{d.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </DashboardCard>
+        </div>
+      </div>
+
+      {/* SECTION 4 - Store Performance (Left: Branch Performance, Right: Best Performing Stores) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Branch Performance Comparison */}
+        <DashboardCard
+          title="Branch Order Comparisons"
+          subtitle="Relative comparison of total processed orders across registered branches."
+        >
+          <div className="w-full h-64 px-2 pt-2">
+            <svg viewBox="0 0 300 160" className="w-full h-full">
+              <line x1="40" y1="20" x2="290" y2="20" stroke="#F8FAFC" strokeWidth="1" strokeDasharray="3 3" />
+              <line x1="40" y1="60" x2="290" y2="60" stroke="#F8FAFC" strokeWidth="1" strokeDasharray="3 3" />
+              <line x1="40" y1="100" x2="290" y2="100" stroke="#F8FAFC" strokeWidth="1" strokeDasharray="3 3" />
+              <line x1="40" y1="130" x2="290" y2="130" stroke="#E2E8F0" strokeWidth="1.25" />
+
+              {branchPerformanceData.map((d, i) => {
+                const barWidth = 16;
+                const spacing = (250 - (branchPerformanceData.length * barWidth)) / (branchPerformanceData.length + 1);
+                const x = 40 + spacing + i * (barWidth + spacing);
+                const height = (d.orders / branchPerformanceMax) * 105;
+                const y = 130 - height;
+
+                return (
+                  <g key={i} className="group cursor-pointer">
+                    <rect
+                      x={x}
+                      y={y}
+                      width={barWidth}
+                      height={height}
+                      rx="3"
+                      fill={d.color}
+                      className="opacity-90 hover:opacity-100 transition-all duration-350"
+                    />
+                    <text x={x + barWidth / 2} y={y - 6} textAnchor="middle" className="text-[7.5px] font-extrabold fill-slate-800 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                      {d.orders}
+                    </text>
+                    <text x={x + barWidth / 2} y="144" textAnchor="middle" className="text-[8px] font-extrabold fill-slate-400 pointer-events-none">
+                      {d.name.split(' ')[0]}
+                    </text>
+                    <title>{`${d.name}: ${d.orders} Orders`}</title>
+                  </g>
+                );
+              })}
+            </svg>
+          </div>
+        </DashboardCard>
+
+        {/* Best Performing Stores leaderboard */}
+        <div className="bg-white rounded-3xl border border-slate-200/60 p-6 sm:p-8 flex flex-col hover:shadow-md transition-all duration-300 h-full">
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 mb-6 flex-shrink-0">
+            <div>
+              <h3 className="text-sm font-bold text-slate-800 tracking-tight">Best Performing Stores</h3>
+              <p className="text-xs text-slate-400 font-medium mt-0.5">Ranked list of branches by revenue performance and order volumes.</p>
+            </div>
+            <span className="text-[10px] font-black text-slate-500 bg-slate-100 px-2 py-1 rounded-lg self-start">Ranked</span>
+          </div>
+          <div className="flex-1 space-y-3.5 overflow-y-auto pr-1 hide-scrollbar">
+            {bestPerformingStores.map((store, idx) => {
+              const rank = idx + 1;
+              const isPositive = store.growth >= 0;
+              return (
+                <div key={store.name} className="flex items-center justify-between gap-3 p-3 hover:bg-slate-50 rounded-2xl border border-transparent hover:border-slate-100/50 transition-all">
+                  <div className="flex items-center gap-3.5 min-w-0">
+                    <span className={`w-6 h-6 rounded-lg flex items-center justify-center font-extrabold text-[11px] flex-shrink-0 ${
+                      rank === 1 ? 'bg-amber-50 text-amber-700 border border-amber-100' :
+                      rank === 2 ? 'bg-slate-50 text-slate-700 border border-slate-200/50' :
+                      rank === 3 ? 'bg-orange-50 text-orange-700 border border-orange-100' :
+                      'bg-slate-50 text-slate-500'
+                    }`}>
+                      {rank}
+                    </span>
+                    <span className="text-sm font-bold text-slate-800 truncate">{store.name}</span>
+                  </div>
+                  <div className="flex items-center gap-5 text-right flex-shrink-0">
+                    <div>
+                      <p className="text-sm font-black text-slate-900 leading-none">{fmtCurrency(store.revenue)}</p>
+                      <p className="text-[10px] font-semibold text-slate-400 mt-0.5">{store.orders} Orders</p>
+                    </div>
+                    <span className={`text-xs font-extrabold px-2 py-0.5 rounded-lg border ${isPositive ? 'text-emerald-700 bg-emerald-50 border-emerald-100' : 'text-red-700 bg-red-50 border-red-100'}`}>
+                      {isPositive ? '+' : ''}{store.growth}%
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* SECTION 5 - Inventory Insights (Left: Inventory Status, Right: Store-wise Inventory Distribution) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Inventory Status Bar Chart */}
+        <DashboardCard
+          title="Inventory Status Overview"
+          subtitle="Proportion of total stocked items categorized by availability levels."
+        >
+          <div className="w-full h-64 px-2 pt-2">
+            <svg viewBox="0 0 300 160" className="w-full h-full">
+              <line x1="40" y1="20" x2="290" y2="20" stroke="#F8FAFC" strokeWidth="1" strokeDasharray="3 3" />
+              <line x1="40" y1="60" x2="290" y2="60" stroke="#F8FAFC" strokeWidth="1" strokeDasharray="3 3" />
+              <line x1="40" y1="100" x2="290" y2="100" stroke="#F8FAFC" strokeWidth="1" strokeDasharray="3 3" />
+              <line x1="40" y1="130" x2="290" y2="130" stroke="#E2E8F0" strokeWidth="1.25" />
+
+              {inventoryStatusData.map((d, i) => {
+                const barWidth = 20;
+                const spacing = (250 - (inventoryStatusData.length * barWidth)) / (inventoryStatusData.length + 1);
+                const x = 40 + spacing + i * (barWidth + spacing);
+                const height = (d.value / inventoryStatusMax) * 105;
+                const y = 130 - height;
+
+                return (
+                  <g key={i} className="group cursor-pointer">
+                    <rect
+                      x={x}
+                      y={y}
+                      width={barWidth}
+                      height={height}
+                      rx="3"
+                      fill={d.color}
+                      className="opacity-90 hover:opacity-100 transition-all duration-350"
+                    />
+                    <text x={x + barWidth / 2} y={y - 6} textAnchor="middle" className="text-[7.5px] font-extrabold fill-slate-800 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                      {d.value}
+                    </text>
+                    <text x={x + barWidth / 2} y="144" textAnchor="middle" className="text-[8px] font-extrabold fill-slate-400 pointer-events-none">
+                      {d.label}
+                    </text>
+                    <title>{`${d.label}: ${d.value} Products`}</title>
+                  </g>
+                );
+              })}
+            </svg>
+          </div>
+        </DashboardCard>
+
+        {/* Store-wise Inventory Distribution Donut Chart */}
+        <DashboardCard
+          title="Store-wise Inventory Distribution"
+          subtitle="Relative breakdown of active inventory volumes allocated to each branch."
+        >
+          <div className="relative w-full h-64 flex flex-col sm:flex-row items-center justify-around gap-4 px-2">
+            <div className="relative w-36 h-36 flex-shrink-0">
+              <svg viewBox="0 0 140 140" className="w-full h-full transform -rotate-90">
+                <circle cx="70" cy="70" r="50" fill="transparent" stroke="#F8FAFC" strokeWidth="12" />
+                {storeInventoryDistribution.map((d, i) => {
+                  const percentage = storeInventoryDistributionTotal > 0 ? (d.value / storeInventoryDistributionTotal) * 100 : 0;
+                  const strokeLength = (percentage / 100) * 314.16;
+                  const strokeOffset = 314.16 - strokeLength + accumInventoryPercent;
+                  accumInventoryPercent -= strokeLength;
+                  return (
+                    <circle
+                      key={i}
+                      cx="70"
+                      cy="70"
+                      r="50"
+                      fill="transparent"
+                      stroke={d.color}
+                      strokeWidth="12"
+                      strokeDasharray={`${strokeLength} 314.16`}
+                      strokeDashoffset={strokeOffset}
+                      className="transition-all duration-200 cursor-pointer hover:stroke-[14px]"
+                      style={{ transformOrigin: 'center' }}
+                    >
+                      <title>{`${d.name}: ${d.value} (${Math.round(percentage)}%)`}</title>
+                    </circle>
+                  );
+                })}
+              </svg>
+              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                <span className="text-[9px] text-slate-400 font-extrabold uppercase tracking-wider">Items</span>
+                <span className="text-base font-black text-slate-800 leading-none mt-0.5">{storeInventoryDistributionTotal}</span>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-1.5 text-xs text-slate-600 w-full max-w-[170px]">
+              {storeInventoryDistribution.map((d, i) => (
+                <div key={i} className="flex items-center justify-between gap-2 bg-slate-50/50 p-2 rounded-xl border border-slate-100">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: d.color }} />
+                    <span className="font-extrabold truncate text-[10px] text-slate-655">{d.name.split(' ')[0]}</span>
+                  </div>
+                  <span className="font-black text-[10px] text-slate-900 ml-auto">{d.value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </DashboardCard>
+      </div>
+
+      {/* SECTION 6 - Business Insights (Three cards) */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Top Brand Card */}
+        <div className="bg-white rounded-2xl p-6 border border-slate-200/60 shadow-sm flex items-center gap-4 hover:shadow-md transition-all duration-300">
+          <div className="w-12 h-12 rounded-xl bg-slate-50 border border-slate-200/70 flex items-center justify-center text-slate-500 flex-shrink-0">
+            <Award className="w-5.5 h-5.5" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[9px] font-extrabold text-slate-400 uppercase tracking-widest mb-0.5">Top Eyewear Brand</p>
+            <h4 className="text-sm font-bold text-slate-800 truncate">Ray-Ban</h4>
+            <p className="text-xs text-slate-500 font-bold mt-0.5">{fmtCurrency(Math.round(284000 * mult))} · {Math.round(120 * mult)} units sold</p>
+          </div>
+        </div>
+
+        {/* Top Supplier Card */}
+        <div className="bg-white rounded-2xl p-6 border border-slate-200/60 shadow-sm flex items-center gap-4 hover:shadow-md transition-all duration-300">
+          <div className="w-12 h-12 rounded-xl bg-slate-50 border border-slate-200/70 flex items-center justify-center text-slate-500 flex-shrink-0">
+            <Truck className="w-5.5 h-5.5" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[9px] font-extrabold text-slate-400 uppercase tracking-widest mb-0.5">Leading Lens Supplier</p>
+            <h4 className="text-sm font-bold text-slate-800 truncate">Lens World</h4>
+            <p className="text-xs text-slate-500 font-bold mt-0.5">{Math.round(32 * mult)} supplies · 98% rating</p>
+          </div>
+        </div>
+
+        {/* Best Sales Month Card */}
+        <div className="bg-white rounded-2xl p-6 border border-slate-200/60 shadow-sm flex items-center gap-4 hover:shadow-md transition-all duration-300">
+          <div className="w-12 h-12 rounded-xl bg-slate-50 border border-slate-200/70 flex items-center justify-center text-slate-500 flex-shrink-0">
+            <Calendar className="w-5.5 h-5.5" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[9px] font-extrabold text-slate-400 uppercase tracking-widest mb-0.5">Highest Performing Month</p>
+            <h4 className="text-sm font-bold text-slate-800 truncate">May 2026</h4>
+            <p className="text-xs text-slate-500 font-bold mt-0.5">{fmtCurrency(Math.round(210000 * mult))} total sales</p>
+          </div>
+        </div>
+      </div>
+
+      {/* SECTION 7 - Recent Activity (Tabbed panel: Orders, Transactions, Customers) */}
+      <div className="bg-white rounded-3xl border border-slate-200/60 overflow-hidden shadow-sm hover:shadow-md transition-all duration-300">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-6 border-b border-slate-100 gap-4">
+          <div className="flex items-center gap-2">
+            <Clock className="w-4.5 h-4.5 text-emerald-500" />
+            <h2 className="text-sm font-extrabold text-slate-800 uppercase tracking-wider">Recent Operational Activity</h2>
           </div>
 
-          {/* Row 2: Sales Status | Revenue Breakdown */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <ChartCard
-              id="sales-status"
-              isHighlighted={highlightedChart === 'sales-status'}
-              title="Sales Status (Donut Chart)"
-              onRefresh={handleRefresh}
+          <div className="flex bg-slate-100 p-0.5 rounded-xl border border-slate-200/50 w-full sm:w-auto">
+            <button
+              onClick={() => setActivityTab('orders')}
+              className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${activityTab === 'orders' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400 hover:text-slate-700'}`}
             >
-              <DonutChart
-                data={salesStatusData}
-                onSliceClick={(slice) => navigate(`/admin/sales?status=${slice.name}`)}
-              />
-            </ChartCard>
-
-            <ChartCard title="Revenue Breakdown (Donut Chart)" onRefresh={handleRefresh}>
-              <DonutChart
-                data={revenueBreakdownData}
-                onSliceClick={(slice) => navigate(`/admin/store/${activeStoreId}/inventory?category_id=${slice.categoryId}`)}
-              />
-            </ChartCard>
+              Recent Orders
+            </button>
+            <button
+              onClick={() => setActivityTab('transactions')}
+              className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${activityTab === 'transactions' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400 hover:text-slate-700'}`}
+            >
+              Transactions
+            </button>
+            <button
+              onClick={() => setActivityTab('customers')}
+              className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${activityTab === 'customers' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400 hover:text-slate-700'}`}
+            >
+              New Customers
+            </button>
           </div>
+        </div>
 
-          {/* Row 3: Inventory Status | Branch Performance (Highlights Comparison) */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <ChartCard
-              id="inventory-status"
-              isHighlighted={highlightedChart === 'inventory-status'}
-              title="Inventory Status (Bar Chart)"
-              onRefresh={handleRefresh}
-            >
-              <BarChart
-                data={inventoryStatusData}
-                onBarClick={(bar) => navigate(`/admin/store/${activeStoreId}/inventory?stock_status=${bar.label}`)}
-              />
-            </ChartCard>
-
-            <ChartCard
-              id="branch-performance"
-              isHighlighted={highlightedChart === 'branch-performance'}
-              title="Branch Performance (Bar Chart)"
-              onRefresh={handleRefresh}
-            >
-              <BarChart
-                data={branchPerformanceData}
-                onBarClick={(bar) => navigate(`/admin/sales?branch=${bar.label}`)}
-              />
-            </ChartCard>
-          </div>
-
-          {/* Row 4 & 5: Conditional Supplier Analytics Grid */}
-          {showSupplier ? (
-            <>
-              {/* Row 4: Store Inventory Distribution | Supplier Analytics */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <ChartCard title="Store-wise Inventory Distribution (Donut Chart)" onRefresh={handleRefresh}>
-                  <DonutChart
-                    data={storeInventoryDistributionData}
-                    onSliceClick={(slice) => navigate(`/admin/store/${slice.id}/inventory`)}
-                  />
-                </ChartCard>
-
-                <ChartCard title="Supplier Analytics (Bar Chart)" onRefresh={handleRefresh}>
-                  <BarChart
-                    data={supplierAnalyticsData}
-                    onBarClick={(bar) => navigate(`/admin/suppliers/${bar.id}`)}
-                  />
-                </ChartCard>
-              </div>
-
-              {/* Row 5: Transaction Analytics | Brand Performance */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <ChartCard title="Transaction Analytics (Donut Chart)" onRefresh={handleRefresh}>
-                  <DonutChart
-                    data={transactionAnalyticsData}
-                    onSliceClick={(slice) => navigate(`/admin/transactions?type=${slice.type}`)}
-                  />
-                </ChartCard>
-
-                <ChartCard title="Brand Performance (Bar Chart)" onRefresh={handleRefresh}>
-                  <BarChart
-                    data={brandPerformanceData}
-                    onBarClick={() => navigate(`/admin/store/${activeStoreId}/inventory`)}
-                  />
-                </ChartCard>
-              </div>
-            </>
-          ) : (
-            <>
-              {/* Row 4: Store Inventory Distribution | Transaction Analytics */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <ChartCard title="Store-wise Inventory Distribution (Donut Chart)" onRefresh={handleRefresh}>
-                  <DonutChart
-                    data={storeInventoryDistributionData}
-                    onSliceClick={(slice) => navigate(`/admin/store/${slice.id}/inventory`)}
-                  />
-                </ChartCard>
-
-                <ChartCard title="Transaction Analytics (Donut Chart)" onRefresh={handleRefresh}>
-                  <DonutChart
-                    data={transactionAnalyticsData}
-                    onSliceClick={(slice) => navigate(`/admin/transactions?type=${slice.type}`)}
-                  />
-                </ChartCard>
-              </div>
-
-              {/* Row 5: Brand Performance (Full Width) */}
-              <div className="w-full">
-                <ChartCard title="Brand Performance (Bar Chart)" onRefresh={handleRefresh}>
-                  <BarChart
-                    data={brandPerformanceData}
-                    onBarClick={() => navigate(`/admin/store/${activeStoreId}/inventory`)}
-                  />
-                </ChartCard>
-              </div>
-            </>
+        <div className="overflow-x-auto w-full">
+          {/* TAB 1: Recent Orders */}
+          {activityTab === 'orders' && (
+            <table className="w-full">
+              <thead>
+                <tr className="bg-slate-50/50 border-b border-slate-100 text-left text-slate-500 text-[10px] font-extrabold uppercase tracking-widest">
+                  <th className="px-6 py-4">Order ID</th>
+                  <th className="px-6 py-4">Customer</th>
+                  <th className="px-6 py-4">Product</th>
+                  <th className="px-6 py-4">Branch</th>
+                  <th className="px-6 py-4">Amount</th>
+                  <th className="px-6 py-4">Status</th>
+                  <th className="px-6 py-4">Date</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-xs text-slate-600">
+                {recentSalesData.length === 0 ? (
+                  <tr>
+                    <td colSpan="7" className="text-center py-8 text-xs text-slate-400 italic">No orders found.</td>
+                  </tr>
+                ) : (
+                  recentSalesData.map((sale) => (
+                    <tr key={sale.id} className="hover:bg-slate-50/40 transition-colors">
+                      <td className="px-6 py-4.5 text-xs font-mono font-bold text-slate-800">{sale.orderId}</td>
+                      <td className="px-6 py-4.5 font-bold text-slate-700">{sale.customerName}</td>
+                      <td className="px-6 py-4.5 text-slate-500 max-w-[200px] truncate">{sale.productName}</td>
+                      <td className="px-6 py-4.5 text-slate-600 font-semibold">{sale.branchName}</td>
+                      <td className="px-6 py-4.5 font-black text-slate-900">{fmtCurrency(sale.totalAmount)}</td>
+                      <td className="px-6 py-4.5">
+                        <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-[10px] font-bold border ${getStatusColor(sale.status)}`}>
+                          {sale.status}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4.5 text-xs text-slate-400 font-bold">{fmtDate(sale.orderDate)}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
           )}
 
-        </div>
-      )}
+          {/* TAB 2: Recent Transactions */}
+          {activityTab === 'transactions' && (
+            <table className="w-full">
+              <thead>
+                <tr className="bg-slate-50/50 border-b border-slate-100 text-left text-slate-500 text-[10px] font-extrabold uppercase tracking-widest">
+                  <th className="px-6 py-4">Transaction ID</th>
+                  <th className="px-6 py-4">Customer</th>
+                  <th className="px-6 py-4">Branch</th>
+                  <th className="px-6 py-4">Method</th>
+                  <th className="px-6 py-4">Paid Amount</th>
+                  <th className="px-6 py-4">Status</th>
+                  <th className="px-6 py-4">Payment Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-xs text-slate-600">
+                {recentTransactions.length === 0 ? (
+                  <tr>
+                    <td colSpan="7" className="text-center py-8 text-xs text-slate-400 italic">No transactions found.</td>
+                  </tr>
+                ) : (
+                  recentTransactions.map((sale) => (
+                    <tr key={sale.id} className="hover:bg-slate-50/40 transition-colors">
+                      <td className="px-6 py-4.5 text-xs font-mono font-bold text-slate-800">TXN-{(sale.id * 893)}</td>
+                      <td className="px-6 py-4.5 font-bold text-slate-700">{sale.customerName}</td>
+                      <td className="px-6 py-4.5 text-slate-600 font-semibold">{sale.branchName}</td>
+                      <td className="px-6 py-4.5"><span className="bg-slate-50 text-slate-500 font-bold px-2 py-0.5 rounded border border-slate-200/50 text-[10px]">{sale.paymentMethod}</span></td>
+                      <td className="px-6 py-4.5 font-black text-emerald-600">{fmtCurrency(sale.paidAmount)}</td>
+                      <td className="px-6 py-4.5 text-xs text-slate-400 font-bold">{fmtDate(sale.orderDate)}</td>
+                      <td className="px-6 py-4.5">
+                        <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-[10px] font-bold border ${
+                          sale.paymentStatus === 'Paid' ? 'text-emerald-700 bg-emerald-50/50 border-emerald-200' : 'text-amber-700 bg-amber-50/50 border-amber-200'
+                        }`}>
+                          {sale.paymentStatus}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          )}
 
-      {/* Reinstated Store Add Modal */}
+          {/* TAB 3: Recent Customers */}
+          {activityTab === 'customers' && (
+            <table className="w-full">
+              <thead>
+                <tr className="bg-slate-50/50 border-b border-slate-100 text-left text-slate-500 text-[10px] font-extrabold uppercase tracking-widest">
+                  <th className="px-6 py-4">ID</th>
+                  <th className="px-6 py-4">Name</th>
+                  <th className="px-6 py-4">Contact</th>
+                  <th className="px-6 py-4">City</th>
+                  <th className="px-6 py-4">Status</th>
+                  <th className="px-6 py-4">Prescription Lens</th>
+                  <th className="px-6 py-4">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-xs text-slate-600">
+                {recentCustomers.length === 0 ? (
+                  <tr>
+                    <td colSpan="7" className="text-center py-8 text-xs text-slate-400 italic">No customers found.</td>
+                  </tr>
+                ) : (
+                  recentCustomers.map((cust) => (
+                    <tr key={cust.id} className="hover:bg-slate-50/40 transition-colors">
+                      <td className="px-6 py-4.5 text-xs font-mono font-bold text-slate-400">#CUST-0{cust.id}</td>
+                      <td className="px-6 py-4.5 font-bold text-slate-700">{cust.firstName} {cust.lastName}</td>
+                      <td className="px-6 py-4.5 font-mono text-slate-500 text-xs">{cust.phone}</td>
+                      <td className="px-6 py-4.5 text-slate-500 font-semibold">{cust.city}</td>
+                      <td className="px-6 py-4.5">
+                        <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-[10px] font-bold border ${
+                          cust.status === 'VIP' ? 'text-purple-700 bg-purple-50/50 border-purple-200' : 'text-emerald-700 bg-emerald-50/50 border-emerald-200'
+                        }`}>
+                          {cust.status}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4.5 text-xs font-bold text-slate-655">{cust.prescription.lensType} ({cust.prescription.framePreference})</td>
+                      <td className="px-6 py-4.5">
+                        <button
+                          onClick={() => navigate(`/admin/stores`)}
+                          className="text-[10px] font-black text-blue-600 hover:text-blue-800 transition-colors cursor-pointer"
+                        >
+                          View CRM
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+
+      {/* Store Add Modal */}
       <AddStoreModal
         isOpen={showAddStore}
         onClose={() => setShowAddStore(false)}

@@ -5,12 +5,20 @@ import Sidebar from '../components/admin/Sidebar';
 
 function AdminLayout() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  
   const handleCloseSidebar = useCallback(() => setIsSidebarOpen(false), []);
+  const handleToggleCollapse = useCallback(() => setIsSidebarCollapsed(prev => !prev), []);
 
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50">
       {/* Sidebar Component */}
-      <Sidebar isOpen={isSidebarOpen} onClose={handleCloseSidebar} />
+      <Sidebar
+        isOpen={isSidebarOpen}
+        onClose={handleCloseSidebar}
+        isCollapsed={isSidebarCollapsed}
+        onToggleCollapse={handleToggleCollapse}
+      />
       
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0">

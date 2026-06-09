@@ -1,10 +1,50 @@
-import { useEffect } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { LayoutDashboard, LogOut, Glasses, X, Users, Store, Package, ShoppingCart, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useAuthStore } from '../../store/store';
 
 const ShopkeeperSidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) => {
+  const [width, setWidth] = useState(() => {
+    const saved = localStorage.getItem('shopkeeper-sidebar-width');
+    return saved ? parseInt(saved, 10) : 280; // default 280px
+  });
+  const [isResizing, setIsResizing] = useState(false);
+
+  const startResizing = useCallback((e) => {
+    e.preventDefault();
+    setIsResizing(true);
+  }, []);
+
+  const stopResizing = useCallback(() => {
+    setIsResizing(false);
+  }, []);
+
+  const resize = useCallback((e) => {
+    if (isResizing) {
+      const clientX = e.clientX || (e.touches && e.touches[0]?.clientX);
+      if (clientX) {
+        const newWidth = Math.max(200, Math.min(450, clientX));
+        setWidth(newWidth);
+        localStorage.setItem('shopkeeper-sidebar-width', String(newWidth));
+      }
+    }
+  }, [isResizing]);
+
+  useEffect(() => {
+    if (isResizing) {
+      window.addEventListener('mousemove', resize);
+      window.addEventListener('mouseup', stopResizing);
+      window.addEventListener('touchmove', resize);
+      window.addEventListener('touchend', stopResizing);
+    }
+    return () => {
+      window.removeEventListener('mousemove', resize);
+      window.removeEventListener('mouseup', stopResizing);
+      window.removeEventListener('touchmove', resize);
+      window.removeEventListener('touchend', stopResizing);
+    };
+  }, [isResizing, resize, stopResizing]);
   const location = useLocation();
   const { logout, isLoggingOut } = useAuth();
   const { user } = useAuthStore();
@@ -37,15 +77,21 @@ const ShopkeeperSidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) =
         className={`
           fixed top-0 left-0 h-full z-50
           shrink-0 bg-[#0A0F1F] text-slate-300 flex flex-col border-r border-white/5 shadow-2xl
-          transition-all duration-300 ease-in-out
           lg:translate-x-0 lg:static lg:z-20
           ${isOpen ? 'translate-x-0' : '-translate-x-full'}
-          ${isCollapsed ? 'w-[88px]' : 'w-[320px]'}
+          ${isResizing ? '' : 'transition-all duration-300 ease-in-out'}
         `}
+        style={{ width: isCollapsed ? '88px' : `${width}px` }}
       >
         {/* Sidebar Header */}
         <div className={`h-24 flex items-center ${isCollapsed ? 'justify-center px-2' : 'px-6'} border-b border-white/10 relative`}>
-          <div className={`flex items-center justify-center w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.15)] flex-shrink-0 ${isCollapsed ? '' : 'mr-3'}`}>
+          <div
+            onClick={() => isCollapsed && onToggleCollapse()}
+            className={`flex items-center justify-center w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.15)] flex-shrink-0 ${
+              isCollapsed ? 'cursor-pointer hover:bg-emerald-500/20 hover:border-emerald-500/30' : 'mr-3'
+            }`}
+            title={isCollapsed ? "Expand Sidebar" : undefined}
+          >
             <Glasses className="w-5 h-5 text-emerald-400 flex-shrink-0" />
           </div>
 
@@ -54,14 +100,14 @@ const ShopkeeperSidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) =
           )}
 
           {/* Toggle Button for collapsing on desktop */}
-          {!isOpen && (
+          {!isOpen && !isCollapsed && (
             <button
               onClick={onToggleCollapse}
-              className={`hidden lg:flex p-1.5 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors flex-shrink-0 ${isCollapsed ? 'mt-2' : 'ml-auto'}`}
-              title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+              className="hidden lg:flex p-1.5 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors flex-shrink-0 ml-auto"
+              title="Collapse Sidebar"
               type="button"
             >
-              {isCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+              <ChevronLeft className="w-4 h-4" />
             </button>
           )}
 
@@ -186,6 +232,18 @@ const ShopkeeperSidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) =
             {!isCollapsed && <span className="font-medium text-sm animate-fade-in">{isLoggingOut ? 'Signing Out...' : 'Sign Out'}</span>}
           </button>
         </div>
+
+        {/* Resizer Handle */}
+        {!isCollapsed && (
+          <div
+            onMouseDown={startResizing}
+            onTouchStart={startResizing}
+            className={`absolute top-0 right-0 w-1.5 h-full cursor-col-resize hover:bg-emerald-500/30 transition-colors z-50 ${
+              isResizing ? 'bg-emerald-500/50' : ''
+            }`}
+            title="Drag to resize sidebar"
+          />
+        )}
       </div>
     </>
   );

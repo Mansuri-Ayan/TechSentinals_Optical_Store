@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-toastify';
-import { createStoreApi, getStoresApi } from '../api/stores/store.api';
+import { createStoreApi, getStoresApi, updateStoreApi, deleteStoreApi } from '../api/stores/store.api';
 import { useStoreStore } from '../store/store';
 
 export const storesQueryKey = ['stores'];
@@ -32,6 +32,33 @@ export const useStores = (params = { paginate: false }) => {
     },
   });
 
+  const updateStoreMutation = useMutation({
+    mutationFn: updateStoreApi,
+    onSuccess: (updatedStore) => {
+      upsertStore(updatedStore);
+      queryClient.invalidateQueries({ queryKey: storesQueryKey });
+      toast.success('Store updated successfully.');
+    },
+    onError: (error) => {
+      const errorMsg =
+        error.response?.data?.detail || 'Failed to update store.';
+      toast.error(errorMsg);
+    },
+  });
+
+  const deleteStoreMutation = useMutation({
+    mutationFn: deleteStoreApi,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: storesQueryKey });
+      toast.success('Store deleted successfully.');
+    },
+    onError: (error) => {
+      const errorMsg =
+        error.response?.data?.detail || 'Failed to delete store.';
+      toast.error(errorMsg);
+    },
+  });
+
   return {
     storesQuery,
     stores: storesQuery.data?.items || emptyStores,
@@ -40,5 +67,11 @@ export const useStores = (params = { paginate: false }) => {
     createStore: createStoreMutation.mutate,
     createStoreAsync: createStoreMutation.mutateAsync,
     isCreatingStore: createStoreMutation.isPending,
+    updateStore: updateStoreMutation.mutate,
+    updateStoreAsync: updateStoreMutation.mutateAsync,
+    isUpdatingStore: updateStoreMutation.isPending,
+    deleteStore: deleteStoreMutation.mutate,
+    deleteStoreAsync: deleteStoreMutation.mutateAsync,
+    isDeletingStore: deleteStoreMutation.isPending,
   };
 };

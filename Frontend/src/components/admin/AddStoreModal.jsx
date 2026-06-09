@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useForm } from 'react-hook-form';
 import { Check, X, Store } from 'lucide-react';
@@ -33,9 +33,9 @@ const inputCls = (hasError) =>
   }`;
 
 /* ---------- Component ---------- */
-const AddStoreModal = ({ isOpen, onClose }) => {
+const AddStoreModal = ({ isOpen, onClose, storeToEdit = null }) => {
   const [useExistingGst, setUseExistingGst] = useState(true);
-  const { createStoreAsync, isCreatingStore } = useStores();
+  const { createStoreAsync, isCreatingStore, updateStoreAsync, isUpdatingStore } = useStores();
   const { user } = useAuthStore();
   const adminGstNumber = user?.gst_number || '';
   const isUsingExistingGst = useExistingGst && Boolean(adminGstNumber);
@@ -49,6 +49,7 @@ const AddStoreModal = ({ isOpen, onClose }) => {
     formState: { errors },
   } = useForm({
     defaultValues: {
+      store_code: '',
       store_name: '',
       gst_number: '',
       phone: '',
@@ -63,6 +64,41 @@ const AddStoreModal = ({ isOpen, onClose }) => {
 
   const watchedIsActive = watch('is_active');
 
+  // Sync edit data when modal opens or storeToEdit changes
+  useEffect(() => {
+    if (isOpen) {
+      if (storeToEdit) {
+        reset({
+          store_code: storeToEdit.store_code || storeToEdit.code || '',
+          store_name: storeToEdit.store_name || storeToEdit.name || '',
+          gst_number: storeToEdit.gst_number || '',
+          phone: storeToEdit.phone || '',
+          email: storeToEdit.email || '',
+          address: storeToEdit.address || '',
+          city: storeToEdit.city || '',
+          state: storeToEdit.state || '',
+          pincode: storeToEdit.pincode || '',
+          is_active: storeToEdit.is_active !== undefined ? storeToEdit.is_active : true,
+        });
+        setUseExistingGst(storeToEdit.gst_number === adminGstNumber);
+      } else {
+        reset({
+          store_code: '',
+          store_name: '',
+          gst_number: '',
+          phone: '',
+          email: '',
+          address: '',
+          city: '',
+          state: '',
+          pincode: '',
+          is_active: true,
+        });
+        setUseExistingGst(true);
+      }
+    }
+  }, [isOpen, storeToEdit, reset, adminGstNumber]);
+
   if (!isOpen) return null;
 
   const handleCancel = () => {
@@ -73,6 +109,7 @@ const AddStoreModal = ({ isOpen, onClose }) => {
 
   const onSubmit = async (data) => {
     const payload = {
+      store_code: data.store_code,
       store_name: data.store_name,
       email: data.email,
       phone: data.phone,
@@ -85,7 +122,11 @@ const AddStoreModal = ({ isOpen, onClose }) => {
     };
 
     try {
-      await createStoreAsync(payload);
+      if (storeToEdit) {
+        await updateStoreAsync({ id: storeToEdit.id, payload });
+      } else {
+        await createStoreAsync(payload);
+      }
       reset();
       setUseExistingGst(true);
       onClose();
@@ -93,6 +134,8 @@ const AddStoreModal = ({ isOpen, onClose }) => {
       // Toast feedback is handled by the store mutation.
     }
   };
+
+  const isSaving = isCreatingStore || isUpdatingStore;
 
   return createPortal(
     /* ── Dark blurred overlay ── */
@@ -106,9 +149,11 @@ const AddStoreModal = ({ isOpen, onClose }) => {
               <Store className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
             <div className="min-w-0">
-              <h2 className="text-lg sm:text-xl font-bold text-slate-900 truncate">Add New Store</h2>
+              <h2 className="text-lg sm:text-xl font-bold text-slate-900 truncate">
+                {storeToEdit ? 'Edit Store' : 'Add New Store'}
+              </h2>
               <p className="text-xs text-slate-500 mt-0.5 hidden sm:block">
-                Fill in all required fields to create a store.
+                {storeToEdit ? 'Update store details.' : 'Fill in all required fields to create a store.'}
               </p>
             </div>
           </div>
@@ -158,6 +203,24 @@ const AddStoreModal = ({ isOpen, onClose }) => {
                   <FieldError message={errors.store_name?.message} />
                 </div>
 
+                {/* Store Code */}
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+                    Store Code <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    {...register('store_code', {
+                      required: 'Store code is required',
+                      minLength: { value: 2, message: 'At least 2 characters required' },
+                      maxLength: { value: 20, message: 'Maximum 20 characters allowed' },
+                    })}
+                    type="text"
+                    placeholder="Enter store code (e.g. ST-01)"
+                    className={inputCls(!!errors.store_code)}
+                  />
+                  <FieldError message={errors.store_code?.message} />
+                </div>
+
                 {/* Created By — read-only */}
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-1.5">
@@ -185,7 +248,7 @@ const AddStoreModal = ({ isOpen, onClose }) => {
                 </div>
 
                 {/* GST Number */}
-                <div>
+                <div className="sm:col-span-2">
                   <div className="flex items-center justify-between gap-2 mb-1.5">
                     <label className="block text-sm font-semibold text-slate-700">
                       GST Number
@@ -426,16 +489,16 @@ const AddStoreModal = ({ isOpen, onClose }) => {
             </button>
             <button
               type="submit"
-              disabled={isCreatingStore}
+              disabled={isSaving}
               className="w-full sm:w-auto px-6 py-2.5 bg-slate-900 text-white hover:bg-slate-700 rounded-xl font-semibold transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 text-sm disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-md"
             >
-              {isCreatingStore ? (
+              {isSaving ? (
                 <span className="flex items-center justify-center gap-2">
                   <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   Saving...
                 </span>
               ) : (
-                'Save Store'
+                storeToEdit ? 'Update Store' : 'Save Store'
               )}
             </button>
           </div>

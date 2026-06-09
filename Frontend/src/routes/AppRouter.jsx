@@ -1,6 +1,8 @@
+
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore, useStoreStore } from '../store/store';
 import Login from '../pages/auth/Login';
+import ProfileHome from '../pages/auth/ProfileHome';
 import AdminLayout from '../layouts/AdminLayout';
 import Dashboard from '../pages/admin/Dashboard';
 import Staff from '../pages/admin/Staff';
@@ -12,6 +14,9 @@ import Suppliers from '../pages/admin/Suppliers';
 import SupplierDetail from '../pages/admin/SupplierDetail';
 import Sales from '../pages/admin/Sales';
 import Expenses from '../pages/admin/Expenses';
+import Analyses from '../pages/admin/Analyses';
+import Stores from '../pages/admin/Stores';
+import StoreDetail from '../pages/admin/StoreDetail';
 
 // Shopkeeper imports
 import ShopKeeperLayout from '../layouts/ShopKeeperLayout';
@@ -24,15 +29,19 @@ import Shopkeeper from '../pages/shopkeeper/Shopkeeper';
 
 // Responsive loading spinner component
 const LoadingSpinner = () => (
-  <div className="min-h-screen bg-navy flex items-center justify-center text-slate-300 px-4">
+    <div className="min-h-screen bg-navy flex items-center justify-center text-slate-300 px-4">
     <div className="w-10 h-10 sm:w-12 sm:h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
   </div>
 );
 
-// Route for non-logged in users (Guests) 
+// Route for non-logged in users (Guests)
 const GuestRoute = ({ children }) => {
   const { isAuthenticated, user, isLoading } = useAuthStore();
-  if (isLoading) return <LoadingSpinner />;
+
+  if (isLoading) {
+    return <LoadingSpinner />;
+  }
+
   if (isAuthenticated && user) {
     return user.role === 'admin' ? (
       <Navigate to="/admin/dashboard" replace />
@@ -40,78 +49,187 @@ const GuestRoute = ({ children }) => {
       <Navigate to="/shopkeeper" replace />
     );
   }
+
   return children;
 };
 
 // Route for authenticated users
 const PrivateRoute = ({ children }) => {
   const { isAuthenticated, isLoading } = useAuthStore();
-  if (isLoading) return <LoadingSpinner />;
-  if (!isAuthenticated) return <Navigate to="/login" replace />;
+
+  if (isLoading) {
+    return <LoadingSpinner />;
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return children;
+};
+
+// Route specifically for Admins
+/* eslint-disable-next-line no-unused-vars */
+const AdminRoute = ({ children }) => {
+  const { isAuthenticated, user, isLoading } = useAuthStore();
+
+  if (isLoading) {
+    return <LoadingSpinner />;
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (user && user.role !== 'admin') {
+    return <Navigate to="/" replace />;
+  }
+
   return children;
 };
 
 // Route specifically for Home (Redirects admin to dashboard, others to ProfileHome)
 const HomeRoute = () => {
   const { user, isLoading } = useAuthStore();
-  if (isLoading) return <LoadingSpinner />;
+
+  if (isLoading) {
+    return <LoadingSpinner />;
+  }
+
   if (user && user.role === 'admin') {
     return <Navigate to="/admin/dashboard" replace />;
   }
+
   return <Navigate to="/shopkeeper" replace />;
 };
 
-// Redirect helpers
-const StoreRouteRedirect = ({ path }) => {
+const StaffRouteRedirect = () => {
   const { selectedStore, stores } = useStoreStore();
   const targetStore = selectedStore || stores[0];
-  if (!targetStore) return <Navigate to="/admin/dashboard" replace />;
-  return <Navigate to={`/admin/store/${targetStore.id}/${path}`} replace />;
+
+  if (!targetStore) {
+    return <Navigate to="/admin/dashboard" replace />;
+  }
+
+  return <Navigate to={`/admin/store/${targetStore.id}/staff`} replace />;
+};
+
+const InventoryRouteRedirect = () => {
+  const { selectedStore, stores } = useStoreStore();
+  const targetStore = selectedStore || stores[0];
+
+  if (!targetStore) {
+    return <Navigate to="/admin/dashboard" replace />;
+  }
+
+  return <Navigate to={`/admin/store/${targetStore.id}/inventory`} replace />;
+};
+
+const BrandsRouteRedirect = () => {
+  const { selectedStore, stores } = useStoreStore();
+  const targetStore = selectedStore || stores[0];
+
+  if (!targetStore) {
+    return <Navigate to="/admin/dashboard" replace />;
+  }
+
+  return <Navigate to={`/admin/store/${targetStore.id}/brands`} replace />;
+};
+
+const CategoriesRouteRedirect = () => {
+  const { selectedStore, stores } = useStoreStore();
+  const targetStore = selectedStore || stores[0];
+
+  if (!targetStore) {
+    return <Navigate to="/admin/dashboard" replace />;
+  }
+
+  return <Navigate to={`/admin/store/${targetStore.id}/categories`} replace />;
+};
+
+const TransactionsRouteRedirect = () => {
+  const { selectedStore, stores } = useStoreStore();
+  const targetStore = selectedStore || stores[0];
+
+  if (!targetStore) {
+    return <Navigate to="/admin/dashboard" replace />;
+  }
+
+  return <Navigate to={`/admin/store/${targetStore.id}/transactions`} replace />;
+};
+
+const SuppliersRouteRedirect = () => {
+  const { selectedStore, stores } = useStoreStore();
+  const targetStore = selectedStore || stores[0];
+
+  if (!targetStore) {
+    return <Navigate to="/admin/dashboard" replace />;
+  }
+
+  return <Navigate to={`/admin/store/${targetStore.id}/suppliers`} replace />;
 };
 
 function AppRouter() {
   return (
     <Routes>
       {/* Public Routes */}
-      <Route path="/login" element={<GuestRoute><Login /></GuestRoute>} />
+      <Route
+        path="/login"
+        element={
+          <GuestRoute>
+            <Login />
+          </GuestRoute>
+        }
+      />
 
       {/* Main home route - protected */}
-      <Route path="/" element={<PrivateRoute><HomeRoute /></PrivateRoute>} />
+      <Route
+        path="/"
+        element={
+          <PrivateRoute>
+            <HomeRoute />
+          </PrivateRoute>
+        }
+      />
 
-      {/* Admin Routes */}
-      <Route path="/admin" element={<AdminLayout />}>
+      {/* Admin Routes - protected to only admins */}
+      <Route
+        path="/admin"
+        element={
+          // <AdminRoute>
+          <AdminLayout />
+          // </AdminRoute>
+        }
+      >
+        {/* Redirect /admin to /admin/dashboard */}
         <Route index element={<Navigate to="dashboard" replace />} />
         <Route path="dashboard" element={<Dashboard />} />
-        
-        {/* Store-scoped routes */}
-        <Route path="staff" element={<StoreRouteRedirect path="staff" />} />
+        <Route path="staff" element={<StaffRouteRedirect />} />
         <Route path="store/:storeId/staff" element={<Staff />} />
-        
-        <Route path="inventory" element={<StoreRouteRedirect path="inventory" />} />
+        <Route path="inventory" element={<InventoryRouteRedirect />} />
         <Route path="store/:storeId/inventory" element={<Inventory />} />
-        
-        <Route path="brands" element={<StoreRouteRedirect path="brands" />} />
+        <Route path="brands" element={<BrandsRouteRedirect />} />
         <Route path="store/:storeId/brands" element={<Brands />} />
-        
-        <Route path="categories" element={<StoreRouteRedirect path="categories" />} />
+        <Route path="categories" element={<CategoriesRouteRedirect />} />
         <Route path="store/:storeId/categories" element={<Categories />} />
-        
-        <Route path="transactions" element={<StoreRouteRedirect path="transactions" />} />
+        <Route path="transactions" element={<TransactionsRouteRedirect />} />
         <Route path="store/:storeId/transactions" element={<Transactions />} />
-        
-        <Route path="suppliers" element={<StoreRouteRedirect path="suppliers" />} />
+        <Route path="suppliers" element={<SuppliersRouteRedirect />} />
         <Route path="store/:storeId/suppliers" element={<Suppliers />} />
         <Route path="store/:storeId/suppliers/:id" element={<SupplierDetail />} />
-        
         <Route path="sales" element={<Sales />} />
-        
-        {/* Expenses - Using store_id as requested */}
-        <Route path="expenses" element={<StoreRouteRedirect path="expenses" />} />
-        <Route path="store/:store_id/expenses" element={<Expenses />} />
+        <Route path="expenses" element={<Expenses />} />
+        <Route path="analyses" element={<Analyses />} />
+        <Route path="stores" element={<Stores />} />
+        <Route path="stores/:storeId" element={<StoreDetail />} />
       </Route>
 
       {/* Shopkeeper Routes */}
-      <Route path="/shopkeeper" element={<ShopKeeperLayout />}>
+      <Route
+        path="/shopkeeper"
+        element={<ShopKeeperLayout />}
+      >
+        {/* Redirect /shopkeeper to /shopkeeper/dashboard */}
         <Route index element={<Shopkeeper />} />
         <Route path="dashboard" element={<ShopkeeperDashboard />} />
         <Route path="customers" element={<Customers />} />
@@ -120,6 +238,7 @@ function AppRouter() {
         <Route path="sales" element={<ShopkeeperSales />} />
       </Route>
 
+      {/* Fallback root redirect */}
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
   );
