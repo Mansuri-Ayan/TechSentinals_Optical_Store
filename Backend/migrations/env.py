@@ -23,7 +23,8 @@ from models import (
     Admin, Store, Worker, Optician, Manager, RefreshToken, Role, Brand,
     Category, Subcategory, Product, FrameProduct, LensProduct, AccessoryProduct,
     Inventory, InventoryTransaction, Supplier, SupplierStoreLink, SupplierProduct,
-    PurchaseOrder, PurchaseOrderItem, SupplierPayment, Customer, Sale, SaleItem, SalePayment
+    PurchaseOrder, PurchaseOrderItem, SupplierPayment, Customer, Prescription, Sale, SaleItem, SalePayment,
+    Expense, ExpenseCategory
 )
 
 target_metadata = Base.metadata

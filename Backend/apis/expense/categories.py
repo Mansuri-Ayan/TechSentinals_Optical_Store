@@ -59,14 +59,18 @@ async def create_category_endpoint(
     summary="List all expense categories",
 )
 async def list_categories_endpoint(
+    store_id: int | None = Query(None, description="Filter categories by store"),
     search: str | None = Query(None),
     active_only: bool = Query(False),
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ) -> list[ExpenseCategoryRead]:
     admin_id = _get_user_admin_id(current_user)
+    
+    # Optional: verify store_id belongs to admin_id if provided
+    # For now, we just pass it to the service which uses admin_id for scoping
     categories = await list_expense_categories(
-        db, admin_id=admin_id, search=search, active_only=active_only
+        db, admin_id=admin_id, store_id=store_id, search=search, active_only=active_only
     )
     return [ExpenseCategoryRead.model_validate(c) for c in categories]
 

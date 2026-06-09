@@ -58,6 +58,7 @@ const Sidebar = ({ isOpen, onClose }) => {
   const categoriesRoute = currentStore ? `/admin/store/${currentStore.id}/categories` : '/admin/dashboard';
   const transactionsRoute = currentStore ? `/admin/store/${currentStore.id}/transactions` : '/admin/dashboard';
   const suppliersRoute = currentStore ? `/admin/store/${currentStore.id}/suppliers` : '/admin/dashboard';
+  const expensesRoute = currentStore ? `/admin/store/${currentStore.id}/expenses` : '/admin/dashboard';
 
   const handleStoreSelect = (store) => {
     setSelectedStore(store);
@@ -75,6 +76,8 @@ const Sidebar = ({ isOpen, onClose }) => {
       navigate(`/admin/store/${store.id}/transactions`);
     } else if (location.pathname.startsWith('/admin/store/') && location.pathname.includes('/suppliers')) {
       navigate(`/admin/store/${store.id}/suppliers`);
+    } else if (location.pathname.startsWith('/admin/store/') && location.pathname.includes('/expenses')) {
+      navigate(`/admin/store/${store.id}/expenses`);
     }
   };
 
@@ -284,12 +287,20 @@ const Sidebar = ({ isOpen, onClose }) => {
 
           <NavLink
             to="/admin/expenses"
-            className={({ isActive }) =>
-              `flex items-center px-4 py-2.5 rounded-xl transition-all duration-200 group ${isActive
+            end
+            className={({ isActive }) => {
+              const isExpensesActive = isActive || location.pathname.includes('/expenses');
+              return `flex items-center px-4 py-2.5 rounded-xl transition-all duration-200 group ${isExpensesActive
                 ? 'bg-emerald-500/10 text-emerald-400 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_0_10px_rgba(16,185,129,0.1)] border border-emerald-500/20'
                 : 'text-slate-400 hover:bg-white/5 hover:text-slate-200 border border-transparent'
-              }`
-            }
+              }`;
+            }}
+            onClick={(e) => {
+              if (currentStore) {
+                e.preventDefault();
+                navigate(expensesRoute);
+              }
+            }}
           >
             <Receipt className="w-5 h-5 mr-3 transition-transform group-hover:scale-110" />
             <span className="font-medium text-sm">Expenses</span>

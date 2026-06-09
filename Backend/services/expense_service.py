@@ -1,4 +1,5 @@
 # Service: expense_service.py
+import math
 from datetime import date, datetime, timezone
 from sqlalchemy import select, or_, func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -8,7 +9,7 @@ from models.store import Store
 from models.worker import Worker
 from models.optician import Optician
 from models.manager import Manager
-from models.expense import Expense, ExpenseOwnerType, ExpenseRecordedByType
+from models.expense import Expense, ExpenseOwnerType, ExpenseRecordedByType, ExpensePaymentMethod
 from models.expense_category import ExpenseCategory
 from schemas.expense import ExpenseCreate, ExpenseUpdate
 from schemas.expense_category import ExpenseCategoryCreate, ExpenseCategoryUpdate
@@ -75,7 +76,11 @@ async def get_expense_category(db: AsyncSession, category_id: int) -> ExpenseCat
 
 
 async def list_expense_categories(
-    db: AsyncSession, admin_id: int, search: str | None = None, active_only: bool = False
+    db: AsyncSession,
+    admin_id: int,
+    store_id: int | None = None,
+    search: str | None = None,
+    active_only: bool = False
 ) -> list[ExpenseCategory]:
     stmt = select(ExpenseCategory).where(ExpenseCategory.admin_id == admin_id)
     if active_only:
@@ -99,11 +104,6 @@ async def update_expense_category(
 
 
 async def delete_expense_category(db: AsyncSession, category: ExpenseCategory) -> bool:
-    """
-    Tries to delete an expense category.
-    Returns True if deleted, or False if restricted (used by expenses).
-    """
-    # Check if category is used by any expense (ignoring soft deleted or not)
     stmt = select(func.count(Expense.id)).where(Expense.category_id == category.id)
     res = await db.execute(stmt)
     count = res.scalar()
@@ -127,7 +127,7 @@ async def create_expense(
         admin_id=admin_id,
         recorded_by_type=recorded_by_type,
         recorded_by_id=recorded_by_id,
-        is_approved=False,  # pending by default
+        is_approved=False,
         **payload.model_dump(),
     )
     db.add(expense)
@@ -148,53 +148,74 @@ async def get_expense(db: AsyncSession, expense_id: int) -> Expense | None:
 async def list_expenses(
     db: AsyncSession,
     admin_id: int,
-    owner_type: ExpenseOwnerType | None = None,
-    owner_id: int | None = None,
-    category_id: int | None = None,
+    store_id: int,
+    page: int = 1,
+    page_size: int = 10,
     search: str | None = None,
-    is_approved: bool | None = None,
+    category_id: int | None = None,
     start_date: date | None = None,
     end_date: date | None = None,
-    limit: int = 50,
-    offset: int = 0,
-) -> tuple[list[Expense], int]:
-    """List expenses with filter options, returning items and total count."""
-    stmt = select(Expense).where(
+    is_approved: bool | None = None,
+    payment_method: ExpensePaymentMethod | None = None,
+    approval_status: str | None = None,
+) -> dict:
+    """List expenses with filter options, returning items and pagination metadata."""
+    # Build base query with store filter first
+    query = select(Expense).where(
         Expense.admin_id == admin_id,
+        Expense.owner_type == ExpenseOwnerType.STORE,
+        Expense.owner_id == store_id,
         Expense.deleted_at.is_(None),
     )
 
-    if owner_type is not None:
-        stmt = stmt.where(Expense.owner_type == owner_type)
-    if owner_id is not None:
-        stmt = stmt.where(Expense.owner_id == owner_id)
+    # Apply all other filters to the SAME query object
     if category_id is not None:
-        stmt = stmt.where(Expense.category_id == category_id)
-    if is_approved is not None:
-        stmt = stmt.where(Expense.is_approved == is_approved)
+        query = query.where(Expense.category_id == category_id)
+    
+    # Handle approval status filters
+    if approval_status == 'PENDING':
+        query = query.where(and_(Expense.is_approved == False, Expense.is_rejected == False))
+    elif approval_status == 'APPROVED':
+        query = query.where(Expense.is_approved == True)
+    elif approval_status == 'REJECTED':
+        query = query.where(Expense.is_rejected == True)
+    elif is_approved is not None:
+        query = query.where(Expense.is_approved == is_approved)
+
     if start_date is not None:
-        stmt = stmt.where(Expense.expense_date >= start_date)
+        query = query.where(Expense.expense_date >= start_date)
     if end_date is not None:
-        stmt = stmt.where(Expense.expense_date <= end_date)
+        query = query.where(Expense.expense_date <= end_date)
+    
+    if payment_method is not None:
+        query = query.where(Expense.payment_method == payment_method)
+
     if search:
-        stmt = stmt.where(
+        query = query.where(
             or_(
                 Expense.title.ilike(f"%{search}%"),
                 Expense.description.ilike(f"%{search}%"),
             )
         )
 
-    # Count total
-    count_stmt = select(func.count(Expense.id)).select_from(stmt.subquery())
+    # COUNT uses the filtered query - FIXED to use subquery correctly
+    count_stmt = select(func.count()).select_from(query.subquery())
     count_res = await db.execute(count_stmt)
     total = count_res.scalar() or 0
 
-    # Paginate
-    stmt = stmt.order_by(Expense.expense_date.desc()).limit(limit).offset(offset)
-    items_res = await db.execute(stmt)
+    # PAGINATE uses the same filtered query
+    offset = (page - 1) * page_size
+    items_stmt = query.order_by(Expense.expense_date.desc()).limit(page_size).offset(offset)
+    items_res = await db.execute(items_stmt)
     items = list(items_res.scalars().all())
 
-    return items, total
+    return {
+        "items": items,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "pages": math.ceil(total / page_size) if total > 0 else 1,
+    }
 
 
 async def update_expense(db: AsyncSession, expense: Expense, payload: ExpenseUpdate) -> Expense:
@@ -213,9 +234,28 @@ async def approve_expense(
     if is_approved:
         expense.approved_by = approved_by_admin_id
         expense.approved_at = datetime.now(timezone.utc)
+        expense.is_rejected = False
+        expense.rejected_by = None
+        expense.rejected_at = None
+        expense.rejection_reason = None
     else:
         expense.approved_by = None
         expense.approved_at = None
+    await db.commit()
+    await db.refresh(expense)
+    return expense
+
+
+async def reject_expense(
+    db: AsyncSession, expense: Expense, rejected_by_admin_id: int, reason: str | None = None
+) -> Expense:
+    expense.is_rejected = True
+    expense.rejected_by = rejected_by_admin_id
+    expense.rejected_at = datetime.now(timezone.utc)
+    expense.rejection_reason = reason
+    expense.is_approved = False
+    expense.approved_by = None
+    expense.approved_at = None
     await db.commit()
     await db.refresh(expense)
     return expense

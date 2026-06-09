@@ -1,5 +1,4 @@
 # API: expense/operations.py
-import math
 from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,14 +9,15 @@ from models.admin import Admin
 from models.manager import Manager
 from models.worker import Worker
 from models.optician import Optician
-from models.expense import ExpenseOwnerType, ExpensePaymentMethod, ExpenseRecordedByType
-from schemas.expense import ExpenseCreate, ExpenseUpdate, ExpenseApprove, ExpenseRead
+from models.expense import ExpenseOwnerType, ExpenseRecordedByType, ExpensePaymentMethod
+from schemas.expense import ExpenseCreate, ExpenseUpdate, ExpenseApprove, ExpenseReject, ExpenseRead, PaginatedExpenseResponse
 from services.expense_service import (
     create_expense,
     get_expense,
     list_expenses,
     update_expense,
     approve_expense,
+    reject_expense,
     soft_delete_expense,
     get_staff_name,
     get_owner_name,
@@ -61,6 +61,15 @@ async def _resolve_expense_names(db: AsyncSession, p) -> ExpenseRead:
     read_data.recorded_by_name = await get_staff_name(db, p.recorded_by_type.value, p.recorded_by_id)
     if p.incurred_by_type and p.incurred_by_id:
         read_data.incurred_by_name = await get_staff_name(db, p.incurred_by_type.value, p.incurred_by_id)
+    
+    # Resolve approval name if approved
+    if p.is_approved and p.approved_by:
+        read_data.approved_by_name = await get_staff_name(db, "ADMIN", p.approved_by)
+    
+    # Resolve rejection name if rejected
+    if p.is_rejected and p.rejected_by:
+        read_data.rejected_by_name = await get_staff_name(db, "ADMIN", p.rejected_by)
+        
     return read_data
 
 
@@ -78,14 +87,12 @@ async def create_expense_endpoint(
     admin_id = _get_user_admin_id(current_user)
     rec_type, rec_id = _get_user_recorded_by(current_user)
 
-    # If user is not Admin and wants to record a STORE expense, enforce it is their own store
     if not isinstance(current_user, Admin):
         if payload.owner_type == ExpenseOwnerType.ADMIN:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Non-admin staff members cannot record head-office/ADMIN expenses.",
             )
-        # Store verification
         user_store_id = current_user.store_id
         if payload.owner_id != user_store_id:
             raise HTTPException(
@@ -105,51 +112,56 @@ async def create_expense_endpoint(
 
 @router.get(
     "/",
+    response_model=PaginatedExpenseResponse,
     summary="List all expenses",
 )
 async def list_expenses_endpoint(
-    owner_type: ExpenseOwnerType | None = Query(None),
-    owner_id: int | None = Query(None),
+    store_id: int = Query(..., description="The store ID to filter by"),
     category_id: int | None = Query(None),
     search: str | None = Query(None),
     is_approved: bool | None = Query(None),
+    approval_status: str | None = Query(None, description="Approval status filter: PENDING | APPROVED"),
+    payment_method: ExpensePaymentMethod | None = Query(None, description="Payment method filter"),
     start_date: date | None = Query(None),
     end_date: date | None = Query(None),
     page: int = Query(1, ge=1),
-    limit: int = Query(20, ge=1, le=100),
+    page_size: int = Query(10, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
     admin_id = _get_user_admin_id(current_user)
 
-    # Scoping: if user is not Admin, restrict queries to their store
     if not isinstance(current_user, Admin):
-        owner_type = ExpenseOwnerType.STORE
-        owner_id = current_user.store_id
+        if store_id != current_user.store_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied to this store's expense records.",
+            )
 
-    offset = (page - 1) * limit
-    items, total = await list_expenses(
+    result = await list_expenses(
         db,
         admin_id=admin_id,
-        owner_type=owner_type,
-        owner_id=owner_id,
-        category_id=category_id,
+        store_id=store_id,
+        page=page,
+        page_size=page_size,
         search=search,
+        category_id=category_id,
         is_approved=is_approved,
+        approval_status=approval_status,
+        payment_method=payment_method,
         start_date=start_date,
         end_date=end_date,
-        limit=limit,
-        offset=offset,
     )
 
+    items = result["items"]
     validated = [await _resolve_expense_names(db, item) for item in items]
 
     return {
         "items": validated,
-        "total": total,
-        "page": page,
-        "limit": limit,
-        "pages": math.ceil(total / limit) if limit else 1,
+        "total": result["total"],
+        "page": result["page"],
+        "page_size": result["page_size"],
+        "pages": result["pages"],
     }
 
 
@@ -171,7 +183,6 @@ async def get_expense_endpoint(
             detail="Expense record not found",
         )
 
-    # Scoping: non-admin can only see their own store's expenses
     if not isinstance(current_user, Admin):
         if expense.owner_type != ExpenseOwnerType.STORE or expense.owner_id != current_user.store_id:
             raise HTTPException(
@@ -201,14 +212,12 @@ async def update_expense_endpoint(
             detail="Expense record not found",
         )
 
-    # Non-admin scoping
     if not isinstance(current_user, Admin):
         if expense.owner_type != ExpenseOwnerType.STORE or expense.owner_id != current_user.store_id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied to this store's expense records.",
             )
-        # Block updates if expense is already approved (unless Admin)
         if expense.is_approved:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -219,10 +228,15 @@ async def update_expense_endpoint(
     return await _resolve_expense_names(db, updated)
 
 
+@router.patch(
+    "/{expense_id}/approve",
+    response_model=ExpenseRead,
+    summary="Approve an expense",
+)
 @router.put(
     "/{expense_id}/approve",
     response_model=ExpenseRead,
-    summary="Approve or reject an expense",
+    include_in_schema=False,
 )
 async def approve_expense_endpoint(
     expense_id: int,
@@ -237,6 +251,32 @@ async def approve_expense_endpoint(
             detail="Expense record not found",
         )
     updated = await approve_expense(db, expense, current_admin.id, payload.is_approved)
+    return await _resolve_expense_names(db, updated)
+
+
+@router.patch(
+    "/{expense_id}/reject",
+    response_model=ExpenseRead,
+    summary="Reject an expense",
+)
+@router.put(
+    "/{expense_id}/reject",
+    response_model=ExpenseRead,
+    include_in_schema=False,
+)
+async def reject_expense_endpoint(
+    expense_id: int,
+    payload: ExpenseReject,
+    db: AsyncSession = Depends(get_db),
+    current_admin: Admin = Depends(get_current_admin),
+) -> ExpenseRead:
+    expense = await get_expense(db, expense_id)
+    if not expense or expense.admin_id != current_admin.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Expense record not found",
+        )
+    updated = await reject_expense(db, expense, current_admin.id, payload.reason)
     return await _resolve_expense_names(db, updated)
 
 

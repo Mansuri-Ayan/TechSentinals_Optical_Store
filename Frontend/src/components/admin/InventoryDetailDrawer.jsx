@@ -98,9 +98,9 @@ const RejectReasonPrompt = ({ onConfirm, onCancel }) => {
 
 /* ─────────────────────────────────────────────────────────
    MAIN DRAWER COMPONENT
-   Props: item, onClose, onApprove(item), onReject(item, reason)
+   Props: item, onClose, onApprove(item), onReject(item, reason), isApproving, isRejecting
 ───────────────────────────────────────────────────────── */
-const InventoryDetailDrawer = ({ item, onClose, onApprove, onReject }) => {
+const InventoryDetailDrawer = ({ item, onClose, onApprove, onReject, isApproving, isRejecting }) => {
   const [showRejectPrompt, setShowRejectPrompt] = useState(false);
 
   if (!item) return null;
@@ -326,15 +326,17 @@ const InventoryDetailDrawer = ({ item, onClose, onApprove, onReject }) => {
                   <p className="text-xs text-slate-500 font-medium mb-3">Review and take action on this expense:</p>
                   <div className="flex gap-2">
                     <button
+                      disabled={isApproving}
                       onClick={handleApprove}
-                      className="flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-semibold text-white bg-emerald-600 rounded-xl hover:bg-emerald-700 transition-all shadow-sm"
+                      className="flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-semibold text-white bg-emerald-600 rounded-xl hover:bg-emerald-700 transition-all shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
                     >
-                      <ThumbsUp className="w-4 h-4" />
-                      Approve
+                      {isApproving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <ThumbsUp className="w-4 h-4" />}
+                      {isApproving ? 'Approving...' : 'Approve'}
                     </button>
                     <button
+                      disabled={isRejecting}
                       onClick={() => setShowRejectPrompt(true)}
-                      className="flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-semibold text-white bg-red-600 rounded-xl hover:bg-red-700 transition-all shadow-sm"
+                      className="flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-semibold text-white bg-red-600 rounded-xl hover:bg-red-700 transition-all shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
                     >
                       <ThumbsDown className="w-4 h-4" />
                       Reject

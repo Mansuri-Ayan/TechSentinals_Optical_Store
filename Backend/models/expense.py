@@ -176,6 +176,32 @@ class Expense(Base):
         comment="Timestamp when the expense was approved",
     )
 
+    is_rejected = Column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+        comment="Whether this expense has been rejected by an admin",
+    )
+
+    rejected_by = Column(
+        BigInteger,
+        nullable=True,
+        comment="admins.id of the admin who rejected this expense",
+    )
+
+    rejected_at = Column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="Timestamp when the expense was rejected",
+    )
+
+    rejection_reason = Column(
+        Text,
+        nullable=True,
+        comment="Reason provided for rejection",
+    )
+
     # ── Who recorded it (polymorphic) ─────────────────────────
     recorded_by_type = Column(
         Enum(
