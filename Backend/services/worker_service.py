@@ -1,6 +1,6 @@
-# Service: worker_service.py
 from datetime import datetime, timezone
 from sqlalchemy import desc, select, func
+from sqlalchemy.orm import joinedload
 from sqlalchemy.ext.asyncio import AsyncSession
 from core.security import hash_password
 from models.worker import Worker
@@ -46,7 +46,11 @@ async def create_worker(
 
 async def get_worker(db: AsyncSession, worker_id: int) -> Worker | None:
     """Fetch a single worker by ID (excluding soft-deleted)."""
-    stmt = select(Worker).where(Worker.id == worker_id, Worker.deleted_at.is_(None))
+    stmt = (
+        select(Worker)
+        .options(joinedload(Worker.store), joinedload(Worker.role))
+        .where(Worker.id == worker_id, Worker.deleted_at.is_(None))
+    )
     result = await db.execute(stmt)
     return result.scalar_one_or_none()
 
@@ -61,7 +65,11 @@ async def get_workers_by_store(
     paginate: bool = True,
 ) -> tuple[list[Worker], int]:
     """List all non-deleted workers for a given store with pagination and filtering."""
-    stmt = select(Worker).where(Worker.store_id == store_id, Worker.deleted_at.is_(None))
+    stmt = (
+        select(Worker)
+        .options(joinedload(Worker.store), joinedload(Worker.role))
+        .where(Worker.store_id == store_id, Worker.deleted_at.is_(None))
+    )
     count_stmt = select(func.count()).select_from(Worker).where(Worker.store_id == store_id, Worker.deleted_at.is_(None))
 
     if is_active is not None:

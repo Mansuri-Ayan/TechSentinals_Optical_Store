@@ -1,6 +1,6 @@
-# Service: manager_service.py
 from datetime import datetime, timezone
 from sqlalchemy import desc, select, func
+from sqlalchemy.orm import joinedload
 from sqlalchemy.ext.asyncio import AsyncSession
 from core.security import hash_password
 from models.manager import Manager
@@ -46,8 +46,10 @@ async def create_manager(
 
 async def get_manager(db: AsyncSession, manager_id: int) -> Manager | None:
     """Fetch a single manager by ID (excluding soft-deleted)."""
-    stmt = select(Manager).where(
-        Manager.id == manager_id, Manager.deleted_at.is_(None)
+    stmt = (
+        select(Manager)
+        .options(joinedload(Manager.store), joinedload(Manager.role))
+        .where(Manager.id == manager_id, Manager.deleted_at.is_(None))
     )
     result = await db.execute(stmt)
     return result.scalar_one_or_none()
@@ -63,7 +65,11 @@ async def get_managers_by_store(
     paginate: bool = True,
 ) -> tuple[list[Manager], int]:
     """List all non-deleted managers for a given store with pagination and filtering."""
-    stmt = select(Manager).where(Manager.store_id == store_id, Manager.deleted_at.is_(None))
+    stmt = (
+        select(Manager)
+        .options(joinedload(Manager.store), joinedload(Manager.role))
+        .where(Manager.store_id == store_id, Manager.deleted_at.is_(None))
+    )
     count_stmt = select(func.count()).select_from(Manager).where(Manager.store_id == store_id, Manager.deleted_at.is_(None))
 
     if is_active is not None:

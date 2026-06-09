@@ -1,6 +1,6 @@
-# Schema: worker.py
 from datetime import date, datetime
-from pydantic import BaseModel, Field
+from typing import Any
+from pydantic import BaseModel, Field, computed_field
 
 
 class WorkerCreate(BaseModel):
@@ -57,5 +57,19 @@ class WorkerRead(BaseModel):
     last_login_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
+
+    # Internal fields for extracting data from relationships
+    role_obj: Any = Field(alias="role", exclude=True, default=None)
+    store_obj: Any = Field(alias="store", exclude=True, default=None)
+
+    @computed_field
+    @property
+    def role(self) -> str | None:
+        return self.role_obj.role if self.role_obj else None
+
+    @computed_field
+    @property
+    def store_name(self) -> str | None:
+        return self.store_obj.store_name if self.store_obj else None
 
     model_config = {"from_attributes": True}

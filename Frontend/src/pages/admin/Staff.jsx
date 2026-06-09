@@ -1,6 +1,7 @@
 /** @format */
 
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { useParams, Link } from "react-router-dom";
 import {
   Plus,
@@ -15,11 +16,20 @@ import {
   Edit2,
   Trash2,
   Loader2,
+  X,
+  User,
+  Briefcase,
+  Shield,
+  Calendar,
+  Clock,
+  Mail,
+  Phone,
 } from "lucide-react";
 import AddStaffModal from "../../components/admin/AddStaffModal";
 import Pagination from "../../components/shared/Pagination";
 import { useStoreStore } from "../../store/store";
 import { useStoreStaff } from "../../hooks/useStaff";
+import { getWorkerById, getOpticianById, getManagerById } from "../../api/staff/staff.api";
 
 const roleOptions = [
   { value: "all", label: "All Roles" },
@@ -40,7 +50,10 @@ const roleColorByRole = {
   optician: "border-emerald-500",
 };
 
-const formatRole = (role) => role.charAt(0).toUpperCase() + role.slice(1);
+const formatRole = (role) => {
+  if (!role) return "";
+  return role.charAt(0).toUpperCase() + role.slice(1).toLowerCase();
+};
 
 const formatLastActive = (value) => {
   if (!value) return "Never";
@@ -55,6 +68,154 @@ const formatLastActive = (value) => {
   });
 };
 
+const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+
+/* ─────────────────────────────────────────────────────────
+   DRAWER SUB-COMPONENTS
+───────────────────────────────────────────────────────── */
+const DetailRow = ({ label, value, mono }) => (
+  <div className="flex items-start justify-between py-2.5 border-b border-slate-50 last:border-0 gap-3">
+    <span className="text-sm text-slate-500 font-medium shrink-0">{label}</span>
+    <span className={`text-sm font-semibold text-slate-900 text-right break-words min-w-0 ${mono ? 'font-mono' : ''}`}>
+      {value ?? '—'}
+    </span>
+  </div>
+);
+
+const Section = ({ icon: Icon, title, children, color = 'emerald' }) => {
+  const colours = {
+    emerald: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600',
+    blue:    'bg-blue-500/10 border-blue-500/20 text-blue-600',
+    purple:  'bg-purple-500/10 border-purple-500/20 text-purple-600',
+    amber:   'bg-amber-500/10 border-amber-500/20 text-amber-600',
+    rose:    'bg-rose-500/10 border-rose-500/20 text-rose-600',
+    slate:   'bg-slate-500/10 border-slate-500/20 text-slate-600',
+    violet:  'bg-violet-500/10 border-violet-500/20 text-violet-600',
+  };
+  return (
+    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+      <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-50">
+        <div className={`p-2 rounded-xl border ${colours[color]}`}>
+          <Icon className="w-4 h-4" />
+        </div>
+        <h3 className="text-sm font-bold text-slate-800">{title}</h3>
+      </div>
+      <div className="px-5 pt-1 pb-2">{children}</div>
+    </div>
+  );
+};
+
+const StaffDetailDrawer = ({ staff, onClose, isLoading }) => {
+  const [isAnimating, setIsAnimating] = useState(false);
+
+  useEffect(() => {
+    if (staff) {
+      const timer = setTimeout(() => setIsAnimating(true), 10);
+      return () => clearTimeout(timer);
+    } else {
+      setIsAnimating(false);
+    }
+  }, [staff]);
+
+  if (!staff) return null;
+
+  const initials = staff.first_name ? staff.first_name.charAt(0) : (staff.name ? staff.name.charAt(0) : '?');
+
+  return createPortal(
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[999] flex justify-end animate-fade-in font-sans">
+      <div className="absolute inset-0" onClick={onClose} aria-hidden />
+      
+      <div className={`relative w-full sm:max-w-md h-full bg-slate-50 shadow-2xl flex flex-col transition-transform duration-300 transform ${isAnimating ? 'translate-x-0' : 'translate-x-full'}`}>
+        
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 bg-white border-b border-slate-100 flex-shrink-0">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="h-10 w-10 rounded-full bg-gradient-to-tr from-slate-800 to-slate-600 flex items-center justify-center text-white font-bold text-lg shadow-inner flex-shrink-0">
+              {initials}
+            </div>
+            <div className="min-w-0">
+              <h2 className="text-base font-bold text-slate-900 truncate">{staff.first_name ? `${staff.first_name} ${staff.last_name}` : staff.name}</h2>
+              <div className="flex items-center gap-2 mt-0.5">
+                <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200 uppercase">
+                  {staff.role}
+                </span>
+              </div>
+            </div>
+          </div>
+          <button onClick={onClose}
+            className="p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 rounded-full transition-colors flex-shrink-0 ml-2">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Status strip */}
+        <div className="px-5 py-3 bg-white border-b border-slate-100 flex-shrink-0 flex items-center justify-between gap-3 flex-wrap">
+          <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${staff.is_active ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-red-700 bg-red-50 border-red-200'}`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${staff.is_active ? 'bg-emerald-500' : 'bg-red-500'}`} />
+            {staff.is_active ? 'Active' : 'Inactive'}
+          </span>
+          <span className="text-xs text-slate-400 font-semibold">Joined: {fmtDate(staff.created_at)}</span>
+        </div>
+
+        {/* Scrollable content */}
+        <div className="flex-1 overflow-y-auto hide-scrollbar px-4 py-4 space-y-3">
+          {isLoading ? (
+            <div className="space-y-4">
+              {[1, 2, 3].map(i => (
+                <div key={i} className="bg-white rounded-2xl border border-slate-100 p-5 space-y-4">
+                  <div className="h-4 bg-slate-100 rounded-full w-1/3 animate-pulse" />
+                  <div className="space-y-3">
+                    <div className="h-3 bg-slate-50 rounded-full w-full animate-pulse" />
+                    <div className="h-3 bg-slate-50 rounded-full w-2/3 animate-pulse" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <>
+              <Section icon={User} title="Personal Info" color="emerald">
+                <DetailRow label="Full Name" value={staff.first_name ? `${staff.first_name} ${staff.last_name}` : staff.name} />
+                <DetailRow label="Email"     value={staff.email} />
+                <DetailRow label="Phone"     value={staff.phone || staff.phone_number} />
+                <DetailRow label="Role"      value={formatRole(staff.role)} />
+              </Section>
+
+              <Section icon={Briefcase} title="Employment" color="blue">
+                <DetailRow label="Store / Branch" value={staff.store_name} />
+                <DetailRow label="Status" value={
+                  <span className={`inline-flex px-2 py-0.5 rounded text-[11px] font-bold ${staff.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
+                    {staff.is_active ? 'Active' : 'Inactive'}
+                  </span>
+                } />
+                <DetailRow label="Joined"     value={fmtDate(staff.created_at)} />
+                <DetailRow label="Last Login"  value={staff.last_login_at ? formatLastActive(staff.last_login_at) : "Never"} />
+              </Section>
+
+              <Section icon={Shield} title="Account" color="purple">
+                <DetailRow label="Username"    value={staff.username || staff.email} mono />
+                <DetailRow label="Role ID"     value={staff.role_id || staff.id} mono />
+                {staff.permissions && <DetailRow label="Permissions" value={staff.permissions.join(', ')} />}
+              </Section>
+            </>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="px-5 py-4 bg-white border-t border-slate-100 flex-shrink-0">
+          <button onClick={onClose}
+            className="w-full py-2.5 bg-slate-900 text-white rounded-xl font-semibold text-sm hover:bg-slate-700 transition-all shadow-md hover:shadow-lg">
+            Close
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+};
+
+/* ─────────────────────────────────────────────────────────
+   MAIN STAFF PAGE
+───────────────────────────────────────────────────────── */
 const Staff = () => {
   const { storeId } = useParams();
   const { stores, selectedStore, setSelectedStore } = useStoreStore();
@@ -65,6 +226,8 @@ const Staff = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [editingStaff, setEditingStaff] = useState(null);
   const [showAddStaff, setShowAddStaff] = useState(false);
+  const [selectedStaff, setSelectedStaff] = useState(null);
+  const [drawerLoading, setDrawerLoading] = useState(false);
   const ITEMS_PER_PAGE = 20;
 
   useEffect(() => {
@@ -193,7 +356,8 @@ const Staff = () => {
       : statusFilter === "active"
         ? "border-emerald-200 text-emerald-700 bg-emerald-50/50"
         : "border-red-200 text-red-700 bg-red-50/50";
-  const handleDelete = async (person) => {
+  const handleDelete = async (e, person) => {
+    e.stopPropagation();
     if (window.confirm(`Are you sure you want to delete ${person.name}?`)) {
       await deleteStaffAsync({
         role: person.role,
@@ -217,6 +381,27 @@ const Staff = () => {
       role,
       payload,
     });
+  };
+
+  const handleStaffClick = async (staffMember) => {
+    setSelectedStaff(staffMember);
+    setDrawerLoading(true);
+    try {
+      let res;
+      const role = staffMember.role?.toLowerCase();
+      if (role === 'worker') {
+        res = await getWorkerById(staffMember.id);
+      } else if (role === 'optician') {
+        res = await getOpticianById(staffMember.id);
+      } else if (role === 'manager') {
+        res = await getManagerById(staffMember.id);
+      }
+      if (res) setSelectedStaff(res.data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setDrawerLoading(false);
+    }
   };
 
   return (
@@ -363,7 +548,8 @@ const Staff = () => {
               formattedStaff.map((person) => (
                 <div
                   key={`${person.role}-${person.id}`}
-                  className="bg-white border border-slate-100 rounded-xl sm:rounded-2xl p-3 sm:p-4 shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5 group relative overflow-hidden"
+                  onClick={() => handleStaffClick(person)}
+                  className="bg-white border border-slate-100 rounded-xl sm:rounded-2xl p-3 sm:p-4 shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5 group relative overflow-hidden cursor-pointer"
                 >
                   <div
                     className={`absolute left-0 top-0 bottom-0 w-1 ${person.roleColor}`}
@@ -425,14 +611,14 @@ const Staff = () => {
 
                       <div className="md:w-auto flex items-center space-x-1 md:space-x-2 md:opacity-0 group-hover:opacity-100 transition-opacity ml-auto md:ml-0">
                         <button
-                          onClick={() => setEditingStaff(person)}
+                          onClick={(e) => { e.stopPropagation(); setEditingStaff(person); }}
                           className="p-2 md:p-2.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg md:rounded-xl transition-colors"
                           title="Edit"
                         >
                           <Edit2 className="w-4 h-4" />
                         </button>
                         <button
-                          onClick={() => handleDelete(person)}
+                          onClick={(e) => handleDelete(e, person)}
                           disabled={isDeletingStaff}
                           className="p-2 md:p-2.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg md:rounded-xl transition-colors"
                           title="Delete"
@@ -501,6 +687,13 @@ const Staff = () => {
           isSaving={isSavingStaff}
         />
       )}
+
+      {/* ── Detail Drawer ── */}
+      <StaffDetailDrawer
+        staff={selectedStaff}
+        onClose={() => setSelectedStaff(null)}
+        isLoading={drawerLoading}
+      />
     </div>
   );
 };

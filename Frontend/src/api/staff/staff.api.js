@@ -20,6 +20,10 @@ export const getStoreStaffApi = async (storeId, params) => {
   return response.data;
 };
 
+export const getWorkerById = (id) => api.get(`/stores/workers/${id}`);
+export const getOpticianById = (id) => api.get(`/stores/opticians/${id}`);
+export const getManagerById = (id) => api.get(`/stores/managers/${id}`);
+
 export const createStaffApi = async ({ storeId, role, payload }) => {
   const response = await api.post(`/stores/${storeId}/${role}s`, payload);
   return { ...response.data, role };

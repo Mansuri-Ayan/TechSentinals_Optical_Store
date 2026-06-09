@@ -1,6 +1,6 @@
-# Service: optician_service.py
 from datetime import datetime, timezone
 from sqlalchemy import desc, select, func
+from sqlalchemy.orm import joinedload
 from sqlalchemy.ext.asyncio import AsyncSession
 from core.security import hash_password
 from models.optician import Optician
@@ -47,8 +47,10 @@ async def create_optician(
 
 async def get_optician(db: AsyncSession, optician_id: int) -> Optician | None:
     """Fetch a single optician by ID (excluding soft-deleted)."""
-    stmt = select(Optician).where(
-        Optician.id == optician_id, Optician.deleted_at.is_(None)
+    stmt = (
+        select(Optician)
+        .options(joinedload(Optician.store), joinedload(Optician.role))
+        .where(Optician.id == optician_id, Optician.deleted_at.is_(None))
     )
     result = await db.execute(stmt)
     return result.scalar_one_or_none()
@@ -64,7 +66,11 @@ async def get_opticians_by_store(
     paginate: bool = True,
 ) -> tuple[list[Optician], int]:
     """List all non-deleted opticians for a given store with pagination and filtering."""
-    stmt = select(Optician).where(Optician.store_id == store_id, Optician.deleted_at.is_(None))
+    stmt = (
+        select(Optician)
+        .options(joinedload(Optician.store), joinedload(Optician.role))
+        .where(Optician.store_id == store_id, Optician.deleted_at.is_(None))
+    )
     count_stmt = select(func.count()).select_from(Optician).where(Optician.store_id == store_id, Optician.deleted_at.is_(None))
 
     if is_active is not None:

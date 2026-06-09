@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -6,7 +7,7 @@ import {
   X as XIcon, Building2, Store, Package, Filter,
   CheckCircle, Clock, XCircle, AlertTriangle, Tag,
   Layers, RotateCcw, ShoppingCart, TrendingUp, Truck,
-  RefreshCw, Trash2, Eye, IndianRupee,
+  RefreshCw, Trash2, Eye, IndianRupee, FileText,
 } from 'lucide-react';
 import Pagination from '../../components/shared/Pagination';
 import { useStoreStore, useAuthStore } from '../../store/store';
@@ -75,6 +76,38 @@ const TypeBadge = ({ type }) => {
       <Icon className="w-3 h-3" />
       {type}
     </span>
+  );
+};
+
+const DetailRow = ({ label, value, mono }) => (
+  <div className="flex items-start justify-between py-2.5 border-b border-slate-50 last:border-0 gap-3">
+    <span className="text-sm text-slate-500 font-medium shrink-0">{label}</span>
+    <span className={`text-sm font-semibold text-slate-900 text-right break-words min-w-0 ${mono ? 'font-mono' : ''}`}>
+      {value ?? '—'}
+    </span>
+  </div>
+);
+
+const Section = ({ icon: Icon, title, children, color = 'emerald' }) => {
+  const colours = {
+    emerald: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600',
+    blue:    'bg-blue-500/10 border-blue-500/20 text-blue-600',
+    purple:  'bg-purple-500/10 border-purple-500/20 text-purple-600',
+    amber:   'bg-amber-500/10 border-amber-500/20 text-amber-600',
+    rose:    'bg-rose-500/10 border-rose-500/20 text-rose-600',
+    slate:   'bg-slate-500/10 border-slate-500/20 text-slate-600',
+    violet:  'bg-violet-500/10 border-violet-500/20 text-violet-600',
+  };
+  return (
+    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+      <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-50">
+        <div className={`p-2 rounded-xl border ${colours[color]}`}>
+          <Icon className="w-4 h-4" />
+        </div>
+        <h3 className="text-sm font-bold text-slate-800">{title}</h3>
+      </div>
+      <div className="px-5 pt-1 pb-2">{children}</div>
+    </div>
   );
 };
 
@@ -262,8 +295,6 @@ const NewTransactionModal = ({
     ...stores.map(st => ({ id: String(st.id), name: st.store_name || st.name || `Store #${st.id}` }))
   ];
 
-  const receiverOptions = storeOptions.filter(opt => opt.id !== form.sender);
-
   const productOptions = form.type === 'Purchase'
     ? catalogProducts
     : inventoryItems.filter(item => !form.categoryId || String(item.category_id) === String(form.categoryId));
@@ -320,7 +351,7 @@ const NewTransactionModal = ({
                     <label className="text-xs font-semibold text-slate-600 mb-1.5 block">Receiver Store <span className="text-red-500">*</span></label>
                     <select value={form.receiver} onChange={e => set('receiver', e.target.value)} className={inputCls('receiver')}>
                       <option value="">Select receiver...</option>
-                      {receiverOptions.map(opt => (
+                      {storeOptions.filter(opt => opt.id !== form.sender).map(opt => (
                         <option key={opt.id} value={opt.id}>{opt.name}</option>
                       ))}
                     </select>
@@ -454,92 +485,105 @@ const NewTransactionModal = ({
 };
 
 /* ─────────────────────────────────────────────────────────
-   VIEW DETAIL MODAL
+   TRANSACTION DETAIL DRAWER
 ───────────────────────────────────────────────────────── */
-const ViewDetailModal = ({ transaction, onClose }) => {
+const TransactionDetailDrawer = ({ transaction, onClose }) => {
+  const [isOpen, setIsOpen] = useState(false);
+
+  useEffect(() => {
+    if (transaction) {
+      // Small delay to trigger animation
+      const timer = setTimeout(() => setIsOpen(true), 10);
+      return () => clearTimeout(timer);
+    } else {
+      setIsOpen(false);
+    }
+  }, [transaction]);
+
   if (!transaction) return null;
 
   const date = new Date(transaction.date);
-  const rows = [
-    { label: 'Transaction ID', value: transaction.id, mono: true },
-    { label: 'Date & Time', value: `${date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })} · ${date.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}` },
-    { label: 'Sender', value: transaction.sender },
-    { label: 'Receiver', value: transaction.receiver },
-    { label: 'Category', value: transaction.category },
-    { label: 'Product', value: transaction.product },
-    { label: 'Quantity', value: transaction.quantity },
-  ];
+  const formattedDate = `${date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })} · ${date.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}`;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-white w-full sm:max-w-lg sm:rounded-2xl shadow-2xl overflow-hidden">
+  return createPortal(
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[999] flex justify-end animate-fade-in font-sans">
+      <div className="absolute inset-0" onClick={onClose} aria-hidden />
+      
+      <div className={`relative w-full sm:max-w-md h-full bg-slate-50 shadow-2xl flex flex-col transition-transform duration-300 transform ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+        
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center">
-              <Eye className="w-4 h-4 text-slate-600" />
+        <div className="flex items-center justify-between px-5 py-4 bg-white border-b border-slate-100 flex-shrink-0">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center flex-shrink-0">
+              <ArrowRightLeft className="w-5 h-5 text-blue-600" />
             </div>
-            <div>
-              <h2 className="text-base font-bold text-slate-900">Transaction Details</h2>
-              <p className="text-xs font-mono text-slate-500">{transaction.id}</p>
+            <div className="min-w-0">
+              <h2 className="text-base font-bold text-slate-900 truncate">Transaction Details</h2>
+              <p className="text-xs text-slate-500 font-mono mt-0.5">{transaction.id}</p>
             </div>
           </div>
-          <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors">
+          <button onClick={onClose} className="p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 rounded-full transition-colors flex-shrink-0 ml-2">
             <XIcon className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Body */}
-        <div className="px-5 py-5 space-y-4">
-          {/* Status + Type row */}
-          <div className="flex items-center gap-3 flex-wrap">
+        {/* Status strip */}
+        <div className="px-5 py-3 bg-white border-b border-slate-100 flex-shrink-0 flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-2">
             <StatusBadge status={transaction.status} />
             <TypeBadge type={transaction.type} />
           </div>
+          <span className="text-xs text-slate-400 font-semibold">{formattedDate}</span>
+        </div>
 
-          {/* Transfer arrow */}
-          <div className="flex items-center gap-3 px-4 py-3.5 bg-gradient-to-r from-slate-50 to-slate-100 rounded-2xl border border-slate-200">
-            <div className="flex-1 min-w-0">
-              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-0.5">From</p>
-              <p className="font-bold text-slate-900 text-sm truncate">{transaction.sender}</p>
-            </div>
-            <div className="flex-shrink-0 w-8 h-8 bg-white border border-slate-200 rounded-full flex items-center justify-center shadow-sm">
-              <ArrowRightLeft className="w-4 h-4 text-slate-500" />
-            </div>
-            <div className="flex-1 min-w-0 text-right">
-              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-0.5">To</p>
-              <p className="font-bold text-slate-900 text-sm truncate">{transaction.receiver}</p>
-            </div>
-          </div>
-
-          {/* Details table */}
-          <div className="rounded-xl border border-slate-100 overflow-hidden">
-            {rows.slice(4).map((r, i) => (
-              <div key={r.label} className={`flex items-start justify-between px-4 py-3 ${i % 2 === 0 ? 'bg-white' : 'bg-slate-50'}`}>
-                <span className="text-xs font-semibold text-slate-500">{r.label}</span>
-                <span className={`text-xs font-bold text-slate-900 text-right max-w-[55%] ${r.mono ? 'font-mono' : ''}`}>{r.value}</span>
+        {/* Scrollable content */}
+        <div className="flex-1 overflow-y-auto hide-scrollbar px-4 py-4 space-y-3">
+          
+          {/* Section 1 - Transfer */}
+          <Section icon={ArrowRightLeft} title="Transfer" color="blue">
+            <div className="py-3">
+               <div className="flex items-center gap-3 px-4 py-3.5 bg-gradient-to-r from-slate-50 to-slate-100 rounded-2xl border border-slate-200">
+                <div className="flex-1 min-w-0">
+                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-0.5">From</p>
+                  <p className="font-bold text-slate-900 text-sm truncate">{transaction.sender}</p>
+                </div>
+                <div className="flex-shrink-0 w-8 h-8 bg-white border border-slate-200 rounded-full flex items-center justify-center shadow-sm">
+                  <ArrowRightLeft className="w-4 h-4 text-slate-500" />
+                </div>
+                <div className="flex-1 min-w-0 text-right">
+                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-0.5">To</p>
+                  <p className="font-bold text-slate-900 text-sm truncate">{transaction.receiver}</p>
+                </div>
               </div>
-            ))}
-          </div>
+            </div>
+          </Section>
 
-          {/* Remarks */}
+          {/* Section 2 - Details */}
+          <Section icon={FileText} title="Details" color="violet">
+            <DetailRow label="Category" value={transaction.category} />
+            <DetailRow label="Product" value={transaction.product} />
+            <DetailRow label="Quantity" value={transaction.quantity} />
+          </Section>
+
+          {/* Section 3 - Remarks */}
           {transaction.remarks && (
-            <div className="px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl">
-              <p className="text-[10px] font-semibold text-amber-600 uppercase tracking-wider mb-1">Remarks</p>
-              <p className="text-sm text-amber-800 font-medium">{transaction.remarks}</p>
+            <div className="px-5 py-4 bg-amber-50 border border-amber-200 rounded-2xl shadow-sm">
+              <p className="text-[10px] font-bold text-amber-600 uppercase tracking-widest mb-1">Remarks</p>
+              <p className="text-sm text-amber-900 font-medium leading-relaxed">{transaction.remarks}</p>
             </div>
           )}
         </div>
 
-        <div className="px-5 py-3 border-t border-slate-100 flex justify-end bg-slate-50">
+        {/* Footer */}
+        <div className="px-5 py-4 bg-white border-t border-slate-100 flex-shrink-0">
           <button onClick={onClose}
-            className="px-4 py-2 text-sm font-semibold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors">
+            className="w-full py-2.5 bg-slate-900 text-white rounded-xl font-semibold text-sm hover:bg-slate-700 transition-all shadow-md hover:shadow-lg">
             Close
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
@@ -577,7 +621,6 @@ const Transactions = () => {
     page: currentPage,
     limit: ITEMS_PER_PAGE,
   });
-  const { kpiItems: inventoryItems } = useInventory(storeId);
   const transactions = useMemo(() => backendTransactions.map((tx) => ({
     id: `TXN-${String(tx.id).padStart(6, '0')}`,
     rawId: tx.id,
@@ -995,7 +1038,7 @@ const Transactions = () => {
         stores={stores}
         isSubmitting={isCreatingTransaction}
       />
-      <ViewDetailModal
+      <TransactionDetailDrawer
         transaction={viewTx}
         onClose={() => setViewTx(null)}
       />
@@ -1004,4 +1047,3 @@ const Transactions = () => {
 };
 
 export default Transactions;
-
