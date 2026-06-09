@@ -1,11 +1,12 @@
 # API: sale/update.py
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from core.deps import get_current_admin
+from core.deps import get_current_user
 from db.session import get_db
 from models.admin import Admin
 from schemas.sale import SaleUpdate, SaleRead, SaleItemRead, SalePaymentRead
 from services.sale_service import get_sale, update_sale, cancel_sale
+from apis.customer.read import _get_user_admin_id
 
 router = APIRouter()
 
@@ -47,14 +48,22 @@ async def update_sale_endpoint(
     sale_id: int,
     payload: SaleUpdate,
     db: AsyncSession = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin),
+    current_user=Depends(get_current_user),
 ) -> SaleRead:
+    admin_id = _get_user_admin_id(current_user)
     sale = await get_sale(db, sale_id)
-    if not sale or sale.admin_id != current_admin.id:
+    if not sale or sale.admin_id != admin_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Sale not found",
         )
+    # Scoping check
+    if not isinstance(current_user, Admin):
+        if sale.store_id != current_user.store_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied to this store's sale records.",
+            )
     updated = await update_sale(db, sale, payload)
     return _sale_to_read(updated)
 
@@ -68,13 +77,21 @@ async def update_sale_endpoint(
 async def cancel_sale_endpoint(
     sale_id: int,
     db: AsyncSession = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin),
+    current_user=Depends(get_current_user),
 ) -> SaleRead:
+    admin_id = _get_user_admin_id(current_user)
     sale = await get_sale(db, sale_id)
-    if not sale or sale.admin_id != current_admin.id:
+    if not sale or sale.admin_id != admin_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Sale not found",
         )
-    cancelled = await cancel_sale(db, sale, cancelled_by=current_admin.id)
+    # Scoping check
+    if not isinstance(current_user, Admin):
+        if sale.store_id != current_user.store_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied to this store's sale records.",
+            )
+    cancelled = await cancel_sale(db, sale, cancelled_by=current_user.id)
     return _sale_to_read(cancelled)

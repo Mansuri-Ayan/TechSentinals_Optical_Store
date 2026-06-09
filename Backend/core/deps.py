@@ -80,7 +80,8 @@ async def get_current_user(
                 headers={"WWW-Authenticate": "Bearer"},
             )
     elif role_name == "manager":
-        stmt = select(Manager).where(Manager.id == user_id)
+        from sqlalchemy.orm import joinedload
+        stmt = select(Manager).options(joinedload(Manager.store)).where(Manager.id == user_id)
         result = await db.execute(stmt)
         user = result.scalar_one_or_none()
         if user is None or not user.is_active or user.deleted_at is not None:
@@ -90,7 +91,8 @@ async def get_current_user(
                 headers={"WWW-Authenticate": "Bearer"},
             )
     elif role_name == "worker":
-        stmt = select(Worker).where(Worker.id == user_id)
+        from sqlalchemy.orm import joinedload
+        stmt = select(Worker).options(joinedload(Worker.store)).where(Worker.id == user_id)
         result = await db.execute(stmt)
         user = result.scalar_one_or_none()
         if user is None or not user.is_active or user.deleted_at is not None:
@@ -100,7 +102,8 @@ async def get_current_user(
                 headers={"WWW-Authenticate": "Bearer"},
             )
     elif role_name == "optician":
-        stmt = select(Optician).where(Optician.id == user_id)
+        from sqlalchemy.orm import joinedload
+        stmt = select(Optician).options(joinedload(Optician.store)).where(Optician.id == user_id)
         result = await db.execute(stmt)
         user = result.scalar_one_or_none()
         if user is None or not user.is_active or user.deleted_at is not None:

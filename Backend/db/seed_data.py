@@ -658,6 +658,27 @@ PRODUCTS = [
             "size": "Adjustable",
         },
     },
+    {
+        "sku": "GENERIC-OPTICAL",
+        "name": "Custom Optical Item",
+        "category_index": 0,
+        "subcategory_index": 0,
+        "brand_index": 0,
+        "cost_price": 0.00,
+        "selling_price": 0.00,
+        "type": "frame",
+        "details": {
+            "frame_type": "Full-Rim",
+            "shape": "Custom",
+            "material": "Custom",
+            "color": "Custom",
+            "lens_width": "0",
+            "bridge_width": "0",
+            "temple_length": "0",
+            "gender": "Unisex",
+            "age_group": "Adult",
+        },
+    },
 ]
 
 # ── Inventories — admin warehouse + store stock for each product
@@ -1219,8 +1240,8 @@ async def seed() -> None:
         print("=" * 60)
         admin_inv_map = {}
         store_inv_map = {}
-        warehouse_quantities = [50, 40, 60, 70, 80, 200, 100, 150, 120, 180, 150, 300, 250, 100, 80]
-        store_quantities     = [10,  8, 12, 14, 16,  50,  20,  30,  24,  36,  30,  60,  50,  20, 16]
+        warehouse_quantities = [50, 40, 60, 70, 80, 200, 100, 150, 120, 180, 150, 300, 250, 100, 80, 100]
+        store_quantities     = [10,  8, 12, 14, 16,  50,  20,  30,  24,  36,  30,  60,  50,  20, 16, 100]
 
         for idx, admin_id in enumerate(admin_ids):
             product_ids = admin_product_map[admin_id]
@@ -1686,6 +1707,13 @@ async def seed() -> None:
                     pupillary_distance=p_data["pupillary_distance"],
                     prescription_date=p_data["prescription_date"],
                     notes=p_data["notes"],
+                    lens_type="Single Vision",
+                    lens_material="CR-39",
+                    lens_coating="Anti-Reflective",
+                    frame_preference="Full-Rim",
+                    expiry_date=p_data["prescription_date"] + timedelta(days=365),
+                    recommended_usage="Constant Wear",
+                    doctor_name=f"{opt.first_name} {opt.last_name}" if opt else "Optician",
                     is_active=True
                 )
                 session.add(prescription)

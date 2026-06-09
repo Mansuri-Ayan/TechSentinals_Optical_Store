@@ -22,6 +22,13 @@ class PrescriptionCreate(BaseModel):
     pupillary_distance: str | None = Field(default=None, max_length=10)
     prescription_date: date = Field(..., description="Date of the eye exam")
     notes: str | None = None
+    lens_type: str | None = Field(default=None, max_length=100)
+    lens_material: str | None = Field(default=None, max_length=100)
+    lens_coating: str | None = Field(default=None, max_length=100)
+    frame_preference: str | None = Field(default=None, max_length=100)
+    expiry_date: date | None = None
+    recommended_usage: str | None = Field(default=None, max_length=255)
+    doctor_name: str | None = Field(default=None, max_length=255)
 
 
 class PrescriptionUpdate(BaseModel):
@@ -38,6 +45,13 @@ class PrescriptionUpdate(BaseModel):
     prescription_date: date | None = None
     notes: str | None = None
     is_active: bool | None = None
+    lens_type: str | None = Field(default=None, max_length=100)
+    lens_material: str | None = Field(default=None, max_length=100)
+    lens_coating: str | None = Field(default=None, max_length=100)
+    frame_preference: str | None = Field(default=None, max_length=100)
+    expiry_date: date | None = None
+    recommended_usage: str | None = Field(default=None, max_length=255)
+    doctor_name: str | None = Field(default=None, max_length=255)
 
 
 class PrescriptionRead(BaseModel):
@@ -56,6 +70,13 @@ class PrescriptionRead(BaseModel):
     prescription_date: date
     notes: str | None = None
     is_active: bool
+    lens_type: str | None = None
+    lens_material: str | None = None
+    lens_coating: str | None = None
+    frame_preference: str | None = None
+    expiry_date: date | None = None
+    recommended_usage: str | None = None
+    doctor_name: str | None = None
     created_at: datetime
     updated_at: datetime
 

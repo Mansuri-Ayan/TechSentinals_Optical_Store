@@ -1,25 +1,14 @@
 # API: customer/create.py
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from core.deps import get_current_admin
+from core.deps import get_current_user
 from db.session import get_db
 from models.admin import Admin
 from schemas.customer import CustomerCreate, CustomerRead
-from services.customer_service import create_customer
+from services.customer_service import create_customer, get_customer
+from apis.customer.read import _get_user_admin_id, _customer_to_read
 
 router = APIRouter()
-
-
-def _customer_to_read(c) -> CustomerRead:
-    return CustomerRead(
-        **{col.key: getattr(c, col.key) for col in c.__table__.columns},
-        store_name=(
-            c.store.store_name if c.store else None
-        ),
-        first_visit_store_name=(
-            c.first_visit_store.store_name if c.first_visit_store else None
-        ),
-    )
 
 
 @router.post(
@@ -32,7 +21,14 @@ def _customer_to_read(c) -> CustomerRead:
 async def create_customer_endpoint(
     payload: CustomerCreate,
     db: AsyncSession = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin),
+    current_user=Depends(get_current_user),
 ) -> CustomerRead:
-    customer = await create_customer(db, admin_id=current_admin.id, payload=payload)
-    return _customer_to_read(customer)
+    admin_id = _get_user_admin_id(current_user)
+    if not isinstance(current_user, Admin):
+        # Enforce store scoping
+        payload.store_id = current_user.store_id
+        payload.first_visit_store_id = current_user.store_id
+
+    customer = await create_customer(db, admin_id=admin_id, payload=payload)
+    customer_detail = await get_customer(db, customer.id)
+    return _customer_to_read(customer_detail)

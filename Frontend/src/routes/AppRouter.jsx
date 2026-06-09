@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+  import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore, useStoreStore } from '../store/store';
 import Login from '../pages/auth/Login';
 import ProfileHome from '../pages/auth/ProfileHome';
@@ -30,7 +30,7 @@ const LoadingSpinner = () => (
   </div>
 );
 
-// Route for non-logged in users (Guests)
+// Route for non-logged in users (Guests) 
 const GuestRoute = ({ children }) => {
   const { isAuthenticated, user, isLoading } = useAuthStore();
 
@@ -64,8 +64,6 @@ const PrivateRoute = ({ children }) => {
   return children;
 };
 
-<<<<<<< Updated upstream
-=======
 // Route specifically for Admins
 /* eslint-disable-next-line no-unused-vars */
 const AdminRoute = ({ children }) => {
@@ -86,7 +84,6 @@ const AdminRoute = ({ children }) => {
   return children;
 };
 
->>>>>>> Stashed changes
 // Route specifically for Home (Redirects admin to dashboard, others to ProfileHome)
 const HomeRoute = () => {
   const { user, isLoading } = useAuthStore();

@@ -1,7 +1,7 @@
 # API: prescription/read.py
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from core.deps import get_current_admin
+from core.deps import get_current_user
 from db.session import get_db
 from models.admin import Admin
 from schemas.prescription import PrescriptionRead, PrescriptionListRead
@@ -11,6 +11,7 @@ from services.prescription_service import (
     list_prescriptions_for_customer,
 )
 from services.customer_service import get_customer
+from apis.customer.read import _get_user_admin_id
 
 router = APIRouter()
 
@@ -64,14 +65,21 @@ async def list_prescriptions_endpoint(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin),
+    current_user=Depends(get_current_user),
 ) -> list[PrescriptionListRead]:
+    admin_id = _get_user_admin_id(current_user)
     # Verify customer belongs to this admin
     customer = await get_customer(db, customer_id)
-    if not customer or customer.admin_id != current_admin.id:
+    if not customer or customer.admin_id != admin_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Customer not found",
+        )
+    # Scoping check
+    if not isinstance(current_user, Admin) and customer.store_id != current_user.store_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied to this store's customer.",
         )
     prescriptions = await list_prescriptions_for_customer(
         db, customer_id, limit=limit, offset=offset
@@ -88,14 +96,21 @@ async def list_prescriptions_endpoint(
 async def get_active_prescription_endpoint(
     customer_id: int,
     db: AsyncSession = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin),
+    current_user=Depends(get_current_user),
 ) -> PrescriptionRead | None:
+    admin_id = _get_user_admin_id(current_user)
     # Verify customer belongs to this admin
     customer = await get_customer(db, customer_id)
-    if not customer or customer.admin_id != current_admin.id:
+    if not customer or customer.admin_id != admin_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Customer not found",
+        )
+    # Scoping check
+    if not isinstance(current_user, Admin) and customer.store_id != current_user.store_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied to this store's customer.",
         )
     prescription = await get_active_prescription(db, customer_id)
     if not prescription:
@@ -112,8 +127,9 @@ async def get_active_prescription_endpoint(
 async def get_prescription_endpoint(
     prescription_id: int,
     db: AsyncSession = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin),
+    current_user=Depends(get_current_user),
 ) -> PrescriptionRead:
+    admin_id = _get_user_admin_id(current_user)
     prescription = await get_prescription(db, prescription_id)
     if not prescription:
         raise HTTPException(
@@ -121,9 +137,16 @@ async def get_prescription_endpoint(
             detail="Prescription not found",
         )
     # Verify customer belongs to this admin
-    if prescription.customer and prescription.customer.admin_id != current_admin.id:
+    if prescription.customer and prescription.customer.admin_id != admin_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Prescription not found",
         )
+    # Scoping check
+    if not isinstance(current_user, Admin):
+        if prescription.customer and prescription.customer.store_id != current_user.store_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied to this store's prescriptions.",
+            )
     return _prescription_to_read(prescription)

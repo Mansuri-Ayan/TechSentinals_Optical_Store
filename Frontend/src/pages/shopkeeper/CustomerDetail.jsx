@@ -1,11 +1,11 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   ChevronLeft, ChevronRight, User, Mail, Phone, MapPin,
   ShoppingBag, Calendar, Eye, Clock, AlertTriangle,
   CheckCircle, TrendingUp, Info, FileText, History, Plus
 } from 'lucide-react';
-import { getCustomers, updateOrderStatus, updatePaymentStatus } from '../../services/customerService';
+import { useCustomer, useCustomerMutations } from '../../hooks/useCustomers';
 import AddOpticalModal from '../../components/shopkeeper/AddOpticalModal';
 import AddOrderModal from '../../components/shopkeeper/AddOrderModal';
 
@@ -59,93 +59,104 @@ const CustomerDetail = () => {
   const { customerId } = useParams();
   const navigate = useNavigate();
 
-  const [customers, setCustomers] = useState(() => getCustomers());
+  const { customer: c, isLoading } = useCustomer(customerId);
+  const {
+    createPrescriptionAsync,
+    addSalePaymentAsync,
+    updateSaleAsync,
+    createManualOrderAsync,
+    isMutating
+  } = useCustomerMutations(customerId);
+
   const [activeTab, setActiveTab] = useState('info');
   const [showOpticalModal, setShowOpticalModal] = useState(false);
   const [showOrderModal, setShowOrderModal] = useState(false);
 
-  // Sync to local storage
-  useEffect(() => {
-    localStorage.setItem('shopkeeper_customers', JSON.stringify(customers));
-  }, [customers]);
-
-  const c = useMemo(() => {
-    return customers.find(item => String(item.id) === String(customerId));
-  }, [customers, customerId]);
-
-  const refreshState = () => {
-    setCustomers(getCustomers());
+  const handleUpdatePrescription = async (prescriptionData) => {
+    try {
+      await createPrescriptionAsync({
+        customerId: Number(customerId),
+        ...prescriptionData
+      });
+      setShowOpticalModal(false);
+    } catch (e) {
+      console.error(e);
+    }
   };
 
-  const handleUpdatePrescription = (prescriptionData) => {
-    const updatedCustomer = {
-      ...c,
-      prescription: prescriptionData,
-      prescriptionHistory: [prescriptionData, ...(c.prescriptionHistory || [])],
-      history: [
-        {
-          date: prescriptionData.prescriptionDate,
-          event: 'Prescription Updated',
-          description: `Prescription updated by ${prescriptionData.doctorName || 'Dr. Anil Sharma'}`,
-        },
-        ...(c.history || [])
-      ]
+  const handleAddOrder = async (orderData) => {
+    try {
+      await createManualOrderAsync({
+        customerId: Number(customerId),
+        payload: orderData
+      });
+      setShowOrderModal(false);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleStatusChange = async (orderId, newStatus) => {
+    const order = c.orders?.find(o => String(o.id) === String(orderId));
+    if (!order) return;
+    
+    // Map status string: Pending, In Progress, Ready, Delivered -> PENDING, COMPLETED, etc.
+    const backendStatusMap = {
+      "Pending": "PENDING",
+      "In Progress": "PARTIALLY_PAID",
+      "Ready": "PARTIALLY_PAID",
+      "Delivered": "COMPLETED",
     };
-    setCustomers(prev => prev.map(item => String(item.id) === String(customerId) ? updatedCustomer : item));
-    setShowOpticalModal(false);
+    const backendStatus = backendStatusMap[newStatus] || "PENDING";
+    
+    try {
+      await updateSaleAsync({
+        saleId: order.dbId,
+        payload: { status: backendStatus }
+      });
+    } catch (e) {
+      console.error(e);
+    }
   };
 
-  const handleAddOrder = (orderData) => {
-    const newOrder = {
-      id: orderData.orderNumber,
-      date: orderData.orderDate,
-      items: [
-        {
-          productName: orderData.frameName,
-          frameName: orderData.frameName,
-          quantity: 1,
-          price: Number(orderData.amount),
-          amount: Number(orderData.amount),
-        }
-      ],
-      subtotal: Number(orderData.amount),
-      discount: 0,
-      amount: Number(orderData.amount),
-      status: orderData.status || 'Pending',
-      paymentMethod: 'Cash',
-      paymentStatus: 'Paid',
-      receivedAmount: Number(orderData.amount),
-      remainingAmount: 0,
-      upiId: '',
-    };
+  const handlePaymentStatusChange = async (orderId, newPaymentStatus, additionalPaidAmount = 0) => {
+    const order = c.orders?.find(o => String(o.id) === String(orderId));
+    if (!order) return;
 
-    const updatedCustomer = {
-      ...c,
-      orders: [newOrder, ...(c.orders || [])],
-      totalOrders: (c.totalOrders || 0) + 1,
-      totalAmount: (c.totalAmount || 0) + Number(orderData.amount),
-      history: [
-        {
-          date: orderData.orderDate,
-          event: 'New Order Created',
-          description: `Order ${orderData.orderNumber} for ${orderData.frameName} placed`,
-        },
-        ...(c.history || [])
-      ]
-    };
-    setCustomers(prev => prev.map(item => String(item.id) === String(customerId) ? updatedCustomer : item));
-    setShowOrderModal(false);
+    try {
+      if (newPaymentStatus === 'Paid') {
+        await addSalePaymentAsync({
+          saleId: order.dbId,
+          payload: {
+            amount: Number(order.remainingAmount),
+            payment_method: 'CASH',
+            remarks: 'Full payment balance closure'
+          }
+        });
+      } else if (newPaymentStatus === 'Partial') {
+        await addSalePaymentAsync({
+          saleId: order.dbId,
+          payload: {
+            amount: Number(additionalPaidAmount),
+            payment_method: 'CASH',
+            remarks: 'Instalment cash receipt'
+          }
+        });
+      } else if (newPaymentStatus === 'Unpaid') {
+        alert('To mark a sale as unpaid, please cancel the sale or contact an admin.');
+      }
+    } catch (e) {
+      console.error(e);
+    }
   };
 
-  const handleStatusChange = (orderId, newStatus) => {
-    updateOrderStatus(c.id, orderId, newStatus);
-    refreshState();
-  };
-
-  const handlePaymentStatusChange = (orderId, newPaymentStatus, additionalPaidAmount = 0) => {
-    updatePaymentStatus(c.id, orderId, newPaymentStatus, additionalPaidAmount);
-    refreshState();
-  };
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
+      </div>
+    );
+  }
 
   if (!c) {
     return (

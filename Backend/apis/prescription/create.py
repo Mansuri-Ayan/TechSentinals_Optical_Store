@@ -1,12 +1,14 @@
 # API: prescription/create.py
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from core.deps import get_current_admin
+from core.deps import get_current_user
 from db.session import get_db
 from models.admin import Admin
+from models.optician import Optician
 from schemas.prescription import PrescriptionCreate, PrescriptionRead
-from services.prescription_service import create_prescription
+from services.prescription_service import create_prescription, get_prescription
 from services.customer_service import get_customer
+from apis.customer.read import _get_user_admin_id
 
 router = APIRouter()
 
@@ -41,14 +43,28 @@ def _prescription_to_read(p) -> PrescriptionRead:
 async def create_prescription_endpoint(
     payload: PrescriptionCreate,
     db: AsyncSession = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin),
+    current_user=Depends(get_current_user),
 ) -> PrescriptionRead:
+    admin_id = _get_user_admin_id(current_user)
     # Verify customer belongs to this admin
     customer = await get_customer(db, payload.customer_id)
-    if not customer or customer.admin_id != current_admin.id:
+    if not customer or customer.admin_id != admin_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Customer not found",
         )
+    # Scoping check
+    if not isinstance(current_user, Admin):
+        if customer.store_id != current_user.store_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied to this store's customer.",
+            )
+        # Assign store_id and optician_id automatically
+        payload.store_id = current_user.store_id
+        if isinstance(current_user, Optician):
+            payload.optician_id = current_user.id
+
     prescription = await create_prescription(db, payload=payload)
-    return _prescription_to_read(prescription)
+    p = await get_prescription(db, prescription.id)
+    return _prescription_to_read(p)

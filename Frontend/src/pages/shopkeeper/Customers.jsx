@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Search, Users, ChevronRight, X as XIcon, UserCheck, UserPlus, Repeat } from 'lucide-react';
 import Pagination from '../../components/shared/Pagination';
-import { getCustomers } from '../../services/customerService';
+import { useCustomers } from '../../hooks/useCustomers';
 
 const ITEMS_PER_PAGE = 12;
 
@@ -36,7 +36,7 @@ const Customers = () => {
   const navigate = useNavigate();
   
   // Load customers via service layer
-  const [customers] = useState(() => getCustomers());
+  const { customers, isLoading } = useCustomers();
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState('All');
@@ -74,6 +74,14 @@ const Customers = () => {
       repeat: customers.filter(c => c.totalOrders > 1).length,
     };
   }, [customers]);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto animate-fade-in font-sans">

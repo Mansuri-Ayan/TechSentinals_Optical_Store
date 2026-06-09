@@ -117,6 +117,42 @@ class Prescription(Base):
         comment="Optician notes on the prescription",
     )
 
+    lens_type = Column(
+        String(100),
+        nullable=True,
+        comment="Type of lens prescribed",
+    )
+    lens_material = Column(
+        String(100),
+        nullable=True,
+        comment="Material of the lenses",
+    )
+    lens_coating = Column(
+        String(100),
+        nullable=True,
+        comment="Coating applied to the lenses",
+    )
+    frame_preference = Column(
+        String(100),
+        nullable=True,
+        comment="Customer frame type preference",
+    )
+    expiry_date = Column(
+        Date,
+        nullable=True,
+        comment="Expiry date of the prescription",
+    )
+    recommended_usage = Column(
+        String(255),
+        nullable=True,
+        comment="Usage instructions (e.g. reading only, constant wear)",
+    )
+    doctor_name = Column(
+        String(255),
+        nullable=True,
+        comment="Name of the examining doctor / optician",
+    )
+
     is_active = Column(
         Boolean,
         nullable=False,

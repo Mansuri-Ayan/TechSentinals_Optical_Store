@@ -79,6 +79,13 @@ class CustomerRead(BaseModel):
     store_name: str | None = None
     first_visit_store_name: str | None = None
 
+    # Aggregates
+    total_orders: int = 0
+    total_amount: float = 0.0
+    outstanding_balance: float = 0.0
+    last_visit: date | None = None
+    status: str = "Active"
+
     model_config = {"from_attributes": True}
 
 
@@ -99,4 +106,19 @@ class CustomerListRead(BaseModel):
     # Denormalized
     store_name: str | None = None
 
+    # Aggregates
+    total_orders: int = 0
+    total_amount: float = 0.0
+    outstanding_balance: float = 0.0
+    last_visit: date | None = None
+    status: str = "Active"
+
     model_config = {"from_attributes": True}
+
+
+class CustomerDetailRead(CustomerRead):
+    """Detailed customer schema including orders, active prescription, prescription history, and compiled activity history."""
+    orders: list[dict] = []
+    prescription: dict | None = None
+    prescription_history: list[dict] = []
+    history: list[dict] = []
