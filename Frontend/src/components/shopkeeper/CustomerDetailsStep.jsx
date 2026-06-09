@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Search, User, Mail, Phone, MapPin, Calendar, ArrowLeft, ArrowRight, UserCheck, Edit3, UserPlus, ShoppingBag, Eye } from 'lucide-react';
 import { getCustomers } from '../../services/customerService';
 
@@ -386,7 +386,7 @@ const CustomerDetailsStep = ({ formState, onSaveState, onBack, onNext }) => {
           type="button"
         >
           <ArrowLeft className="w-4 h-4" />
-          Back to Products
+          Cancel Checkout
         </button>
 
         <button

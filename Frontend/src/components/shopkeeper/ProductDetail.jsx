@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Tag, CheckCircle2, AlertTriangle, AlertCircle, ShoppingCart } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, AlertCircle, ShoppingCart } from 'lucide-react';
 
 const statusConfig = {
   'In Stock':     { color: 'text-emerald-700 bg-emerald-50 border-emerald-200', icon: CheckCircle2 },

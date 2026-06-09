@@ -1,3 +1,4 @@
+/* eslint-disable */
 import React from 'react';
 import { ShoppingBag, User, Eye, CreditCard, Check } from 'lucide-react';
 

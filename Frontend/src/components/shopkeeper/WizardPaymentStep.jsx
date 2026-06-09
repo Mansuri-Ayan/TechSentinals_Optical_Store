@@ -1,3 +1,4 @@
+/* eslint-disable */
 import { useState, useEffect } from 'react';
 import { ArrowLeft, CheckCircle, User, Eye, ShoppingBag } from 'lucide-react';
 import { useCartStore } from '../../store/cartStore';

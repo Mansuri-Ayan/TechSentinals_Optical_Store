@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
 import { Coins, Smartphone, CreditCard, CheckCircle2, Clock, AlertCircle, Sparkles } from 'lucide-react';
 
 const PaymentForm = ({
@@ -32,12 +32,14 @@ const PaymentForm = ({
       remaining = Math.max(0, finalAmount - received);
     }
 
-    onPaymentChange({
-      ...payment,
-      receivedAmount: received,
-      remainingAmount: remaining,
-    });
-  }, [finalAmount, payment.status]);
+    if (received !== payment.receivedAmount || remaining !== payment.remainingAmount) {
+      onPaymentChange({
+        ...payment,
+        receivedAmount: received,
+        remainingAmount: remaining,
+      });
+    }
+  }, [finalAmount, payment, subtotal, onPaymentChange]);
 
   const handleMethodChange = (method) => {
     onPaymentChange({

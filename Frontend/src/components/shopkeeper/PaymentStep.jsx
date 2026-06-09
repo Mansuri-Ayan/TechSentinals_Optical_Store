@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { ArrowLeft, CheckCircle } from 'lucide-react';
 import OrderSummary from './OrderSummary';
 import PaymentForm from './PaymentForm';
@@ -20,8 +20,8 @@ const PaymentStep = ({ customer, cart, prescription, onBack, onComplete }) => {
 
   const finalAmount = Math.max(0, subtotal - discount);
 
-  // Auto-sync received amount on discount change
-  useEffect(() => {
+  const [prevFinalAmount, setPrevFinalAmount] = useState(finalAmount);
+  if (finalAmount !== prevFinalAmount) {
     setPayment((prev) => {
       let received = prev.receivedAmount;
       let remaining = prev.remainingAmount;
@@ -44,7 +44,8 @@ const PaymentStep = ({ customer, cart, prescription, onBack, onComplete }) => {
         remainingAmount: remaining,
       };
     });
-  }, [discount, finalAmount]);
+    setPrevFinalAmount(finalAmount);
+  }
 
   const handleComplete = () => {
     // Validate UPI ID

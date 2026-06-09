@@ -1,5 +1,4 @@
-import React from 'react';
-import { User, Eye, ShoppingBag, Sparkles, Calendar } from 'lucide-react';
+import { User, Eye, ShoppingBag } from 'lucide-react';
 
 const GRAD_PALETTE = [
   'from-blue-400 to-indigo-600',

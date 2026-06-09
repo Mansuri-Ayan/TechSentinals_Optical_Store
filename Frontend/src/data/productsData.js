@@ -8,11 +8,11 @@ export const PRODUCT_CATEGORIES = {
 };
 
 export const FRAME_SUBCATEGORIES = [
-  'Full Rim', 'Half Rim', 'Rimless', 'Metal Frame', 'Plastic Frame'
+  'Full Rim', 'Half Rim', 'Rimless', 'Metal Frame', 'Plastic Frame', 'full-rim frame', 'half-rim frame'
 ];
 
 export const LENS_SUBCATEGORIES = [
-  'Single Vision', 'Progressive', 'Bifocal', 'Blue Cut', 'Photochromic'
+  'Single Vision', 'Progressive', 'Bifocal', 'Blue Cut', 'Photochromic', 'progressive', 'single vision'
 ];
 
 export const MOCK_PRODUCTS = [
@@ -273,6 +273,70 @@ export const MOCK_PRODUCTS = [
     features: ['Selective Blue-Violet Filtering', 'Prevents Premature Eye Aging', 'No Color Distortion', 'Ultimate Reflection Shield'],
     availableColors: ['Clear'],
     availableSizes: ['Standard Index (1.5)', 'Thin Index (1.6)', 'Ultra Thin (1.67)'],
+    image: null,
+  },
+  {
+    id: 17,
+    product_name: 'Vincent Chase Blend Full Rim',
+    brand: 'Vincent Chase',
+    category: 'Frames',
+    subcategory: 'full-rim frame',
+    sku: 'FR-VC-017',
+    selling_price: 3200,
+    available_quantity: 10,
+    reorder_level: 3,
+    description: 'Classic full-rim acetate frame designed for durable daily use.',
+    features: ['Acetate Frame', 'Spring Hinges', 'Full-Rim Design'],
+    availableColors: ['Black', 'Blue', 'Grey'],
+    availableSizes: ['Medium', 'Large'],
+    image: null,
+  },
+  {
+    id: 18,
+    product_name: 'John Jacobs Club Half Rim',
+    brand: 'John Jacobs',
+    category: 'Frames',
+    subcategory: 'half-rim frame',
+    sku: 'FR-JJ-018',
+    selling_price: 4800,
+    available_quantity: 8,
+    reorder_level: 2,
+    description: 'Sleek half-rim frame combining matte steel with comfortable acetate temples.',
+    features: ['Matte Steel Front', 'Lightweight temples', 'Half-Rim Design'],
+    availableColors: ['Matte Black', 'Brown', 'Gunmetal'],
+    availableSizes: ['Standard'],
+    image: null,
+  },
+  {
+    id: 19,
+    product_name: 'Hoya Balans Progressive',
+    brand: 'Hoya',
+    category: 'Lenses',
+    subcategory: 'progressive',
+    sku: 'LN-HY-019',
+    selling_price: 13500,
+    available_quantity: 6,
+    reorder_level: 2,
+    description: 'High-definition progressive lenses with wide reading zones.',
+    features: ['HD Surfacing', 'Smooth Transitions', 'Minimized swim effect'],
+    availableColors: ['Clear', 'Transitions Grey'],
+    availableSizes: ['Standard Index (1.5)', 'Thin Index (1.6)'],
+    image: null,
+  },
+  {
+    id: 20,
+    product_name: 'Zeiss DuraVision Single Vision',
+    brand: 'Zeiss',
+    category: 'Lenses',
+    subcategory: 'single vision',
+    sku: 'LN-ZS-020',
+    selling_price: 6800,
+    available_quantity: 12,
+    reorder_level: 4,
+    description: 'Premium single vision lenses with DuraVision anti-reflective coating.',
+    features: ['Anti-Reflective Coating', 'High Clarity', 'Scratch Resistant'],
+    availableColors: ['Clear'],
+    availableSizes: ['Standard Index (1.5)', 'Thin Index (1.6)'],
     image: null,
   },
 ];

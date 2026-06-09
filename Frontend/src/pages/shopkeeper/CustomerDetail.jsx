@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   ChevronLeft, ChevronRight, User, Mail, Phone, MapPin,
@@ -64,8 +64,7 @@ const CustomerDetail = () => {
     createPrescriptionAsync,
     addSalePaymentAsync,
     updateSaleAsync,
-    createManualOrderAsync,
-    isMutating
+    createManualOrderAsync
   } = useCustomerMutations(customerId);
 
   const [activeTab, setActiveTab] = useState('info');

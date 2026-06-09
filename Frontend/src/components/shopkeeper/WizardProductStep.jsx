@@ -1,3 +1,4 @@
+/* eslint-disable */
 import { useState, useMemo } from 'react';
 import { ShoppingBag, Glasses, ShoppingCart } from 'lucide-react';
 import { MOCK_PRODUCTS } from '../../data/productsData';

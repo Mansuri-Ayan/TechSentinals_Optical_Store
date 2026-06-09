@@ -1,10 +1,10 @@
 import { useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { LayoutDashboard, LogOut, Glasses, X, Users, Store } from 'lucide-react';
+import { LayoutDashboard, LogOut, Glasses, X, Users, Store, Package, ShoppingCart, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useAuthStore } from '../../store/store';
 
-const ShopkeeperSidebar = ({ isOpen, onClose }) => {
+const ShopkeeperSidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) => {
   const location = useLocation();
   const { logout, isLoggingOut } = useAuth();
   const { user } = useAuthStore();
@@ -36,110 +36,154 @@ const ShopkeeperSidebar = ({ isOpen, onClose }) => {
       <div
         className={`
           fixed top-0 left-0 h-full z-50
-          w-[350px] shrink-0 bg-[#0A0F1F] text-slate-300 flex flex-col border-r border-white/5 shadow-2xl
-          transition-transform duration-300 ease-in-out
+          shrink-0 bg-[#0A0F1F] text-slate-300 flex flex-col border-r border-white/5 shadow-2xl
+          transition-all duration-300 ease-in-out
           lg:translate-x-0 lg:static lg:z-20
           ${isOpen ? 'translate-x-0' : '-translate-x-full'}
+          ${isCollapsed ? 'w-[88px]' : 'w-[320px]'}
         `}
       >
         {/* Sidebar Header */}
-        <div className="h-24 flex items-center px-6 border-b border-white/10 relative">
-          <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 mr-3 shadow-[0_0_15px_rgba(16,185,129,0.15)]">
+        <div className={`h-24 flex items-center ${isCollapsed ? 'justify-center px-2' : 'px-6'} border-b border-white/10 relative`}>
+          <div className={`flex items-center justify-center w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.15)] flex-shrink-0 ${isCollapsed ? '' : 'mr-3'}`}>
             <Glasses className="w-5 h-5 text-emerald-400 flex-shrink-0" />
           </div>
 
-          <h2 className="text-lg font-semibold tracking-tight text-white truncate">Shopkeeper</h2>
+          {!isCollapsed && (
+            <h2 className="text-lg font-semibold tracking-tight text-white truncate animate-fade-in">Inventory Portal</h2>
+          )}
+
+          {/* Toggle Button for collapsing on desktop */}
+          {!isOpen && (
+            <button
+              onClick={onToggleCollapse}
+              className={`hidden lg:flex p-1.5 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors flex-shrink-0 ${isCollapsed ? 'mt-2' : 'ml-auto'}`}
+              title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+              type="button"
+            >
+              {isCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+            </button>
+          )}
 
           {/* Mobile Close Button */}
           <button
             onClick={onClose}
             className="lg:hidden ml-auto p-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors flex-shrink-0"
             aria-label="Close sidebar"
+            type="button"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Navigation Links */}
-        <nav className="flex-1 px-4 py-6 sm:py-8 space-y-1.5 overflow-y-auto hide-scrollbar">
-          <div className="px-4 mb-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Overview</div>
+        <nav className={`flex-1 ${isCollapsed ? 'px-2' : 'px-4'} py-6 sm:py-8 space-y-1.5 overflow-y-auto hide-scrollbar`}>
+          {!isCollapsed && (
+            <div className="px-4 mb-3 text-xs font-semibold text-slate-500 uppercase tracking-wider animate-fade-in">Overview</div>
+          )}
 
           <NavLink
             to="/shopkeeper"
             end
+            title={isCollapsed ? "POS Checkout" : undefined}
             className={({ isActive }) =>
-              `flex items-center px-4 py-2.5 rounded-xl transition-all duration-200 group ${isActive
+              `flex items-center ${isCollapsed ? 'justify-center px-0' : 'px-4'} py-2.5 rounded-xl transition-all duration-200 group ${isActive
                 ? 'bg-emerald-500/10 text-emerald-400 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_0_10px_rgba(16,185,129,0.1)] border border-emerald-500/20'
                 : 'text-slate-400 hover:bg-white/5 hover:text-slate-200 border border-transparent'
               }`
             }
           >
-            <Store className="w-5 h-5 mr-3 transition-transform group-hover:scale-110" />
-            <span className="font-medium text-sm">Shopkeeper</span>
+            <Store className={`w-5 h-5 transition-transform group-hover:scale-110 flex-shrink-0 ${isCollapsed ? '' : 'mr-3'}`} />
+            {!isCollapsed && <span className="font-medium text-sm truncate animate-fade-in">POS Checkout</span>}
           </NavLink>
 
           <NavLink
             to="/shopkeeper/dashboard"
+            title={isCollapsed ? "Dashboard" : undefined}
             className={({ isActive }) =>
-              `flex items-center px-4 py-2.5 rounded-xl transition-all duration-200 group ${isActive
+              `flex items-center ${isCollapsed ? 'justify-center px-0' : 'px-4'} py-2.5 rounded-xl transition-all duration-200 group ${isActive
                 ? 'bg-emerald-500/10 text-emerald-400 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_0_10px_rgba(16,185,129,0.1)] border border-emerald-500/20'
-                : 'text-slate-400 hover:bg-white/5 hover:text-slate-200 border border-transparent'
+                : 'text-slate-400 hover:bg-white/5 hover:text-slate-205 border border-transparent'
               }`
             }
           >
-            <LayoutDashboard className="w-5 h-5 mr-3 transition-transform group-hover:scale-110" />
-            <span className="font-medium text-sm">Dashboard</span>
+            <LayoutDashboard className={`w-5 h-5 transition-transform group-hover:scale-110 flex-shrink-0 ${isCollapsed ? '' : 'mr-3'}`} />
+            {!isCollapsed && <span className="font-medium text-sm truncate animate-fade-in">Dashboard</span>}
           </NavLink>
 
           <NavLink
             to="/shopkeeper/customers"
+            title={isCollapsed ? "Customers" : undefined}
             className={({ isActive }) => {
               const isCustomersActive = isActive || location.pathname.startsWith('/shopkeeper/customers');
-              return `flex items-center px-4 py-2.5 rounded-xl transition-all duration-200 group ${isCustomersActive
+              return `flex items-center ${isCollapsed ? 'justify-center px-0' : 'px-4'} py-2.5 rounded-xl transition-all duration-200 group ${isCustomersActive
                 ? 'bg-emerald-500/10 text-emerald-400 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_0_10px_rgba(16,185,129,0.1)] border border-emerald-500/20'
                 : 'text-slate-400 hover:bg-white/5 hover:text-slate-200 border border-transparent'
               }`;
             }}
           >
-            <Users className="w-5 h-5 mr-3 transition-transform group-hover:scale-110" />
-            <span className="font-medium text-sm">Customers</span>
+            <Users className={`w-5 h-5 transition-transform group-hover:scale-110 flex-shrink-0 ${isCollapsed ? '' : 'mr-3'}`} />
+            {!isCollapsed && <span className="font-medium text-sm truncate animate-fade-in">Customers</span>}
           </NavLink>
 
           <NavLink
-            to="/shopkeeper/products"
+            to="/shopkeeper/inventory"
+            title={isCollapsed ? "Inventory" : undefined}
             className={({ isActive }) => {
-              const isProductsActive = isActive || location.pathname.startsWith('/shopkeeper/products');
-              return `flex items-center px-4 py-2.5 rounded-xl transition-all duration-200 group ${isProductsActive
+              const isInventoryActive = isActive || location.pathname.startsWith('/shopkeeper/inventory');
+              return `flex items-center ${isCollapsed ? 'justify-center px-0' : 'px-4'} py-2.5 rounded-xl transition-all duration-200 group ${isInventoryActive
                 ? 'bg-emerald-500/10 text-emerald-400 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_0_10px_rgba(16,185,129,0.1)] border border-emerald-500/20'
-                : 'text-slate-400 hover:bg-white/5 hover:text-slate-200 border border-transparent'
+                : 'text-slate-400 hover:bg-white/5 hover:text-slate-205 border border-transparent'
               }`;
             }}
           >
-            <Glasses className="w-5 h-5 mr-3 transition-transform group-hover:scale-110" />
-            <span className="font-medium text-sm">Products</span>
+            <Package className={`w-5 h-5 transition-transform group-hover:scale-110 flex-shrink-0 ${isCollapsed ? '' : 'mr-3'}`} />
+            {!isCollapsed && <span className="font-medium text-sm truncate animate-fade-in">Inventory</span>}
+          </NavLink>
+
+          <NavLink
+            to="/shopkeeper/sales"
+            title={isCollapsed ? "Sales" : undefined}
+            className={({ isActive }) => {
+              const isSalesActive = isActive || location.pathname.startsWith('/shopkeeper/sales');
+              return `flex items-center ${isCollapsed ? 'justify-center px-0' : 'px-4'} py-2.5 rounded-xl transition-all duration-200 group ${isSalesActive
+                ? 'bg-emerald-500/10 text-emerald-400 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_0_10px_rgba(16,185,129,0.1)] border border-emerald-500/20'
+                : 'text-slate-400 hover:bg-white/5 hover:text-slate-205 border border-transparent'
+              }`;
+            }}
+          >
+            <ShoppingCart className={`w-5 h-5 transition-transform group-hover:scale-110 flex-shrink-0 ${isCollapsed ? '' : 'mr-3'}`} />
+            {!isCollapsed && <span className="font-medium text-sm truncate animate-fade-in">Sales</span>}
           </NavLink>
         </nav>
 
         {/* User Profile & Footer */}
-        <div className="p-4 border-t border-white/10 bg-[#060a16]">
+        <div className={`p-4 border-t border-white/10 bg-[#060a16] ${isCollapsed ? 'flex flex-col items-center gap-2' : ''}`}>
           {/* Profile Card */}
-          <div className="flex items-center px-3 sm:px-4 py-3 mb-2 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 transition-colors cursor-pointer">
+          <div 
+            title={isCollapsed ? (user?.full_name || 'Inventory Portal') : undefined}
+            className={`flex items-center ${isCollapsed ? 'justify-center w-10 h-10 p-0 rounded-full' : 'px-3 sm:px-4 py-3 rounded-xl'} mb-2 bg-white/5 border border-white/5 hover:bg-white/10 transition-colors cursor-pointer w-full`}
+          >
             <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-emerald-400 to-emerald-600 flex items-center justify-center text-white font-bold text-sm shadow-md flex-shrink-0">
               {getInitials(user?.full_name)}
             </div>
-            <div className="ml-3 flex-1 overflow-hidden min-w-0">
-              <p className="text-sm font-semibold text-white truncate">{user?.full_name || 'Shopkeeper'}</p>
-              <p className="text-xs text-slate-400 truncate">{user?.email || 'shopkeeper@gmail.com'}</p>
-            </div>
+            {!isCollapsed && (
+              <div className="ml-3 flex-1 overflow-hidden min-w-0 flex-shrink-0 animate-fade-in">
+                <p className="text-sm font-semibold text-white truncate">{user?.full_name || 'Inventory Portal'}</p>
+                <p className="text-xs text-slate-400 truncate">{user?.email || 'inventory@gmail.com'}</p>
+              </div>
+            )}
           </div>
 
           <button
             onClick={logout}
             disabled={isLoggingOut}
-            className="w-full flex items-center px-4 py-2.5 text-slate-400 hover:bg-red-500/10 hover:text-red-400 rounded-xl transition-colors group text-left cursor-pointer focus:outline-none disabled:opacity-50"
+            title={isCollapsed ? "Sign Out" : undefined}
+            className={`flex items-center ${isCollapsed ? 'justify-center px-0 w-10 h-10' : 'px-4 py-2.5 w-full'} text-slate-400 hover:bg-red-500/10 hover:text-red-400 rounded-xl transition-colors group text-left cursor-pointer focus:outline-none disabled:opacity-50`}
+            type="button"
           >
-            <LogOut className="w-5 h-5 mr-3 group-hover:-translate-x-1 transition-transform" />
-            <span className="font-medium text-sm">{isLoggingOut ? 'Signing Out...' : 'Sign Out'}</span>
+            <LogOut className={`w-5 h-5 group-hover:-translate-x-1 transition-transform flex-shrink-0 ${isCollapsed ? '' : 'mr-3'}`} />
+            {!isCollapsed && <span className="font-medium text-sm animate-fade-in">{isLoggingOut ? 'Signing Out...' : 'Sign Out'}</span>}
           </button>
         </div>
       </div>

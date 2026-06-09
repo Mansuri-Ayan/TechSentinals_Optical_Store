@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Eye, ArrowLeft, ArrowRight, Stethoscope, Calendar, FileText, Layers, Frame, Sparkles } from 'lucide-react';
+import { useState } from 'react';
+import { Eye, ArrowLeft, ArrowRight, Stethoscope, Calendar, FileText, Sparkles } from 'lucide-react';
 import { LENS_TYPES, FRAME_PREFERENCES, LENS_COATINGS } from '../../data/customersData';
 
 const defaultPrescription = {
@@ -37,16 +37,16 @@ function OpticalPrescriptionForm({ prescription, onChange, onBack, onNext }) {
     return { ...defaultPrescription };
   });
 
-  useEffect(() => {
-    if (prescription) {
-      setForm({
-        ...defaultPrescription,
-        ...prescription,
-        rightEye: { ...defaultPrescription.rightEye, ...prescription.rightEye },
-        leftEye: { ...defaultPrescription.leftEye, ...prescription.leftEye },
-      });
-    }
-  }, [prescription]);
+  const [prevPrescription, setPrevPrescription] = useState(prescription);
+  if (prescription !== prevPrescription) {
+    setForm({
+      ...defaultPrescription,
+      ...prescription,
+      rightEye: { ...defaultPrescription.rightEye, ...prescription.rightEye },
+      leftEye: { ...defaultPrescription.leftEye, ...prescription.leftEye },
+    });
+    setPrevPrescription(prescription);
+  }
 
   const handleEyeChange = (eye, field, value) => {
     setForm((prev) => ({
@@ -57,6 +57,15 @@ function OpticalPrescriptionForm({ prescription, onChange, onBack, onNext }) {
 
   const handleFieldChange = (field, value) => {
     setForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleSkip = () => {
+    const emptyPres = {
+      ...defaultPrescription,
+      prescriptionDate: '', // make it empty/falsy so hasPrescription returns false
+    };
+    onChange?.(emptyPres);
+    onNext?.();
   };
 
   const handleNext = () => {
@@ -252,14 +261,24 @@ function OpticalPrescriptionForm({ prescription, onChange, onBack, onNext }) {
           Back
         </button>
 
-        <button
-          type="button"
-          onClick={handleNext}
-          className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-[#0A0F1F] rounded-xl shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300"
-        >
-          Next
-          <ArrowRight className="w-4 h-4" />
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={handleSkip}
+            className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-slate-500 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all duration-300 cursor-pointer"
+          >
+            Skip Prescription
+          </button>
+
+          <button
+            type="button"
+            onClick={handleNext}
+            className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-[#0A0F1F] rounded-xl shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300"
+          >
+            Next
+            <ArrowRight className="w-4 h-4" />
+          </button>
+        </div>
       </div>
     </div>
   );

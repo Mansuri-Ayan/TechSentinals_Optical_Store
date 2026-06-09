@@ -110,7 +110,7 @@ const Dashboard = () => {
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 sm:mb-8 border-b border-slate-100 pb-5">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">Shopkeeper Dashboard</h1>
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">Inventory Dashboard</h1>
           <p className="text-slate-500 mt-1.5 text-xs sm:text-sm font-semibold">Welcome back! Here's a live overview of your optical store transactions and CRM activity.</p>
         </div>
       </div>

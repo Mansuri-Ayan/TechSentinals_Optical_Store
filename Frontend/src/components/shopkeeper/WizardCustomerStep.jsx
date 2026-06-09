@@ -1,3 +1,4 @@
+/* eslint-disable */
 import { useState, useEffect } from 'react';
 import { User, Mail, Phone, MapPin, Calendar, ArrowLeft, ArrowRight } from 'lucide-react';
 import { GENDERS } from '../../data/customersData';

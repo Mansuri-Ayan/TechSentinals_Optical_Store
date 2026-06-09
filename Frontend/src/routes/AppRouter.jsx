@@ -1,7 +1,6 @@
-  import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore, useStoreStore } from '../store/store';
 import Login from '../pages/auth/Login';
-import ProfileHome from '../pages/auth/ProfileHome';
 import AdminLayout from '../layouts/AdminLayout';
 import Dashboard from '../pages/admin/Dashboard';
 import Staff from '../pages/admin/Staff';
@@ -19,8 +18,8 @@ import ShopKeeperLayout from '../layouts/ShopKeeperLayout';
 import ShopkeeperDashboard from '../pages/shopkeeper/Dashboard';
 import Customers from '../pages/shopkeeper/Customers';
 import CustomerDetail from '../pages/shopkeeper/CustomerDetail';
-import Products from '../pages/shopkeeper/Products';
-import ProductDetail from '../pages/shopkeeper/ProductDetail';
+import ShopkeeperInventory from '../pages/shopkeeper/Inventory';
+import ShopkeeperSales from '../pages/shopkeeper/Sales';
 import Shopkeeper from '../pages/shopkeeper/Shopkeeper';
 
 // Responsive loading spinner component
@@ -227,8 +226,8 @@ function AppRouter() {
         <Route path="dashboard" element={<ShopkeeperDashboard />} />
         <Route path="customers" element={<Customers />} />
         <Route path="customers/:customerId" element={<CustomerDetail />} />
-        <Route path="products" element={<Products />} />
-        <Route path="products/:productId" element={<ProductDetail />} />
+        <Route path="inventory" element={<ShopkeeperInventory />} />
+        <Route path="sales" element={<ShopkeeperSales />} />
       </Route>
 
       {/* Fallback root redirect */}
