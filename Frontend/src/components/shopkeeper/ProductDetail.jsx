@@ -2,21 +2,26 @@ import { useState } from 'react';
 import { CheckCircle2, AlertTriangle, AlertCircle, ShoppingCart } from 'lucide-react';
 
 const statusConfig = {
-  'In Stock':     { color: 'text-emerald-700 bg-emerald-50 border-emerald-200', icon: CheckCircle2 },
-  'Low Stock':    { color: 'text-amber-700 bg-amber-50 border-amber-200',       icon: AlertTriangle },
-  'Out Of Stock': { color: 'text-red-700 bg-red-50 border-red-200',             icon: AlertCircle },
+  'in_stock':     { label: 'In Stock',     color: 'text-emerald-700 bg-emerald-50 border-emerald-200', icon: CheckCircle2 },
+  'low_stock':    { label: 'Low Stock',    color: 'text-amber-700 bg-amber-50 border-amber-200',       icon: AlertTriangle },
+  'out_of_stock': { label: 'Out of Stock', color: 'text-red-700 bg-red-50 border-red-200',             icon: AlertCircle },
 };
 
-const getStatus = (qty, reorder) => {
-  if (qty === 0) return 'Out Of Stock';
-  if (qty <= reorder) return 'Low Stock';
-  return 'In Stock';
+const getStockStatus = (item) => {
+  const qty = item.available_quantity ?? item.quantity ?? 0;
+  if (qty === 0) return 'out_of_stock';
+  const threshold = (item.reorder_level && item.reorder_level > 0)
+    ? item.reorder_level
+    : 10;
+  if (qty <= threshold) return 'low_stock';
+  return 'in_stock';
 };
 
 const ProductDetail = ({ product, onAddToCart, isSelectionMode }) => {
-  const status = getStatus(product.available_quantity, product.reorder_level);
-  const StatusIcon = (statusConfig[status] || statusConfig['In Stock']).icon;
-  const statusColor = (statusConfig[status] || statusConfig['In Stock']).color;
+  const status = getStockStatus(product);
+  const sc = statusConfig[status] || statusConfig['in_stock'];
+  const StatusIcon = sc.icon;
+  const statusColor = sc.color;
 
   const [qty, setQty] = useState(1);
   const [selectedColor, setSelectedColor] = useState(product.availableColors?.[0] || '');
@@ -36,7 +41,7 @@ const ProductDetail = ({ product, onAddToCart, isSelectionMode }) => {
         </div>
         <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold border ${statusColor}`}>
           <StatusIcon className="w-3.5 h-3.5" />
-          {status}
+          {sc.label}
         </span>
       </div>
 
@@ -135,7 +140,7 @@ const ProductDetail = ({ product, onAddToCart, isSelectionMode }) => {
           <div className="flex items-center border border-slate-200 rounded-xl p-1 bg-white">
             <button
               onClick={() => setQty(Math.max(1, qty - 1))}
-              disabled={qty <= 1 || status === 'Out Of Stock'}
+              disabled={qty <= 1 || status === 'out_of_stock'}
               className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-500 hover:bg-slate-50 hover:text-slate-900 disabled:opacity-30 transition-colors font-extrabold"
               type="button"
             >
@@ -144,7 +149,7 @@ const ProductDetail = ({ product, onAddToCart, isSelectionMode }) => {
             <span className="w-8 text-center text-sm font-black text-slate-800">{qty}</span>
             <button
               onClick={() => setQty(Math.min(product.available_quantity, qty + 1))}
-              disabled={qty >= product.available_quantity || status === 'Out Of Stock'}
+              disabled={qty >= product.available_quantity || status === 'out_of_stock'}
               className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-500 hover:bg-slate-50 hover:text-slate-900 disabled:opacity-30 transition-colors font-extrabold"
               type="button"
             >
@@ -158,7 +163,7 @@ const ProductDetail = ({ product, onAddToCart, isSelectionMode }) => {
           <div className="flex-1 flex flex-col justify-end pt-5">
             <button
               onClick={handleAdd}
-              disabled={status === 'Out Of Stock'}
+              disabled={status === 'out_of_stock'}
               className="w-full flex items-center justify-center gap-2 py-3 bg-[#0A0F1F] hover:bg-slate-800 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all shadow-md hover:shadow-lg disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
               type="button"
             >

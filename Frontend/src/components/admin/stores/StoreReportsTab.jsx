@@ -5,7 +5,15 @@ import { FileText, Download, Loader2, TrendingUp, Users, Archive, Receipt, BarCh
 const StoreReportsTab = ({ store }) => {
   const [generatingId, setGeneratingId] = useState(null);
 
-  const storeName = store.store_name || store.name;
+  if (!store || (!store.store_name && !store.name)) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900" />
+      </div>
+    );
+  }
+
+  const storeName = store?.store_name || store?.name;
 
   const reports = [
     {

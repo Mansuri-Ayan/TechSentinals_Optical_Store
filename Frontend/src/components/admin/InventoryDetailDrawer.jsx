@@ -8,9 +8,19 @@ import {
 } from 'lucide-react';
 
 const statusConfig = {
-  'In Stock':    { color: 'text-emerald-700 bg-emerald-50 border-emerald-200', dot: 'bg-emerald-500', icon: CheckCircle },
-  'Low Stock':   { color: 'text-amber-700 bg-amber-50 border-amber-200',       dot: 'bg-amber-500',   icon: AlertTriangle },
-  'Out of Stock':{ color: 'text-red-700 bg-red-50 border-red-200',             dot: 'bg-red-500',     icon: XCircle },
+  'in_stock':    { label: 'In Stock',     color: 'text-emerald-700 bg-emerald-50 border-emerald-200', dot: 'bg-emerald-500', icon: CheckCircle },
+  'low_stock':   { label: 'Low Stock',    color: 'text-amber-700 bg-amber-50 border-amber-200',       dot: 'bg-amber-500',   icon: AlertTriangle },
+  'out_of_stock':{ label: 'Out of Stock', color: 'text-red-700 bg-red-50 border-red-200',             dot: 'bg-red-500',     icon: XCircle },
+};
+
+const getStockStatus = (item) => {
+  const qty = item.available_quantity ?? item.quantity ?? 0;
+  if (qty === 0) return 'out_of_stock';
+  const threshold = (item.reorder_level && item.reorder_level > 0)
+    ? item.reorder_level
+    : 10;
+  if (qty <= threshold) return 'low_stock';
+  return 'in_stock';
 };
 
 const categoryLabel = { frames: 'Frames', lenses: 'Lenses', other: 'Other Products' };
@@ -394,8 +404,8 @@ const InventoryDetailDrawer = ({ item, onClose, onApprove, onReject, isApproving
   }
 
   /* ── INVENTORY DRAWER ──────────────────────────────────── */
-  const status = item.status || 'In Stock';
-  const sc = statusConfig[status] || statusConfig['In Stock'];
+  const status = getStockStatus(item);
+  const sc = statusConfig[status] || statusConfig['in_stock'];
   const profit = item.selling_price && item.cost_price
     ? (Number(item.selling_price) - Number(item.cost_price)).toFixed(2)
     : null;
@@ -431,7 +441,7 @@ const InventoryDetailDrawer = ({ item, onClose, onApprove, onReject, isApproving
         <div className="px-5 py-3 bg-white border-b border-slate-100 flex-shrink-0">
           <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${sc.color}`}>
             <span className={`w-1.5 h-1.5 rounded-full ${sc.dot}`} />
-            {status}
+            {sc.label}
           </span>
           <span className="ml-2 text-xs text-slate-400 font-medium">{categoryLabel[item.category] || item.category}</span>
         </div>
@@ -494,7 +504,7 @@ const InventoryDetailDrawer = ({ item, onClose, onApprove, onReject, isApproving
           <Section icon={BarChart3} title="Stock Details" color="amber">
             <DetailRow label="Quantity"      value={item.quantity} />
             <DetailRow label="Reorder Level" value={item.reorder_level} />
-            <DetailRow label="Status"        value={status} />
+            <DetailRow label="Status"        value={sc.label} />
           </Section>
 
           <Section icon={DollarSign} title="Pricing Details" color="rose">

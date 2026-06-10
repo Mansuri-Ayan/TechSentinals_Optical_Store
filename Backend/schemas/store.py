@@ -73,5 +73,37 @@ class StoreRead(BaseModel):
     is_active: bool
     created_at: datetime
     updated_at: datetime
+    
+    # Aggregated metrics
+    staff_count: int = 0
+    revenue_generated: float = 0.0
+    total_orders: int = 0
 
     model_config = {"from_attributes": True}
+
+
+class WeeklyRevenue(BaseModel):
+    week: str
+    amount: float
+
+
+class SalesByCategory(BaseModel):
+    category: str
+    amount: float
+
+
+class ExpenseBreakdown(BaseModel):
+    label: str
+    amount: float
+
+
+class MonthlyCustomer(BaseModel):
+    month: str
+    count: int
+
+
+class StoreOverview(BaseModel):
+    weekly_revenue: list[WeeklyRevenue]
+    sales_by_category: list[SalesByCategory]
+    expense_breakdown: list[ExpenseBreakdown]
+    monthly_customers: list[MonthlyCustomer]

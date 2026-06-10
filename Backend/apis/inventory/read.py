@@ -4,8 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.deps import get_current_admin
 from db.session import get_db
 from models.admin import Admin
-from schemas.inventory import InventoryRead
-from schemas.pagination import PaginatedResponse
+from schemas.inventory import InventoryRead, InventoryResponse
 from services.inventory_service import (
     get_inventory,
     get_inventories_by_owner,
@@ -17,6 +16,7 @@ router = APIRouter()
 
 def _inventory_to_read(inv) -> InventoryRead:
     product = inv.product
+    selling_price = product.selling_price if product else None
     return InventoryRead(
         **{c.key: getattr(inv, c.key) for c in inv.__table__.columns},
         product_name=product.name if product else None,
@@ -28,7 +28,8 @@ def _inventory_to_read(inv) -> InventoryRead:
         brand_id=product.brand_id if product else None,
         brand_name=product.brand.name if product and product.brand else None,
         cost_price=product.cost_price if product else None,
-        selling_price=product.selling_price if product else None,
+        selling_price=selling_price,
+        price=selling_price,
         image_url=product.image_url if product else None,
         frame_product=product.frame_product if product else None,
         lens_product=product.lens_product if product else None,
@@ -38,9 +39,9 @@ def _inventory_to_read(inv) -> InventoryRead:
 
 @router.get(
     "/",
-    response_model=PaginatedResponse[InventoryRead],
+    response_model=InventoryResponse,
     summary="List inventories",
-    description="List inventory records filtered by owner type and ID with pagination.",
+    description="List inventory records filtered by owner type and ID with pagination and stats.",
 )
 async def list_inventories(
     owner_type: str = Query(..., description="ADMIN or STORE"),
@@ -59,8 +60,8 @@ async def list_inventories(
     paginate: bool = Query(default=True, description="Enable pagination"),
     db: AsyncSession = Depends(get_db),
     current_admin: Admin = Depends(get_current_admin),
-) -> PaginatedResponse[InventoryRead]:
-    items, total = await get_inventories_by_owner(
+) -> InventoryResponse:
+    result_dict = await get_inventories_by_owner(
         db,
         owner_type=owner_type,
         owner_id=owner_id,
@@ -74,13 +75,17 @@ async def list_inventories(
         limit=limit,
         paginate=paginate,
     )
-    pages = (total + limit - 1) // limit if limit > 0 else 1
-    return PaginatedResponse[InventoryRead](
-        items=[_inventory_to_read(inv) for inv in items],
-        total=total,
-        page=page,
-        pages=pages,
-        limit=limit,
+    
+    return InventoryResponse(
+        items=[_inventory_to_read(inv) for inv in result_dict["items"]],
+        total=result_dict["total"],
+        page=result_dict["page"],
+        limit=result_dict["limit"],
+        pages=result_dict["pages"],
+        total_products=result_dict["total_products"],
+        low_stock_count=result_dict["low_stock_count"],
+        out_of_stock_count=result_dict["out_of_stock_count"],
+        total_valuation=result_dict["total_valuation"],
     )
 
 

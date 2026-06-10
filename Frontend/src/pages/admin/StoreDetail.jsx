@@ -1,10 +1,11 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import {
   ChevronRight, MapPin, Phone, Mail, FileText, CheckCircle, XCircle,
   IndianRupee, ShoppingBag, Users, AlertCircle, ArrowLeft
 } from 'lucide-react';
-import { useStores } from '../../hooks/useStores';
+import { useQuery } from '@tanstack/react-query';
+import { getStoreByIdApi } from '../../api/stores/store.api';
 
 // Import Tab Components
 import StoreOverview from '../../components/admin/stores/StoreOverview';
@@ -15,18 +16,6 @@ import StoreCustomersTab from '../../components/admin/stores/StoreCustomersTab';
 import StoreSalesTab from '../../components/admin/stores/StoreSalesTab';
 import StoreExpensesTab from '../../components/admin/stores/StoreExpensesTab';
 import StoreReportsTab from '../../components/admin/stores/StoreReportsTab';
-
-const STORE_METRICS = {
-  All:          { revenue: '₹8,15,400', staff: 24, orders: 1240, lowStock: 35, mult: 1.0 },
-  'Main Branch': { revenue: '₹2,84,000', staff: 8,  orders: 420,  lowStock: 12, mult: 0.35 },
-  'Branch 2':    { revenue: '₹1,97,000', staff: 6,  orders: 310,  lowStock: 8,  mult: 0.24 },
-  'Branch 3':    { revenue: '₹98,500',  staff: 5,  orders: 190,  lowStock: 4,  mult: 0.12 },
-  'Admin Store': { revenue: '₹1,50,000', staff: 5,  orders: 320,  lowStock: 6,  mult: 0.18 }
-};
-
-const getStoreMetrics = (storeName) => {
-  return STORE_METRICS[storeName] || { revenue: '₹1,20,000', staff: 4, orders: 150, lowStock: 5, mult: 0.15 };
-};
 
 const TABS = [
   { id: 'overview', label: 'Overview' },
@@ -41,19 +30,52 @@ const TABS = [
 
 const StoreDetail = () => {
   const { storeId } = useParams();
-  const { stores, isLoadingStores } = useStores();
   const [activeTab, setActiveTab] = useState('overview');
 
-  const store = useMemo(() => {
-    return stores.find(s => String(s.id) === String(storeId));
-  }, [stores, storeId]);
+  // Staff Search State (Moved here to prevent focus loss in child)
+  const [staffSearchInput, setStaffSearchInput] = useState('');
+  const [staffSearch, setStaffSearch] = useState('');
+  const [staffPage, setStaffPage] = useState(1);
 
-  const metrics = useMemo(() => {
-    if (!store) return { revenue: '₹0', staff: 0, orders: 0, lowStock: 0, mult: 0.15 };
-    return getStoreMetrics(store.store_name || store.name);
-  }, [store]);
+  // Inventory Search & Filter State
+  const [inventorySearchInput, setInventorySearchInput] = useState('');
+  const [inventorySearch, setInventorySearch] = useState('');
+  const [inventoryStockFilter, setInventoryStockFilter] = useState('all');
+  const [inventoryPage, setInventoryPage] = useState(1);
 
-  if (isLoadingStores) {
+  // Staff Search Debounce
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setStaffSearch(staffSearchInput);
+      setStaffPage(1);
+    }, 400);
+    return () => clearTimeout(t);
+  }, [staffSearchInput]);
+
+  // Inventory Search Debounce
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setInventorySearch(inventorySearchInput);
+      setInventoryPage(1);
+    }, 400);
+    return () => clearTimeout(t);
+  }, [inventorySearchInput]);
+
+  const { data: store, isLoading: isLoadingStore, isError: isStoreError } = useQuery({
+    queryKey: ['store', storeId],
+    queryFn: () => getStoreByIdApi(storeId),
+    retry: false,
+  });
+
+  const formatRupee = (num) => {
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      maximumFractionDigits: 0
+    }).format(num);
+  };
+
+  if (isLoadingStore) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 text-slate-500 font-semibold font-sans">
         <div className="w-10 h-10 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mr-3" />
@@ -62,7 +84,7 @@ const StoreDetail = () => {
     );
   }
 
-  if (!store) {
+  if (isStoreError || !store) {
     return (
       <div className="p-8 max-w-lg mx-auto text-center font-sans mt-12">
         <div className="w-16 h-16 bg-red-50 text-red-500 border border-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -79,28 +101,48 @@ const StoreDetail = () => {
   }
 
   const storeName = store.store_name || store.name;
-  const storeCode = store.store_code || store.code || `ST-${String(store.id).padStart(2, '0')}`;
+  const storeCode = store.store_code || store.code;
 
   const renderTabContent = () => {
     switch (activeTab) {
       case 'overview':
-        return <StoreOverview store={store} metrics={metrics} />;
+        return <StoreOverview storeId={storeId} />;
       case 'staff':
-        return <StoreStaffTab store={store} />;
+        return (
+          <StoreStaffTab
+            storeId={storeId}
+            searchInput={staffSearchInput}
+            setSearchInput={setStaffSearchInput}
+            search={staffSearch}
+            page={staffPage}
+            setPage={setStaffPage}
+          />
+        );
       case 'inventory':
-        return <StoreInventoryTab store={store} />;
+        return (
+          <StoreInventoryTab
+            storeId={storeId}
+            searchInput={inventorySearchInput}
+            setSearchInput={setInventorySearchInput}
+            search={inventorySearch}
+            stockFilter={inventoryStockFilter}
+            setStockFilter={setInventoryStockFilter}
+            page={inventoryPage}
+            setPage={setInventoryPage}
+          />
+        );
       case 'suppliers':
-        return <StoreSuppliersTab store={store} />;
+        return <StoreSuppliersTab storeId={storeId} />;
       case 'customers':
-        return <StoreCustomersTab store={store} />;
+        return <StoreCustomersTab storeId={storeId} />;
       case 'sales':
-        return <StoreSalesTab store={store} />;
+        return <StoreSalesTab storeId={storeId} />;
       case 'expenses':
-        return <StoreExpensesTab store={store} />;
+        return <StoreExpensesTab storeId={storeId} />;
       case 'reports':
-        return <StoreReportsTab store={store} />;
+        return store && <StoreReportsTab store={store} storeId={storeId} />;
       default:
-        return <StoreOverview store={store} metrics={metrics} />;
+        return <StoreOverview storeId={storeId} />;
     }
   };
 
@@ -175,14 +217,19 @@ const StoreDetail = () => {
       {/* ── KPI Widgets Grid ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-8">
         {[
-          { label: 'Revenue Generated', value: metrics.revenue, color: 'text-blue-700 bg-blue-50 border-blue-200', icon: IndianRupee },
-          { label: 'Total Orders', value: metrics.orders, color: 'text-emerald-700 bg-emerald-50 border-emerald-200', icon: ShoppingBag },
-          { label: 'Store Staff Count', value: metrics.staff, color: 'text-purple-700 bg-purple-50 border-purple-200', icon: Users },
-          { label: 'Store Status', value: store.is_active ? 'Active' : 'Inactive', color: store.is_active ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-slate-600 bg-slate-100 border-slate-200', icon: store.is_active ? CheckCircle : XCircle },
+          { id: 'revenue', label: 'Revenue Generated', value: formatRupee(store.revenue_generated || 0), color: 'text-blue-700 bg-blue-50 border-blue-200', icon: IndianRupee },
+          { id: 'sales', label: 'Total Orders', value: store.total_orders || 0, color: 'text-emerald-700 bg-emerald-50 border-emerald-200', icon: ShoppingBag },
+          { id: 'staff', label: 'Store Staff Count', value: store.staff_count || 0, color: 'text-purple-700 bg-purple-50 border-purple-200', icon: Users },
+          { id: 'status', label: 'Store Status', value: store.is_active ? 'Active' : 'Inactive', color: store.is_active ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-slate-600 bg-slate-100 border-slate-200', icon: store.is_active ? CheckCircle : XCircle },
         ].map(kpi => {
           const Icon = kpi.icon;
+          const isClickable = ['sales', 'staff'].includes(kpi.id);
           return (
-            <div key={kpi.label} className={`flex items-center gap-4 p-4 sm:p-5 bg-white border rounded-2xl shadow-sm ${kpi.color}`}>
+            <div
+              key={kpi.label}
+              onClick={() => isClickable && setActiveTab(kpi.id)}
+              className={`flex items-center gap-4 p-4 sm:p-5 bg-white border rounded-2xl shadow-sm ${kpi.color} ${isClickable ? 'cursor-pointer hover:opacity-80 transition-opacity' : ''}`}
+            >
               <div className="p-2.5 rounded-xl bg-white/60 flex-shrink-0">
                 <Icon className="w-5 h-5" />
               </div>

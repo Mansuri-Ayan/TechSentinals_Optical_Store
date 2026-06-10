@@ -16,9 +16,9 @@ const getCategoryConfig = (name) => {
 };
 
 const statusConfig = {
-  'In Stock':     { color: 'text-emerald-700 bg-emerald-50 border-emerald-200', dot: 'bg-emerald-500' },
-  'Low Stock':    { color: 'text-amber-700 bg-amber-50 border-amber-200',       dot: 'bg-amber-500' },
-  'Out Of Stock': { color: 'text-red-700 bg-red-50 border-red-200',             dot: 'bg-red-500' },
+  'in_stock':     { label: 'In Stock',     color: 'text-emerald-700 bg-emerald-50 border-emerald-200', dot: 'bg-emerald-500' },
+  'low_stock':    { label: 'Low Stock',    color: 'text-amber-700 bg-amber-50 border-amber-200',       dot: 'bg-amber-500' },
+  'out_of_stock': { label: 'Out of Stock', color: 'text-red-700 bg-red-50 border-red-200',             dot: 'bg-red-500' },
 };
 
 const GRAD_PALETTE = [
@@ -30,25 +30,29 @@ const GRAD_PALETTE = [
   'from-cyan-400 to-sky-600',
 ];
 
-const getStatus = (qty, reorder) => {
-  if (qty === 0) return 'Out Of Stock';
-  if (qty <= reorder) return 'Low Stock';
-  return 'In Stock';
+const getStockStatus = (item) => {
+  const qty = item.available_quantity ?? item.quantity ?? 0;
+  if (qty === 0) return 'out_of_stock';
+  const threshold = (item.reorder_level && item.reorder_level > 0)
+    ? item.reorder_level
+    : 10;
+  if (qty <= threshold) return 'low_stock';
+  return 'in_stock';
 };
 
 const StatusBadge = ({ status }) => {
-  const sc = statusConfig[status] || statusConfig['In Stock'];
+  const sc = statusConfig[status] || statusConfig['in_stock'];
   return (
     <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold border ${sc.color}`}>
       <span className={`w-1.5 h-1.5 rounded-full ${sc.dot} flex-shrink-0`} />
-      {status}
+      {sc.label}
     </span>
   );
 };
 
 const ProductCard = ({ product }) => {
   const navigate = useNavigate();
-  const status = getStatus(product.available_quantity, product.reorder_level);
+  const status = getStockStatus(product);
   const config = getCategoryConfig(product.category);
   const grad = GRAD_PALETTE[product.id % GRAD_PALETTE.length];
 
@@ -79,8 +83,8 @@ const ProductCard = ({ product }) => {
         {/* Qty Badge bottom-right */}
         <div className="absolute bottom-3 right-3">
           <span className={`px-2 py-0.5 rounded-lg text-[10px] font-bold shadow-sm border border-white/50 ${
-            product.available_quantity === 0 ? 'bg-red-100 text-red-700' :
-            product.available_quantity <= product.reorder_level ? 'bg-amber-100 text-amber-700' :
+            status === 'out_of_stock' ? 'bg-red-100 text-red-700' :
+            status === 'low_stock' ? 'bg-amber-100 text-amber-700' :
             'bg-white/90 text-slate-700'
           }`}>
             Qty: {product.available_quantity}

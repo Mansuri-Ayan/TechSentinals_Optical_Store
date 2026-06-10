@@ -225,6 +225,8 @@ function AppRouter() {
         <Route path="store/:storeId/transactions" element={<Transactions />} />
         <Route path="suppliers" element={<SuppliersRouteRedirect />} />
         <Route path="store/:storeId/suppliers" element={<Suppliers />} />
+        <Route path="stores" element={<Stores />} />
+        <Route path="stores/:storeId" element={<StoreDetail />} />
         <Route
           path="store/:storeId/suppliers/:id"
           element={<SupplierDetail />}

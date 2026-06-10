@@ -73,6 +73,7 @@ class InventoryRead(BaseModel):
     brand_name: str | None = None
     cost_price: Decimal | None = None
     selling_price: Decimal | None = None
+    price: Decimal | None = None  # Alias for selling_price
     image_url: str | None = None
 
     # Nested type-specific details
@@ -81,3 +82,15 @@ class InventoryRead(BaseModel):
     accessory_product: AccessoryDetailsRead | None = None
 
     model_config = {"from_attributes": True}
+
+
+class InventoryResponse(BaseModel):
+    items: list[InventoryRead]
+    total: int
+    page: int
+    limit: int
+    pages: int
+    total_products: int
+    low_stock_count: int
+    out_of_stock_count: int
+    total_valuation: float

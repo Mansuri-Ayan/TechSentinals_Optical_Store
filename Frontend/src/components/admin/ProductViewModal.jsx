@@ -23,9 +23,19 @@ const VARIANT_GRADS = [
 ];
 
 const statusConfig = {
-  'In Stock':     { color: 'text-emerald-700 bg-emerald-50 border-emerald-200', dot: 'bg-emerald-500', icon: CheckCircle },
-  'Low Stock':    { color: 'text-amber-700 bg-amber-50 border-amber-200',       dot: 'bg-amber-500',   icon: AlertTriangle },
-  'Out of Stock': { color: 'text-red-700 bg-red-50 border-red-200',             dot: 'bg-red-500',     icon: XCircle },
+  'in_stock':     { label: 'In Stock',     color: 'text-emerald-700 bg-emerald-50 border-emerald-200', dot: 'bg-emerald-500', icon: CheckCircle },
+  'low_stock':    { label: 'Low Stock',    color: 'text-amber-700 bg-amber-50 border-amber-200',       dot: 'bg-amber-500',   icon: AlertTriangle },
+  'out_of_stock': { label: 'Out of Stock', color: 'text-red-700 bg-red-50 border-red-200',             dot: 'bg-red-500',     icon: XCircle },
+};
+
+const getStockStatus = (item) => {
+  const qty = item.available_quantity ?? item.quantity ?? 0;
+  if (qty === 0) return 'out_of_stock';
+  const threshold = (item.reorder_level && item.reorder_level > 0)
+    ? item.reorder_level
+    : 10;
+  if (qty <= threshold) return 'low_stock';
+  return 'in_stock';
 };
 
 const categoryLabel = { frames: 'Frames', lenses: 'Lenses', other: 'Other Products' };
@@ -100,9 +110,8 @@ const ImageCarousel = ({ item }) => {
 const ProductViewModal = ({ item, onClose, onPlaceOrder }) => {
   if (!item) return null;
 
-  const status = item.status || 'In Stock';
-  const sc = statusConfig[status] || statusConfig['In Stock'];
-  const StatusIcon = sc.icon;
+  const status = getStockStatus(item);
+  const sc = statusConfig[status] || statusConfig['in_stock'];
 
   return createPortal(
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[999] p-3 sm:p-4 animate-fade-in">
@@ -134,7 +143,7 @@ const ProductViewModal = ({ item, onClose, onPlaceOrder }) => {
             </div>
             <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border flex-shrink-0 ${sc.color}`}>
               <span className={`w-1.5 h-1.5 rounded-full ${sc.dot}`} />
-              {status}
+              {sc.label}
             </span>
           </div>
 
@@ -213,11 +222,11 @@ const ProductViewModal = ({ item, onClose, onPlaceOrder }) => {
           </button>
           <button
             onClick={() => onPlaceOrder(item)}
-            disabled={item.status === 'Out of Stock'}
+            disabled={status === 'out_of_stock'}
             className="flex-[2] py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-xl font-bold text-sm transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 hover:from-emerald-600 hover:to-teal-700 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 flex items-center justify-center gap-2"
           >
             <ShoppingCart className="w-4 h-4" />
-            {item.status === 'Out of Stock' ? 'Out of Stock' : 'Place Order'}
+            {status === 'out_of_stock' ? 'Out of Stock' : 'Place Order'}
           </button>
         </div>
       </div>

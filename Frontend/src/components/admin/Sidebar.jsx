@@ -52,7 +52,7 @@ const Sidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) => {
       window.removeEventListener('touchend', stopResizing);
     };
   }, [isResizing, resize, stopResizing]);
-  const { stores: fetchedStores, isLoadingStores, isStoresError } = useStores();
+  const { stores: fetchedStores, isLoadingStores, isStoresError } = useStores({ page: 1, limit: 100 });
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
   const location = useLocation();
@@ -109,6 +109,12 @@ const Sidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) => {
     setSelectedStore(store);
     setIsDropdownOpen(false);
 
+    // If on Stores Directory or Store Detail, navigate to the new store's detail
+    if (location.pathname.startsWith('/admin/stores')) {
+      navigate(`/admin/stores/${store.id}`);
+      return;
+    }
+
     if (location.pathname.startsWith('/admin/store/') && location.pathname.endsWith('/staff')) {
       navigate(`/admin/store/${store.id}/staff`);
     } else if (location.pathname.startsWith('/admin/store/') && location.pathname.endsWith('/inventory')) {
@@ -123,6 +129,9 @@ const Sidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) => {
       navigate(`/admin/store/${store.id}/suppliers`);
     } else if (location.pathname.startsWith('/admin/store/') && location.pathname.includes('/expenses')) {
       navigate(`/admin/store/${store.id}/expenses`);
+    } else {
+      // Default fallback
+      navigate(`/admin/stores/${store.id}`);
     }
   };
 

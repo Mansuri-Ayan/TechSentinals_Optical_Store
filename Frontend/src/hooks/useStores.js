@@ -6,7 +6,7 @@ import { useStoreStore } from '../store/store';
 export const storesQueryKey = ['stores'];
 const emptyStores = [];
 
-export const useStores = (params = { paginate: false }) => {
+export const useStores = (params = {}) => {
   const queryClient = useQueryClient();
   const { setSelectedStore, upsertStore } = useStoreStore();
 
@@ -59,9 +59,15 @@ export const useStores = (params = { paginate: false }) => {
     },
   });
 
+  const items = storesQuery.data?.items || emptyStores;
+  const total = storesQuery.data?.total || 0;
+  const pages = storesQuery.data?.pages || 0;
+
   return {
     storesQuery,
-    stores: storesQuery.data?.items || emptyStores,
+    stores: items,
+    total,
+    pages,
     isLoadingStores: storesQuery.isLoading,
     isStoresError: storesQuery.isError,
     createStore: createStoreMutation.mutate,

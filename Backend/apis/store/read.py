@@ -18,34 +18,36 @@ router = APIRouter()
     description="List all stores owned by the currently authenticated admin with pagination and filtering.",
 )
 async def list_stores(
-    page: int = Query(default=1, ge=1, description="Page number (starting from 1)"),
-    limit: int = Query(default=20, ge=1, le=100, description="Page size / limit"),
-    search: str | None = Query(default=None, description="Search query matching store name/code"),
-    city: str | None = Query(default=None, description="Filter by city name"),
+    page: int = Query(default=1, ge=1, description="Page number"),
+    page_size: int = Query(default=10, ge=1, le=100, alias="limit", description="Page size"),
+    search: str | None = Query(default=None, description="Search query matching store name/code/city"),
+    status: str | None = Query(default=None, description="Filter by status: ACTIVE/INACTIVE"),
     state: str | None = Query(default=None, description="Filter by state name"),
-    is_active: bool | None = Query(default=None, description="Filter by active status"),
-    paginate: bool = Query(default=True, description="Enable or disable pagination"),
+    paginate: bool = Query(default=True),
     db: AsyncSession = Depends(get_db),
     current_admin: Admin = Depends(get_current_admin),
 ) -> PaginatedResponse[StoreRead]:
+    is_active = None
+    if status:
+        is_active = status.upper() == "ACTIVE"
+        
     stores, total = await get_stores_by_admin(
         db,
         admin_id=current_admin.id,
         page=page,
-        limit=limit,
+        limit=page_size,
         search=search,
-        city=city,
         state=state,
         is_active=is_active,
         paginate=paginate,
     )
-    pages = (total + limit - 1) // limit if limit > 0 else 1
+    pages = (total + page_size - 1) // page_size if page_size > 0 else 1
     return PaginatedResponse[StoreRead](
         items=[StoreRead.model_validate(s) for s in stores],
         total=total,
         page=page,
         pages=pages,
-        limit=limit,
+        limit=page_size,
     )
 
 

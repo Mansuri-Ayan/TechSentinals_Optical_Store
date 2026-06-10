@@ -130,9 +130,19 @@ async def get_staff_by_store(
     combined = managers + workers + opticians
     combined.sort(key=lambda x: x["created_at"], reverse=True)
     
-    total = len(combined)
+    # Deduplicate by email (fallback to employee_code or phone if email missing)
+    seen = set()
+    unique_staff = []
+    for member in combined:
+        # Create a unique key for the person
+        key = member.get("email") or member.get("employee_code") or member.get("phone")
+        if key not in seen:
+            seen.add(key)
+            unique_staff.append(member)
+    
+    total = len(unique_staff)
     
     if paginate:
-        combined = combined[offset : offset + limit]
+        unique_staff = unique_staff[offset : offset + limit]
         
-    return combined, total
+    return unique_staff, total

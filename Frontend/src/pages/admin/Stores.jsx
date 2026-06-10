@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Store, Search, Plus, ChevronRight, Edit2, Trash2,
@@ -7,6 +7,7 @@ import {
 import { useStores } from '../../hooks/useStores';
 import { useStoreStore } from '../../store/store';
 import AddStoreModal from '../../components/admin/AddStoreModal';
+import Pagination from '../../components/shared/Pagination';
 
 const indianStates = [
   'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh',
@@ -18,32 +19,45 @@ const indianStates = [
   'Jammu & Kashmir', 'Ladakh', 'Puducherry', 'Chandigarh',
 ];
 
-const STORE_METRICS = {
-  All:          { revenue: '₹8,15,400', staff: 24, orders: 1240, lowStock: 35, mult: 1.0 },
-  'Main Branch': { revenue: '₹2,84,000', staff: 8,  orders: 420,  lowStock: 12, mult: 0.35 },
-  'Branch 2':    { revenue: '₹1,97,000', staff: 6,  orders: 310,  lowStock: 0.24 },
-  'Branch 3':    { revenue: '₹98,500',  staff: 5,  orders: 190,  lowStock: 4,  mult: 0.12 },
-  'Admin Store': { revenue: '₹1,50,000', staff: 5,  orders: 320,  lowStock: 6,  mult: 0.18 }
-};
-
-const getStoreMetrics = (storeName) => {
-  return STORE_METRICS[storeName] || { revenue: '₹1,20,000', staff: 4, orders: 150, lowStock: 5, mult: 0.15 };
-};
-
 const Stores = () => {
   const navigate = useNavigate();
-  const { stores, isLoadingStores, isStoresError, deleteStoreAsync } = useStores();
   const { setSelectedStore } = useStoreStore();
 
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [stateFilter, setStateFilter] = useState('');
+  const [page, setPage] = useState(1);
   const [showFilters, setShowFilters] = useState(false);
 
   const [showModal, setShowModal] = useState(false);
   const [storeToEdit, setStoreToEdit] = useState(null);
   const [storeToDelete, setStoreToDelete] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Debounced search
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setSearch(searchInput);
+      setPage(1);
+    }, 400);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
+  const filters = useMemo(() => ({
+    page,
+    limit: 10,
+    ...(search && { search }),
+    ...(statusFilter !== 'All' && { status: statusFilter.toUpperCase() }),
+    ...(stateFilter && { state: stateFilter })
+  }), [page, search, statusFilter, stateFilter]);
+
+  const { stores, total, pages, isLoadingStores, isStoresError, deleteStoreAsync } = useStores(filters);
+  
+  // Unfiltered call for Total Stores count
+  const { total: overallTotal } = useStores({ paginate: false });
+  // Active branches call
+  const { total: activeTotal } = useStores({ status: 'ACTIVE', paginate: false });
 
   const handleAddClick = () => {
     setStoreToEdit(null);
@@ -79,46 +93,14 @@ const Stores = () => {
     navigate(`/admin/stores/${store.id}`);
   };
 
-  // Filter stores
-  const filteredStores = useMemo(() => {
-    return stores.filter((store) => {
-      const name = (store.store_name || store.name || '').toLowerCase();
-      const code = (store.store_code || store.code || '').toLowerCase();
-      const city = (store.city || '').toLowerCase();
-      const state = (store.state || '').toLowerCase();
-      const query = searchTerm.toLowerCase().trim();
-
-      const matchesSearch =
-        !query ||
-        name.includes(query) ||
-        code.includes(query) ||
-        city.includes(query);
-
-      const matchesStatus =
-        statusFilter === 'All' ||
-        (statusFilter === 'Active' && store.is_active) ||
-        (statusFilter === 'Inactive' && !store.is_active);
-
-      const matchesState = !stateFilter || state === stateFilter.toLowerCase();
-
-      return matchesSearch && matchesStatus && matchesState;
-    });
-  }, [stores, searchTerm, statusFilter, stateFilter]);
-
   // KPIs
   const kpiData = useMemo(() => {
-    const total = stores.length;
-    const active = stores.filter(s => s.is_active).length;
-    
     let totalRevenueVal = 0;
     let totalStaffVal = 0;
 
     stores.forEach(s => {
-      const name = s.store_name || s.name;
-      const metrics = getStoreMetrics(name);
-      totalStaffVal += metrics.staff;
-      const revNum = parseInt(metrics.revenue.replace(/[^0-9]/g, ''), 10) || 0;
-      totalRevenueVal += revNum;
+      totalStaffVal += (s.staff_count || 0);
+      totalRevenueVal += (s.revenue_generated || 0);
     });
 
     const formatRupee = (num) => {
@@ -130,19 +112,21 @@ const Stores = () => {
     };
 
     return {
-      total,
-      active,
+      total: overallTotal,
+      active: activeTotal,
       revenue: formatRupee(totalRevenueVal),
       staff: totalStaffVal
     };
-  }, [stores]);
+  }, [stores, overallTotal, activeTotal]);
 
-  const hasFilters = searchTerm || statusFilter !== 'All' || stateFilter;
+  const hasFilters = search || statusFilter !== 'All' || stateFilter;
 
   const handleClearFilters = () => {
-    setSearchTerm('');
+    setSearchInput('');
+    setSearch('');
     setStatusFilter('All');
     setStateFilter('');
+    setPage(1);
   };
 
   return (
@@ -207,13 +191,13 @@ const Stores = () => {
           </div>
           <input
             type="text"
-            value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
+            value={searchInput}
+            onChange={e => setSearchInput(e.target.value)}
             placeholder="Search stores by name, code or city..."
             className="w-full pl-10 pr-10 py-2.5 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 text-sm font-medium transition-all shadow-sm placeholder:text-slate-400"
           />
-          {searchTerm && (
-            <button onClick={() => setSearchTerm('')}
+          {searchInput && (
+            <button onClick={() => { setSearchInput(''); setSearch(''); }}
               className="absolute inset-y-0 right-3 flex items-center text-slate-400 hover:text-slate-700 transition-colors">
               <XIcon className="w-4 h-4" />
             </button>
@@ -243,7 +227,7 @@ const Stores = () => {
             <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5 block">Store Status</label>
             <select
               value={statusFilter}
-              onChange={e => setStatusFilter(e.target.value)}
+              onChange={e => { setStatusFilter(e.target.value); setPage(1); }}
               className="w-full px-3 py-2 text-sm font-medium border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 bg-white text-slate-700 transition-all"
             >
               <option value="All">All Statuses</option>
@@ -255,7 +239,7 @@ const Stores = () => {
             <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5 block">State</label>
             <select
               value={stateFilter}
-              onChange={e => setStateFilter(e.target.value)}
+              onChange={e => { setStateFilter(e.target.value); setPage(1); }}
               className="w-full px-3 py-2 text-sm font-medium border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 bg-white text-slate-700 transition-all"
             >
               <option value="">All States</option>
@@ -286,7 +270,7 @@ const Stores = () => {
         <div className="bg-red-50 border border-red-100 rounded-2xl p-12 text-center text-red-700 font-semibold">
           Unable to load stores list. Please check your backend connection.
         </div>
-      ) : filteredStores.length === 0 ? (
+      ) : stores.length === 0 ? (
         <div className="bg-white border border-dashed border-slate-200 rounded-2xl p-12 flex flex-col items-center justify-center text-center">
           <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4 border border-slate-100">
             <Store className="w-8 h-8 text-slate-300" />
@@ -313,10 +297,16 @@ const Stores = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredStores.map(store => {
+                {stores.map(store => {
                   const name = store.store_name || store.name;
-                  const metrics = getStoreMetrics(name);
-                  const code = store.store_code || store.code || `ST-${String(store.id).padStart(2, '0')}`;
+                  const code = store.store_code || store.code;
+                  const formatRupee = (num) => {
+                    return new Intl.NumberFormat('en-IN', {
+                      style: 'currency',
+                      currency: 'INR',
+                      maximumFractionDigits: 0
+                    }).format(num);
+                  };
                   
                   return (
                     <tr
@@ -364,13 +354,13 @@ const Stores = () => {
                       <td className="px-6 py-4 whitespace-nowrap text-slate-700 font-bold">
                         <div className="flex items-center gap-2">
                           <Users className="w-4 h-4 text-purple-500" />
-                          <span>{metrics.staff}</span>
+                          <span>{store.staff_count || 0}</span>
                         </div>
                       </td>
 
                       {/* Revenue */}
                       <td className="px-6 py-4 whitespace-nowrap text-slate-900 font-extrabold">
-                        {metrics.revenue}
+                        {formatRupee(store.revenue_generated || 0)}
                       </td>
 
                       {/* Status */}
@@ -417,6 +407,17 @@ const Stores = () => {
               </tbody>
             </table>
           </div>
+          
+          {pages > 1 && (
+            <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50">
+              <Pagination
+                totalItems={total}
+                itemsPerPage={10}
+                currentPage={page}
+                onPageChange={setPage}
+              />
+            </div>
+          )}
         </div>
       )}
 

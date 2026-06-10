@@ -5,6 +5,7 @@ from apis.store.read import router as read_router
 from apis.store.update import router as update_router
 from apis.store.delete import router as delete_router
 from apis.store.staff import router as staff_router
+from apis.store.overview import router as overview_router
 
 store_router = APIRouter(
     prefix="/stores",
@@ -16,3 +17,4 @@ store_router.include_router(read_router)
 store_router.include_router(update_router)
 store_router.include_router(delete_router)
 store_router.include_router(staff_router)
+store_router.include_router(overview_router)

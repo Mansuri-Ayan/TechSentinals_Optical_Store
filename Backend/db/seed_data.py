@@ -1295,7 +1295,7 @@ async def seed() -> None:
                         quantity=st_qty,
                         available_quantity=st_qty,
                         reserved_quantity=0,
-                        reorder_level=5,
+                        reorder_level=10,
                     )
                     session.add(inv)
                     await session.flush()

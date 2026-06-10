@@ -19,12 +19,12 @@ router = APIRouter()
 )
 async def list_store_staff(
     store_id: int,
-    page: int = Query(default=1, ge=1, description="Page number (starting from 1)"),
-    limit: int = Query(default=20, ge=1, le=100, description="Page size / limit"),
+    page: int = Query(default=1, ge=1, description="Page number"),
+    page_size: int = Query(default=10, ge=1, le=100, alias="limit", description="Page size"),
     search: str | None = Query(default=None, description="Search query matching staff name/email/phone/code"),
-    is_active: bool | None = Query(default=None, description="Filter by active status"),
-    role: str | None = Query(default=None, description="Filter by role: 'manager', 'worker', 'optician'"),
-    paginate: bool = Query(default=True, description="Enable or disable pagination"),
+    status: str | None = Query(default=None, description="Filter by status: ACTIVE/INACTIVE"),
+    role: str | None = Query(default=None, description="Filter by role: MANAGER/WORKER/OPTICIAN"),
+    paginate: bool = Query(default=True),
     db: AsyncSession = Depends(get_db),
     current_admin: Admin = Depends(get_current_admin),
 ) -> PaginatedResponse[StaffRead]:
@@ -36,22 +36,26 @@ async def list_store_staff(
             detail="Store not found",
         )
         
+    is_active = None
+    if status:
+        is_active = status.upper() == "ACTIVE"
+        
     staff_items, total = await get_staff_by_store(
         db,
         store_id=store_id,
         page=page,
-        limit=limit,
+        limit=page_size,
         search=search,
         is_active=is_active,
-        role=role,
+        role=role.upper() if role and role.lower() != "all" else None,
         paginate=paginate,
     )
     
-    pages = (total + limit - 1) // limit if limit > 0 else 1
+    pages = (total + page_size - 1) // page_size if page_size > 0 else 1
     return PaginatedResponse[StaffRead](
         items=[StaffRead.model_validate(item) for item in staff_items],
         total=total,
         page=page,
         pages=pages,
-        limit=limit,
+        limit=page_size,
     )
