@@ -7,18 +7,7 @@ import {
 } from 'lucide-react';
 import { useStoreStore } from '../../store/store';
 import StoreSwitcher from '../../components/admin/stores/StoreSwitcher';
-import { SALES_MOCK_DATA } from '../../data/salesData';
-
-/* ─────────────────────────────────────────────────────────
-   STORE SPECIFIC KPI METRIC CALCULATIONS
-   ───────────────────────────────────────────────────────── */
-const STORE_METRICS = {
-  All:          { revenue: 1245000, orders: 1245, customers: 4250, profit: 747000, inventoryVal: 845000, stores: 4, mult: 1.0 },
-  'Main Branch': { revenue: 435750, orders: 436,  customers: 1487, profit: 261450, inventoryVal: 295750, stores: 1, mult: 0.35 },
-  'Branch 2':    { revenue: 298800, orders: 299,  customers: 1020, profit: 179280, inventoryVal: 202800, stores: 1, mult: 0.24 },
-  'Branch 3':    { revenue: 149400, orders: 149,  customers: 510,  profit: 89640,  inventoryVal: 101400, stores: 1, mult: 0.12 },
-  'Admin Store': { revenue: 224100, orders: 224,  customers: 765,  profit: 134465, inventoryVal: 152100, stores: 1, mult: 0.18 }
-};
+import { useAnalyses } from '../../hooks/useAnalyses';
 
 /* ─────────────────────────────────────────────────────────
    PREMIUM WIDGET CARD (STRIPE-LIKE NOTION AESTHETICS)
@@ -44,10 +33,10 @@ const AnalyticsCard = ({ title, subtitle, children, actions, className = "" }) =
 
 // 1. Line Chart: Sales Trend (12 Months representation)
 const SalesTrendChart = ({ data }) => {
-  const maxValue = Math.max(...data.map(item => item.value), 1);
+  const maxValue = Math.max(...data.map(item => Number(item.value)), 1);
   const points = data.map((item, i) => {
     const x = 40 + i * (250 / 11);
-    const y = 135 - (item.value / maxValue) * 105;
+    const y = 135 - (Number(item.value) / maxValue) * 105;
     return `${x},${y}`;
   }).join(' ');
 
@@ -72,15 +61,16 @@ const SalesTrendChart = ({ data }) => {
 
         {data.map((p, i) => {
           const x = 40 + i * (250 / 11);
-          const y = 135 - (p.value / maxValue) * 105;
+          const y = 135 - (Number(p.value) / maxValue) * 105;
           return (
             <g key={i} className="group cursor-pointer">
               <circle cx={x} cy={y} r="2.5" fill="#FFFFFF" stroke="#10B981" strokeWidth="1.5" className="transition-all duration-200 group-hover:r-4.5 group-hover:stroke-emerald-600" />
+              <circle cx={x} cy={y} r="8" fill="transparent" />
               <text x={x} y={y - 8} textAnchor="middle" className="text-[7.5px] font-extrabold fill-slate-800 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                ₹{(p.value / 1000).toFixed(0)}k
+                ₹{(Number(p.value) / 1000).toFixed(0)}k
               </text>
               <text x={x} y="145" textAnchor="middle" className="text-[8px] font-bold fill-slate-400 pointer-events-none">{p.label}</text>
-              <title>{`${p.label}: ₹${p.value.toLocaleString()}`}</title>
+              <title>{`${p.label}: ₹${Number(p.value).toLocaleString()}`}</title>
             </g>
           );
         })}
@@ -192,10 +182,10 @@ const BarChart = ({ data }) => {
 
 // 4. Line Chart: Customer Growth (Jan -> Dec)
 const CustomerGrowthChart = ({ data }) => {
-  const maxValue = Math.max(...data.map(item => item.value), 1);
+  const maxValue = Math.max(...data.map(item => Number(item.value)), 1);
   const points = data.map((item, i) => {
     const x = 40 + i * (250 / 11);
-    const y = 130 - (item.value / maxValue) * 105;
+    const y = 130 - (Number(item.value) / maxValue) * 105;
     return `${x},${y}`;
   }).join(' ');
 
@@ -211,15 +201,16 @@ const CustomerGrowthChart = ({ data }) => {
 
         {data.map((p, i) => {
           const x = 40 + i * (250 / 11);
-          const y = 130 - (p.value / maxValue) * 105;
+          const y = 130 - (Number(p.value) / maxValue) * 105;
           return (
             <g key={i} className="group cursor-pointer">
               <circle cx={x} cy={y} r="2.5" fill="#FFFFFF" stroke="#6366F1" strokeWidth="1.5" className="transition-all duration-200 group-hover:r-4 group-hover:stroke-indigo-600" />
+              <circle cx={x} cy={y} r="8" fill="transparent" />
               <text x={x} y={y - 8} textAnchor="middle" className="text-[7.5px] font-extrabold fill-indigo-700 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                {p.value}
+                {Number(p.value)}
               </text>
               <text x={x} y="143" textAnchor="middle" className="text-[8px] font-extrabold fill-slate-400 pointer-events-none">{p.label}</text>
-              <title>{`${p.label}: ${p.value} Customers`}</title>
+              <title>{`${p.label}: ${Number(p.value)} Customers`}</title>
             </g>
           );
         })}
@@ -233,166 +224,109 @@ const Analyses = () => {
   const { stores, selectedStore, setSelectedStore } = useStoreStore();
   const [selectedStoreFilter, setSelectedStoreFilter] = useState('All');
   const [dateRange, setDateRange] = useState('This Year');
-  const [isLoading, setIsLoading] = useState(false);
+
+  // Find active store ID based on selectedStoreFilter name
+  const activeStoreId = useMemo(() => {
+    if (selectedStoreFilter === 'All') return null;
+    const matchedStore = stores.find(s => (s.store_name || s.name) === selectedStoreFilter);
+    return matchedStore?.id || null;
+  }, [selectedStoreFilter, stores]);
+
+  // Fetch real analyses data from backend
+  const { data, isLoading, refetch } = useAnalyses(activeStoreId, dateRange);
 
   // Sync state if selectedStore changes from sidebar selector
   useEffect(() => {
     if (selectedStore) {
       setSelectedStoreFilter(selectedStore.store_name || selectedStore.name);
+    } else {
+      setSelectedStoreFilter('All');
     }
   }, [selectedStore]);
 
   const activeMetrics = useMemo(() => {
-    return STORE_METRICS[selectedStoreFilter] || {
-      revenue: Math.round(1245000 * 0.15),
-      orders: Math.round(1245 * 0.15),
-      customers: Math.round(4250 * 0.15),
-      profit: Math.round(747000 * 0.15),
-      inventoryVal: Math.round(845000 * 0.15),
-      stores: 1,
-      mult: 0.15
+    if (!data?.kpis) {
+      return {
+        revenue: 0,
+        orders: 0,
+        customers: 0,
+        profit: 0,
+        inventoryVal: 0,
+        stores: 0
+      };
+    }
+    return {
+      revenue: data.kpis.revenue,
+      orders: data.kpis.orders_count,
+      customers: data.kpis.customers_count,
+      profit: data.kpis.profit,
+      inventoryVal: data.kpis.inventory_val,
+      stores: data.kpis.stores_count
     };
-  }, [selectedStoreFilter]);
-
-  const mult = activeMetrics.mult;
+  }, [data]);
 
   const handleRefresh = () => {
-    setIsLoading(true);
-    setTimeout(() => setIsLoading(false), 500);
+    refetch();
   };
 
   const handleExport = () => {
-    alert("Exporting analytics report as CSV/PDF...");
+    alert("Exporting analyses report as CSV/PDF...");
   };
 
   /* ── 1. Sales Trend Data (Jan -> Dec) ── */
   const salesTrendData = useMemo(() => {
-    const raw = [
-      { label: 'Jan', value: 85000 },
-      { label: 'Feb', value: 95000 },
-      { label: 'Mar', value: 110000 },
-      { label: 'Apr', value: 105000 },
-      { label: 'May', value: 145000 },
-      { label: 'Jun', value: 168000 },
-      { label: 'Jul', value: 155000 },
-      { label: 'Aug', value: 162000 },
-      { label: 'Sep', value: 178000 },
-      { label: 'Oct', value: 190000 },
-      { label: 'Nov', value: 215000 },
-      { label: 'Dec', value: 245000 },
-    ];
-    return raw.map(item => ({ ...item, value: Math.round(item.value * mult) }));
-  }, [mult]);
+    return data?.sales_trend || [];
+  }, [data]);
 
   /* ── 2. Sales Status Data ── */
   const salesStatusData = useMemo(() => {
-    return [
-      { name: 'Completed', value: Math.round(980 * mult), color: '#10B981' },
-      { name: 'Pending', value: Math.round(180 * mult), color: '#3B82F6' },
-      { name: 'Cancelled', value: Math.round(65 * mult), color: '#EF4444' },
-      { name: 'Refunded', value: Math.round(20 * mult), color: '#F59E0B' },
-    ];
-  }, [mult]);
+    return data?.sales_status || [];
+  }, [data]);
 
   /* ── 3. Revenue Breakdown Data ── */
   const revenueBreakdownData = useMemo(() => {
-    return [
-      { name: 'Frames', value: Math.round(584000 * mult), color: '#3B82F6' },
-      { name: 'Lenses', value: Math.round(445000 * mult), color: '#10B981' },
-      { name: 'Accessories', value: Math.round(216000 * mult), color: '#8B5CF6' },
-    ];
-  }, [mult]);
+    return data?.revenue_breakdown || [];
+  }, [data]);
 
   /* ── 4. Inventory Status Data ── */
   const inventoryStatusData = useMemo(() => {
-    return [
-      { label: 'In Stock', value: Math.round(480 * mult), color: '#10B981' },
-      { label: 'Low Stock', value: Math.round(35 * mult), color: '#F59E0B' },
-      { label: 'Out Of Stock', value: Math.round(15 * mult), color: '#EF4444' },
-    ];
-  }, [mult]);
+    return data?.inventory_status || [];
+  }, [data]);
 
   /* ── 5. Branch Performance Data ── */
   const branchPerformanceData = useMemo(() => {
-    return [
-      { label: 'Main Branch', value: Math.round(435 * mult), color: '#3B82F6' },
-      { label: 'Branch 2', value: Math.round(298 * mult), color: '#10B981' },
-      { label: 'Admin Store', value: Math.round(224 * mult), color: '#6366F1' },
-      { label: 'Branch 3', value: Math.round(149 * mult), color: '#F59E0B' },
-    ];
-  }, [mult]);
+    return data?.branch_performance || [];
+  }, [data]);
 
   /* ── 6. Best Performing Stores Data ── */
   const bestPerformingStores = useMemo(() => {
-    const list = [
-      { rank: 1, name: 'Main Branch', revenue: 435750, growth: 12.5 },
-      { rank: 2, name: 'Branch 2', revenue: 298800, growth: 8.2 },
-      { rank: 3, name: 'Admin Store', revenue: 224100, growth: 5.4 },
-      { rank: 4, name: 'Branch 3', revenue: 149400, growth: -2.1 }
-    ];
-    return list.sort((a, b) => b.revenue - a.revenue);
-  }, []);
+    return data?.best_performing_stores || [];
+  }, [data]);
 
   /* ── 7. Store-wise Inventory Distribution Data ── */
   const storeInventoryDistribution = useMemo(() => {
-    return [
-      { name: 'Main Branch', value: Math.round(1450 * mult), color: '#3B82F6' },
-      { name: 'Branch 2', value: Math.round(1100 * mult), color: '#10B981' },
-      { name: 'Admin Store', value: Math.round(820 * mult), color: '#6366F1' },
-      { name: 'Branch 3', value: Math.round(550 * mult), color: '#F59E0B' },
-    ].filter(d => d.value > 0);
-  }, [mult]);
+    return data?.store_inventory_distribution || [];
+  }, [data]);
 
   /* ── 8. Supplier Analytics Data ── */
   const supplierAnalyticsData = useMemo(() => {
-    return [
-      { label: 'Vision Supply', value: Math.round(24 * mult), color: '#3B82F6' },
-      { label: 'Eyewear Depot', value: Math.round(18 * mult), color: '#10B981' },
-      { label: 'Lens World', value: Math.round(32 * mult), color: '#8B5CF6' },
-      { label: 'Zeiss India', value: Math.round(12 * mult), color: '#EC4899' },
-      { label: 'OpticEssential', value: Math.round(22 * mult), color: '#F59E0B' },
-    ];
-  }, [mult]);
+    return data?.supplier_volumes || [];
+  }, [data]);
 
-  /* ── 9. Transaction Analytics Data ── */
+  /* ── 9. Transaction Payment Analytics Data ── */
   const transactionAnalyticsData = useMemo(() => {
-    return [
-      { name: 'Cash', value: Math.round(280 * mult), color: '#8B5CF6' },
-      { name: 'UPI', value: Math.round(520 * mult), color: '#10B981' },
-      { name: 'Card', value: Math.round(345 * mult), color: '#3B82F6' },
-      { name: 'Credit', value: Math.round(100 * mult), color: '#F59E0B' },
-    ];
-  }, [mult]);
+    return data?.transaction_payment_analytics || [];
+  }, [data]);
 
   /* ── 10. Brand Performance Data ── */
   const brandPerformanceData = useMemo(() => {
-    return [
-      { label: 'Ray-Ban', value: Math.round(120 * mult), color: '#3B82F6' },
-      { label: 'Oakley', value: Math.round(85 * mult), color: '#6366F1' },
-      { label: 'Crizal', value: Math.round(70 * mult), color: '#10B981' },
-      { label: 'Hoya', value: Math.round(65 * mult), color: '#F59E0B' },
-      { label: 'Essilor', value: Math.round(50 * mult), color: '#8B5CF6' },
-    ];
-  }, [mult]);
+    return data?.brand_revenue_comparison || [];
+  }, [data]);
 
   /* ── 11. Customer Growth Data (Jan -> Dec) ── */
   const customerGrowthData = useMemo(() => {
-    const raw = [
-      { label: 'Jan', value: 80 },
-      { label: 'Feb', value: 120 },
-      { label: 'Mar', value: 190 },
-      { label: 'Apr', value: 290 },
-      { label: 'May', value: 410 },
-      { label: 'Jun', value: 580 },
-      { label: 'Jul', value: 750 },
-      { label: 'Aug', value: 920 },
-      { label: 'Sep', value: 1110 },
-      { label: 'Oct', value: 1350 },
-      { label: 'Nov', value: 1620 },
-      { label: 'Dec', value: 1950 },
-    ];
-    return raw.map(item => ({ ...item, value: Math.round(item.value * mult) }));
-  }, [mult]);
+    return data?.monthly_customer_growth || [];
+  }, [data]);
 
   const fmtCurrency = (val) => {
     return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(val);
@@ -461,29 +395,6 @@ const Analyses = () => {
         </div>
       </div>
 
-      {/* Analytics Cards at Top */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
-        {[
-          { title: 'Total Revenue', value: fmtCurrency(activeMetrics.revenue), icon: DollarSign, color: 'text-slate-400' },
-          { title: 'Total Orders', value: activeMetrics.orders.toLocaleString(), icon: ShoppingBag, color: 'text-slate-400' },
-          { title: 'Total Customers', value: activeMetrics.customers.toLocaleString(), icon: Users, color: 'text-slate-400' },
-          { title: 'Profit (60% Margin)', value: fmtCurrency(activeMetrics.profit), icon: TrendingUp, color: 'text-slate-400' },
-          { title: 'Inventory Value', value: fmtCurrency(activeMetrics.inventoryVal), icon: Archive, color: 'text-slate-400' },
-          { title: 'Total Stores', value: activeMetrics.stores.toString(), icon: Store, color: 'text-slate-400' }
-        ].map((stat, i) => (
-          <div
-            key={i}
-            className="bg-white p-6 rounded-2xl border border-slate-200/60 shadow-sm flex flex-col justify-between h-36 hover:shadow-md transition-all duration-300"
-          >
-            <div className="flex justify-between items-start">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{stat.title}</p>
-              <stat.icon className={`w-4.5 h-4.5 ${stat.color}`} />
-            </div>
-            <h3 className="text-xl sm:text-2xl font-black text-slate-800 tracking-tight leading-none mt-4 truncate">{stat.value}</h3>
-          </div>
-        ))}
-      </div>
-
       {isLoading ? (
         <div className="min-h-[50vh] flex flex-col items-center justify-center p-20 bg-white rounded-3xl border border-slate-100 shadow-sm">
           <RefreshCw className="w-10 h-10 animate-spin text-emerald-500 mb-3" />
@@ -491,6 +402,29 @@ const Analyses = () => {
         </div>
       ) : (
         <div className="space-y-6 sm:space-y-8">
+          
+          {/* Analytics Cards at Top */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
+            {[
+              { title: 'Total Revenue', value: fmtCurrency(activeMetrics.revenue), icon: DollarSign, color: 'text-slate-400' },
+              { title: 'Total Orders', value: activeMetrics.orders.toLocaleString(), icon: ShoppingBag, color: 'text-slate-400' },
+              { title: 'Total Customers', value: activeMetrics.customers.toLocaleString(), icon: Users, color: 'text-slate-400' },
+              { title: 'Gross Profit', value: fmtCurrency(activeMetrics.profit), icon: TrendingUp, color: 'text-slate-400' },
+              { title: 'Inventory Value', value: fmtCurrency(activeMetrics.inventoryVal), icon: Archive, color: 'text-slate-400' },
+              { title: 'Total Stores', value: activeMetrics.stores.toString(), icon: Store, color: 'text-slate-400' }
+            ].map((stat, i) => (
+              <div
+                key={i}
+                className="bg-white p-6 rounded-2xl border border-slate-200/60 shadow-sm flex flex-col justify-between h-36 hover:shadow-md transition-all duration-300"
+              >
+                <div className="flex justify-between items-start">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{stat.title}</p>
+                  <stat.icon className={`w-4.5 h-4.5 ${stat.color}`} />
+                </div>
+                <h3 className="text-xl sm:text-2xl font-black text-slate-800 tracking-tight leading-none mt-4 truncate">{stat.value}</h3>
+              </div>
+            ))}
+          </div>
           
           {/* Row 1: Sales Trend (Large 2/3) + Sales Status (Medium 1/3) */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -558,7 +492,7 @@ const Analyses = () => {
                     </div>
                     <div className="flex items-center gap-3 flex-shrink-0">
                       <span className="text-xs font-black text-slate-900">{fmtCurrency(store.revenue)}</span>
-                      <span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded ${store.growth >= 0 ? 'text-emerald-700 bg-emerald-50 border border-emerald-100' : 'text-red-700 bg-red-50 border-red-100'}`}>
+                      <span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded ${store.growth >= 0 ? 'text-emerald-700 bg-emerald-50 border-emerald-100' : 'text-red-700 bg-red-50 border-red-100'}`}>
                         {store.growth >= 0 ? '+' : ''}{store.growth}%
                       </span>
                     </div>

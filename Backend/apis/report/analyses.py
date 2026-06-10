@@ -1,0 +1,30 @@
+# API: report/analyses.py
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy.ext.asyncio import AsyncSession
+from core.deps import get_current_admin
+from db.session import get_db
+from models.admin import Admin
+from schemas.report import AnalysesReport
+from services.report_service import get_analyses_report
+
+router = APIRouter()
+
+
+@router.get(
+    "/analyses",
+    response_model=AnalysesReport,
+    summary="Get central analyses report metrics",
+    description="Fetch key performance indicators, sales trends, category sales, inventory breakdowns, branch performance comparison, supplier volumes, payment analytics, and brand revenue details.",
+)
+async def get_analyses_report_endpoint(
+    store_id: int | None = Query(None, description="Optional store ID to filter the report"),
+    date_range: str | None = Query(None, description="Optional date range (e.g. Last 30 Days, This Month, This Quarter, This Year)"),
+    db: AsyncSession = Depends(get_db),
+    current_admin: Admin = Depends(get_current_admin),
+) -> AnalysesReport:
+    return await get_analyses_report(
+        db=db,
+        admin_id=current_admin.id,
+        store_id=store_id,
+        date_range=date_range
+    )

@@ -71,3 +71,6 @@ app.include_router(prescription_router)
 app.include_router(sale_router)
 # ── Expenses module ───────────────────────────────────────────
 app.include_router(expense_router)
+# ── Reports & Analysis module ─────────────────────────────────
+app.include_router(report_router)
+
