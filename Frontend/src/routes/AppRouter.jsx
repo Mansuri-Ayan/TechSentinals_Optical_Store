@@ -27,6 +27,8 @@ import CustomerDetail from "../pages/shopkeeper/CustomerDetail";
 import ShopkeeperInventory from "../pages/shopkeeper/Inventory";
 import ShopkeeperSales from "../pages/shopkeeper/Sales";
 import Shopkeeper from "../pages/shopkeeper/Shopkeeper";
+import ShopkeeperStaff from "../pages/shopkeeper/Staff";
+import ShopkeeperExpenses from "../pages/shopkeeper/Expenses";
 
 // Responsive loading spinner component
 const LoadingSpinner = () => (
@@ -254,6 +256,8 @@ function AppRouter() {
         <Route path="customers/:customerId" element={<CustomerDetail />} />
         <Route path="inventory" element={<ShopkeeperInventory />} />
         <Route path="sales" element={<ShopkeeperSales />} />
+        <Route path="staff" element={<ShopkeeperStaff />} />
+        <Route path="expenses" element={<ShopkeeperExpenses />} />
       </Route>
 
       {/* Fallback root redirect */}

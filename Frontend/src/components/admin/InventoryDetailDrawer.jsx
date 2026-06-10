@@ -5,6 +5,7 @@ import {
   Store, CheckCircle, AlertTriangle, XCircle, Image as ImageIcon, Sliders,
   User, Users, CreditCard, UserCheck, Calendar, IndianRupee, ShoppingCart,
   Receipt, FileText, RefreshCw, Shield, ThumbsUp, ThumbsDown,
+  Briefcase, Clock, Phone, Mail,
 } from 'lucide-react';
 
 const statusConfig = {
@@ -108,12 +109,124 @@ const RejectReasonPrompt = ({ onConfirm, onCancel }) => {
 
 /* ─────────────────────────────────────────────────────────
    MAIN DRAWER COMPONENT
-   Props: item, onClose, onApprove(item), onReject(item, reason), isApproving, isRejecting
+   Props: item, onClose, onApprove, onReject, isApproving, isRejecting, isLoading
 ───────────────────────────────────────────────────────── */
-const InventoryDetailDrawer = ({ item, onClose, onApprove, onReject, isApproving, isRejecting }) => {
+const InventoryDetailDrawer = ({ item, onClose, onApprove, onReject, isApproving, isRejecting, isLoading }) => {
   const [showRejectPrompt, setShowRejectPrompt] = useState(false);
 
   if (!item) return null;
+
+  /* ── STAFF DRAWER ──────────────────────────────────────── */
+  if (item.type === 'staff') {
+    const initials = item.first_name ? item.first_name.charAt(0) : (item.name ? item.name.charAt(0) : '?');
+    const formatRole = (role) => {
+      if (!role) return "";
+      return role.charAt(0).toUpperCase() + role.slice(1).toLowerCase();
+    };
+    const formatLastActive = (value) => {
+      if (!value) return "Never";
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return "Never";
+      return date.toLocaleDateString(undefined, {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      });
+    };
+    const fmtDateLocal = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+
+    return pojrtal(
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[999] flex justify-end animate-fade-in font-sans">
+        <div className="absolute inset-0" onClick={onClose} aria-hidden />
+        
+        <div className="relative w-full sm:max-w-md h-full bg-slate-50 shadow-2xl flex flex-col animate-slide-up">
+          
+          {/* Header */}
+          <div className="flex items-center justify-between px-5 py-4 bg-white border-b border-slate-100 flex-shrink-0">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="h-10 w-10 rounded-full bg-gradient-to-tr from-slate-800 to-slate-600 flex items-center justify-center text-white font-bold text-lg shadow-inner flex-shrink-0">
+                {initials}
+              </div>
+              <div className="min-w-0">
+                <h2 className="text-base font-bold text-slate-900 truncate">{item.first_name ? `${item.first_name} ${item.last_name}` : item.name}</h2>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200 uppercase">
+                    {item.role}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <button onClick={onClose}
+              className="p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 rounded-full transition-colors flex-shrink-0 ml-2">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Status strip */}
+          <div className="px-5 py-3 bg-white border-b border-slate-100 flex-shrink-0 flex items-center justify-between gap-3 flex-wrap">
+            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${item.is_active ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-red-700 bg-red-50 border-red-200'}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${item.is_active ? 'bg-emerald-500' : 'bg-red-500'}`} />
+              {item.is_active ? 'Active' : 'Inactive'}
+            </span>
+            <span className="text-xs text-slate-400 font-semibold">Joined: {fmtDateLocal(item.created_at || item.joining_date)}</span>
+          </div>
+
+          {/* Scrollable content */}
+          <div className="flex-1 overflow-y-auto hide-scrollbar px-4 py-4 space-y-3">
+            {isLoading ? (
+              <div className="space-y-4">
+                {[1, 2, 3].map(i => (
+                  <div key={i} className="bg-white rounded-2xl border border-slate-100 p-5 space-y-4 animate-pulse">
+                    <div className="h-4 bg-slate-100 rounded-full w-1/3" />
+                    <div className="space-y-3">
+                      <div className="h-3 bg-slate-50 rounded-full w-full" />
+                      <div className="h-3 bg-slate-50 rounded-full w-2/3" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <>
+                <Section icon={User} title="Personal Info" color="emerald">
+                  <DetailRow label="Full Name" value={item.first_name ? `${item.first_name} ${item.last_name}` : item.name} />
+                  <DetailRow label="Email"     value={item.email} />
+                  <DetailRow label="Phone"     value={item.phone || item.phone_number} />
+                  <DetailRow label="Role"      value={formatRole(item.role)} />
+                  {item.qualification && <DetailRow label="Qualification" value={item.qualification} />}
+                </Section>
+
+                <Section icon={Briefcase} title="Employment" color="blue">
+                  <DetailRow label="Store / Branch" value={item.store_name} />
+                  <DetailRow label="Status" value={
+                    <span className={`inline-flex px-2 py-0.5 rounded text-[11px] font-bold ${item.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
+                      {item.is_active ? 'Active' : 'Inactive'}
+                    </span>
+                  } />
+                  <DetailRow label="Joined"     value={fmtDateLocal(item.created_at || item.joining_date)} />
+                  <DetailRow label="Last Login"  value={item.last_login_at ? formatLastActive(item.last_login_at) : "Never"} />
+                </Section>
+
+                <Section icon={Shield} title="Account" color="purple">
+                  <DetailRow label="Username"    value={item.username || item.email} mono />
+                  <DetailRow label="Role ID"     value={item.role_id || item.id} mono />
+                  {item.permissions && <DetailRow label="Permissions" value={item.permissions.join(', ')} />}
+                </Section>
+              </>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="px-5 py-4 bg-white border-t border-slate-100 flex-shrink-0">
+            <button onClick={onClose}
+              className="w-full py-2.5 bg-slate-900 text-white rounded-xl font-semibold text-sm hover:bg-slate-700 transition-all shadow-md hover:shadow-lg">
+              Close
+            </button>
+          </div>
+        </div>
+      </div>,
+      document.body
+    );
+  }
 
   /* ── SALES DRAWER ──────────────────────────────────────── */
   if (item.type === 'sales') {
