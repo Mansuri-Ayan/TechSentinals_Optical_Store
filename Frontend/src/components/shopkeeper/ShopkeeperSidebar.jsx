@@ -96,7 +96,9 @@ const ShopkeeperSidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) =
           </div>
 
           {!isCollapsed && (
-            <h2 className="text-lg font-semibold tracking-tight text-white truncate animate-fade-in">Inventory Portal</h2>
+            <h2 className="text-lg font-semibold tracking-tight text-white truncate animate-fade-in">
+              {user?.store_name || 'Inventory Portal'}
+            </h2>
           )}
 
           {/* Toggle Button for collapsing on desktop */}
@@ -237,7 +239,7 @@ const ShopkeeperSidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) =
         <div className={`p-4 border-t border-white/10 bg-[#060a16] ${isCollapsed ? 'flex flex-col items-center gap-2' : ''}`}>
           {/* Profile Card */}
           <div 
-            title={isCollapsed ? (user?.full_name || 'Inventory Portal') : undefined}
+            title={isCollapsed ? `${user?.full_name} (${user?.role || 'Staff'})` : undefined}
             className={`flex items-center ${isCollapsed ? 'justify-center w-10 h-10 p-0 rounded-full' : 'px-3 sm:px-4 py-3 rounded-xl'} mb-2 bg-white/5 border border-white/5 hover:bg-white/10 transition-colors cursor-pointer w-full`}
           >
             <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-emerald-400 to-emerald-600 flex items-center justify-center text-white font-bold text-sm shadow-md flex-shrink-0">
@@ -245,8 +247,9 @@ const ShopkeeperSidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) =
             </div>
             {!isCollapsed && (
               <div className="ml-3 flex-1 overflow-hidden min-w-0 flex-shrink-0 animate-fade-in">
-                <p className="text-sm font-semibold text-white truncate">{user?.full_name || 'Inventory Portal'}</p>
-                <p className="text-xs text-slate-400 truncate">{user?.email || 'inventory@gmail.com'}</p>
+                <p className="text-sm font-semibold text-white truncate">{user?.full_name || 'Staff Member'}</p>
+                <p className="text-xs text-emerald-400 font-bold uppercase tracking-wider truncate mt-0.5">{user?.role || 'Staff'}</p>
+                <p className="text-[11px] text-slate-400 truncate mt-0.5">{user?.email || 'inventory@gmail.com'}</p>
               </div>
             )}
           </div>

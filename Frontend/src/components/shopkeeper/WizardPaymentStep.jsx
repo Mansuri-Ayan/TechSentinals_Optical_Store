@@ -240,7 +240,7 @@ const WizardPaymentStep = ({ customer, prescription, onBack, onComplete }) => {
                     </p>
                   </div>
                 )}
-                {prescription.prescriptionDate && (
+                {prescription.prescriptionDate && !isNaN(new Date(prescription.prescriptionDate).getTime()) && (
                   <div>
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">
                       Prescription Date

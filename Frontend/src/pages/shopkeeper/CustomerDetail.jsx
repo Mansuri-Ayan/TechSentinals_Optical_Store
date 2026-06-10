@@ -172,7 +172,10 @@ const CustomerDetail = () => {
     );
   }
 
-  const fullName = `${c.firstName} ${c.lastName}`;
+  const fName = c.firstName || c.first_name || '';
+  const lName = c.lastName || c.last_name || '';
+  const fullName = `${fName} ${lName}`.trim() || 'Unknown Customer';
+  const initials = fName ? fName[0].toUpperCase() : (lName ? lName[0].toUpperCase() : 'C');
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto animate-fade-in font-sans">
@@ -199,7 +202,7 @@ const CustomerDetail = () => {
           </button>
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-br from-slate-700 to-slate-900 flex items-center justify-center text-white font-black text-xl sm:text-2xl shadow-md flex-shrink-0">
-              {c.firstName[0]}
+              {initials}
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
@@ -287,8 +290,8 @@ const CustomerDetail = () => {
           <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {[
-                { icon: User, label: 'First Name', value: c.firstName },
-                { icon: User, label: 'Last Name', value: c.lastName },
+                { icon: User, label: 'First Name', value: fName },
+                { icon: User, label: 'Last Name', value: lName },
                 { icon: Mail, label: 'Email Address', value: c.email || '—' },
                 { icon: Phone, label: 'Phone Number', value: c.phone },
                 { icon: Calendar, label: 'Date of Birth', value: fmtDate(c.dateOfBirth) },

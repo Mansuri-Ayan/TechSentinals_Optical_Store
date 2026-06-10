@@ -10,7 +10,7 @@ const PaymentForm = ({
 }) => {
   const finalAmount = Math.max(0, subtotal - discount);
 
-  // Synchronize payment amounts when subtotal, discount, or payment status changes
+  // Synchronize payment amounts when finalAmount changes
   useEffect(() => {
     let received = payment.receivedAmount;
     let remaining = payment.remainingAmount;
@@ -22,24 +22,24 @@ const PaymentForm = ({
       received = 0;
       remaining = finalAmount;
     } else if (payment.status === 'Partial') {
-      // If switching to partial, default received amount to half or keep existing if valid
-      const curRec = Number(payment.receivedAmount) || 0;
-      if (curRec > finalAmount || curRec === 0 || curRec === subtotal) {
-        received = Math.round(finalAmount / 2);
+      if (payment.receivedAmount === '') {
+        received = '';
+        remaining = finalAmount;
       } else {
-        received = curRec;
+        const curRec = Number(payment.receivedAmount) || 0;
+        received = Math.min(finalAmount, curRec);
+        remaining = Math.max(0, finalAmount - received);
       }
-      remaining = Math.max(0, finalAmount - received);
     }
 
     if (received !== payment.receivedAmount || remaining !== payment.remainingAmount) {
-      onPaymentChange({
-        ...payment,
+      onPaymentChange(prev => ({
+        ...prev,
         receivedAmount: received,
         remainingAmount: remaining,
-      });
+      }));
     }
-  }, [finalAmount, payment, subtotal, onPaymentChange]);
+  }, [finalAmount]);
 
   const handleMethodChange = (method) => {
     onPaymentChange({
@@ -50,18 +50,41 @@ const PaymentForm = ({
   };
 
   const handleStatusChange = (status) => {
+    let received = payment.receivedAmount;
+    let remaining = payment.remainingAmount;
+    if (status === 'Paid') {
+      received = finalAmount;
+      remaining = 0;
+    } else if (status === 'Unpaid') {
+      received = 0;
+      remaining = finalAmount;
+    } else if (status === 'Partial') {
+      received = Math.round(finalAmount / 2);
+      remaining = finalAmount - received;
+    }
     onPaymentChange({
       ...payment,
       status,
+      receivedAmount: received,
+      remainingAmount: remaining,
     });
   };
 
   const handleReceivedAmountChange = (val) => {
-    const received = Math.min(finalAmount, Math.max(0, Number(val) || 0));
-    const remaining = Math.max(0, finalAmount - received);
+    if (val === '') {
+      onPaymentChange({
+        ...payment,
+        receivedAmount: '',
+        remainingAmount: finalAmount,
+      });
+      return;
+    }
+    const num = Number(val);
+    // Allow user to type beyond limits temporarily without clamping, let validation handle it
+    const remaining = Math.max(0, finalAmount - num);
     onPaymentChange({
       ...payment,
-      receivedAmount: val === '' ? '' : received,
+      receivedAmount: val,
       remainingAmount: remaining,
     });
   };
@@ -104,7 +127,7 @@ const PaymentForm = ({
             type="number"
             min="0"
             max={subtotal}
-            value={discount === '' ? '' : discount}
+            value={discount === '' || discount === null || discount === undefined ? '' : discount}
             onChange={(e) => {
               const val = e.target.value;
               onDiscountChange(val === '' ? '' : Math.min(subtotal, Math.max(0, Number(val))));
@@ -237,7 +260,7 @@ const PaymentForm = ({
               type="number"
               min="0"
               max={finalAmount}
-              value={payment.receivedAmount === '' ? '' : payment.receivedAmount}
+              value={payment.receivedAmount === '' || payment.receivedAmount === null || payment.receivedAmount === undefined ? '' : payment.receivedAmount}
               disabled={payment.status === 'Paid' || payment.status === 'Unpaid'}
               onChange={(e) => handleReceivedAmountChange(e.target.value)}
               className={`${inputCls} font-bold text-slate-800 ${

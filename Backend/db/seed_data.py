@@ -6,7 +6,7 @@ import asyncio
 import sys
 from datetime import date, datetime, timedelta, timezone
 import uuid
-from pathlib import Path
+from pathlib import Path    
 
 _backend_dir = Path(__file__).resolve().parent.parent
 if str(_backend_dir) not in sys.path:
@@ -24,7 +24,7 @@ from models.optician import Optician
 from models.manager import Manager
 from models.role import Role
 from models.brand import Brand
-from models.category import Category
+from models.category import Category 
 from models.subcategory import Subcategory
 from models.product import Product
 from models.frame_product import FrameProduct

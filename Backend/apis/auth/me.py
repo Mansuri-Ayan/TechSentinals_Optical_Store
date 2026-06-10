@@ -33,16 +33,24 @@ async def me(
         data["role"] = "admin"
         data["first_name"] = current_user.owner_first_name
         data["last_name"] = current_user.owner_last_name
+        data["full_name"] = f"{current_user.owner_first_name} {current_user.owner_last_name}"
+        data["store_name"] = "Central Warehouse"
         return data
     elif isinstance(current_user, Manager):
         data = ManagerRead.model_validate(current_user).model_dump()
         data["role"] = "manager"
+        data["full_name"] = f"{current_user.first_name} {current_user.last_name}"
+        data["store_name"] = current_user.store.store_name if current_user.store else None
         return data
     elif isinstance(current_user, Worker):
         data = WorkerRead.model_validate(current_user).model_dump()
         data["role"] = "worker"
+        data["full_name"] = f"{current_user.first_name} {current_user.last_name}"
+        data["store_name"] = current_user.store.store_name if current_user.store else None
         return data
     elif isinstance(current_user, Optician):
         data = OpticianRead.model_validate(current_user).model_dump()
         data["role"] = "optician"
+        data["full_name"] = f"{current_user.first_name} {current_user.last_name}"
+        data["store_name"] = current_user.store.store_name if current_user.store else None
         return data

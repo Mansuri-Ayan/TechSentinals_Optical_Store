@@ -4,7 +4,9 @@ import {
   Search, Package, ChevronRight, Eye, AlertTriangle,
   CheckCircle, XCircle, Glasses, ShoppingBag, X as XIcon, Info
 } from 'lucide-react';
-import { MOCK_PRODUCTS, FRAME_SUBCATEGORIES, LENS_SUBCATEGORIES } from '../../data/productsData';
+import { FRAME_SUBCATEGORIES, LENS_SUBCATEGORIES } from '../../data/productsData';
+import { useAuthStore, useStoreStore } from '../../store/store';
+import { useInventory } from '../../hooks/useInventory';
 
 const getCategoryConfig = (name) => {
   const normalized = (name || '').toLowerCase();
@@ -13,7 +15,7 @@ const getCategoryConfig = (name) => {
       icon: Glasses,
       badge: 'bg-blue-50 text-blue-700 border-blue-200',
       activeTab: 'bg-blue-600 text-white shadow-blue-200 shadow-md',
-      hoverTab: 'bg-white text-slate-650 border border-slate-200 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-200',
+      hoverTab: 'bg-white text-slate-655 border border-slate-200 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-200',
       color: 'blue'
     };
   }
@@ -22,7 +24,7 @@ const getCategoryConfig = (name) => {
       icon: Eye,
       badge: 'bg-emerald-50 text-emerald-700 border-emerald-200',
       activeTab: 'bg-emerald-600 text-white shadow-emerald-200 shadow-md',
-      hoverTab: 'bg-white text-slate-650 border border-slate-200 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200',
+      hoverTab: 'bg-white text-slate-655 border border-slate-200 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200',
       color: 'emerald'
     };
   }
@@ -30,7 +32,7 @@ const getCategoryConfig = (name) => {
     icon: ShoppingBag,
     badge: 'bg-purple-50 text-purple-700 border-purple-200',
     activeTab: 'bg-purple-600 text-white shadow-purple-200 shadow-md',
-    hoverTab: 'bg-white text-slate-650 border border-slate-200 hover:bg-purple-50 hover:text-purple-700 hover:border-purple-200',
+    hoverTab: 'bg-white text-slate-655 border border-slate-200 hover:bg-purple-50 hover:text-purple-700 hover:border-purple-200',
     color: 'purple'
   };
 };
@@ -67,20 +69,37 @@ const StatusBadge = ({ status }) => {
 };
 
 const Inventory = () => {
+  const { user } = useAuthStore();
+  const { selectedStore } = useStoreStore();
+  const storeId = user?.role === 'admin' ? selectedStore?.id : user?.store_id;
+
   const [searchTerm, setSearchTerm] = useState('');
   const [activeCategory, setActiveCategory] = useState('all');
   const [activeSubcategory, setActiveSubcategory] = useState('all');
   const [activeStatus, setActiveStatus] = useState('');
   const [selectedProduct, setSelectedProduct] = useState(null);
 
-  // Dynamically calculate stock statuses from mock products
+  const { kpiItems, isLoading } = useInventory(storeId);
+
+  // Dynamically calculate stock statuses from backend products
   const products = useMemo(() => {
-    return MOCK_PRODUCTS.map(p => ({
-      ...p,
-      status: getStatus(p.available_quantity, p.reorder_level),
-      quantity: p.available_quantity,
+    return (kpiItems || []).map(item => ({
+      id: item.id,
+      product_id: item.product_id,
+      product_name: item.product_name,
+      category: item.category_name,
+      subcategory: item.subcategory_name,
+      brand: item.brand_name,
+      sku: item.product_sku,
+      selling_price: Number(item.selling_price),
+      available_quantity: item.available_quantity,
+      reorder_level: item.reorder_level,
+      image: item.image_url,
+      description: item.product_description || '',
+      status: getStatus(item.available_quantity, item.reorder_level),
+      quantity: item.available_quantity,
     }));
-  }, []);
+  }, [kpiItems]);
 
   // Filtered listing
   const filteredProducts = useMemo(() => {
@@ -161,6 +180,15 @@ const Inventory = () => {
       activeBg: 'bg-red-50',
     },
   ];
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center p-20 min-h-[400px] bg-white rounded-2xl border border-slate-100 shadow-sm font-sans">
+        <div className="w-10 h-10 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-3"></div>
+        <p className="text-slate-505 text-sm font-semibold">Loading inventory...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto animate-fade-in font-sans">

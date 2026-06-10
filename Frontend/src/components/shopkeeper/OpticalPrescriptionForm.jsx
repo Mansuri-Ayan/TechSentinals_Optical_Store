@@ -65,12 +65,12 @@ function OpticalPrescriptionForm({ prescription, onChange, onBack, onNext }) {
       prescriptionDate: '', // make it empty/falsy so hasPrescription returns false
     };
     onChange?.(emptyPres);
-    onNext?.();
+    onNext?.(emptyPres);
   };
 
   const handleNext = () => {
     onChange?.(form);
-    onNext?.();
+    onNext?.(form);
   };
 
   const handleBack = () => {
@@ -107,7 +107,7 @@ function OpticalPrescriptionForm({ prescription, onChange, onBack, onNext }) {
                 min={field.min}
                 max={field.max}
                 placeholder={field.placeholder}
-                value={form[eyeKey][field.key]}
+                value={form[eyeKey][field.key] ?? ''}
                 onChange={(e) => handleEyeChange(eyeKey, field.key, e.target.value)}
                 className={inputClass}
               />
@@ -152,7 +152,7 @@ function OpticalPrescriptionForm({ prescription, onChange, onBack, onNext }) {
               Lens Type
             </label>
             <select
-              value={form.lensType}
+              value={form.lensType ?? ''}
               onChange={(e) => handleFieldChange('lensType', e.target.value)}
               className={inputClass}
             >
@@ -169,7 +169,7 @@ function OpticalPrescriptionForm({ prescription, onChange, onBack, onNext }) {
               Frame Preference
             </label>
             <select
-              value={form.framePreference}
+              value={form.framePreference ?? ''}
               onChange={(e) => handleFieldChange('framePreference', e.target.value)}
               className={inputClass}
             >
@@ -186,7 +186,7 @@ function OpticalPrescriptionForm({ prescription, onChange, onBack, onNext }) {
               Lens Coating
             </label>
             <select
-              value={form.lensCoating}
+              value={form.lensCoating ?? ''}
               onChange={(e) => handleFieldChange('lensCoating', e.target.value)}
               className={inputClass}
             >
@@ -209,7 +209,7 @@ function OpticalPrescriptionForm({ prescription, onChange, onBack, onNext }) {
               <input
                 type="text"
                 placeholder="Dr. John Smith"
-                value={form.doctorName}
+                value={form.doctorName ?? ''}
                 onChange={(e) => handleFieldChange('doctorName', e.target.value)}
                 className={`${inputClass} pl-9`}
               />
@@ -224,7 +224,7 @@ function OpticalPrescriptionForm({ prescription, onChange, onBack, onNext }) {
               <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input
                 type="date"
-                value={form.prescriptionDate}
+                value={form.prescriptionDate ?? ''}
                 onChange={(e) => handleFieldChange('prescriptionDate', e.target.value)}
                 className={`${inputClass} pl-9`}
               />
@@ -242,7 +242,7 @@ function OpticalPrescriptionForm({ prescription, onChange, onBack, onNext }) {
             <textarea
               rows={2}
               placeholder="Any additional notes about the prescription..."
-              value={form.notes}
+              value={form.notes ?? ''}
               onChange={(e) => handleFieldChange('notes', e.target.value)}
               className={`${inputClass} pl-9 resize-none`}
             />

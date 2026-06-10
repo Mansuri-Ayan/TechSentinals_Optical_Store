@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-toastify';
 import { createStoreApi, getStoresApi, updateStoreApi, deleteStoreApi } from '../api/stores/store.api';
-import { useStoreStore } from '../store/store';
+import { useStoreStore, useAuthStore } from '../store/store';
 
 export const storesQueryKey = ['stores'];
 const emptyStores = [];
@@ -9,12 +9,16 @@ const emptyStores = [];
 export const useStores = (params = {}) => {
   const queryClient = useQueryClient();
   const { setSelectedStore, upsertStore } = useStoreStore();
+  const { user } = useAuthStore();
+
+  const isManagerOrStaff = user && user.role !== 'admin';
 
   const storesQuery = useQuery({
     queryKey: [storesQueryKey, params],
     queryFn: () => getStoresApi(params),
     staleTime: 1000 * 60 * 5,
     retry: false,
+    enabled: user?.role === 'admin',
   });
 
   const createStoreMutation = useMutation({
@@ -59,17 +63,23 @@ export const useStores = (params = {}) => {
     },
   });
 
-  const items = storesQuery.data?.items || emptyStores;
+  let stores = emptyStores;
   const total = storesQuery.data?.total || 0;
   const pages = storesQuery.data?.pages || 0;
 
+  if (isManagerOrStaff && user) {
+    stores = [{ id: user.store_id, store_name: user.store_name }];
+  } else if (storesQuery.data?.items) {
+    stores = storesQuery.data.items;
+  }
+
   return {
     storesQuery,
-    stores: items,
+    stores,
     total,
     pages,
-    isLoadingStores: storesQuery.isLoading,
-    isStoresError: storesQuery.isError,
+    isLoadingStores: user?.role === 'admin' ? storesQuery.isLoading : false,
+    isStoresError: user?.role === 'admin' ? storesQuery.isError : false,
     createStore: createStoreMutation.mutate,
     createStoreAsync: createStoreMutation.mutateAsync,
     isCreatingStore: createStoreMutation.isPending,

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Search, User, Mail, Phone, MapPin, Calendar, ArrowLeft, ArrowRight, UserCheck, Edit3, UserPlus, ShoppingBag, Eye } from 'lucide-react';
-import { getCustomers } from '../../services/customerService';
+import { getCustomersApi, getCustomerApi } from '../../api/customer/customer.api';
+import { useAuthStore, useStoreStore } from '../../store/store';
 
 const INDIAN_STATES = [
   'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh',
@@ -14,6 +15,10 @@ const INDIAN_STATES = [
 const GENDERS = ['Male', 'Female', 'Other'];
 
 const CustomerDetailsStep = ({ formState, onSaveState, onBack, onNext }) => {
+  const { user } = useAuthStore();
+  const { selectedStore } = useStoreStore();
+  const storeId = user?.role === 'admin' ? selectedStore?.id : user?.store_id;
+
   const [form, setForm] = useState(formState);
   const [errors, setErrors] = useState({});
   const [isLocked, setIsLocked] = useState(formState.id ? true : false);
@@ -28,26 +33,61 @@ const CustomerDetailsStep = ({ formState, onSaveState, onBack, onNext }) => {
     setErrors((p) => ({ ...p, [field]: '' }));
   };
 
-  const handleSearch = (q) => {
+  const handleSearch = async (q) => {
     setSearchQuery(q);
     if (!q.trim()) {
       setSearchResults([]);
       return;
     }
 
-    const customers = getCustomers();
-    const query = q.toLowerCase();
-    const matches = customers.filter(
-      (c) =>
-        `${c.firstName} ${c.lastName}`.toLowerCase().includes(query) ||
-        c.phone.includes(query)
-    );
-    setSearchResults(matches);
+    try {
+      const data = await getCustomersApi({ search: q, store_id: storeId });
+      const matches = (data || []).map((c) => ({
+        id: c.id,
+        firstName: c.first_name,
+        lastName: c.last_name || '',
+        email: c.email || '',
+        phone: c.phone,
+        dateOfBirth: c.date_of_birth || '',
+        gender: c.gender || '',
+        address: c.address || '',
+        city: c.city || '',
+        state: c.state || '',
+        pincode: c.pincode || '',
+        remark: c.remark || '',
+      }));
+      setSearchResults(matches);
+    } catch (err) {
+      console.error('Failed to search customers:', err);
+      setSearchResults([]);
+    }
   };
 
-  const handleSelectResult = (c) => {
-    setSelectedResult(c);
-    setSearchResults([]);
+  const handleSelectResult = async (c) => {
+    try {
+      const fullCust = await getCustomerApi(c.id);
+      const mapped = {
+        id: fullCust.id,
+        firstName: fullCust.first_name,
+        lastName: fullCust.last_name || '',
+        email: fullCust.email || '',
+        phone: fullCust.phone,
+        dateOfBirth: fullCust.date_of_birth || '',
+        gender: fullCust.gender || '',
+        address: fullCust.address || '',
+        city: fullCust.city || '',
+        state: fullCust.state || '',
+        pincode: fullCust.pincode || '',
+        remark: fullCust.remark || '',
+        prescription: fullCust.prescription || null,
+        prescriptionHistory: fullCust.prescription_history || [],
+        orders: fullCust.orders || [],
+      };
+      setSelectedResult(mapped);
+      setSearchResults([]);
+    } catch (err) {
+      console.error('Failed to fetch customer detail:', err);
+    }
   };
 
   const handleUseCustomer = (mode) => {
@@ -107,9 +147,9 @@ const CustomerDetailsStep = ({ formState, onSaveState, onBack, onNext }) => {
 
   const validate = () => {
     const e = {};
-    if (!form.firstName.trim()) e.firstName = 'First name is required';
-    if (!form.lastName.trim()) e.lastName = 'Last name is required';
-    if (!form.phone.trim()) e.phone = 'Mobile number is required';
+    if (!form.firstName?.trim()) e.firstName = 'First name is required';
+    if (!form.lastName?.trim()) e.lastName = 'Last name is required';
+    if (!form.phone?.trim()) e.phone = 'Mobile number is required';
     else if (!/^[+]?[\d\s\-()]{8,15}$/.test(form.phone)) e.phone = 'Enter a valid mobile number';
     if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) e.email = 'Enter a valid email';
     if (form.pincode && !/^\d{6}$/.test(form.pincode)) e.pincode = 'Enter a valid 6-digit pincode';
@@ -120,12 +160,11 @@ const CustomerDetailsStep = ({ formState, onSaveState, onBack, onNext }) => {
   const handleContinue = () => {
     if (!validate()) return;
     onSaveState(form);
-    onNext();
+    onNext(form);
   };
 
   const inputCls = (f) =>
-    `w-full px-3 py-2.5 text-xs font-semibold rounded-xl border transition-all focus:outline-none focus:ring-4 bg-white ${
-      isLocked ? 'bg-slate-50 border-slate-200 text-slate-500 cursor-not-allowed' :
+    `w-full px-3 py-2.5 text-xs font-semibold rounded-xl border transition-all focus:outline-none focus:ring-4 bg-white ${isLocked ? 'bg-slate-50 border-slate-200 text-slate-500 cursor-not-allowed' :
       errors[f]
         ? 'border-red-400 focus:ring-red-100 focus:border-red-500'
         : 'border-slate-200 focus:ring-blue-500/10 focus:border-blue-500 placeholder:text-slate-400'
@@ -234,7 +273,7 @@ const CustomerDetailsStep = ({ formState, onSaveState, onBack, onNext }) => {
                 {selectedResult.prescription ? (
                   <p className="text-slate-700 font-semibold bg-slate-50 p-2 rounded-lg border border-slate-100">
                     Lens Type: <span className="font-extrabold text-slate-800">{selectedResult.prescription.lensType || '—'}</span> &middot;
-                    Dr. {selectedResult.prescription.doctorName || 'Anil Sharma'} ({new Date(selectedResult.prescription.prescriptionDate).toLocaleDateString('en-IN')})
+                    Dr. {selectedResult.prescription.doctorName || 'Anil Sharma'} ({selectedResult.prescription.prescriptionDate && !isNaN(new Date(selectedResult.prescription.prescriptionDate).getTime()) ? new Date(selectedResult.prescription.prescriptionDate).toLocaleDateString('en-IN') : '—'})
                   </p>
                 ) : (
                   <p className="text-slate-450 italic">No prescription logged</p>

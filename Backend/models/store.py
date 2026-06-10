@@ -6,7 +6,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     String,
-    Text,
+    Text,   
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func

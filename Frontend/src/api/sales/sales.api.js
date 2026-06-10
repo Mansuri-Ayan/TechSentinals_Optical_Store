@@ -19,3 +19,13 @@ export const getSaleApi = async (id) => {
   const response = await api.get(`/sales/${id}`);
   return response.data;
 };
+
+/**
+ * Create a new sale atomically with items and payments.
+ * 
+ * @param {Object} payload - The sale payload.
+ */
+export const createSaleApi = async (payload) => {
+  const response = await api.post('/sales/', payload);
+  return response.data;
+};

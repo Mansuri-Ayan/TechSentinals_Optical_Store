@@ -1,6 +1,8 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { ShoppingBag, ArrowRight, ArrowLeft, X, Glasses, Eye, Trash2, Minus, Plus } from 'lucide-react';
-import { MOCK_PRODUCTS, FRAME_SUBCATEGORIES, LENS_SUBCATEGORIES } from '../../data/productsData';
+import { useAuthStore, useStoreStore } from '../../store/store';
+import { useInventory } from '../../hooks/useInventory';
+import { useCategories, useSubcategories } from '../../hooks/useCategories';
 import ProductSearch from './ProductSearch';
 import ProductFilter from './ProductFilter';
 import ProductGallery from './ProductGallery';
@@ -42,7 +44,11 @@ const ProductSelectionStep = ({
   onBack,
   onNext,
 }) => {
-  const [activeCategory, setActiveCategory] = useState('Frames');
+  const { user } = useAuthStore();
+  const { selectedStore } = useStoreStore();
+  const storeId = user?.role === 'admin' ? selectedStore?.id : user?.store_id;
+
+  const [activeCategory, setActiveCategory] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [activeSubcategory, setActiveSubcategory] = useState('all');
   const [viewProduct, setViewProduct] = useState(null);
@@ -56,6 +62,98 @@ const ProductSelectionStep = ({
   const [dragging, setDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [clickStartPos, setClickStartPos] = useState({ x: 0, y: 0 });
+
+  const { kpiItems, isLoading } = useInventory(storeId);
+
+  const { categories } = useCategories(null, { paginate: false });
+
+  const activeCategoryObj = useMemo(() => {
+    return (categories || []).find((c) => c.name === activeCategory);
+  }, [categories, activeCategory]);
+
+  const { subcategories } = useSubcategories(activeCategoryObj?.id, null, { paginate: false });
+
+  const products = useMemo(() => {
+    return (kpiItems || []).map((item) => {
+      let availableColors = [];
+      let availableSizes = [];
+      let features = [];
+
+      if (item.category_name === 'Frames') {
+        const fp = item.frame_product;
+        if (fp && fp.color) {
+          availableColors = [fp.color];
+        } else {
+          availableColors = ['Classic Black', 'Matte Black', 'Gold', 'Silver'];
+        }
+        if (fp && fp.lens_width) {
+          availableSizes = [`${fp.lens_width}-${fp.bridge_width}-${fp.temple_length}`, 'Standard'];
+        } else {
+          availableSizes = ['Small', 'Medium', 'Large'];
+        }
+        features = [
+          fp?.material ? `Material: ${fp.material}` : 'Premium Build',
+          fp?.shape ? `Shape: ${fp.shape}` : 'Trendy Shape',
+          fp?.frame_type ? `Type: ${fp.frame_type}` : 'Durable Frame',
+        ];
+      } else if (item.category_name === 'Lenses') {
+        const lp = item.lens_product;
+        if (lp && lp.tint_color) {
+          availableColors = [lp.tint_color];
+        } else {
+          availableColors = ['Clear'];
+        }
+        if (lp && lp.index_value) {
+          availableSizes = [lp.index_value];
+        } else {
+          availableSizes = ['Standard (1.5)', 'Thin (1.6)'];
+        }
+        features = [
+          lp?.lens_type ? `Type: ${lp.lens_type}` : 'Precision Optics',
+          lp?.coating ? `Coating: ${lp.coating}` : 'Anti-Reflective',
+          lp?.material ? `Material: ${lp.material}` : 'High Clarity',
+        ];
+      } else if (item.category_name === 'Accessories') {
+        const ap = item.accessory_product;
+        if (ap && ap.color) {
+          availableColors = [ap.color];
+        } else {
+          availableColors = ['Default'];
+        }
+        if (ap && ap.size) {
+          availableSizes = [ap.size];
+        } else {
+          availableSizes = ['Standard'];
+        }
+        features = [
+          ap?.accessory_type ? `Type: ${ap.accessory_type}` : 'Useful Accessory',
+          ap?.material ? `Material: ${ap.material}` : 'Premium Material',
+        ];
+      } else {
+        availableColors = ['Default'];
+        availableSizes = ['Standard'];
+        features = ['High Quality'];
+      }
+
+      return {
+        id: item.product_id,
+        inventory_id: item.id,
+        product_name: item.product_name,
+        brand: item.brand_name || 'Generic',
+        category: item.category_name,
+        subcategory: item.subcategory_name || 'Standard',
+        sku: item.product_sku,
+        selling_price: Number(item.selling_price) || 0,
+        available_quantity: item.available_quantity || 0,
+        reorder_level: item.reorder_level || 0,
+        description: item.product_description || 'No description available.',
+        features,
+        availableColors,
+        availableSizes,
+        image: item.image_url,
+      };
+    });
+  }, [kpiItems]);
 
   // Clamping positioning when resizing or zooming
   useEffect(() => {
@@ -149,8 +247,8 @@ const ProductSelectionStep = ({
 
   // Filter items based on active category, subcategory, and search text
   const filteredProducts = useMemo(() => {
-    return MOCK_PRODUCTS.filter((product) => {
-      const matchesCategory = product.category === activeCategory;
+    return products.filter((product) => {
+      const matchesCategory = activeCategory === 'all' || product.category === activeCategory;
       const matchesSubcategory = activeSubcategory === 'all' || product.subcategory === activeSubcategory;
       const q = searchTerm.toLowerCase().trim();
       if (!q) return matchesCategory && matchesSubcategory;
@@ -163,7 +261,16 @@ const ProductSelectionStep = ({
 
       return matchesCategory && matchesSubcategory && matchesSearch;
     });
-  }, [activeCategory, activeSubcategory, searchTerm]);
+  }, [products, activeCategory, activeSubcategory, searchTerm]);
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px]">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-slate-900 mb-4"></div>
+        <p className="text-slate-500 font-semibold text-sm">Loading store inventory...</p>
+      </div>
+    );
+  }
 
   const totalAmount = cart.reduce((sum, item) => sum + item.product.selling_price * item.quantity, 0);
   const cartTotalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
@@ -185,10 +292,10 @@ const ProductSelectionStep = ({
       {/* Search and Filters */}
       <div className="flex flex-col gap-4">
         <ProductSearch value={searchTerm} onChange={setSearchTerm} placeholder="Search optical products..." />
-        <ProductFilter activeCategory={activeCategory} onCategoryChange={handleCategoryChange} />
+        <ProductFilter categories={categories} activeCategory={activeCategory} onCategoryChange={handleCategoryChange} />
         
         {/* ── Subcategory Tabs ── */}
-        {(activeCategory === 'Frames' || activeCategory === 'Lenses') && (
+        {activeCategory !== 'all' && subcategories && subcategories.length > 0 && (
           <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar pb-1 text-xs">
             <button
               onClick={() => setActiveSubcategory('all')}
@@ -200,19 +307,19 @@ const ProductSelectionStep = ({
             >
               All Subcategories
             </button>
-            {(activeCategory === 'Frames' ? FRAME_SUBCATEGORIES : LENS_SUBCATEGORIES).map((sub) => {
-              const isActive = activeSubcategory === sub;
+            {subcategories.map((sub) => {
+              const isActive = activeSubcategory === sub.name;
               return (
                 <button
-                  key={sub}
-                  onClick={() => setActiveSubcategory(sub)}
+                  key={sub.id}
+                  onClick={() => setActiveSubcategory(sub.name)}
                   className={`px-3.5 py-2 rounded-xl font-bold border transition-all whitespace-nowrap flex-shrink-0 cursor-pointer ${
                     isActive
                       ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
                       : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
                   }`}
                 >
-                  {sub}
+                  {sub.name}
                 </button>
               );
             })}
@@ -320,8 +427,6 @@ const ProductSelectionStep = ({
                     onAddToCart={(qty, color, size) => {
                       onAddToCart(viewProduct, qty, color, size);
                       setViewProduct(null);
-                      // Proactively prompt user to view cart when product is added
-                      setShowCartModal(true);
                     }}
                   />
                 </div>
@@ -472,7 +577,7 @@ const ProductSelectionStep = ({
         type="button"
         title={`View Cart (${cartTotalItems})`}
       >
-        <ShoppingBag className="w-6 h-6 text-emerald-450" />
+        <ShoppingBag className="w-6 h-6 text-emerald-400" />
         {cartTotalItems > 0 && (
           <span className="absolute -top-1.5 -right-1.5 w-6 h-6 bg-emerald-500 text-white text-[11px] rounded-full flex items-center justify-center font-bold border-2 border-white animate-pulse">
             {cartTotalItems}

@@ -2,7 +2,7 @@
 import math
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from core.deps import get_current_admin
+from core.deps import get_current_user
 from db.session import get_db
 from models.admin import Admin
 from schemas.category import CategoryRead, SubcategoryRead
@@ -26,11 +26,17 @@ async def list_categories(
     limit: int = Query(20, ge=1, le=100),
     paginate: bool = Query(True),
     db: AsyncSession = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin),
+    current_user = Depends(get_current_user),
 ):
+    if isinstance(current_user, Admin):
+        admin_id = current_user.id
+    else:
+        admin_id = current_user.store.admin_id
+        store_id = current_user.store_id
+
     items, total = await get_categories_by_admin(
         db,
-        admin_id=current_admin.id,
+        admin_id=admin_id,
         active_only=active_only,
         search=search,
         store_id=store_id,
@@ -62,10 +68,15 @@ async def list_categories(
 async def get_category_endpoint(
     category_id: int,
     db: AsyncSession = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin),
+    current_user = Depends(get_current_user),
 ) -> CategoryRead:
+    if isinstance(current_user, Admin):
+        admin_id = current_user.id
+    else:
+        admin_id = current_user.store.admin_id
+
     category = await get_category(db, category_id)
-    if category is None or category.admin_id != current_admin.id:
+    if category is None or category.admin_id != admin_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Category not found",
@@ -90,11 +101,17 @@ async def list_subcategories(
     limit: int = Query(20, ge=1, le=100),
     paginate: bool = Query(True),
     db: AsyncSession = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin),
+    current_user = Depends(get_current_user),
 ):
+    if isinstance(current_user, Admin):
+        admin_id = current_user.id
+    else:
+        admin_id = current_user.store.admin_id
+        store_id = current_user.store_id
+
     # Verify ownership
     category = await get_category(db, category_id)
-    if category is None or category.admin_id != current_admin.id:
+    if category is None or category.admin_id != admin_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Category not found",

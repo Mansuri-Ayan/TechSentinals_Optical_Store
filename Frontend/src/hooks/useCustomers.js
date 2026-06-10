@@ -57,6 +57,7 @@ export const useCustomers = (filters = {}) => {
   const params = {
     limit: filters.limit || 500,
     ...(filters.search ? { search: filters.search } : {}),
+    ...(filters.store_id ? { store_id: filters.store_id } : {}),
   };
 
   const query = useQuery({

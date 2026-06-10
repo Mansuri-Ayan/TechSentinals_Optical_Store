@@ -223,8 +223,18 @@ async def create_sale(
         db.add(txn)
 
     await db.commit()
-    await db.refresh(sale)
-    return sale
+    stmt = (
+        select(Sale)
+        .options(
+            selectinload(Sale.items),
+            selectinload(Sale.payments),
+            selectinload(Sale.store),
+            selectinload(Sale.customer),
+        )
+        .where(Sale.id == sale.id)
+    )
+    result = await db.execute(stmt)
+    return result.scalar_one()
 
 
 # ── Read Sales ────────────────────────────────────────────────

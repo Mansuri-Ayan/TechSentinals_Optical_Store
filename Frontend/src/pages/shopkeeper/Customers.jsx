@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Search, Users, ChevronRight, X as XIcon, UserCheck, UserPlus, Repeat } from 'lucide-react';
 import Pagination from '../../components/shared/Pagination';
 import { useCustomers } from '../../hooks/useCustomers';
+import { useAuthStore, useStoreStore } from '../../store/store';
 
 const ITEMS_PER_PAGE = 12;
 
@@ -10,7 +11,7 @@ const ITEMS_PER_PAGE = 12;
 const StatusBadge = ({ status }) => {
   const colors = {
     Active: 'text-emerald-700 bg-emerald-50 border-emerald-200',
-    Inactive: 'text-slate-600 bg-slate-100 border-slate-200',
+    Inactive: 'text-slate-655 bg-slate-100 border-slate-200',
     VIP: 'text-amber-700 bg-amber-50 border-amber-200',
   };
   const dots = {
@@ -34,9 +35,12 @@ const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-dig
 ───────────────────────────────────────────────────────── */
 const Customers = () => {
   const navigate = useNavigate();
+  const { user } = useAuthStore();
+  const { selectedStore } = useStoreStore();
+  const storeId = user?.role === 'admin' ? selectedStore?.id : user?.store_id;
   
   // Load customers via service layer
-  const { customers, isLoading } = useCustomers();
+  const { customers, isLoading } = useCustomers({ store_id: storeId });
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState('All');
@@ -49,13 +53,21 @@ const Customers = () => {
     }
     const q = searchTerm.toLowerCase().trim();
     if (!q) return list;
-    return list.filter(c =>
-      `${c.firstName} ${c.lastName}`.toLowerCase().includes(q) ||
-      c.email.toLowerCase().includes(q) ||
-      c.phone.includes(q) ||
-      c.city?.toLowerCase().includes(q) ||
-      c.status.toLowerCase().includes(q)
-    );
+    return list.filter(c => {
+      const fName = c.firstName || c.first_name || '';
+      const lName = c.lastName || c.last_name || '';
+      const email = c.email || '';
+      const phone = c.phone || '';
+      const city = c.city || '';
+      const status = c.status || '';
+      return (
+        `${fName} ${lName}`.toLowerCase().includes(q) ||
+        email.toLowerCase().includes(q) ||
+        phone.includes(q) ||
+        city.toLowerCase().includes(q) ||
+        status.toLowerCase().includes(q)
+      );
+    });
   }, [customers, searchTerm, statusFilter]);
 
   const paginated = useMemo(() => {
@@ -190,7 +202,10 @@ const Customers = () => {
                 </thead>
                 <tbody className="divide-y divide-slate-50">
                   {paginated.map(c => {
-                    const fullName = `${c.firstName} ${c.lastName}`;
+                    const fName = c.firstName || c.first_name || '';
+                    const lName = c.lastName || c.last_name || '';
+                    const fullName = `${fName} ${lName}`.trim() || 'Unknown Customer';
+                    const initials = fName ? fName[0].toUpperCase() : (lName ? lName[0].toUpperCase() : 'C');
                     return (
                       <tr
                         key={c.id}
@@ -198,9 +213,9 @@ const Customers = () => {
                         className="hover:bg-blue-50/40 transition-colors cursor-pointer group"
                       >
                         <td className="px-5 py-4">
-                          <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3">
                             <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-slate-700 to-slate-900 flex items-center justify-center text-white font-bold text-sm shadow-sm flex-shrink-0">
-                              {c.firstName[0]}
+                              {initials}
                             </div>
                             <div>
                               <p className="font-bold text-slate-900 text-sm leading-tight">{fullName}</p>
@@ -239,7 +254,10 @@ const Customers = () => {
           {/* Mobile Card-List Layout */}
           <div className="md:hidden space-y-3 mb-6">
             {paginated.map(c => {
-              const fullName = `${c.firstName} ${c.lastName}`;
+              const fName = c.firstName || c.first_name || '';
+              const lName = c.lastName || c.last_name || '';
+              const fullName = `${fName} ${lName}`.trim() || 'Unknown Customer';
+              const initials = fName ? fName[0].toUpperCase() : (lName ? lName[0].toUpperCase() : 'C');
               return (
                 <div
                   key={c.id}
@@ -249,7 +267,7 @@ const Customers = () => {
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-slate-700 to-slate-900 flex items-center justify-center text-white font-bold text-sm shadow-sm flex-shrink-0">
-                        {c.firstName[0]}
+                        {initials}
                       </div>
                       <div>
                         <p className="font-bold text-slate-900 text-sm leading-tight">{fullName}</p>

@@ -4,15 +4,19 @@ import {
   Search, ShoppingCart, UserCheck, ChevronRight,
   X as XIcon, Package, Clock, DollarSign
 } from 'lucide-react';
-import { getCustomers } from '../../services/customerService';
+import { useAuthStore, useStoreStore } from '../../store/store';
+import { useSales } from '../../hooks/useSales';
 import Pagination from '../../components/shared/Pagination';
 
 const STATUS_CFG = {
+  Completed:   { color: 'text-emerald-700 bg-emerald-50 border-emerald-200', dot: 'bg-emerald-500' },
+  Cancelled:   { color: 'text-slate-650 bg-slate-100 border-slate-200',      dot: 'bg-slate-400' },
+  Returned:    { color: 'text-red-700 bg-red-50 border-red-200',             dot: 'bg-red-500' },
+  'Lab Pending': { color: 'text-amber-700 bg-amber-50 border-amber-200',     dot: 'bg-amber-500' },
   Delivered:   { color: 'text-emerald-700 bg-emerald-50 border-emerald-200', dot: 'bg-emerald-500' },
-  Completed:   { color: 'text-emerald-750 bg-emerald-50 border-emerald-200', dot: 'bg-emerald-500' },
   Pending:     { color: 'text-amber-700 bg-amber-50 border-amber-200',       dot: 'bg-amber-500' },
-  'In Progress': { color: 'text-blue-700 bg-blue-50 border-blue-200',         dot: 'bg-blue-500' },
-  Ready:       { color: 'text-indigo-700 bg-indigo-50 border-indigo-200',     dot: 'bg-indigo-505' },
+  'In Progress': { color: 'text-blue-700 bg-blue-50 border-blue-250',         dot: 'bg-blue-500' },
+  Ready:       { color: 'text-indigo-700 bg-indigo-50 border-indigo-250',     dot: 'bg-indigo-505' },
 };
 
 const PAYMENT_STATUS_CFG = {
@@ -23,10 +27,10 @@ const PAYMENT_STATUS_CFG = {
 
 const STATUS_FILTERS = [
   { key: 'All', label: 'All Orders' },
-  { key: 'Pending', label: 'Pending' },
-  { key: 'In Progress', label: 'In Progress' },
-  { key: 'Ready', label: 'Ready' },
-  { key: 'Delivered', label: 'Delivered' },
+  { key: 'Completed', label: 'Completed' },
+  { key: 'Cancelled', label: 'Cancelled' },
+  { key: 'Returned', label: 'Returned' },
+  { key: 'Lab Pending', label: 'Lab Pending' },
 ];
 
 const StatusBadge = ({ status }) => {
@@ -53,92 +57,43 @@ const fmt = (n) => `₹${Number(n).toLocaleString('en-IN')}`;
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 
 const Sales = () => {
-  const [customers] = useState(() => getCustomers());
+  const { user } = useAuthStore();
+  const { selectedStore } = useStoreStore();
+  const storeId = user?.role === 'admin' ? selectedStore?.id : user?.store_id;
+
   const [selectedStatus, setSelectedStatus] = useState('All');
   const [searchInput, setSearchInput] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedSale, setSelectedSale] = useState(null);
 
-  // Flatten and build sales records
-  const sales = useMemo(() => {
-    const records = [];
-    customers.forEach((c) => {
-      if (c.orders) {
-        c.orders.forEach((o) => {
-          records.push({
-            id: o.id,
-            orderId: o.id,
-            customerName: `${c.firstName} ${c.lastName}`,
-            customerPhone: c.phone,
-            customerEmail: c.email,
-            customerId: c.id,
-            productName: o.items?.[0]?.productName || o.frameName || 'Optical Items',
-            items: o.items || [],
-            subtotal: o.subtotal || o.amount,
-            discount: o.discount || 0,
-            total_amount: o.amount,
-            receivedAmount: o.receivedAmount || 0,
-            remainingAmount: o.remainingAmount || 0,
-            orderDate: o.date,
-            paymentMethod: o.paymentMethod || 'Cash',
-            paymentStatus: o.paymentStatus || 'Paid',
-            upiId: o.upiId || '',
-            status: o.status || 'Pending',
-          });
-        });
-      }
-    });
-    // Sort descending by date
-    return records.sort((a, b) => b.orderDate.localeCompare(a.orderDate));
-  }, [customers]);
+  // Fetch sales from backend
+  const { sales, total, pages, kpis, isLoading } = useSales({
+    page: currentPage,
+    limit: 8,
+    storeId: storeId,
+    status: selectedStatus,
+    search: searchInput,
+  });
 
-  // KPI Calculations
-  const kpis = useMemo(() => {
-    let revenue = 0;
-    let completed = 0;
-    let pending = 0;
-
-    sales.forEach((s) => {
-      revenue += s.receivedAmount;
-      if (s.status === 'Delivered') {
-        completed++;
-      } else {
-        pending++;
-      }
-    });
-
-    return {
-      revenue,
-      totalOrders: sales.length,
-      completed,
-      pending,
-    };
+  const paginatedSales = useMemo(() => {
+    return (sales || []).map(sale => ({
+      ...sale,
+      items: (sale.items || []).map(item => ({
+        ...item,
+        productName: item.product_name || 'Optical Item',
+        price: Number(item.unit_price),
+        quantity: item.quantity,
+        selectedColor: item.notes || '', // display notes as details (color/size combination)
+      })),
+      subtotal: Number(sale.subtotal),
+      discount: Number(sale.discount_amount),
+      total_amount: Number(sale.total_amount),
+      receivedAmount: Number(sale.paid_amount),
+      remainingAmount: Number(sale.due_amount),
+    }));
   }, [sales]);
 
-  // Filtering
-  const filteredSales = useMemo(() => {
-    return sales.filter((s) => {
-      const matchStatus = selectedStatus === 'All' || s.status === selectedStatus;
-      const q = searchInput.toLowerCase().trim();
-      if (!q) return matchStatus;
-
-      const matchSearch =
-        s.orderId.toLowerCase().includes(q) ||
-        s.customerName.toLowerCase().includes(q) ||
-        s.productName.toLowerCase().includes(q) ||
-        s.paymentMethod.toLowerCase().includes(q);
-
-      return matchStatus && matchSearch;
-    });
-  }, [sales, selectedStatus, searchInput]);
-
-  const itemsPerPage = 8;
-  const paginatedSales = useMemo(() => {
-    const start = (currentPage - 1) * itemsPerPage;
-    return filteredSales.slice(start, start + itemsPerPage);
-  }, [filteredSales, currentPage]);
-
-  const totalPages = Math.ceil(filteredSales.length / itemsPerPage);
+  const totalPages = pages;
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto animate-fade-in font-sans overflow-x-hidden">
@@ -318,8 +273,8 @@ const Sales = () => {
           {/* Pagination */}
           {totalPages > 1 && (
             <Pagination
-              totalItems={filteredSales.length}
-              itemsPerPage={itemsPerPage}
+              totalItems={total}
+              itemsPerPage={8}
               currentPage={currentPage}
               onPageChange={setCurrentPage}
             />

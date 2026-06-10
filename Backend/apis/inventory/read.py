@@ -1,7 +1,7 @@
 # API: inventory/read.py
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from core.deps import get_current_admin
+from core.deps import get_current_user
 from db.session import get_db
 from models.admin import Admin
 from schemas.inventory import InventoryRead, InventoryResponse
@@ -45,7 +45,7 @@ def _inventory_to_read(inv) -> InventoryRead:
 )
 async def list_inventories(
     owner_type: str = Query(..., description="ADMIN or STORE"),
-    owner_id: int = Query(..., description="Admin ID or Store ID"),
+    owner_id: int | None = Query(default=None, description="Admin ID or Store ID. Omit for aggregated warehouse view."),
     active_only: bool = Query(True),
     search: str | None = Query(default=None, description="Search product name or SKU"),
     category_id: int | None = Query(default=None, description="Filter by category ID"),
@@ -59,8 +59,15 @@ async def list_inventories(
     limit: int = Query(default=20, ge=1, le=100, description="Page size"),
     paginate: bool = Query(default=True, description="Enable pagination"),
     db: AsyncSession = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin),
+    current_user = Depends(get_current_user),
 ) -> InventoryResponse:
+    if not isinstance(current_user, Admin):
+        owner_type = "STORE"
+        owner_id = current_user.store_id
+    elif owner_type.upper() == "ADMIN" and owner_id is None:
+        # Aggregated warehouse view: show ALL inventory for this admin
+        owner_id = current_user.id
+
     result_dict = await get_inventories_by_owner(
         db,
         owner_type=owner_type,
@@ -97,9 +104,19 @@ async def list_inventories(
 )
 async def low_stock_items(
     db: AsyncSession = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin),
+    current_user = Depends(get_current_user),
 ) -> list[InventoryRead]:
-    items = await get_low_stock_items(db, admin_id=current_admin.id)
+    if isinstance(current_user, Admin):
+        items = await get_low_stock_items(db, admin_id=current_user.id)
+    else:
+        items, _ = await get_inventories_by_owner(
+            db,
+            owner_type="STORE",
+            owner_id=current_user.store_id,
+            active_only=True,
+            stock_status="low_stock",
+            paginate=False,
+        )
     return [_inventory_to_read(inv) for inv in items]
 
 
@@ -111,7 +128,7 @@ async def low_stock_items(
 async def get_inventory_endpoint(
     inventory_id: int,
     db: AsyncSession = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin),
+    current_user = Depends(get_current_user),
 ) -> InventoryRead:
     inv = await get_inventory(db, inventory_id)
     if inv is None:
@@ -119,4 +136,10 @@ async def get_inventory_endpoint(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Inventory record not found",
         )
+    if not isinstance(current_user, Admin):
+        if inv.owner_type != "STORE" or inv.owner_id != current_user.store_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied to this store's inventory",
+            )
     return _inventory_to_read(inv)

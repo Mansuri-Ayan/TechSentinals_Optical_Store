@@ -45,7 +45,7 @@ def header(text):
 def main():
     # 1. Login
     header("1. LOGIN AS ADMIN")
-    code, data = api("POST", "/auth/login", {
+    code, data = api("POST", "/auth/login/admin", {
         "email": "ayan@visionary.in",
         "password": "Admin@123",
     })
@@ -61,10 +61,11 @@ def main():
     header("2. LIST MANAGERS IN STORE 1")
     code, data = api("GET", "/stores/1/managers", token=token)
     test("List managers returns 200", code == 200)
-    test("Contains at least one manager", len(data) >= 1)
-    if data:
-        test("Manager name matches seeded Rajesh Sharma", data[0]["first_name"] == "Rajesh")
-        print(f"Managers in store 1: {[m['first_name'] + ' ' + m['last_name'] for m in data]}")
+    items = data.get("items", [])
+    test("Contains at least one manager", len(items) >= 1)
+    if items:
+        test("Manager name matches seeded Rajesh Sharma", items[0]["first_name"] == "Rajesh")
+        print(f"Managers in store 1: {[m['first_name'] + ' ' + m['last_name'] for m in items]}")
 
     # 3. Get Single Manager by ID
     header("3. GET SINGLE MANAGER BY ID")

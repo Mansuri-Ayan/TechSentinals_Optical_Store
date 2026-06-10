@@ -640,11 +640,10 @@ const Inventory = () => {
             <button
               key={kpi.label}
               onClick={() => handleStatusFilter(kpi.status)}
-              className={`text-left p-4 sm:p-5 rounded-2xl border shadow-sm hover:shadow-md transition-all group relative overflow-hidden cursor-pointer focus:outline-none ${
-                isActive
+              className={`text-left p-4 sm:p-5 rounded-2xl border shadow-sm hover:shadow-md transition-all group relative overflow-hidden cursor-pointer focus:outline-none ${isActive
                   ? `${kpi.activeBorder} ${kpi.activeBg} shadow-md`
                   : `bg-white ${kpi.border} hover:${kpi.activeBorder}`
-              }`}
+                }`}
             >
               <div
                 className={`absolute inset-0 bg-gradient-to-br ${kpi.glow} to-transparent ${isActive ? "opacity-80" : "opacity-0 group-hover:opacity-50"} transition-opacity`}
@@ -733,9 +732,8 @@ const Inventory = () => {
             <button
               key={cat.id}
               onClick={() => handleCategoryChange(cat.id)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all whitespace-nowrap flex-shrink-0 ${
-                isActive ? config.activeTab : config.hoverTab
-              }`}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all whitespace-nowrap flex-shrink-0 ${isActive ? config.activeTab : config.hoverTab
+                }`}
             >
               <Icon className="w-4 h-4" />
               {cat.name}

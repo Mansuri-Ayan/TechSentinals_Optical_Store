@@ -26,7 +26,7 @@ export const useCategories = (storeId = null, filters = {}) => {
   const params = {
     page: filters.page || 1,
     limit: filters.limit || 20,
-    paginate: true,
+    paginate: filters.paginate !== undefined ? filters.paginate : true,
     ...(storeId ? { store_id: storeId } : {}),
     ...(filters.search ? { search: filters.search } : {}),
   };
@@ -95,7 +95,7 @@ export const useSubcategories = (categoryId, storeId = null, filters = {}) => {
   const params = {
     page: filters.page || 1,
     limit: filters.limit || 20,
-    paginate: true,
+    paginate: filters.paginate !== undefined ? filters.paginate : true,
     ...(storeId ? { store_id: storeId } : {}),
     ...(filters.search ? { search: filters.search } : {}),
   };

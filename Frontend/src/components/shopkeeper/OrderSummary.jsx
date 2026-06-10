@@ -37,7 +37,7 @@ const OrderSummary = ({ customer, cart, prescription, subtotal, discount, finalA
               Full Name
             </p>
             <p className="text-sm font-bold text-slate-800">
-              {customer?.firstName || ''} {customer?.lastName || ''}
+              {customer?.firstName || customer?.first_name || ''} {customer?.lastName || customer?.last_name || ''}
             </p>
           </div>
           <div>
@@ -179,7 +179,7 @@ const OrderSummary = ({ customer, cart, prescription, subtotal, discount, finalA
                 </p>
               </div>
             )}
-            {prescription.prescriptionDate && (
+            {prescription.prescriptionDate && !isNaN(new Date(prescription.prescriptionDate).getTime()) && (
               <div>
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">
                   Prescription Date

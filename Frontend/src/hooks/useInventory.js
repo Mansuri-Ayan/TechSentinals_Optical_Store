@@ -13,9 +13,12 @@ export const inventoryQueryKey = ["inventory"];
 export const useInventory = (storeId, filters = {}) => {
   const queryClient = useQueryClient();
 
+  const isWarehouse = storeId === 'warehouse';
+
   const params = {
-    owner_type: "STORE",
-    owner_id: storeId,
+    ...(isWarehouse
+      ? { owner_type: 'ADMIN' }
+      : { owner_type: 'STORE', owner_id: storeId }),
     page: filters.page || 1,
     limit: filters.limit || 20,
     paginate: true,
@@ -42,11 +45,11 @@ export const useInventory = (storeId, filters = {}) => {
   const kpiQuery = useQuery({
     queryKey: [inventoryQueryKey, storeId, "kpis"],
     queryFn: async () => {
-      const res = await getInventoryApi({
-        owner_type: "STORE",
-        owner_id: storeId,
-        paginate: false,
-      });
+      const res = await getInventoryApi(
+        isWarehouse
+          ? { owner_type: 'ADMIN', paginate: false }
+          : { owner_type: 'STORE', owner_id: storeId, paginate: false }
+      );
       // Handle both response shapes:
       // Shape 1: { items: [...], total: N }
       // Shape 2: [...] flat array

@@ -114,7 +114,7 @@ const CompletedStep = ({ customer, cart, prescription, paymentInfo, savedCustome
               <User className="w-3.5 h-3.5" /> Customer Details
             </h3>
             <div className="text-xs font-semibold text-slate-650 space-y-1">
-              <p className="font-bold text-slate-900 text-sm">{customer.firstName} {customer.lastName}</p>
+              <p className="font-bold text-slate-900 text-sm">{customer.firstName || customer.first_name || ''} {customer.lastName || customer.last_name || ''}</p>
               <p>Phone: {customer.phone}</p>
               {customer.email && <p>Email: {customer.email}</p>}
               {customer.address && <p>Address: {customer.address}, {customer.city}</p>}
@@ -287,7 +287,7 @@ const CompletedStep = ({ customer, cart, prescription, paymentInfo, savedCustome
             className="flex items-center justify-center gap-2 px-6 py-3 bg-[#0A0F1F] hover:bg-slate-800 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 cursor-pointer w-full sm:w-auto"
             type="button"
           >
-            <RefreshCw className="w-4 h-4 text-emerald-450" />
+            <RefreshCw className="w-4 h-4 text-emerald-400" />
             New Checkout
           </button>
         </div>

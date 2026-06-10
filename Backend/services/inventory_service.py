@@ -113,10 +113,27 @@ async def get_inventories_by_owner(
     owner_type = owner_type.upper()
 
     # ── Base filter conditions ──
-    base_conditions = [
-        Inventory.owner_type == owner_type,
-        Inventory.owner_id == owner_id,
-    ]
+    if owner_type == "ADMIN":
+        # Warehouse view: show ALL inventory for this admin's stores + warehouse
+        from sqlalchemy import or_ as _or
+        from models.store import Store
+        store_ids_stmt = select(Store.id).where(Store.admin_id == owner_id)
+        store_ids_result = await db.execute(store_ids_stmt)
+        store_ids = [row[0] for row in store_ids_result.fetchall()]
+
+        ownership_conditions = [
+            and_(Inventory.owner_type == "ADMIN", Inventory.owner_id == owner_id),
+        ]
+        if store_ids:
+            ownership_conditions.append(
+                and_(Inventory.owner_type == "STORE", Inventory.owner_id.in_(store_ids)),
+            )
+        base_conditions = [_or(*ownership_conditions)]
+    else:
+        base_conditions = [
+            Inventory.owner_type == owner_type,
+            Inventory.owner_id == owner_id,
+        ]
     if active_only:
         base_conditions.append(Inventory.is_active.is_(True))
 

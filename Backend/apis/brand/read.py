@@ -2,7 +2,7 @@
 import math
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from core.deps import get_current_admin
+from core.deps import get_current_user
 from db.session import get_db
 from models.admin import Admin
 from schemas.brand import BrandRead
@@ -23,11 +23,17 @@ async def list_brands(
     limit: int = Query(20, ge=1, le=100),
     paginate: bool = Query(True),
     db: AsyncSession = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin),
+    current_user = Depends(get_current_user),
 ):
+    if isinstance(current_user, Admin):
+        admin_id = current_user.id
+    else:
+        admin_id = current_user.store.admin_id
+        store_id = current_user.store_id
+
     items, total, active_cnt, inactive_cnt = await get_brands_by_admin(
         db,
-        admin_id=current_admin.id,
+        admin_id=admin_id,
         active_status=active_status,
         search=search,
         store_id=store_id,
@@ -60,10 +66,15 @@ async def list_brands(
 async def get_brand_endpoint(
     brand_id: int,
     db: AsyncSession = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin),
+    current_user = Depends(get_current_user),
 ) -> BrandRead:
+    if isinstance(current_user, Admin):
+        admin_id = current_user.id
+    else:
+        admin_id = current_user.store.admin_id
+
     brand = await get_brand(db, brand_id)
-    if brand is None or brand.admin_id != current_admin.id:
+    if brand is None or brand.admin_id != admin_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Brand not found",
