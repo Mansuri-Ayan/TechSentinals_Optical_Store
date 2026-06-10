@@ -459,15 +459,15 @@ async def get_dashboard_report(
     top_brand_units = brand_row.qty if brand_row else 0
 
     # Leading supplier
-    supp_stmt = select(Supplier.name, func.count(PurchaseOrder.id).label("cnt"))\
+    supp_stmt = select(Supplier.company_name, func.count(PurchaseOrder.id).label("cnt"))\
         .join(PurchaseOrder, PurchaseOrder.supplier_id == Supplier.id)\
         .where(Supplier.admin_id == admin_id)
     if store_id:
         supp_stmt = supp_stmt.where(PurchaseOrder.store_id == store_id)
-    supp_stmt = supp_stmt.group_by(Supplier.name).order_by(desc("cnt")).limit(1)
+    supp_stmt = supp_stmt.group_by(Supplier.company_name).order_by(desc("cnt")).limit(1)
     supp_row = (await db.execute(supp_stmt)).first()
 
-    leading_supplier = supp_row.name if supp_row else "Lens World"
+    leading_supplier = supp_row.company_name if supp_row else "Lens World"
     leading_supplier_count = supp_row.cnt if supp_row else 0
 
     # Highest performing month
@@ -751,18 +751,18 @@ async def get_analyses_report(
         ))
 
     # 8. Supplier lead volumes
-    supp_vol_stmt = select(Supplier.name, func.count(PurchaseOrder.id).label("cnt"))\
+    supp_vol_stmt = select(Supplier.company_name, func.count(PurchaseOrder.id).label("cnt"))\
         .join(PurchaseOrder, PurchaseOrder.supplier_id == Supplier.id)\
         .where(Supplier.admin_id == admin_id, PurchaseOrder.order_date.between(start_date, end_date))
     if store_id:
         supp_vol_stmt = supp_vol_stmt.where(PurchaseOrder.store_id == store_id)
-    supp_vol_stmt = supp_vol_stmt.group_by(Supplier.name)
+    supp_vol_stmt = supp_vol_stmt.group_by(Supplier.company_name)
     supp_vol_rows = (await db.execute(supp_vol_stmt)).all()
     supplier_volumes = []
     for idx, row in enumerate(supp_vol_rows):
         color = rev_colors[idx % len(rev_colors)]
         supplier_volumes.append(SupplierVolumePoint(
-            label=row.name,
+            label=row.company_name,
             value=row.cnt or 0,
             color=color
         ))
@@ -1076,3 +1076,4 @@ async def get_staff_report(
         unique_customers_served=unique_customers,
         top_products_sold=top_products
     )
+
