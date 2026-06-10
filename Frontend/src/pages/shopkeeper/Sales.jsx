@@ -2,11 +2,10 @@ import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Search, ShoppingCart, UserCheck, ChevronRight,
-  X as XIcon, Package, Clock, DollarSign
+  X as XIcon, Package, Clock, DollarSign, Loader2
 } from 'lucide-react';
-import { useAuthStore, useStoreStore } from '../../store/store';
-import { useSales } from '../../hooks/useSales';
 import Pagination from '../../components/shared/Pagination';
+import { useSales } from '../../hooks/useSales';
 
 const STATUS_CFG = {
   Completed:   { color: 'text-emerald-700 bg-emerald-50 border-emerald-200', dot: 'bg-emerald-500' },
@@ -57,43 +56,66 @@ const fmt = (n) => `₹${Number(n).toLocaleString('en-IN')}`;
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 
 const Sales = () => {
-  const { user } = useAuthStore();
-  const { selectedStore } = useStoreStore();
-  const storeId = user?.role === 'admin' ? selectedStore?.id : user?.store_id;
-
   const [selectedStatus, setSelectedStatus] = useState('All');
   const [searchInput, setSearchInput] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedSale, setSelectedSale] = useState(null);
 
-  // Fetch sales from backend
-  const { sales, total, pages, kpis, isLoading } = useSales({
+  const itemsPerPage = 8;
+
+  // Load real API query states
+  const { sales, total, kpis, isLoading } = useSales({
     page: currentPage,
-    limit: 8,
-    storeId: storeId,
-    status: selectedStatus,
+    limit: itemsPerPage,
     search: searchInput,
+    status: selectedStatus === 'All' ? undefined : selectedStatus,
   });
 
-  const paginatedSales = useMemo(() => {
-    return (sales || []).map(sale => ({
-      ...sale,
-      items: (sale.items || []).map(item => ({
-        ...item,
-        productName: item.product_name || 'Optical Item',
-        price: Number(item.unit_price),
-        quantity: item.quantity,
-        selectedColor: item.notes || '', // display notes as details (color/size combination)
-      })),
-      subtotal: Number(sale.subtotal),
-      discount: Number(sale.discount_amount),
-      total_amount: Number(sale.total_amount),
-      receivedAmount: Number(sale.paid_amount),
-      remainingAmount: Number(sale.due_amount),
-    }));
-  }, [sales]);
+  // Normalize backend sales data for table and details drawer consumption
+  const formattedSales = useMemo(() => {
+    return sales.map(s => {
+      let displayStatus = 'Pending';
+      const rawStatus = (s.status?.value || s.status || 'PENDING').toUpperCase();
+      if (rawStatus === 'COMPLETED' || rawStatus === 'DELIVERED') displayStatus = 'Delivered';
+      else if (rawStatus === 'PARTIALLY_PAID' || rawStatus === 'PROCESSING' || rawStatus === 'READY') displayStatus = 'In Progress';
 
-  const totalPages = pages;
+      let displayPayStatus = 'Unpaid';
+      const rawPayStatus = (s.paymentStatus || s.payment_status || 'UNPAID').toUpperCase();
+      if (rawPayStatus === 'PAID') displayPayStatus = 'Paid';
+      else if (rawPayStatus === 'PARTIAL' || rawPayStatus === 'PARTIALLY_PAID') displayPayStatus = 'Partial';
+
+      const itemsList = s.items || [
+        {
+          productName: s.productName || s.product_name || 'Optical Item',
+          price: Number(s.productPrice || s.product_price || s.total_amount || s.amount || 0),
+          quantity: Number(s.productQuantity || s.product_quantity || 1),
+          selectedColor: s.product_color || '',
+          selectedSize: s.product_size || '',
+        }
+      ];
+
+      return {
+        ...s,
+        id: s.id || s.orderId,
+        orderId: s.orderId || s.invoice_number || 'ORD-0000',
+        customerName: s.customerName || s.customer_name || 'Walk-in Customer',
+        customerPhone: s.customerPhone || s.customer_phone || '—',
+        customerEmail: s.customerEmail || s.customer_email || '',
+        productName: s.productName || s.product_name || 'Optical Item',
+        items: itemsList,
+        subtotal: Number(s.total_amount || s.amount || 0),
+        discount: Number(s.discount_amount || 0),
+        total_amount: Number(s.total_amount || s.amount || 0),
+        receivedAmount: Number(s.paid_amount || s.receivedAmount || 0),
+        remainingAmount: Number(s.due_amount || 0),
+        orderDate: s.orderDate || s.sale_date || '',
+        paymentMethod: s.paymentMethod || s.payment_method || 'Cash',
+        paymentStatus: displayPayStatus,
+        status: displayStatus,
+        upiId: s.upi_transaction_id || s.upiId || '',
+      };
+    });
+  }, [sales]);
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto animate-fade-in font-sans overflow-x-hidden">
@@ -120,12 +142,12 @@ const Sales = () => {
       {/* ── KPI Cards ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
         {[
-          { label: 'Total Revenue (Paid)', value: fmt(kpis.revenue), icon: DollarSign, color: 'text-emerald-700 bg-emerald-50 border-emerald-100' },
-          { label: 'Total Orders Billed', value: kpis.totalOrders, icon: ShoppingCart, color: 'text-blue-700 bg-blue-50 border-blue-100' },
-          { label: 'Delivered Orders', value: kpis.completed, icon: UserCheck, color: 'text-indigo-700 bg-indigo-50 border-indigo-100' },
-          { label: 'Active Orders', value: kpis.pending, icon: Clock, color: 'text-amber-700 bg-amber-50 border-amber-100' },
+          { label: 'Total Revenue (Paid)', value: fmt(kpis?.revenue || 0), icon: DollarSign, color: 'text-emerald-700 bg-emerald-50 border-emerald-100' },
+          { label: 'Total Orders Billed', value: kpis?.totalOrders || 0, icon: ShoppingCart, color: 'text-blue-700 bg-blue-50 border-blue-100' },
+          { label: 'Delivered Orders', value: kpis?.completed || 0, icon: UserCheck, color: 'text-indigo-700 bg-indigo-50 border-indigo-100' },
+          { label: 'Active Orders', value: kpis?.active || 0, icon: Clock, color: 'text-amber-700 bg-amber-50 border-amber-100' },
         ].map((kpi, idx) => (
-          <div key={idx} className={`p-4 sm:p-5 rounded-2xl border bg-white shadow-sm flex items-center justify-between gap-3 ${kpi.color.split(' ').slice(2).join(' ')}`}>
+          <div key={idx} className="p-4 sm:p-5 rounded-2xl border bg-white shadow-sm flex items-center justify-between gap-3 border-slate-100">
             <div>
               <p className="text-xs sm:text-sm font-bold text-slate-500 mb-1">{kpi.label}</p>
               <h3 className="text-xl sm:text-2xl lg:text-3xl font-black text-slate-900 tracking-tight">{kpi.value}</h3>
@@ -185,7 +207,12 @@ const Sales = () => {
       </div>
 
       {/* ── Listing ── */}
-      {paginatedSales.length === 0 ? (
+      {isLoading ? (
+        <div className="bg-white border border-slate-100 rounded-2xl p-20 flex flex-col items-center justify-center text-center shadow-sm">
+          <Loader2 className="w-10 h-10 animate-spin text-blue-500 mb-3" />
+          <p className="text-slate-500 text-sm font-semibold">Loading transactions list...</p>
+        </div>
+      ) : formattedSales.length === 0 ? (
         <div className="bg-white border border-slate-100 rounded-2xl p-16 flex flex-col items-center justify-center text-center shadow-sm">
           <Package className="w-12 h-12 text-slate-350 mb-3" />
           <h3 className="text-base font-bold text-slate-900 mb-1">No sales records found</h3>
@@ -193,11 +220,11 @@ const Sales = () => {
         </div>
       ) : (
         <div className="space-y-4 animate-fade-in">
-          {/* Desktop Table View */}
-          <div className="hidden lg:block border border-slate-100 rounded-2xl overflow-hidden shadow-sm bg-white">
-            <table className="w-full text-sm">
+          {/* Responsive Table View with Horizontal Scroll Container */}
+          <div className="border border-slate-100 rounded-2xl overflow-x-auto shadow-sm bg-white">
+            <table className="w-full text-sm min-w-[1100px]">
               <thead>
-                <tr className="bg-slate-50 border-b border-slate-100 text-left">
+                <tr className="bg-slate-50 border-b border-slate-105 text-left">
                   {['Order ID', 'Customer Name', 'Product Description', 'Order Date', 'Total Amount', 'Received', 'Order Status', 'Payment Status'].map((col) => (
                     <th key={col} className="px-5 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">
                       {col}
@@ -206,22 +233,22 @@ const Sales = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {paginatedSales.map((sale) => (
+                {formattedSales.map((sale) => (
                   <tr
-                    key={sale.id}
+                    key={sale.orderId}
                     onClick={() => setSelectedSale(sale)}
                     className="hover:bg-blue-50/40 transition-colors cursor-pointer"
                   >
-                    <td className="px-5 py-4 text-xs font-mono font-bold text-slate-700 whitespace-nowrap">{sale.orderId}</td>
-                    <td className="px-5 py-4 font-bold text-slate-900">{sale.customerName}</td>
-                    <td className="px-5 py-4 font-semibold text-slate-600 max-w-[200px] truncate">{sale.productName}</td>
-                    <td className="px-5 py-4 text-xs font-semibold text-slate-500 whitespace-nowrap">{fmtDate(sale.orderDate)}</td>
-                    <td className="px-5 py-4 text-xs sm:text-sm font-black text-slate-900">{fmt(sale.total_amount)}</td>
-                    <td className="px-5 py-4 text-xs sm:text-sm font-bold text-emerald-600">{fmt(sale.receivedAmount)}</td>
-                    <td className="px-5 py-4">
+                    <td className="px-5 py-4 text-xs font-mono font-bold text-slate-705 whitespace-nowrap">{sale.orderId}</td>
+                    <td className="px-5 py-4 font-bold text-slate-900 whitespace-nowrap">{sale.customerName}</td>
+                    <td className="px-5 py-4 font-semibold text-slate-600 max-w-[200px] truncate whitespace-nowrap">{sale.productName}</td>
+                    <td className="px-5 py-4 text-xs font-semibold text-slate-505 whitespace-nowrap">{fmtDate(sale.orderDate)}</td>
+                    <td className="px-5 py-4 text-xs sm:text-sm font-black text-slate-900 whitespace-nowrap">{fmt(sale.total_amount)}</td>
+                    <td className="px-5 py-4 text-xs sm:text-sm font-bold text-emerald-600 whitespace-nowrap">{fmt(sale.receivedAmount)}</td>
+                    <td className="px-5 py-4 whitespace-nowrap">
                       <StatusBadge status={sale.status} />
                     </td>
-                    <td className="px-5 py-4">
+                    <td className="px-5 py-4 whitespace-nowrap">
                       <PaymentBadge status={sale.paymentStatus} />
                     </td>
                   </tr>
@@ -230,51 +257,11 @@ const Sales = () => {
             </table>
           </div>
 
-          {/* Mobile Card Layout */}
-          <div className="lg:hidden space-y-3">
-            {paginatedSales.map((sale) => (
-              <div
-                key={sale.id}
-                onClick={() => setSelectedSale(sale)}
-                className="bg-white p-4 border border-slate-100 rounded-2xl shadow-sm space-y-3 cursor-pointer hover:border-slate-350 transition-all"
-              >
-                <div className="flex justify-between items-start">
-                  <div>
-                    <span className="text-[10px] font-mono font-bold text-slate-400">{sale.orderId}</span>
-                    <h3 className="font-bold text-slate-950 text-sm mt-0.5">{sale.customerName}</h3>
-                  </div>
-                  <StatusBadge status={sale.status} />
-                </div>
-                <div className="text-xs text-slate-600">
-                  <span className="font-semibold text-slate-800">Items:</span> {sale.productName}
-                </div>
-                <div className="grid grid-cols-2 gap-2.5 pt-2.5 border-t border-slate-100 text-xs">
-                  <div>
-                    <span className="text-slate-400 font-bold block mb-0.5">Date</span>
-                    <span className="font-bold text-slate-700">{fmtDate(sale.orderDate)}</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 font-bold block mb-0.5">Amount Billed</span>
-                    <span className="font-black text-slate-900">{fmt(sale.total_amount)}</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 font-bold block mb-0.5">Payment</span>
-                    <span className="font-bold text-slate-700"><PaymentBadge status={sale.paymentStatus} /></span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 font-bold block mb-0.5">Total Paid</span>
-                    <span className="font-extrabold text-emerald-600">{fmt(sale.receivedAmount)}</span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-
           {/* Pagination */}
-          {totalPages > 1 && (
+          {total > itemsPerPage && (
             <Pagination
               totalItems={total}
-              itemsPerPage={8}
+              itemsPerPage={itemsPerPage}
               currentPage={currentPage}
               onPageChange={setCurrentPage}
             />
@@ -285,7 +272,7 @@ const Sales = () => {
       {/* ── Order Receipt details Modal Overlay ── */}
       {selectedSale && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[1100] flex items-center justify-center p-4">
-          <div className="relative bg-white w-full sm:max-w-lg rounded-2xl shadow-2xl flex flex-col max-h-[85vh] border border-slate-150 overflow-hidden animate-fade-in">
+          <div className="relative bg-white w-full sm:max-w-lg rounded-2xl shadow-2xl flex flex-col max-h-[85vh] border border-slate-150 overflow-hidden animate-fade-in animate-fade-in">
             {/* Header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 flex-shrink-0 bg-slate-50">
               <div>
@@ -317,7 +304,7 @@ const Sales = () => {
                   {selectedSale.items && selectedSale.items.map((item, idx) => (
                     <div key={idx} className="flex justify-between items-center py-2 text-xs">
                       <div>
-                        <p className="font-bold text-slate-800">{item.productName || item.frameName || 'Optical Items'}</p>
+                        <p className="font-bold text-slate-800">{item.productName || 'Optical Items'}</p>
                         <p className="text-[10px] text-slate-450 mt-0.5">
                           {item.selectedColor && `Color: ${item.selectedColor}`} {item.selectedSize && `· Size: ${item.selectedSize}`}
                         </p>
@@ -340,7 +327,7 @@ const Sales = () => {
                     <span>{fmt(selectedSale.subtotal)}</span>
                   </div>
                   {selectedSale.discount > 0 && (
-                    <div className="flex justify-between items-center text-xs text-red-500 font-semibold">
+                    <div className="flex justify-between items-center text-xs text-red-505 font-semibold">
                       <span>Discount</span>
                       <span>- {fmt(selectedSale.discount)}</span>
                     </div>

@@ -1,7 +1,8 @@
-import { useState, useMemo } from 'react';
+import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { IndianRupee, ShoppingCart, TrendingUp, Users, ArrowUpRight, BarChart3, Clock, Package } from 'lucide-react';
-import { getDashboardStats, getCustomers } from '../../services/customerService';
+import { useSales } from '../../hooks/useSales';
+import { useCustomers } from '../../hooks/useCustomers';
 
 const fmtDate = (d) => d
   ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
@@ -10,47 +11,51 @@ const fmtDate = (d) => d
 const Dashboard = () => {
   const navigate = useNavigate();
 
-  // Load stats and charts dynamically
-  const [statsData] = useState(() => getDashboardStats());
+  // Load real API query states
+  const { sales, isLoading: salesLoading } = useSales({ limit: 1000 });
+  const { customers, isLoading: customersLoading } = useCustomers();
 
-  const stats = [
-    {
-      title: 'Total Sales',
-      value: statsData.totalSales,
-      change: '+14.2%',
-      icon: IndianRupee,
-      color: 'text-blue-600',
-      bg: 'bg-blue-50 border border-blue-100',
-    },
-    {
-      title: 'Total Orders',
-      value: statsData.totalOrders,
-      change: '+8.1%',
-      icon: ShoppingCart,
-      color: 'text-indigo-600',
-      bg: 'bg-indigo-50 border border-indigo-100',
-    },
-    {
-      title: 'Total Revenue (Paid)',
-      value: statsData.revenue,
-      change: '+12.5%',
-      icon: TrendingUp,
-      color: 'text-emerald-600',
-      bg: 'bg-emerald-50 border border-emerald-100',
-    },
-    {
-      title: 'Active Customers',
-      value: statsData.activeCustomers,
-      change: '+2 new',
-      icon: Users,
-      color: 'text-amber-600',
-      bg: 'bg-amber-50 border border-amber-100',
-    },
-  ];
+  // Dynamic KPI Metrics calculations
+  const stats = useMemo(() => {
+    const totalSalesVal = sales.reduce((sum, s) => sum + (Number(s.total_amount || s.amount) || 0), 0);
+    const totalOrdersVal = sales.length;
+    const paidRevenueVal = sales.reduce((sum, s) => sum + (Number(s.receivedAmount || s.paid_amount) || 0), 0);
+    const activeCustomersVal = customers.filter(c => c.status === 'Active' || c.status === 'VIP').length;
 
-  /* ── Dynamic Monthly Sales Calculation ── */
+    return [
+      {
+        title: 'Total Sales',
+        value: `₹${totalSalesVal.toLocaleString('en-IN')}`,
+        change: '+14.2%',
+        icon: IndianRupee,
+        color: 'text-blue-605',
+      },
+      {
+        title: 'Total Orders',
+        value: String(totalOrdersVal),
+        change: '+8.1%',
+        icon: ShoppingCart,
+        color: 'text-indigo-605',
+      },
+      {
+        title: 'Total Revenue (Paid)',
+        value: `₹${paidRevenueVal.toLocaleString('en-IN')}`,
+        change: '+12.5%',
+        icon: TrendingUp,
+        color: 'text-emerald-655',
+      },
+      {
+        title: 'Active Customers',
+        value: String(activeCustomersVal),
+        change: '+2 new',
+        icon: Users,
+        color: 'text-amber-655',
+      },
+    ];
+  }, [sales, customers]);
+
+  /* ── Dynamic Monthly Sales Calculation from Database ── */
   const monthlySales = useMemo(() => {
-    const customers = getCustomers();
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const now = new Date();
     const last6 = [];
@@ -63,30 +68,76 @@ const Dashboard = () => {
       last6.push({ month: monthName, key: yearMonthKey, amount: 0, max: 100000 });
     }
 
-    // Populate actual order sums
-    customers.forEach((c) => {
-      if (c.orders) {
-        c.orders.forEach((o) => {
-          if (o.date) {
-            const oDate = new Date(o.date);
-            const key = `${oDate.getFullYear()}-${String(oDate.getMonth() + 1).padStart(2, '0')}`;
-            const match = last6.find((m) => m.key === key);
-            if (match) {
-              match.amount += o.amount;
-            }
-          }
-        });
+    // Sum matching backend sales
+    sales.forEach((s) => {
+      const dateVal = s.orderDate || s.sale_date;
+      if (dateVal) {
+        const sDate = new Date(dateVal);
+        const key = `${sDate.getFullYear()}-${String(sDate.getMonth() + 1).padStart(2, '0')}`;
+        const match = last6.find((m) => m.key === key);
+        if (match) {
+          match.amount += Number(s.total_amount || s.amount) || 0;
+        }
       }
     });
 
-    // Determine scale max
+    // Scale chart rendering
     const maxVal = Math.max(...last6.map((m) => m.amount), 50000);
     last6.forEach((m) => {
       m.max = maxVal;
     });
 
     return last6;
-  }, []);
+  }, [sales]);
+
+  // Dynamic Top Selling Products
+  const topProducts = useMemo(() => {
+    const map = {};
+    sales.forEach(s => {
+      const name = s.productName || s.product_name || 'Optical Item';
+      const cat = s.productCategory || s.product_category || 'Optical';
+      const qty = Number(s.productQuantity || s.product_quantity) || 1;
+      const price = Number(s.productPrice || s.product_price || s.total_amount) || 0;
+
+      if (!map[name]) {
+        map[name] = { name, category: cat, sold: 0, revenue: 0 };
+      }
+      map[name].sold += qty;
+      map[name].revenue += price * qty;
+    });
+
+    return Object.values(map)
+      .sort((a, b) => b.sold - a.sold)
+      .slice(0, 4)
+      .map(p => ({
+        name: p.name,
+        category: p.category,
+        sold: p.sold,
+        revenue: `₹${p.revenue.toLocaleString('en-IN')}`,
+      }));
+  }, [sales]);
+
+  // Dynamic Recent Transactions
+  const recentOrders = useMemo(() => {
+    return [...sales]
+      .sort((a, b) => new Date(b.orderDate || b.sale_date) - new Date(a.orderDate || a.sale_date))
+      .slice(0, 5)
+      .map(s => {
+        let displayStatus = 'Pending';
+        const rawStatus = (s.status?.value || s.status || 'PENDING').toUpperCase();
+        if (rawStatus === 'COMPLETED' || rawStatus === 'DELIVERED') displayStatus = 'Delivered';
+        else if (rawStatus === 'PARTIALLY_PAID' || rawStatus === 'PROCESSING' || rawStatus === 'READY') displayStatus = 'In Progress';
+
+        return {
+          id: s.orderId || s.invoice_number || 'ORD-0000',
+          customer: s.customerName || s.customer_name || 'Walk-in Customer',
+          product: s.productName || s.product_name || 'Optical Item',
+          amount: `₹${(Number(s.total_amount || s.amount) || 0).toLocaleString('en-IN')}`,
+          status: displayStatus,
+          date: s.orderDate || s.sale_date || '',
+        };
+      });
+  }, [sales]);
 
   const getStatusColor = (status) => {
     const normalized = (status || '').toLowerCase();
@@ -105,29 +156,42 @@ const Dashboard = () => {
     }
   };
 
+  if (salesLoading || customersLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500" />
+      </div>
+    );
+  }
+
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto animate-fade-in font-sans">
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 sm:mb-8 border-b border-slate-100 pb-5">
         <div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">Inventory Dashboard</h1>
-          <p className="text-slate-500 mt-1.5 text-xs sm:text-sm font-semibold">Welcome back! Here's a live overview of your optical store transactions and CRM activity.</p>
+          <p className="text-slate-555 mt-1.5 text-xs sm:text-sm font-semibold">Welcome back! Here's a live overview of your optical store transactions and CRM activity.</p>
         </div>
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-6 sm:mb-8">
         {stats.map((stat, i) => (
-          <div key={i} className="bg-white p-4 sm:p-5 rounded-2xl shadow-sm border border-slate-100 flex items-center hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
-            <div className={`p-3 sm:p-3.5 rounded-xl ${stat.bg} ${stat.color} mr-3 sm:mr-4 flex-shrink-0`}>
-              <stat.icon className="w-5 h-5 sm:w-6 sm:h-6" />
+          <div
+            key={i}
+            className="bg-white p-6 rounded-2xl border border-slate-200/60 shadow-sm hover:shadow-md transition-all duration-300 flex flex-col justify-between h-40 relative overflow-hidden group"
+          >
+            <div className="flex justify-between items-start z-10">
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{stat.title}</p>
+              <stat.icon className="w-4.5 h-4.5 text-slate-400" />
             </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-[10px] sm:text-xs font-extrabold text-slate-400 uppercase tracking-wider mb-0.5 sm:mb-1 truncate">{stat.title}</p>
-              <div className="flex items-baseline gap-2">
-                <h3 className="text-xl sm:text-2xl font-black text-slate-900 leading-none">{stat.value}</h3>
-              </div>
+            <div className="space-y-2 mt-2 z-10">
+              <h3 className="text-2xl sm:text-3xl font-black text-slate-800 tracking-tight leading-none">{stat.value}</h3>
+              <span className="inline-block text-[10px] font-extrabold px-2 py-0.5 rounded border text-emerald-600 bg-emerald-50 border-emerald-100">
+                {stat.change}
+              </span>
             </div>
+            <stat.icon className="absolute -right-4 -bottom-4 w-32 h-32 text-slate-200 opacity-[0.06] pointer-events-none group-hover:scale-110 transition-transform duration-300" />
           </div>
         ))}
       </div>
@@ -141,13 +205,13 @@ const Dashboard = () => {
               <BarChart3 className="w-5 h-5 text-blue-500" />
               <h2 className="text-base sm:text-lg font-bold text-slate-900">Sales Overview</h2>
             </div>
-            <span className="text-xs font-semibold text-slate-400 bg-slate-50 px-3 py-1 rounded-lg border border-slate-100">Last 6 months</span>
+            <span className="text-xs font-semibold text-slate-455 bg-slate-50 px-3 py-1 rounded-lg border border-slate-100">Last 6 months</span>
           </div>
           <div className="flex items-end justify-between gap-2 sm:gap-4 h-48 sm:h-64">
             {monthlySales.map((item, idx) => (
               <div key={idx} className="flex-1 flex flex-col items-center gap-2">
                 <span className="text-[10px] font-bold text-slate-500">₹{(item.amount / 1000).toFixed(1)}k</span>
-                <div className="w-full bg-slate-50 rounded-xl overflow-hidden relative" style={{ height: '80%' }}>
+                <div className="w-full bg-slate-50 rounded-xl overflow-hidden relative h-32 sm:h-44">
                   <div
                     className="absolute bottom-0 w-full bg-gradient-to-t from-blue-600 to-indigo-500 rounded-xl transition-all duration-350 hover:from-blue-700 hover:to-indigo-600"
                     style={{ height: `${Math.max(5, (item.amount / item.max) * 100)}%` }}
@@ -166,10 +230,10 @@ const Dashboard = () => {
             <h2 className="text-base sm:text-lg font-bold text-slate-900">Top Selling Products</h2>
           </div>
           <div className="space-y-3">
-            {statsData.topProducts && statsData.topProducts.length === 0 ? (
+            {topProducts.length === 0 ? (
               <p className="text-xs text-slate-400 italic text-center py-8">No products sold yet.</p>
             ) : (
-              statsData.topProducts && statsData.topProducts.map((product, idx) => (
+              topProducts.map((product, idx) => (
                 <div key={idx} className="flex items-center gap-3 p-3 rounded-xl bg-slate-50/80 border border-slate-100 hover:bg-slate-100/80 transition-colors">
                   <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-white font-bold text-xs flex-shrink-0">
                     #{idx + 1}
@@ -215,12 +279,12 @@ const Dashboard = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {statsData.recentOrders && statsData.recentOrders.length === 0 ? (
+              {recentOrders.length === 0 ? (
                 <tr>
                   <td colSpan="6" className="text-center py-8 text-xs text-slate-450 italic">No orders logged yet.</td>
                 </tr>
               ) : (
-                statsData.recentOrders && statsData.recentOrders.map((order) => (
+                recentOrders.map((order) => (
                   <tr key={order.id} className="hover:bg-slate-50/50 transition-colors">
                     <td className="px-6 py-4 text-xs font-mono font-bold text-slate-800">{order.id}</td>
                     <td className="px-6 py-4 text-xs sm:text-sm font-bold text-slate-700">{order.customer}</td>
@@ -245,10 +309,10 @@ const Dashboard = () => {
 
         {/* Mobile Cards */}
         <div className="sm:hidden divide-y divide-slate-100">
-          {statsData.recentOrders && statsData.recentOrders.length === 0 ? (
+          {recentOrders.length === 0 ? (
             <p className="text-center py-6 text-xs text-slate-400 italic">No orders logged.</p>
           ) : (
-            statsData.recentOrders && statsData.recentOrders.map((order) => (
+            recentOrders.map((order) => (
               <div key={order.id} className="p-4 space-y-2 text-xs">
                 <div className="flex items-center justify-between">
                   <span className="font-mono font-bold text-slate-900">{order.id}</span>
@@ -261,7 +325,7 @@ const Dashboard = () => {
                   </span>
                 </div>
                 <p className="font-bold text-slate-700">{order.customer}</p>
-                <p className="text-slate-500 truncate">{order.product}</p>
+                <p className="text-slate-555 truncate">{order.product}</p>
                 <div className="flex items-center justify-between pt-1 border-t border-slate-50">
                   <span className="font-black text-slate-900">{order.amount}</span>
                   <span className="text-slate-400 font-semibold">{fmtDate(order.date)}</span>

@@ -190,7 +190,7 @@ const Customers = () => {
           {/* Desktop Table Layout */}
           <div className="hidden md:block bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full text-sm min-w-[1000px]">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-105">
                     {['Customer', 'Phone Number', 'Email', 'Last Visit', 'Total Orders', 'Total Purchases', 'Status'].map(col => (

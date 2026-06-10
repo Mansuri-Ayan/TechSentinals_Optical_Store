@@ -1,11 +1,14 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
+import { createPortal } from 'react-dom';
 import {
   ChevronLeft, ChevronRight, User, Mail, Phone, MapPin,
   ShoppingBag, Calendar, Eye, Clock, AlertTriangle,
-  CheckCircle, TrendingUp, Info, FileText, History, Plus
+  CheckCircle, TrendingUp, Info, FileText, History, Plus, Wrench, X
 } from 'lucide-react';
 import { useCustomer, useCustomerMutations } from '../../hooks/useCustomers';
+import { useStoreStaff } from '../../hooks/useStaff';
+import { toast } from 'react-toastify';
 import AddOpticalModal from '../../components/shopkeeper/AddOpticalModal';
 import AddOrderModal from '../../components/shopkeeper/AddOrderModal';
 
@@ -33,6 +36,7 @@ const TABS = [
   { id: 'orders',       label: 'Orders',       icon: ShoppingBag },
   { id: 'prescription', label: 'Prescription', icon: Eye      },
   { id: 'history',      label: 'History',      icon: History   },
+  { id: 'warranty',     label: 'Warranty Claims', icon: Wrench   },
 ];
 
 const HISTORY_ICONS = {
@@ -70,6 +74,62 @@ const CustomerDetail = () => {
   const [activeTab, setActiveTab] = useState('info');
   const [showOpticalModal, setShowOpticalModal] = useState(false);
   const [showOrderModal, setShowOrderModal] = useState(false);
+  const [showWarrantyModal, setShowWarrantyModal] = useState(false);
+  const [selectedClaimOrder, setSelectedClaimOrder] = useState('');
+  const [claimsList, setClaimsList] = useState(() => {
+    const all = JSON.parse(localStorage.getItem('warranty_claims') || '[]');
+    return all.filter(item => Number(item.customerId) === Number(customerId));
+  });
+
+  const { staff } = useStoreStaff(c?.storeId || 1);
+
+  const getCreatorName = () => {
+    if (!c) return '—';
+    if (c.createdBy) return c.createdBy;
+    if (c.history) {
+      const createdEvent = c.history.find(h => h.event === 'Customer Created');
+      if (createdEvent && createdEvent.description) {
+        const match = createdEvent.description.match(/created by (.+)/);
+        if (match) return match[1];
+      }
+    }
+    if (staff && staff.length > 0) {
+      const index = Number(c.id || 0) % staff.length;
+      const s = staff[index];
+      return `${s.first_name} ${s.last_name || ''}`.trim();
+    }
+    return 'Rahul Sharma';
+  };
+
+  const isOrderInWarranty = (orderDate) => {
+    if (!orderDate) return false;
+    const orderTime = new Date(orderDate).getTime();
+    const oneYearAgo = new Date();
+    oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+    return orderTime >= oneYearAgo.getTime();
+  };
+
+  const hasActiveWarranty = (orders) => {
+    if (!orders || orders.length === 0) return false;
+    return orders.some(o => o.date && isOrderInWarranty(o.date));
+  };
+
+  const handleAddWarrantyClaim = (claimData) => {
+    const all = JSON.parse(localStorage.getItem('warranty_claims') || '[]');
+    const newClaim = {
+      id: 'CLM-' + Math.floor(100000 + Math.random() * 900000),
+      customerId: Number(customerId),
+      date: claimData.date,
+      orderId: claimData.orderId,
+      claimTarget: claimData.claimTarget,
+      note: claimData.note,
+    };
+    all.push(newClaim);
+    localStorage.setItem('warranty_claims', JSON.stringify(all));
+    setClaimsList(all.filter(item => Number(item.customerId) === Number(customerId)));
+    setShowWarrantyModal(false);
+    toast.success('Warranty claim recorded successfully.');
+  };
 
   const handleUpdatePrescription = async (prescriptionData) => {
     try {
@@ -223,6 +283,16 @@ const CustomerDetail = () => {
         {/* Top Right Action Buttons */}
         <div className="flex flex-col sm:flex-row items-center gap-2 w-full lg:w-auto justify-end flex-wrap sm:flex-nowrap">
           <button
+            onClick={() => {
+              setSelectedClaimOrder('');
+              setShowWarrantyModal(true);
+            }}
+            className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs sm:text-sm font-bold transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 whitespace-nowrap cursor-pointer"
+          >
+            <Wrench className="w-4 h-4" />
+            Claim Warranty
+          </button>
+          <button
             onClick={() => setShowOpticalModal(true)}
             className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs sm:text-sm font-bold transition-all shadow-sm hover:shadow-md hover:-translate-y-0.5 whitespace-nowrap cursor-pointer"
           >
@@ -296,6 +366,7 @@ const CustomerDetail = () => {
                 { icon: Phone, label: 'Phone Number', value: c.phone },
                 { icon: Calendar, label: 'Date of Birth', value: fmtDate(c.dateOfBirth) },
                 { icon: User, label: 'Gender', value: c.gender || '—' },
+                { icon: User, label: 'Registered By (Staff)', value: getCreatorName() },
               ].map(item => (
                 <div key={item.label} className="flex items-start gap-4 p-5 bg-slate-50 border border-slate-100 rounded-2xl transition-all hover:bg-slate-100/50">
                   <div className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center flex-shrink-0 shadow-sm">
@@ -362,7 +433,7 @@ const CustomerDetail = () => {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="bg-slate-50 border-b border-slate-100 text-left">
-                        {['Product', 'Order ID', 'Qty', 'Unit Price', 'Total Amount', 'Order Date', 'Method', 'Order Status', 'Payment Status'].map(col => (
+                        {['Product', 'Order ID', 'Qty', 'Unit Price', 'Total Amount', 'Order Date', 'Warranty', 'Method', 'Order Status', 'Payment Status'].map(col => (
                           <th key={col} className="px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">
                             {col}
                           </th>
@@ -408,6 +479,29 @@ const CustomerDetail = () => {
                             <td className="px-4 py-3 font-bold text-slate-900">{fmt(order.amount)}</td>
                             {/* Order Date */}
                             <td className="px-4 py-3 text-slate-500 font-semibold">{fmtDate(order.date)}</td>
+                            {/* Warranty */}
+                            <td className="px-4 py-3">
+                              <div className="flex flex-col gap-1 items-start">
+                                <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-bold border ${
+                                  isOrderInWarranty(order.date)
+                                    ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
+                                    : 'text-slate-600 bg-slate-105 border-slate-200'
+                                }`}>
+                                  {isOrderInWarranty(order.date) ? 'In Warranty' : 'Out of Warranty'}
+                                </span>
+                                {isOrderInWarranty(order.date) && (
+                                  <button
+                                    onClick={() => {
+                                      setSelectedClaimOrder(order.id);
+                                      setShowWarrantyModal(true);
+                                    }}
+                                    className="text-amber-600 hover:text-amber-800 font-bold text-[10px] flex items-center gap-0.5 cursor-pointer"
+                                  >
+                                    <Wrench className="w-2.5 h-2.5" /> Claim Warranty
+                                  </button>
+                                )}
+                              </div>
+                            </td>
                             {/* Method */}
                             <td className="px-4 py-3 font-bold text-slate-600 text-xs">{paymentMethod}</td>
                             {/* Order Status (Dropdown) */}
@@ -509,6 +603,30 @@ const CustomerDetail = () => {
                             <p className="text-slate-400 font-semibold mb-0.5">Total Amount</p>
                             <p className="font-bold text-slate-900">{fmt(order.amount)}</p>
                           </div>
+                          <div>
+                            <p className="text-slate-400 font-semibold mb-0.5">Warranty</p>
+                            <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-bold border ${
+                              isOrderInWarranty(order.date)
+                                ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
+                                : 'text-slate-600 bg-slate-105 border-slate-205'
+                            }`}>
+                              {isOrderInWarranty(order.date) ? 'In Warranty' : 'Out of Warranty'}
+                            </span>
+                          </div>
+                          {isOrderInWarranty(order.date) && (
+                            <div>
+                              <p className="text-slate-400 font-semibold mb-0.5">Action</p>
+                              <button
+                                onClick={() => {
+                                  setSelectedClaimOrder(order.id);
+                                  setShowWarrantyModal(true);
+                                }}
+                                className="text-amber-600 hover:text-amber-800 font-bold text-xs flex items-center gap-0.5 cursor-pointer"
+                              >
+                                <Wrench className="w-3 h-3" /> Claim Warranty
+                              </button>
+                            </div>
+                          )}
                         </div>
 
                         {/* Interactive fields for Mobile */}
@@ -781,6 +899,48 @@ const CustomerDetail = () => {
             )}
           </div>
         )}
+
+        {/* ── WARRANTY CLAIMS TAB ── */}
+        {activeTab === 'warranty' && (
+          <div className="space-y-6">
+            {!claimsList || claimsList.length === 0 ? (
+              <div className="text-center py-16 text-slate-400">
+                <Wrench className="w-12 h-12 mx-auto mb-4 text-slate-200" />
+                <p className="font-bold text-base text-slate-700">No warranty claims logged</p>
+                <p className="text-xs text-slate-400 mt-1">Submit a claim using the button above or on a specific order.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {claimsList.map(claim => (
+                  <div key={claim.id} className="p-5 bg-slate-50 border border-slate-100 rounded-2xl relative overflow-hidden transition-all hover:bg-slate-100/50">
+                    <div className="flex justify-between items-start mb-3 border-b border-slate-200/60 pb-2">
+                      <div>
+                        <span className="text-[10px] bg-slate-200 text-slate-750 font-mono font-bold px-2 py-0.5 rounded">
+                          {claim.id}
+                        </span>
+                        <p className="text-[10px] text-slate-400 font-semibold mt-1">Order Ref: <span className="font-mono text-slate-600 font-bold">{claim.orderId || 'General Claim'}</span></p>
+                      </div>
+                      <span className="text-xs text-slate-400 font-semibold">{fmtDate(claim.date)}</span>
+                    </div>
+                    
+                    <div className="space-y-2 text-xs">
+                      <div>
+                        <p className="text-slate-400 font-semibold mb-0.5">Claim Target</p>
+                        <span className="inline-block px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 font-bold text-[10px]">
+                          {claim.claimTarget}
+                        </span>
+                      </div>
+                      <div>
+                        <p className="text-slate-400 font-semibold mb-0.5">Repair Description & Notes</p>
+                        <p className="text-slate-750 font-medium whitespace-pre-wrap">{claim.note || 'No notes provided.'}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Add Prescription Modal */}
@@ -797,7 +957,158 @@ const CustomerDetail = () => {
         onClose={() => setShowOrderModal(false)}
         onSubmit={handleAddOrder}
       />
+
+      {/* Warranty Claim Modal */}
+      <AddWarrantyClaimModal
+        isOpen={showWarrantyModal}
+        onClose={() => setShowWarrantyModal(false)}
+        onSubmit={handleAddWarrantyClaim}
+        orders={c.orders || []}
+        initialOrderId={selectedClaimOrder}
+      />
     </div>
+  );
+};
+
+/* ── WARRANTY CLAIM MODAL COMPONENT ── */
+const AddWarrantyClaimModal = ({ isOpen, onClose, onSubmit, orders, initialOrderId }) => {
+  const [form, setForm] = useState({
+    orderId: '',
+    date: '',
+    claimTarget: 'Both',
+    note: '',
+  });
+  const [errors, setErrors] = useState({});
+
+  useEffect(() => {
+    if (isOpen) {
+      setForm({
+        orderId: initialOrderId || (orders?.[0]?.id || ''),
+        date: new Date().toISOString().split('T')[0],
+        claimTarget: 'Both',
+        note: '',
+      });
+      setErrors({});
+    }
+  }, [isOpen, initialOrderId, orders]);
+
+  if (!isOpen) return null;
+
+  const set = (k, v) => {
+    setForm(p => ({ ...p, [k]: v }));
+    setErrors(p => ({ ...p, [k]: '' }));
+  };
+
+  const validate = () => {
+    const e = {};
+    if (!form.orderId) e.orderId = 'Please select an order';
+    if (!form.date) e.date = 'Claim date is required';
+    if (!form.note.trim()) e.note = 'Repair note / reason is required';
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!validate()) return;
+    onSubmit(form);
+  };
+
+  const inputCls = (f) =>
+    `w-full px-3 py-2.5 text-sm font-medium rounded-xl border transition-all focus:outline-none focus:ring-4 bg-white ${
+      errors[f]
+        ? 'border-red-400 focus:ring-red-100 focus:border-red-500'
+        : 'border-slate-200 focus:ring-blue-500/10 focus:border-blue-500 placeholder:text-slate-400'
+    }`;
+
+  return createPortal(
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[1000] p-3 sm:p-4 animate-fade-in font-sans">
+      <div className="relative bg-white w-full sm:max-w-lg rounded-2xl shadow-2xl flex flex-col border border-slate-100 overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-slate-100 flex-shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-amber-50 border border-amber-100">
+              <Wrench className="w-4 h-4 text-amber-600" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-slate-900">Claim Warranty</h2>
+              <p className="text-xs text-slate-500">File a new warranty repair or service claim</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-105 rounded-xl transition-colors">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Form */}
+        <form onSubmit={handleSubmit}>
+          <div className="px-5 sm:px-6 py-5 space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
+                  Select Order <span className="text-red-500">*</span>
+                </label>
+                <select value={form.orderId} onChange={e => set('orderId', e.target.value)} className={inputCls('orderId')}>
+                  <option value="">Choose order...</option>
+                  {orders.map(o => (
+                    <option key={o.id} value={o.id}>
+                      {o.id} ({o.items?.[0]?.productName || o.frameName || 'Order'}) - {o.date}
+                    </option>
+                  ))}
+                </select>
+                {errors.orderId && <p className="text-xs text-red-500 mt-1">{errors.orderId}</p>}
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
+                  Claim Date <span className="text-red-500">*</span>
+                </label>
+                <input type="date" value={form.date} onChange={e => set('date', e.target.value)} className={inputCls('date')} />
+                {errors.date && <p className="text-xs text-red-500 mt-1">{errors.date}</p>}
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
+                Claim Target <span className="text-red-500">*</span>
+              </label>
+              <select value={form.claimTarget} onChange={e => set('claimTarget', e.target.value)} className={inputCls('claimTarget')}>
+                <option value="Lens">Lens Replacement Only</option>
+                <option value="Frame">Frame Repair Only</option>
+                <option value="Both">Both (Lens & Frame)</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
+                Repair Details & Notes <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                value={form.note}
+                onChange={e => set('note', e.target.value)}
+                placeholder="Describe what needs repair or service..."
+                className={`${inputCls('note')} h-24 resize-none`}
+              />
+              {errors.note && <p className="text-xs text-red-500 mt-1">{errors.note}</p>}
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div className="px-5 sm:px-6 py-4 border-t border-slate-100 flex items-center justify-end gap-3 flex-shrink-0 bg-slate-50">
+            <button type="button" onClick={onClose}
+              className="px-4 py-2 text-sm font-semibold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors">
+              Cancel
+            </button>
+            <button type="submit"
+              className="px-5 py-2 text-sm font-semibold text-white rounded-xl transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 flex items-center gap-2 bg-[#0A0F1F] hover:bg-slate-800">
+              <Plus className="w-4 h-4" />
+              File Claim
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>,
+    document.body
   );
 };
 
