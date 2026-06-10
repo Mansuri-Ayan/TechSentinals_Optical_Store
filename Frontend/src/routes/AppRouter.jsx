@@ -1,35 +1,36 @@
+/** @format */
 
-import { Routes, Route, Navigate } from 'react-router-dom';
-import { useAuthStore, useStoreStore } from '../store/store';
-import Login from '../pages/auth/Login';
-import ProfileHome from '../pages/auth/ProfileHome';
-import AdminLayout from '../layouts/AdminLayout';
-import Dashboard from '../pages/admin/Dashboard';
-import Staff from '../pages/admin/Staff';
-import Inventory from '../pages/admin/Inventory';
-import Brands from '../pages/admin/Brands';
-import Categories from '../pages/admin/Categories';
-import Transactions from '../pages/admin/Transactions';
-import Suppliers from '../pages/admin/Suppliers';
-import SupplierDetail from '../pages/admin/SupplierDetail';
-import Sales from '../pages/admin/Sales';
-import Expenses from '../pages/admin/Expenses';
-import Analyses from '../pages/admin/Analyses';
-import Stores from '../pages/admin/Stores';
-import StoreDetail from '../pages/admin/StoreDetail';
+import { Routes, Route, Navigate } from "react-router-dom";
+import { useAuthStore, useStoreStore } from "../store/store";
+import Login from "../pages/auth/Login";
+import ProfileHome from "../pages/auth/ProfileHome";
+import AdminLayout from "../layouts/AdminLayout";
+import Dashboard from "../pages/admin/Dashboard";
+import Staff from "../pages/admin/Staff";
+import Inventory from "../pages/admin/Inventory";
+import Brands from "../pages/admin/Brands";
+import Categories from "../pages/admin/Categories";
+import Transactions from "../pages/admin/Transactions";
+import Suppliers from "../pages/admin/Suppliers";
+import SupplierDetail from "../pages/admin/SupplierDetail";
+import Sales from "../pages/admin/Sales";
+import Expenses from "../pages/admin/Expenses";
+import Analyses from "../pages/admin/Analyses";
+import Stores from "../pages/admin/Stores";
+import StoreDetail from "../pages/admin/StoreDetail";
 
 // Shopkeeper imports
-import ShopKeeperLayout from '../layouts/ShopKeeperLayout';
-import ShopkeeperDashboard from '../pages/shopkeeper/Dashboard';
-import Customers from '../pages/shopkeeper/Customers';
-import CustomerDetail from '../pages/shopkeeper/CustomerDetail';
-import ShopkeeperInventory from '../pages/shopkeeper/Inventory';
-import ShopkeeperSales from '../pages/shopkeeper/Sales';
-import Shopkeeper from '../pages/shopkeeper/Shopkeeper';
+import ShopKeeperLayout from "../layouts/ShopKeeperLayout";
+import ShopkeeperDashboard from "../pages/shopkeeper/Dashboard";
+import Customers from "../pages/shopkeeper/Customers";
+import CustomerDetail from "../pages/shopkeeper/CustomerDetail";
+import ShopkeeperInventory from "../pages/shopkeeper/Inventory";
+import ShopkeeperSales from "../pages/shopkeeper/Sales";
+import Shopkeeper from "../pages/shopkeeper/Shopkeeper";
 
 // Responsive loading spinner component
 const LoadingSpinner = () => (
-    <div className="min-h-screen bg-navy flex items-center justify-center text-slate-300 px-4">
+  <div className="min-h-screen bg-navy flex items-center justify-center text-slate-300 px-4">
     <div className="w-10 h-10 sm:w-12 sm:h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
   </div>
 );
@@ -43,7 +44,7 @@ const GuestRoute = ({ children }) => {
   }
 
   if (isAuthenticated && user) {
-    return user.role === 'admin' ? (
+    return user.role === "admin" ? (
       <Navigate to="/admin/dashboard" replace />
     ) : (
       <Navigate to="/shopkeeper" replace />
@@ -81,7 +82,7 @@ const AdminRoute = ({ children }) => {
     return <Navigate to="/login" replace />;
   }
 
-  if (user && user.role !== 'admin') {
+  if (user && user.role !== "admin") {
     return <Navigate to="/" replace />;
   }
 
@@ -96,7 +97,7 @@ const HomeRoute = () => {
     return <LoadingSpinner />;
   }
 
-  if (user && user.role === 'admin') {
+  if (user && user.role === "admin") {
     return <Navigate to="/admin/dashboard" replace />;
   }
 
@@ -155,7 +156,15 @@ const TransactionsRouteRedirect = () => {
     return <Navigate to="/admin/dashboard" replace />;
   }
 
-  return <Navigate to={`/admin/store/${targetStore.id}/transactions`} replace />;
+  return (
+    <Navigate to={`/admin/store/${targetStore.id}/transactions`} replace />
+  );
+};
+const StoreRouteRedirect = ({ path }) => {
+  const { selectedStore, stores } = useStoreStore();
+  const targetStore = selectedStore || stores[0];
+  if (!targetStore) return <Navigate to="/admin/dashboard" replace />;
+  return <Navigate to={`/admin/store/${targetStore.id}/${path}`} replace />;
 };
 
 const SuppliersRouteRedirect = () => {
@@ -216,19 +225,26 @@ function AppRouter() {
         <Route path="store/:storeId/transactions" element={<Transactions />} />
         <Route path="suppliers" element={<SuppliersRouteRedirect />} />
         <Route path="store/:storeId/suppliers" element={<Suppliers />} />
-        <Route path="store/:storeId/suppliers/:id" element={<SupplierDetail />} />
+        <Route
+          path="store/:storeId/suppliers/:id"
+          element={<SupplierDetail />}
+        />
         <Route path="sales" element={<Sales />} />
         <Route path="expenses" element={<Expenses />} />
         <Route path="analyses" element={<Analyses />} />
         <Route path="stores" element={<Stores />} />
         <Route path="stores/:storeId" element={<StoreDetail />} />
+
+        {/* Expenses - Using store_id as requested */}
+        <Route
+          path="expenses"
+          element={<StoreRouteRedirect path="expenses" />}
+        />
+        <Route path="store/:store_id/expenses" element={<Expenses />} />
       </Route>
 
       {/* Shopkeeper Routes */}
-      <Route
-        path="/shopkeeper"
-        element={<ShopKeeperLayout />}
-      >
+      <Route path="/shopkeeper" element={<ShopKeeperLayout />}>
         {/* Redirect /shopkeeper to /shopkeeper/dashboard */}
         <Route index element={<Shopkeeper />} />
         <Route path="dashboard" element={<ShopkeeperDashboard />} />
