@@ -18,6 +18,8 @@ import Expenses from "../pages/admin/Expenses";
 import Analyses from "../pages/admin/Analyses";
 import Stores from "../pages/admin/Stores";
 import StoreDetail from "../pages/admin/StoreDetail";
+import AdminLoyalty from "../pages/admin/Loyalty";
+import AdminLoyaltyCustomerDetail from "../pages/admin/LoyaltyCustomerDetail";
 
 // Shopkeeper imports
 import ShopKeeperLayout from "../layouts/ShopKeeperLayout";
@@ -31,6 +33,10 @@ import ShopkeeperStaff from "../pages/shopkeeper/Staff";
 import ShopkeeperExpenses from "../pages/shopkeeper/Expenses";
 import Repair from "../pages/shopkeeper/Repair";
 import ShopkeeperAnalyses from "../pages/shopkeeper/Analyses";
+import ShopkeeperBrands from "../pages/shopkeeper/Brands";
+import ShopkeeperCategories from "../pages/shopkeeper/Categories";
+import ShopkeeperLoyalty from "../pages/shopkeeper/Loyalty";
+import ShopkeeperLoyaltyCustomerDetail from "../pages/shopkeeper/LoyaltyCustomerDetail";
 
 // Responsive loading spinner component
 const LoadingSpinner = () => (
@@ -247,6 +253,10 @@ function AppRouter() {
           element={<StoreRouteRedirect path="expenses" />}
         />
         <Route path="store/:store_id/expenses" element={<Expenses />} />
+
+        {/* Loyalty Program */}
+        <Route path="loyalty" element={<AdminLoyalty />} />
+        <Route path="loyalty/customer/:id" element={<AdminLoyaltyCustomerDetail />} />
       </Route>
 
       {/* Shopkeeper Routes */}
@@ -262,6 +272,10 @@ function AppRouter() {
         <Route path="staff" element={<ShopkeeperStaff />} />
         <Route path="expenses" element={<ShopkeeperExpenses />} />
         <Route path="repairs" element={<Repair />} />
+        <Route path="brands" element={<ShopkeeperBrands />} />
+        <Route path="categories" element={<ShopkeeperCategories />} />
+        <Route path="loyalty" element={<ShopkeeperLoyalty />} />
+        <Route path="loyalty/customer/:id" element={<ShopkeeperLoyaltyCustomerDetail />} />
       </Route>
 
       {/* Fallback root redirect */}
