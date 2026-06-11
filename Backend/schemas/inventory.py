@@ -75,6 +75,8 @@ class InventoryRead(BaseModel):
     selling_price: Decimal | None = None
     price: Decimal | None = None  # Alias for selling_price
     image_url: str | None = None
+    discount_percent: Decimal = Decimal("0.00")
+    warranty_months: int = 0
 
     # Nested type-specific details
     frame_product: FrameDetailsRead | None = None

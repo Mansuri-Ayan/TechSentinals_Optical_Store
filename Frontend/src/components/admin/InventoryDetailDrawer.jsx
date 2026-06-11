@@ -620,9 +620,15 @@ const InventoryDetailDrawer = ({ item, onClose, onApprove, onReject, isApproving
             <DetailRow label="Status"        value={sc.label} />
           </Section>
 
-          <Section icon={DollarSign} title="Pricing Details" color="rose">
+          <Section icon={DollarSign} title="Pricing & Warranty Details" color="rose">
             <DetailRow label="Cost Price"    value={item.cost_price    ? `₹${Number(item.cost_price).toLocaleString()}`    : null} />
             <DetailRow label="Selling Price" value={item.selling_price ? `₹${Number(item.selling_price).toLocaleString()}` : null} />
+            {item.discount_percent !== undefined && Number(item.discount_percent) > 0 && (
+              <DetailRow label="Default Discount" value={`${item.discount_percent}%`} />
+            )}
+            {item.warranty_months !== undefined && Number(item.warranty_months) > 0 && (
+              <DetailRow label="Warranty Duration" value={`${item.warranty_months} Months`} />
+            )}
             {profit !== null && <DetailRow label="Gross Profit" value={`₹${Number(profit).toLocaleString()}`} />}
             {margin !== null && <DetailRow label="Margin"       value={`${margin}%`} />}
           </Section>

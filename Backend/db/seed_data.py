@@ -283,7 +283,7 @@ OPTICIANS = [
         "password": "Optician@123",
         "employee_code": "OPT-EZ-001",
         "qualification": "M.Optom",
-        "joining_date": date(2025, 5, 10),
+        "joining_date": date(2025, 5, 10),   
     },
 ]
 
@@ -374,6 +374,8 @@ PRODUCTS = [
         "brand_index": 0,
         "cost_price": 3200.00,
         "selling_price": 5999.00,
+        "discount_percent": 15.00,
+        "warranty_months": 24,
         "type": "frame",
         "details": {
             "frame_type": "Full-Rim",
@@ -395,6 +397,8 @@ PRODUCTS = [
         "brand_index": 1,
         "cost_price": 1800.00,
         "selling_price": 3499.00,
+        "discount_percent": 10.00,
+        "warranty_months": 12,
         "type": "frame",
         "details": {
             "frame_type": "Half-Rim",
@@ -1213,6 +1217,8 @@ async def seed() -> None:
                     brand_id=brand_ids[data["brand_index"]],
                     cost_price=data["cost_price"],
                     selling_price=data["selling_price"],
+                    discount_percent=data.get("discount_percent", 0.00),
+                    warranty_months=data.get("warranty_months", 0),
                 )
                 session.add(product)
                 await session.flush()
@@ -1689,7 +1695,7 @@ async def seed() -> None:
                     Prescription.prescription_date == p_data["prescription_date"]
                 )
                 res = await session.execute(stmt)
-                existing = res.scalar_one_or_none()
+                existing = res.scalars().first()
                 if existing:
                     continue
 

@@ -288,12 +288,19 @@ async def reject_expense_endpoint(
 async def delete_expense_endpoint(
     expense_id: int,
     db: AsyncSession = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin),
+    current_user=Depends(get_current_user),
 ) -> None:
+    admin_id = _get_user_admin_id(current_user)
     expense = await get_expense(db, expense_id)
-    if not expense or expense.admin_id != current_admin.id:
+    if not expense or expense.admin_id != admin_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Expense record not found",
         )
+    if not isinstance(current_user, Admin):
+        if expense.owner_type != ExpenseOwnerType.STORE or expense.owner_id != current_user.store_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied to this store's expense records.",
+            )
     await soft_delete_expense(db, expense)

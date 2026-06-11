@@ -31,6 +31,8 @@ def _inventory_to_read(inv) -> InventoryRead:
         selling_price=selling_price,
         price=selling_price,
         image_url=product.image_url if product else None,
+        discount_percent=product.discount_percent if product else 0.00,
+        warranty_months=product.warranty_months if product else 0,
         frame_product=product.frame_product if product else None,
         lens_product=product.lens_product if product else None,
         accessory_product=product.accessory_product if product else None,
@@ -64,9 +66,6 @@ async def list_inventories(
     if not isinstance(current_user, Admin):
         owner_type = "STORE"
         owner_id = current_user.store_id
-    elif owner_type.upper() == "ADMIN" and owner_id is None:
-        # Aggregated warehouse view: show ALL inventory for this admin
-        owner_id = current_user.id
 
     result_dict = await get_inventories_by_owner(
         db,

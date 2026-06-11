@@ -209,12 +209,24 @@ const ProductCard = ({ item, onViewProduct, onViewDetails, onDelete }) => {
 
       {/* Card body */}
       <div className="p-4 flex flex-col flex-1 gap-2">
-        {/* Subcategory badge */}
-        <span
-          className={`self-start inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold border ${config.badge}`}
-        >
-          {item.subcategory}
-        </span>
+        {/* Badges row */}
+        <div className="flex flex-wrap gap-1.5">
+          <span
+            className={`self-start inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold border ${config.badge}`}
+          >
+            {item.subcategory}
+          </span>
+          {Number(item.discount_percent) > 0 && (
+            <span className="self-start inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold border bg-rose-50 text-rose-700 border-rose-200">
+              {item.discount_percent}% Off
+            </span>
+          )}
+          {Number(item.warranty_months) > 0 && (
+            <span className="self-start inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold border bg-blue-50 text-blue-700 border-blue-200">
+              {item.warranty_months}M Warranty
+            </span>
+          )}
+        </div>
 
         {/* Name */}
         <h3
@@ -472,6 +484,8 @@ const Inventory = () => {
       name: data.product_name,
       cost_price: Number(data.cost_price),
       selling_price: Number(data.selling_price),
+      discount_percent: Number(data.discount_percent || 0),
+      warranty_months: Number(data.warranty_months || 0),
       image_url: data.image || null,
       description: data.description || null,
       frame_details: data.frame_details || null,

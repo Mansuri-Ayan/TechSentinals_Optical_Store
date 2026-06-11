@@ -36,6 +36,8 @@ async def create_product(
         brand_id=payload.brand_id,
         cost_price=payload.cost_price,
         selling_price=payload.selling_price,
+        discount_percent=payload.discount_percent,
+        warranty_months=payload.warranty_months,
         image_url=payload.image_url,
     )
     db.add(product)

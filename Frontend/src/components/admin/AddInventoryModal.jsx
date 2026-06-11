@@ -61,6 +61,8 @@ const AddInventoryModal = ({ isOpen, onClose, onSubmit: onSubmitProp }) => {
       reorder_level: '',
       cost_price: '',
       selling_price: '',
+      discount_percent: '0.00',
+      warranty_months: '0',
       description: '',
       is_active: true,
       store_id: selectedStore?.id ? String(selectedStore.id) : '',
@@ -561,7 +563,7 @@ const AddInventoryModal = ({ isOpen, onClose, onSubmit: onSubmitProp }) => {
 
             {/* 4 – Pricing */}
             <section>
-              <SectionHeading num="4" label="Pricing Details" />
+              <SectionHeading num="4" label="Pricing & Warranty Details" />
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-4">
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-1.5">Cost Price (₹) <span className="text-red-500">*</span></label>
@@ -579,6 +581,24 @@ const AddInventoryModal = ({ isOpen, onClose, onSubmit: onSubmitProp }) => {
                     min: { value: 0, message: 'Price cannot be negative' },
                   })} type="number" min="0" step="0.01" disabled={isPending} placeholder="0.00" className={inputCls(!!errors.selling_price)} />
                   <FieldError message={errors.selling_price?.message} />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1.5">Discount (%)</label>
+                  <input {...register('discount_percent', {
+                    min: { value: 0, message: 'Discount cannot be negative' },
+                    max: { value: 100, message: 'Discount cannot exceed 100%' },
+                  })} type="number" min="0" max="100" step="0.01" disabled={isPending} placeholder="0.00" className={inputCls(!!errors.discount_percent)} />
+                  <FieldError message={errors.discount_percent?.message} />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1.5">Warranty (Months)</label>
+                  <input {...register('warranty_months', {
+                    min: { value: 0, message: 'Warranty cannot be negative' },
+                    validate: v => v === '' || Number.isInteger(Number(v)) || 'Enter a whole number',
+                  })} type="number" min="0" disabled={isPending} placeholder="0" className={inputCls(!!errors.warranty_months)} />
+                  <FieldError message={errors.warranty_months?.message} />
                 </div>
               </div>
             </section>

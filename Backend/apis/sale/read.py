@@ -122,7 +122,7 @@ async def list_sales_endpoint(
     date_to: str | None = Query(default=None),
     search: str | None = Query(default=None),
     page: int = Query(1, ge=1),
-    limit: int = Query(20, ge=1, le=100),
+    limit: int = Query(20, ge=1, le=10000),
     paginate: bool = Query(True),
     db: AsyncSession = Depends(get_db),
     current_user = Depends(get_current_user),

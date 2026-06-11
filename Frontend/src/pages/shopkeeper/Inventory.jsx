@@ -98,6 +98,8 @@ const Inventory = () => {
       description: item.product_description || '',
       status: getStatus(item.available_quantity, item.reorder_level),
       quantity: item.available_quantity,
+      discount_percent: Number(item.discount_percent || 0),
+      warranty_months: Number(item.warranty_months || 0),
     }));
   }, [kpiItems]);
 
@@ -368,9 +370,21 @@ const Inventory = () => {
 
                 {/* Body Content */}
                 <div className="p-4 flex flex-col flex-1 gap-1.5">
-                  <span className="self-start inline-flex items-center px-2 py-0.5 rounded-md text-[9px] font-extrabold border bg-slate-50 text-slate-600 border-slate-200">
-                    {item.subcategory}
-                  </span>
+                  <div className="flex flex-wrap gap-1">
+                    <span className="self-start inline-flex items-center px-2 py-0.5 rounded-md text-[9px] font-extrabold border bg-slate-50 text-slate-600 border-slate-200">
+                      {item.subcategory}
+                    </span>
+                    {Number(item.discount_percent) > 0 && (
+                      <span className="self-start inline-flex items-center px-2 py-0.5 rounded-md text-[9px] font-extrabold border bg-rose-50 text-rose-700 border-rose-200">
+                        {item.discount_percent}% Off
+                      </span>
+                    )}
+                    {Number(item.warranty_months) > 0 && (
+                      <span className="self-start inline-flex items-center px-2 py-0.5 rounded-md text-[9px] font-extrabold border bg-blue-50 text-blue-700 border-blue-200">
+                        {item.warranty_months}M Warranty
+                      </span>
+                    )}
+                  </div>
                   <h3 className="text-xs sm:text-sm font-bold text-slate-800 line-clamp-2 leading-snug group-hover:text-blue-600 transition-colors">
                     {item.product_name}
                   </h3>

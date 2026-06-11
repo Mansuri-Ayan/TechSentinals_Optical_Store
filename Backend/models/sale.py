@@ -216,6 +216,11 @@ class Sale(Base):
         cascade="all, delete-orphan",
         lazy="selectin",
     )
+    repairs = relationship(
+        "Repair",
+        back_populates="sale",
+        lazy="noload",
+    )
     # NOTE: loyalty_transactions relationship will be added
     # when the LoyaltyTransaction model is created in a future phase.
 

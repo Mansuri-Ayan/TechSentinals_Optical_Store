@@ -34,3 +34,6 @@ from models.sale_payment import SalePayment, SalePaymentMethod
 # ── Expense ───────────────────────────────────────────────────
 from models.expense import Expense, ExpenseOwnerType, ExpensePaymentMethod, ExpenseRecordedByType
 from models.expense_category import ExpenseCategory
+
+# ── Repair & Services ─────────────────────────────────────────
+from models.repair import Repair, RepairType, RepairStatus, RepairStaffType

@@ -238,6 +238,12 @@ class Admin(Base):
         cascade="all, delete-orphan",
         lazy="noload",
     )
+    repairs = relationship(
+        "Repair",
+        back_populates="admin",
+        cascade="all, delete-orphan",
+        lazy="noload",
+    )
 
     def __repr__(self) -> str:
         return (

@@ -94,6 +94,14 @@ class ProductCreate(BaseModel):
         ..., ge=0, decimal_places=2, examples=[4999.00],
         description="Retail selling price",
     )
+    discount_percent: Decimal = Field(
+        default=Decimal("0.00"), ge=0, le=100, decimal_places=2,
+        description="Default product discount percentage (0-100)",
+    )
+    warranty_months: int = Field(
+        default=0, ge=0,
+        description="Warranty duration in months (0 = no warranty)",
+    )
     image_url: str | None = Field(
         default=None, description="Product image URL",
     )
@@ -112,6 +120,8 @@ class ProductUpdate(BaseModel):
     brand_id: int | None = Field(default=None)
     cost_price: Decimal | None = Field(default=None, ge=0, decimal_places=2)
     selling_price: Decimal | None = Field(default=None, ge=0, decimal_places=2)
+    discount_percent: Decimal | None = Field(default=None, ge=0, le=100, decimal_places=2)
+    warranty_months: int | None = Field(default=None, ge=0)
     image_url: str | None = Field(default=None)
     is_active: bool | None = Field(default=None)
 
@@ -132,6 +142,8 @@ class ProductRead(BaseModel):
     brand_id: int | None = None
     cost_price: Decimal
     selling_price: Decimal
+    discount_percent: Decimal = Decimal("0.00")
+    warranty_months: int = 0
     image_url: str | None = None
     is_active: bool
     created_at: datetime

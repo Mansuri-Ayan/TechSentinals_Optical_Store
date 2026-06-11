@@ -34,7 +34,7 @@ async def me(
         data["first_name"] = current_user.owner_first_name
         data["last_name"] = current_user.owner_last_name
         data["full_name"] = f"{current_user.owner_first_name} {current_user.owner_last_name}"
-        data["store_name"] = "Central Warehouse"
+        data["store_name"] = current_user.business_name
         return data
     elif isinstance(current_user, Manager):
         data = ManagerRead.model_validate(current_user).model_dump()

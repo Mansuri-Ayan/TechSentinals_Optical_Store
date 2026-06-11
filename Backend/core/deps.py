@@ -141,3 +141,16 @@ async def get_current_admin(
             detail="Forbidden — Admin role required",
         )
     return current_user
+
+
+def get_user_admin_id(user) -> int:
+    if isinstance(user, Admin):
+        return user.id
+    if hasattr(user, "store") and user.store:
+        return user.store.admin_id
+    if hasattr(user, "admin_id"):
+        return user.admin_id
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Could not determine admin scoping for user",
+    )

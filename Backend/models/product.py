@@ -5,6 +5,7 @@ from sqlalchemy import (
     Column,
     DateTime,
     ForeignKey,
+    Integer,
     Numeric,
     String,
     Text,
@@ -89,6 +90,22 @@ class Product(Base):
         comment="Retail selling price",
     )
 
+    discount_percent = Column(
+        Numeric(5, 2),
+        nullable=False,
+        default=0,
+        server_default="0",
+        comment="Default product-level discount percentage (0-100)",
+    )
+
+    warranty_months = Column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+        comment="Warranty duration in months (0 = no warranty)",
+    )
+
     image_url = Column(
         Text,
         nullable=True,
@@ -171,6 +188,13 @@ class Product(Base):
     # Supplier catalogue
     supplier_products = relationship(
         "SupplierProduct",
+        back_populates="product",
+        lazy="noload",
+    )
+
+    # Sale items
+    sale_items = relationship(
+        "SaleItem",
         back_populates="product",
         lazy="noload",
     )

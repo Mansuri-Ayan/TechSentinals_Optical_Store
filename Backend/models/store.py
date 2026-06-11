@@ -179,6 +179,11 @@ class Store(Base):
         viewonly=True,
         lazy="noload",
     )
+    repairs = relationship(
+        "Repair",
+        back_populates="store",
+        lazy="noload",
+    )
 
     def __repr__(self) -> str:
         return (

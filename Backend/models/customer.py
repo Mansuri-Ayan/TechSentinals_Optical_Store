@@ -189,6 +189,11 @@ class Customer(Base):
         cascade="all, delete-orphan",
         lazy="noload",
     )
+    repairs = relationship(
+        "Repair",
+        back_populates="customer",
+        lazy="noload",
+    )
 
     def __repr__(self) -> str:
         return (

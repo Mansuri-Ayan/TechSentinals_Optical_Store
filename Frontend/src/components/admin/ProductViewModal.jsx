@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import {
   X, ShoppingCart, Package, Tag, Layers, Star,
   ChevronLeft, ChevronRight, CheckCircle, AlertTriangle, XCircle,
-  Store, Truck,
+  Store, Truck, Shield,
 } from 'lucide-react';
 
 /* ── gradient palette for placeholder images ── */
@@ -180,7 +180,7 @@ const ProductViewModal = ({ item, onClose, onPlaceOrder }) => {
             ))}
           </div>
 
-          {/* SKU + Supplier */}
+          {/* SKU + Supplier + Discount + Warranty */}
           <div className="flex items-center gap-3 flex-wrap">
             <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 text-slate-600 rounded-lg text-xs font-mono font-semibold">
               <Package className="w-3 h-3" />
@@ -190,6 +190,18 @@ const ProductViewModal = ({ item, onClose, onPlaceOrder }) => {
               <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 text-slate-600 rounded-lg text-xs font-semibold">
                 <Truck className="w-3 h-3" />
                 {item.supplier}
+              </span>
+            )}
+            {Number(item.discount_percent) > 0 && (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 text-rose-600 rounded-lg text-xs font-semibold border border-rose-100">
+                <Tag className="w-3 h-3" />
+                {item.discount_percent}% Off
+              </span>
+            )}
+            {Number(item.warranty_months) > 0 && (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg text-xs font-semibold border border-blue-100">
+                <Shield className="w-3 h-3" />
+                {item.warranty_months} Months Warranty
               </span>
             )}
           </div>

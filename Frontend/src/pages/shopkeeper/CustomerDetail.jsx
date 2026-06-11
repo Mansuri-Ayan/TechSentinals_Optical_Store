@@ -8,6 +8,8 @@ import {
 } from 'lucide-react';
 import { useCustomer, useCustomerMutations } from '../../hooks/useCustomers';
 import { useStoreStaff } from '../../hooks/useStaff';
+import { useRepairs, useRepairMutations } from '../../hooks/useRepairs';
+import { useAuthStore, useStoreStore } from '../../store/store';
 import { toast } from 'react-toastify';
 import AddOpticalModal from '../../components/shopkeeper/AddOpticalModal';
 import AddOrderModal from '../../components/shopkeeper/AddOrderModal';
@@ -76,10 +78,16 @@ const CustomerDetail = () => {
   const [showOrderModal, setShowOrderModal] = useState(false);
   const [showWarrantyModal, setShowWarrantyModal] = useState(false);
   const [selectedClaimOrder, setSelectedClaimOrder] = useState('');
-  const [claimsList, setClaimsList] = useState(() => {
-    const all = JSON.parse(localStorage.getItem('warranty_claims') || '[]');
-    return all.filter(item => Number(item.customerId) === Number(customerId));
-  });
+
+  // Fetch customer's repair records from backend (warranty claims)
+  const { user } = useAuthStore();
+  const { stores, selectedStore } = useStoreStore();
+  const activeStoreId = selectedStore?.id || user?.store_id || c?.storeId || stores?.[0]?.id || 1;
+  const { data: repairsData, isLoading: repairsLoading } = useRepairs(
+    customerId ? { customer_id: customerId, limit: 50 } : {}
+  );
+  const claimsList = repairsData?.items?.filter(r => r.is_warranty) || [];
+  const { createRepairAsync, isCreating: isSubmittingClaim } = useRepairMutations();
 
   const { staff } = useStoreStaff(c?.storeId || 1);
 
@@ -101,34 +109,43 @@ const CustomerDetail = () => {
     return 'Rahul Sharma';
   };
 
-  const isOrderInWarranty = (orderDate) => {
-    if (!orderDate) return false;
-    const orderTime = new Date(orderDate).getTime();
-    const oneYearAgo = new Date();
-    oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
-    return orderTime >= oneYearAgo.getTime();
+  const isOrderInWarranty = (orderDate, warrantyMonths = 12) => {
+    if (!orderDate || !warrantyMonths) return false;
+    const expiry = new Date(orderDate);
+    expiry.setMonth(expiry.getMonth() + warrantyMonths);
+    return new Date() <= expiry;
+  };
+
+  const getOrderWarrantyMonths = (order) => {
+    // Use product's warranty_months if available, else fallback to 12
+    return order?.items?.[0]?.warrantyMonths ?? 12;
   };
 
   const hasActiveWarranty = (orders) => {
     if (!orders || orders.length === 0) return false;
-    return orders.some(o => o.date && isOrderInWarranty(o.date));
+    return orders.some(o => o.date && isOrderInWarranty(o.date, getOrderWarrantyMonths(o)));
   };
 
-  const handleAddWarrantyClaim = (claimData) => {
-    const all = JSON.parse(localStorage.getItem('warranty_claims') || '[]');
-    const newClaim = {
-      id: 'CLM-' + Math.floor(100000 + Math.random() * 900000),
-      customerId: Number(customerId),
-      date: claimData.date,
-      orderId: claimData.orderId,
-      claimTarget: claimData.claimTarget,
-      note: claimData.note,
-    };
-    all.push(newClaim);
-    localStorage.setItem('warranty_claims', JSON.stringify(all));
-    setClaimsList(all.filter(item => Number(item.customerId) === Number(customerId)));
-    setShowWarrantyModal(false);
-    toast.success('Warranty claim recorded successfully.');
+  const handleAddWarrantyClaim = async (claimData) => {
+    const selectedOrder = c.orders?.find(o => String(o.id) === String(claimData.orderId));
+    try {
+      await createRepairAsync({
+        store_id: activeStoreId,
+        customer_id: Number(customerId),
+        sale_id: selectedOrder?.dbId || null,
+        customer_name: null,
+        repair_type: 'WARRANTY_SERVICE',
+        is_warranty: true,
+        description: `[${claimData.claimTarget}] ${claimData.note}`,
+        estimated_cost: 0,
+        advance_paid: 0,
+        received_date: claimData.date || new Date().toISOString().split('T')[0],
+        notes: claimData.note,
+      });
+      setShowWarrantyModal(false);
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   const handleUpdatePrescription = async (prescriptionData) => {
@@ -483,13 +500,13 @@ const CustomerDetail = () => {
                             <td className="px-4 py-3">
                               <div className="flex flex-col gap-1 items-start">
                                 <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-bold border ${
-                                  isOrderInWarranty(order.date)
+                                  isOrderInWarranty(order.date, getOrderWarrantyMonths(order))
                                     ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
                                     : 'text-slate-600 bg-slate-105 border-slate-200'
                                 }`}>
-                                  {isOrderInWarranty(order.date) ? 'In Warranty' : 'Out of Warranty'}
+                                  {isOrderInWarranty(order.date, getOrderWarrantyMonths(order)) ? 'In Warranty' : 'Out of Warranty'}
                                 </span>
-                                {isOrderInWarranty(order.date) && (
+                                {isOrderInWarranty(order.date, getOrderWarrantyMonths(order)) && (
                                   <button
                                     onClick={() => {
                                       setSelectedClaimOrder(order.id);
@@ -606,14 +623,14 @@ const CustomerDetail = () => {
                           <div>
                             <p className="text-slate-400 font-semibold mb-0.5">Warranty</p>
                             <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-bold border ${
-                              isOrderInWarranty(order.date)
+                              isOrderInWarranty(order.date, getOrderWarrantyMonths(order))
                                 ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
                                 : 'text-slate-600 bg-slate-105 border-slate-205'
                             }`}>
-                              {isOrderInWarranty(order.date) ? 'In Warranty' : 'Out of Warranty'}
+                              {isOrderInWarranty(order.date, getOrderWarrantyMonths(order)) ? 'In Warranty' : 'Out of Warranty'}
                             </span>
                           </div>
-                          {isOrderInWarranty(order.date) && (
+                          {isOrderInWarranty(order.date, getOrderWarrantyMonths(order)) && (
                             <div>
                               <p className="text-slate-400 font-semibold mb-0.5">Action</p>
                               <button
@@ -903,7 +920,12 @@ const CustomerDetail = () => {
         {/* ── WARRANTY CLAIMS TAB ── */}
         {activeTab === 'warranty' && (
           <div className="space-y-6">
-            {!claimsList || claimsList.length === 0 ? (
+            {repairsLoading ? (
+              <div className="text-center py-10 text-slate-400">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-500 mx-auto mb-3" />
+                <p className="text-sm font-semibold">Loading warranty claims...</p>
+              </div>
+            ) : !claimsList || claimsList.length === 0 ? (
               <div className="text-center py-16 text-slate-400">
                 <Wrench className="w-12 h-12 mx-auto mb-4 text-slate-200" />
                 <p className="font-bold text-base text-slate-700">No warranty claims logged</p>
@@ -916,23 +938,30 @@ const CustomerDetail = () => {
                     <div className="flex justify-between items-start mb-3 border-b border-slate-200/60 pb-2">
                       <div>
                         <span className="text-[10px] bg-slate-200 text-slate-750 font-mono font-bold px-2 py-0.5 rounded">
-                          {claim.id}
+                          {claim.repair_number}
                         </span>
-                        <p className="text-[10px] text-slate-400 font-semibold mt-1">Order Ref: <span className="font-mono text-slate-600 font-bold">{claim.orderId || 'General Claim'}</span></p>
+                        <p className="text-[10px] text-slate-400 font-semibold mt-1">Sale Ref: <span className="font-mono text-slate-600 font-bold">{claim.sale_invoice_number || 'General Claim'}</span></p>
                       </div>
-                      <span className="text-xs text-slate-400 font-semibold">{fmtDate(claim.date)}</span>
+                      <span className="text-xs text-slate-400 font-semibold">{fmtDate(claim.received_date || claim.created_at)}</span>
                     </div>
                     
                     <div className="space-y-2 text-xs">
                       <div>
-                        <p className="text-slate-400 font-semibold mb-0.5">Claim Target</p>
+                        <p className="text-slate-400 font-semibold mb-0.5">Repair Type</p>
                         <span className="inline-block px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 font-bold text-[10px]">
-                          {claim.claimTarget}
+                          {claim.repair_type?.replace('_', ' ') || 'WARRANTY SERVICE'}
                         </span>
+                        <span className={`ml-2 inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                          claim.status === 'COMPLETED' || claim.status === 'DELIVERED'
+                            ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
+                            : claim.status === 'IN_PROGRESS'
+                            ? 'text-blue-700 bg-blue-50 border-blue-200'
+                            : 'text-slate-700 bg-slate-50 border-slate-200'
+                        }`}>{claim.status?.replace('_', ' ')}</span>
                       </div>
                       <div>
-                        <p className="text-slate-400 font-semibold mb-0.5">Repair Description & Notes</p>
-                        <p className="text-slate-750 font-medium whitespace-pre-wrap">{claim.note || 'No notes provided.'}</p>
+                        <p className="text-slate-400 font-semibold mb-0.5">Description & Notes</p>
+                        <p className="text-slate-700 font-medium whitespace-pre-wrap">{claim.description || claim.notes || 'No details provided.'}</p>
                       </div>
                     </div>
                   </div>

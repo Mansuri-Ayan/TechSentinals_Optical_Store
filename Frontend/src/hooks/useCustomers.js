@@ -41,6 +41,8 @@ const mapCustomer = (c) => {
     totalAmount: c.total_amount || 0,
     outstandingBalance: c.outstanding_balance || 0,
     status: c.status || 'Active',
+    storeId: c.store_id,
+    firstVisitStoreId: c.first_visit_store_id,
     storeName: c.store_name,
     firstVisitStoreName: c.first_visit_store_name,
     orders: c.orders || [],

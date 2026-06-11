@@ -334,7 +334,7 @@ const Analyses = () => {
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto animate-fade-in font-sans overflow-x-hidden space-y-6 sm:space-y-8 bg-transparent">
-      
+
       {/* Analytics Page Header */}
       <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 border-b border-slate-100 pb-5 flex-shrink-0">
         <div className="space-y-1.5">
@@ -402,7 +402,7 @@ const Analyses = () => {
         </div>
       ) : (
         <div className="space-y-6 sm:space-y-8">
-          
+
           {/* Analytics Cards at Top */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
             {[
@@ -425,7 +425,7 @@ const Analyses = () => {
               </div>
             ))}
           </div>
-          
+
           {/* Row 1: Sales Trend (Large 2/3) + Sales Status (Medium 1/3) */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2">
@@ -482,10 +482,9 @@ const Analyses = () => {
                 {bestPerformingStores.map((store, idx) => (
                   <div key={store.name} className="flex items-center justify-between gap-3 p-2.5 hover:bg-slate-50 rounded-2xl border border-transparent hover:border-slate-100/50 transition-all">
                     <div className="flex items-center gap-3 min-w-0">
-                      <span className={`w-5 h-5 rounded flex items-center justify-center font-black text-[10px] flex-shrink-0 ${
-                        idx === 0 ? 'bg-amber-50 text-amber-700 border border-amber-100' :
-                        idx === 1 ? 'bg-slate-50 text-slate-700 border border-slate-200/50' : 'bg-orange-50 text-orange-700 border border-orange-100'
-                      }`}>
+                      <span className={`w-5 h-5 rounded flex items-center justify-center font-black text-[10px] flex-shrink-0 ${idx === 0 ? 'bg-amber-50 text-amber-700 border border-amber-100' :
+                          idx === 1 ? 'bg-slate-50 text-slate-700 border border-slate-200/50' : 'bg-orange-50 text-orange-700 border border-orange-100'
+                        }`}>
                         {idx + 1}
                       </span>
                       <span className="text-xs font-bold text-slate-800 truncate">{store.name}</span>

@@ -3,7 +3,7 @@ import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Users, LogOut, Glasses, ChevronDown, Check, X,
   Archive, Tag, Layers, ArrowRightLeft, Truck, ShoppingCart, Receipt,
-  Store, ChevronLeft, ChevronRight, BarChart3, Warehouse
+  Store, ChevronLeft, ChevronRight, BarChart3
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useAuthStore, useStoreStore } from '../../store/store';
@@ -61,21 +61,11 @@ const Sidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) => {
   const { logout, isLoggingOut } = useAuth();
   const { user } = useAuthStore();
 
-  // Inject Central Warehouse as a virtual store entry
   useEffect(() => {
-    if (fetchedStores && fetchedStores.length > 0) {
-      if (user?.role === 'admin') {
-        const warehouseEntry = { id: 'warehouse', store_name: '🏭 Central Warehouse', isWarehouse: true };
-        const hasWarehouse = fetchedStores.some((s) => s.id === 'warehouse');
-        const allStores = hasWarehouse ? fetchedStores : [warehouseEntry, ...fetchedStores];
-        setStores(allStores);
-      } else {
-        setStores(fetchedStores);
-      }
-    } else {
+    if (fetchedStores) {
       setStores(fetchedStores);
     }
-  }, [fetchedStores, setStores, user]);
+  }, [fetchedStores, setStores]);
 
   // Set default selected store
   useEffect(() => {
@@ -108,9 +98,8 @@ const Sidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) => {
   }, [location.pathname, onClose]);
 
   const currentStore = selectedStore || stores[0];
-  const isWarehouse = currentStore?.id === 'warehouse' || currentStore?.isWarehouse;
   const getStoreName = (store) => store?.store_name || store?.name || 'Select Store';
-  const staffRoute = currentStore && !isWarehouse ? `/admin/store/${currentStore.id}/staff` : '/admin/dashboard';
+  const staffRoute = currentStore ? `/admin/store/${currentStore.id}/staff` : '/admin/dashboard';
   const inventoryRoute = currentStore ? `/admin/store/${currentStore.id}/inventory` : '/admin/dashboard';
   const brandsRoute = currentStore ? `/admin/store/${currentStore.id}/brands` : '/admin/dashboard';
   const categoriesRoute = currentStore ? `/admin/store/${currentStore.id}/categories` : '/admin/dashboard';
@@ -307,7 +296,6 @@ const Sidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) => {
             {!isCollapsed && <span className="font-medium text-sm">Stores</span>}
           </NavLink>
 
-          {!isWarehouse && (
           <NavLink
             to={staffRoute}
             title={isCollapsed ? "Staff Directory" : undefined}
@@ -321,7 +309,6 @@ const Sidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) => {
             <Users className={`w-5 h-5 transition-transform group-hover:scale-110 flex-shrink-0 ${isCollapsed ? '' : 'mr-3'}`} />
             {!isCollapsed && <span className="font-medium text-sm">Staff Directory</span>}
           </NavLink>
-          )}
 
           <NavLink
             to={inventoryRoute}

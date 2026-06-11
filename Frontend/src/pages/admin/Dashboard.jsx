@@ -118,7 +118,7 @@ const Dashboard = () => {
     return data?.branch_order_comparisons || [];
   }, [data]);
 
-  const branchPerformanceMax = Math.max(...branchPerformanceData.map(d => d.sales), 1);
+  const branchPerformanceMax = Math.max(...branchPerformanceData.map(d => d.orders), 1);
 
   /* ── 4. Ranked List: Best Performing Stores ── */
   const bestPerformingStores = useMemo(() => {
