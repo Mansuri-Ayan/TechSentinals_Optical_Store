@@ -51,6 +51,12 @@ async def purchase_endpoint(
     db: AsyncSession = Depends(get_db),
     current_admin: Admin = Depends(get_current_admin),
 ) -> TransactionRead:
+    # Resolve owner: default to admin warehouse if not specified
+    ot = (payload.owner_type or "ADMIN").upper()
+    oid = payload.owner_id
+    if ot == "ADMIN":
+        oid = current_admin.id
+
     txn = await purchase_stock(
         db,
         admin_id=current_admin.id,
@@ -58,6 +64,8 @@ async def purchase_endpoint(
         quantity=payload.quantity,
         purchase_price=payload.purchase_price,
         created_by=current_admin.id,
+        owner_type=ot,
+        owner_id=oid,
         remarks=payload.remarks,
     )
     return _txn_to_read(txn)

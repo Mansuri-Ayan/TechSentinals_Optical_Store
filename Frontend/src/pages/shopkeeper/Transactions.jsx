@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import TransactionDetailModal from '../../components/admin/suppliers/TransactionDetailModal';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -7,19 +7,19 @@ import {
   X as XIcon, Building2, Store, Package, Filter,
   CheckCircle, Clock, XCircle, AlertTriangle, Tag,
   Layers, RotateCcw, ShoppingCart, TrendingUp, Truck,
-  RefreshCw, Trash2, Eye, IndianRupee, FileText,
+  RefreshCw, Trash2, FileText, IndianRupee,
 } from 'lucide-react';
 import Pagination from '../../components/shared/Pagination';
-import { useStoreStore, useAuthStore } from '../../store/store';
-import { useInventory } from '../../hooks/useInventory';
+import { useAuthStore } from '../../store/store';
 import { useTransactions } from '../../hooks/useTransactions';
 import { useCategories } from '../../hooks/useCategories';
 import { useProducts } from '../../hooks/useProducts';
+import { useStores } from '../../hooks/useStores';
 import { getInventoryApi } from '../../api/inventory/inventory.api';
 
 /* ─────────────────────────────────────────────────────────
-   CONSTANTS & MOCK DATA
-───────────────────────────────────────────────────────── */
+   CONSTANTS
+   ───────────────────────────────────────────────────────── */
 const TRANSACTION_TYPES = [
   { value: 'Inventory Transfer', icon: ArrowRightLeft, color: 'text-blue-600 bg-blue-50 border-blue-200' },
   { value: 'Sale', icon: ShoppingCart, color: 'text-emerald-600 bg-emerald-50 border-emerald-200' },
@@ -38,30 +38,18 @@ const STATUS_CONFIG = {
   Failed: { color: 'text-red-700 bg-red-50 border-red-200', dot: 'bg-red-500', icon: AlertTriangle },
 };
 
-// Tab definitions: key used to filter by transfer direction
 const TABS = [
   { id: 'all', label: 'All Transactions', icon: ArrowRightLeft },
-  { id: 'admin-to-branch', label: 'Admin → Branch', icon: Truck },
-  { id: 'branch-to-branch', label: 'Branch → Branch', icon: RefreshCw },
-  { id: 'branch-to-admin', label: 'Branch → Admin', icon: Building2 },
-  { id: 'pending-requests', label: 'Pending Requests', icon: Clock },
+  { id: 'incoming', label: 'Incoming', icon: Truck },
+  { id: 'outgoing', label: 'Outgoing', icon: RefreshCw },
+  { id: 'pending', label: 'Pending Requests', icon: Clock },
 ];
-
-// Helper: classify a transaction into a tab
-const classifyTab = (tx) => {
-  const senderIsAdmin = tx.sender.toLowerCase().includes('admin');
-  const receiverIsAdmin = tx.receiver.toLowerCase().includes('admin');
-  if (senderIsAdmin && !receiverIsAdmin) return 'admin-to-branch';
-  if (!senderIsAdmin && receiverIsAdmin) return 'branch-to-admin';
-  if (!senderIsAdmin && !receiverIsAdmin) return 'branch-to-branch';
-  return 'other';
-};
 
 const ITEMS_PER_PAGE = 10;
 
 /* ─────────────────────────────────────────────────────────
    SUB-COMPONENTS
-───────────────────────────────────────────────────────── */
+   ───────────────────────────────────────────────────────── */
 const StatusBadge = ({ status, rejectionReason }) => {
   const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.Pending;
   return (
@@ -119,56 +107,60 @@ const Section = ({ icon: Icon, title, children, color = 'emerald' }) => {
 };
 
 /* ─────────────────────────────────────────────────────────
-   NEW TRANSACTION MODAL
-───────────────────────────────────────────────────────── */
+   NEW TRANSACTION MODAL (MANAGER VERSION)
+   ───────────────────────────────────────────────────────── */
 const EMPTY_FORM = {
-  sender: '',
-  receiver: '',
+  mode: 'request', // 'request' (pull), 'send' (push), or 'purchase'
+  targetStore: '', // admin warehouse or another store ID
   categoryId: '',
   product: '',
   quantity: '',
-  type: 'Inventory Transfer',
   purchasePrice: '',
   remarks: '',
 };
 
-const TRANSACTION_TYPE_OPTIONS = [
-  { value: 'Inventory Transfer', label: 'Inventory Transfer' },
-  { value: 'Purchase', label: 'Purchase' },
-  { value: 'Damage', label: 'Damage' },
-  { value: 'Loss', label: 'Loss' },
-  { value: 'Sale', label: 'Sale' },
-  { value: 'Return', label: 'Return' },
-];
-
 const NewTransactionModal = ({
   isOpen,
   onClose,
-  onSubmit,
-  currentStore,
+  onRequest,
+  onPush,
+  onPurchase,
+  currentUser,
   stores,
   isSubmitting,
 }) => {
-  const { user } = useAuthStore();
   const [form, setForm] = useState(EMPTY_FORM);
   const [errors, setErrors] = useState({});
 
   const { categories } = useCategories(null, { limit: 100 });
 
-  const senderType = form.sender === 'admin' ? 'ADMIN' : 'STORE';
-  const senderIdVal = form.sender === 'admin' ? user?.id : Number(form.sender);
-
-  const { data: inventoryData, isLoading: isLoadingInventory } = useQuery({
-    queryKey: ['inventory', senderType, senderIdVal],
+  // If mode is 'send', we show OUR store's inventory
+  const { data: ownInventoryData, isLoading: isLoadingOwnInventory } = useQuery({
+    queryKey: ['inventory', 'STORE', currentUser?.store_id],
     queryFn: () => getInventoryApi({
-      owner_type: senderType,
-      owner_id: senderIdVal,
+      owner_type: 'STORE',
+      owner_id: currentUser?.store_id,
       paginate: false
     }),
-    enabled: isOpen && !!form.sender && (senderType === 'ADMIN' ? !!user?.id : !!senderIdVal) && form.type !== 'Purchase',
+    enabled: isOpen && form.mode === 'send' && !!currentUser?.store_id,
   });
 
-  const inventoryItems = inventoryData?.items || [];
+  const ownInventoryItems = ownInventoryData?.items || [];
+
+  // If mode is 'request', fetch source inventory (Admin Warehouse or sister store)
+  const sourceOwnerType = form.targetStore === 'admin' ? 'ADMIN' : 'STORE';
+  const sourceOwnerId = form.targetStore === 'admin' ? 1 : Number(form.targetStore);
+  const { data: sourceInventoryData, isLoading: isLoadingSourceInventory } = useQuery({
+    queryKey: ['inventory', sourceOwnerType, sourceOwnerId],
+    queryFn: () => getInventoryApi({
+      owner_type: sourceOwnerType,
+      owner_id: sourceOwnerId,
+      paginate: false
+    }),
+    enabled: isOpen && form.mode === 'request' && !!form.targetStore,
+  });
+
+  const sourceInventoryItems = sourceInventoryData?.items || [];
 
   const { products: catalogProducts } = useProducts({
     category_id: form.categoryId ? Number(form.categoryId) : null,
@@ -178,62 +170,45 @@ const NewTransactionModal = ({
 
   useEffect(() => {
     if (isOpen) {
-      setForm({
-        ...EMPTY_FORM,
-        sender: currentStore?.id ? String(currentStore.id) : '',
-      });
+      setForm(EMPTY_FORM);
       setErrors({});
     }
-  }, [isOpen, currentStore]);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
   const set = (key, val) => {
-    setForm(prev => {
-      const next = {
-        ...prev,
-        [key]: val,
-        ...(key === 'type' ? { product: '', quantity: '', purchasePrice: '', receiver: '' } : {}),
-        ...(key === 'sender' ? { product: '', quantity: '', receiver: prev.receiver === val ? '' : prev.receiver } : {}),
-        ...(key === 'categoryId' ? { product: '' } : {}),
-      };
-      return next;
-    });
+    setForm(prev => ({
+      ...prev,
+      [key]: val,
+      ...(key === 'mode' ? { product: '', quantity: '', targetStore: '', purchasePrice: '' } : {}),
+      ...(key === 'categoryId' ? { product: '' } : {}),
+      ...(key === 'targetStore' ? { product: '' } : {}),
+    }));
     setErrors(prev => ({ ...prev, [key]: '' }));
   };
 
   const validate = () => {
     const e = {};
-    const type = form.type;
-
+    if (form.mode !== 'purchase' && !form.targetStore) {
+      e.targetStore = form.mode === 'request' ? 'Source store/warehouse is required' : 'Destination is required';
+    }
     if (!form.product) e.product = 'Product is required';
     if (!form.quantity || isNaN(form.quantity) || Number(form.quantity) < 1) {
       e.quantity = 'Enter a valid quantity (≥ 1)';
     }
 
-    if (type === 'Inventory Transfer') {
-      if (!form.sender) e.sender = 'Sender store is required';
-      if (!form.receiver) e.receiver = 'Receiver store is required';
-      if (form.sender && form.receiver && form.sender === form.receiver) {
-        e.receiver = 'Sender and receiver must be different';
-      }
-
-      const selectedItem = inventoryItems.find(item => String(item.product_id) === String(form.product));
+    if (form.mode === 'send') {
+      const selectedItem = ownInventoryItems.find(item => String(item.product_id) === String(form.product));
       if (selectedItem && Number(form.quantity) > Number(selectedItem.available_quantity || 0)) {
-        e.quantity = `Only ${selectedItem.available_quantity || 0} available in sender stock`;
+        e.quantity = `Only ${selectedItem.available_quantity || 0} available in your store stock`;
       }
-    } else if (type === 'Purchase') {
+    }
+
+    if (form.mode === 'purchase') {
       if (!form.purchasePrice || isNaN(form.purchasePrice) || Number(form.purchasePrice) <= 0) {
         e.purchasePrice = 'Enter a valid purchase price (> 0)';
       }
-    } else if (['Damage', 'Loss', 'Sale'].includes(type)) {
-      if (!form.sender) e.sender = 'Affected store/owner is required';
-      const selectedItem = inventoryItems.find(item => String(item.product_id) === String(form.product));
-      if (selectedItem && Number(form.quantity) > Number(selectedItem.available_quantity || 0)) {
-        e.quantity = `Only ${selectedItem.available_quantity || 0} available in stock`;
-      }
-    } else if (type === 'Return') {
-      if (!form.sender) e.sender = 'Affected store/owner is required';
     }
 
     setErrors(e);
@@ -244,43 +219,33 @@ const NewTransactionModal = ({
     e.preventDefault();
     if (!validate()) return;
 
-    let payload = {};
-    const type = form.type;
-
-    if (type === 'Inventory Transfer') {
-      payload = {
-        product_id: Number(form.product),
-        quantity: Number(form.quantity),
-        from_owner_type: form.sender === 'admin' ? 'ADMIN' : 'STORE',
-        from_owner_id: form.sender === 'admin' ? user?.id : Number(form.sender),
-        to_owner_type: form.receiver === 'admin' ? 'ADMIN' : 'STORE',
-        to_owner_id: form.receiver === 'admin' ? user?.id : Number(form.receiver),
-        remarks: form.remarks || null,
-      };
-    } else if (type === 'Purchase') {
-      payload = {
-        product_id: Number(form.product),
-        quantity: Number(form.quantity),
-        purchase_price: Number(form.purchasePrice),
-        remarks: form.remarks || null,
-      };
-    } else {
-      payload = {
-        product_id: Number(form.product),
-        owner_type: form.sender === 'admin' ? 'ADMIN' : 'STORE',
-        owner_id: form.sender === 'admin' ? user?.id : Number(form.sender),
-        quantity: Number(form.quantity),
-        remarks: form.remarks || null,
-      };
-    }
-
     try {
-      await onSubmit({
-        type: type === 'Inventory Transfer' ? 'TRANSFER' : type.toUpperCase(),
-        payload,
-      });
-      setForm(EMPTY_FORM);
-      setErrors({});
+      if (form.mode === 'request') {
+        const isFromAdmin = form.targetStore === 'admin';
+        await onRequest({
+          product_id: Number(form.product),
+          quantity: Number(form.quantity),
+          from_owner_type: isFromAdmin ? 'ADMIN' : 'STORE',
+          from_owner_id: isFromAdmin ? 1 : Number(form.targetStore),
+          remarks: form.remarks || null,
+        });
+      } else if (form.mode === 'send') {
+        const isToAdmin = form.targetStore === 'admin' || form.targetStore === '0';
+        await onPush({
+          product_id: Number(form.product),
+          quantity: Number(form.quantity),
+          to_store_id: isToAdmin ? 0 : Number(form.targetStore),
+          remarks: form.remarks || null,
+        });
+      } else if (form.mode === 'purchase') {
+        await onPurchase({
+          product_id: Number(form.product),
+          quantity: Number(form.quantity),
+          purchase_price: Number(form.purchasePrice),
+          remarks: form.remarks || null,
+        });
+      }
+      handleClose();
     } catch {
     }
   };
@@ -297,14 +262,23 @@ const NewTransactionModal = ({
       : 'border-slate-200 focus:ring-blue-500/10 focus:border-blue-500'
     }`;
 
-  const storeOptions = [
-    { id: 'admin', name: 'Admin Warehouse' },
-    ...stores.map(st => ({ id: String(st.id), name: st.store_name || st.name || `Store #${st.id}` }))
-  ];
+  // Filter other stores for destination dropdown
+  const otherStores = stores.filter(st => String(st.id) !== String(currentUser?.store_id));
 
-  const productOptions = form.type === 'Purchase'
-    ? catalogProducts
-    : inventoryItems.filter(item => !form.categoryId || String(item.category_id) === String(form.categoryId));
+  // Determine options for products based on mode
+  let productOptions = [];
+  let isLoadingProducts = false;
+  if (form.mode === 'request') {
+    // Show inventory items from the selected source (Admin Warehouse or sister store)
+    productOptions = sourceInventoryItems.filter(item => !form.categoryId || String(item.category_id) === String(form.categoryId));
+    isLoadingProducts = isLoadingSourceInventory;
+  } else if (form.mode === 'send') {
+    productOptions = ownInventoryItems.filter(item => !form.categoryId || String(item.category_id) === String(form.categoryId));
+    isLoadingProducts = isLoadingOwnInventory;
+  } else {
+    // Purchase — show full catalog
+    productOptions = catalogProducts;
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 font-sans">
@@ -317,8 +291,8 @@ const NewTransactionModal = ({
               <ArrowRightLeft className="w-4 h-4 text-blue-600" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-slate-900">New Transaction</h2>
-              <p className="text-xs text-slate-500">Record a new stock movement or adjustment</p>
+              <h2 className="text-base font-bold text-slate-900">{form.mode === 'purchase' ? 'Supplier Purchase' : 'New Stock Transfer'}</h2>
+              <p className="text-xs text-slate-500">{form.mode === 'purchase' ? 'Record a purchase into your store inventory' : 'Request stock or send inventory to other branches'}</p>
             </div>
           </div>
           <button onClick={handleClose} className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors">
@@ -328,55 +302,74 @@ const NewTransactionModal = ({
 
         <form onSubmit={handleSubmit} className="overflow-y-auto flex-1">
           <div className="px-5 sm:px-6 py-5 space-y-4">
+            
+            {/* Mode selection (Tabs) */}
             <div>
-              <label className="text-xs font-semibold text-slate-600 mb-1.5 block">Transaction Type <span className="text-red-500">*</span></label>
-              <select value={form.type} onChange={e => set('type', e.target.value)} className={inputCls('type')}>
-                {TRANSACTION_TYPE_OPTIONS.map(opt => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                ))}
-              </select>
-              {errors.type && <p className="text-xs text-red-500 mt-1">{errors.type}</p>}
+              <label className="text-xs font-semibold text-slate-600 mb-1.5 block">Action Type</label>
+              <div className="grid grid-cols-3 gap-2 bg-slate-50 p-1.5 rounded-xl border border-slate-150">
+                <button
+                  type="button"
+                  onClick={() => set('mode', 'request')}
+                  className={`py-2 px-3 text-xs font-bold rounded-lg transition-all ${
+                    form.mode === 'request'
+                      ? 'bg-white text-blue-700 shadow-sm border border-slate-200'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  Request Stock
+                </button>
+                <button
+                  type="button"
+                  onClick={() => set('mode', 'send')}
+                  className={`py-2 px-3 text-xs font-bold rounded-lg transition-all ${
+                    form.mode === 'send'
+                      ? 'bg-white text-blue-700 shadow-sm border border-slate-200'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  Send Stock
+                </button>
+                <button
+                  type="button"
+                  onClick={() => set('mode', 'purchase')}
+                  className={`py-2 px-3 text-xs font-bold rounded-lg transition-all ${
+                    form.mode === 'purchase'
+                      ? 'bg-white text-purple-700 shadow-sm border border-slate-200'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  Purchase
+                </button>
+              </div>
             </div>
 
-            {form.type !== 'Purchase' ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="text-xs font-semibold text-slate-600 mb-1.5 block">
-                    {form.type === 'Inventory Transfer' ? 'Sender Store' : 'Affected Store/Owner'} <span className="text-red-500">*</span>
-                  </label>
-                  <select value={form.sender} onChange={e => set('sender', e.target.value)} className={inputCls('sender')}>
-                    <option value="">Select store/warehouse...</option>
-                    {storeOptions.map(opt => (
-                      <option key={opt.id} value={opt.id}>{opt.name}</option>
-                    ))}
-                  </select>
-                  {errors.sender && <p className="text-xs text-red-500 mt-1">{errors.sender}</p>}
-                </div>
-
-                {form.type === 'Inventory Transfer' ? (
-                  <div>
-                    <label className="text-xs font-semibold text-slate-600 mb-1.5 block">Receiver Store <span className="text-red-500">*</span></label>
-                    <select value={form.receiver} onChange={e => set('receiver', e.target.value)} className={inputCls('receiver')}>
-                      <option value="">Select receiver...</option>
-                      {storeOptions.filter(opt => opt.id !== form.sender).map(opt => (
-                        <option key={opt.id} value={opt.id}>{opt.name}</option>
-                      ))}
-                    </select>
-                    {errors.receiver && <p className="text-xs text-red-500 mt-1">{errors.receiver}</p>}
-                  </div>
-                ) : null}
-              </div>
-            ) : (
+            {/* Destination/Source store — hidden for purchase mode */}
+            {form.mode === 'purchase' ? (
               <div>
-                <label className="text-xs font-semibold text-slate-600 mb-1.5 block">Destination Store</label>
+                <label className="text-xs font-semibold text-slate-600 mb-1.5 block">Destination</label>
                 <input
-                  value="Admin Warehouse"
+                  value="My Store Stock"
                   disabled
                   className={`${inputCls('destination')} disabled:bg-slate-50 disabled:text-slate-500`}
                 />
               </div>
+            ) : (
+              <div>
+                <label className="text-xs font-semibold text-slate-600 mb-1.5 block">
+                  {form.mode === 'request' ? 'Request From (Source)' : 'Send To (Destination)'} <span className="text-red-500">*</span>
+                </label>
+                <select value={form.targetStore} onChange={e => set('targetStore', e.target.value)} className={inputCls('targetStore')}>
+                  <option value="">Select store/warehouse...</option>
+                  <option value="admin">Admin Warehouse</option>
+                  {otherStores.map(st => (
+                    <option key={st.id} value={String(st.id)}>{st.store_name || st.name || `Store #${st.id}`}</option>
+                  ))}
+                </select>
+                {errors.targetStore && <p className="text-xs text-red-500 mt-1">{errors.targetStore}</p>}
+              </div>
             )}
 
+            {/* Product selection */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="text-xs font-semibold text-slate-600 mb-1.5 block">Category Filter</label>
@@ -394,17 +387,17 @@ const NewTransactionModal = ({
                   value={form.product}
                   onChange={e => set('product', e.target.value)}
                   className={inputCls('product')}
-                  disabled={form.type !== 'Purchase' && !form.sender}
+                  disabled={isLoadingProducts}
                 >
                   <option value="">
-                    {form.type !== 'Purchase' && !form.sender
-                      ? 'Select store first'
-                      : isLoadingInventory
+                    {isLoadingProducts
                       ? 'Loading inventory...'
-                      : 'Select product...'
+                      : form.mode === 'request' && !form.targetStore
+                        ? 'Select source first'
+                        : 'Select product...'
                     }
                   </option>
-                  {form.type === 'Purchase' ? (
+                  {form.mode === 'purchase' ? (
                     productOptions.map(p => (
                       <option key={p.id} value={p.id}>{p.name} ({p.sku})</option>
                     ))
@@ -420,6 +413,7 @@ const NewTransactionModal = ({
               </div>
             </div>
 
+            {/* Quantity + Purchase Price */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="text-xs font-semibold text-slate-600 mb-1.5 block">Quantity <span className="text-red-500">*</span></label>
@@ -434,10 +428,10 @@ const NewTransactionModal = ({
                 {errors.quantity && <p className="text-xs text-red-500 mt-1">{errors.quantity}</p>}
               </div>
 
-              {form.type === 'Purchase' ? (
+              {form.mode === 'purchase' && (
                 <div>
                   <label className="text-xs font-semibold text-slate-600 mb-1.5 block flex items-center gap-1">
-                    <IndianRupee className="w-3.5 h-3.5" /> Unit Purchase Price (₹) <span className="text-red-500">*</span>
+                    <IndianRupee className="w-3.5 h-3.5" /> Unit Price (₹) <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="number"
@@ -450,28 +444,20 @@ const NewTransactionModal = ({
                   />
                   {errors.purchasePrice && <p className="text-xs text-red-500 mt-1">{errors.purchasePrice}</p>}
                 </div>
-              ) : null}
+              )}
             </div>
 
+            {/* Remarks */}
             <div>
               <label className="text-xs font-semibold text-slate-600 mb-1.5 block">Remarks <span className="text-slate-400">(optional)</span></label>
               <textarea
                 rows={2}
                 value={form.remarks}
                 onChange={e => set('remarks', e.target.value)}
-                placeholder="Add any notes, audit reference, damage details or remarks…"
+                placeholder="Add any notes or justification for the transfer request…"
                 className="w-full px-3 py-2.5 text-sm font-medium border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all bg-white resize-none"
               />
             </div>
-
-            {form.type === 'Inventory Transfer' && form.sender && form.receiver && form.product && form.quantity && (
-              <div className="flex items-center gap-2 px-4 py-3 bg-blue-50 border border-blue-200 rounded-xl text-sm font-semibold text-blue-700">
-                <Store className="w-4 h-4 flex-shrink-0" />
-                <span className="truncate">{storeOptions.find(o => o.id === form.sender)?.name}</span>
-                <ArrowRightLeft className="w-4 h-4 flex-shrink-0" />
-                <span className="truncate">{storeOptions.find(o => o.id === form.receiver)?.name}</span>
-              </div>
-            )}
           </div>
 
           <div className="px-5 sm:px-6 py-4 border-t border-slate-100 flex items-center justify-end gap-3 flex-shrink-0 bg-slate-50">
@@ -482,7 +468,7 @@ const NewTransactionModal = ({
             <button type="submit" disabled={isSubmitting}
               className="px-5 py-2 text-sm font-semibold text-white bg-[#0A0F1F] rounded-xl hover:bg-slate-800 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed">
               <Plus className="w-4 h-4" />
-              {isSubmitting ? 'Creating...' : 'Create Transaction'}
+              {isSubmitting ? 'Submitting...' : form.mode === 'request' ? 'Request Stock' : form.mode === 'purchase' ? 'Record Purchase' : 'Send Stock'}
             </button>
           </div>
         </form>
@@ -492,25 +478,16 @@ const NewTransactionModal = ({
 };
 
 /* ─────────────────────────────────────────────────────────
-   TRANSACTION DETAIL DRAWER
-───────────────────────────────────────────────────────── */
-
-
-
-
-/* ─────────────────────────────────────────────────────────
    MAIN PAGE
-───────────────────────────────────────────────────────── */
+   ───────────────────────────────────────────────────────── */
 const Transactions = () => {
-  const { storeId } = useParams();
-  const { selectedStore, setSelectedStore, stores } = useStoreStore();
+  const { user } = useAuthStore();
   const [searchParams, setSearchParams] = useSearchParams();
   const queryType = searchParams.get('type');
   const querySearch = searchParams.get('search');
+  
   const [activeTab, setActiveTab] = useState('all');
   const [searchTerm, setSearchTerm] = useState(querySearch || '');
-  const [filterSender, setFilterSender] = useState('');
-  const [filterReceiver, setFilterReceiver] = useState('');
   const [filterType, setFilterType] = useState(queryType || '');
 
   // Synchronize URL query changes to state
@@ -537,33 +514,39 @@ const Transactions = () => {
   const [showNewModal, setShowNewModal] = useState(false);
   const [viewTx, setViewTx] = useState(null);
   const [showFilters, setShowFilters] = useState(false);
+
+  const { stores } = useStores({ paginate: false });
+
   const {
     transactions: backendTransactions,
     totalTransactions,
     isLoadingTransactions,
     isTransactionsError,
-    createTransactionAsync,
-    isCreatingTransaction,
+    createManagerRequestAsync,
+    createManagerPushAsync,
+    createManagerPurchaseAsync,
     approveTransactionAsync,
     rejectTransactionAsync,
     isApprovingTransaction,
     isRejectingTransaction,
-  } = useTransactions(storeId, {
+    isCreatingTransaction,
+    isCreatingManagerRequest,
+    isCreatingManagerPush,
+    isCreatingManagerPurchase,
+  } = useTransactions(null, {
     page: currentPage,
     limit: ITEMS_PER_PAGE,
-    search: searchTerm || undefined,
-    transaction_type: filterType || undefined,
-    status: activeTab === 'pending-requests' ? 'Pending' : undefined,
-    transfer_direction: ['admin-to-branch', 'branch-to-branch', 'branch-to-admin'].includes(activeTab)
-      ? activeTab.replace(/-/g, '_').toUpperCase()
-      : undefined,
-  });
+    transaction_type: filterType,
+    search: searchTerm,
+    status: activeTab === 'pending' ? 'Pending' : undefined,
+    transfer_direction: (activeTab === 'incoming' || activeTab === 'outgoing') ? activeTab : undefined,
+  }, true);
 
-  const { transactions: allTransactions } = useTransactions(storeId, {
+  const { transactions: allTransactions } = useTransactions(null, {
     limit: 1000,
-    search: searchTerm || undefined,
-    transaction_type: filterType || undefined,
-  });
+    transaction_type: filterType,
+    search: searchTerm,
+  }, true);
 
   const mapTransaction = (tx) => {
     let displayId = `TXN-${String(tx.id).padStart(6, '0')}`;
@@ -576,7 +559,7 @@ const Transactions = () => {
           displayId = `TXN-${String(searchedId).padStart(6, '0')}`;
         }
       }
-    } else if (storeId && tx.receive_store_id && String(tx.receive_store_id) === String(storeId) && tx.reference_id) {
+    } else if (user?.store_id && tx.receive_store_id && String(tx.receive_store_id) === String(user.store_id) && tx.reference_id) {
       displayId = `TXN-${String(tx.reference_id).padStart(6, '0')}`;
     }
 
@@ -604,63 +587,67 @@ const Transactions = () => {
       isRequest: tx.is_request,
       rejectionReason: tx.rejection_reason,
       remarks: tx.remarks || '',
+      sendStoreId: tx.send_store_id,
+      receiveStoreId: tx.receive_store_id,
     };
   };
 
   const transactions = useMemo(() => backendTransactions.map(mapTransaction), [backendTransactions]);
   const mappedAllTransactions = useMemo(() => allTransactions.map(mapTransaction), [allTransactions]);
 
-  useEffect(() => {
-    if (storeId && stores.length > 0) {
-      const urlStore = stores.find(s => String(s.id) === String(storeId));
-      if (urlStore && (!selectedStore || String(selectedStore.id) !== String(storeId))) {
-        setSelectedStore(urlStore);
-      }
-    }
-  }, [storeId, stores, selectedStore, setSelectedStore]);
-
-  /* ── Filtered list (tab filtering only — search/type are handled server-side) ── */
+  /* ── Filtered list by tab direction ── */
   const filtered = useMemo(() => {
     return transactions.filter(tx => {
-      const tab = classifyTab(tx);
-      const matchTab = activeTab === 'all' || 
-                       (activeTab === 'pending-requests' ? tx.status === 'Pending' : tab === activeTab);
-      const matchSender = !filterSender || tx.sender === filterSender;
-      const matchReceiver = !filterReceiver || tx.receiver === filterReceiver;
-      return matchTab && matchSender && matchReceiver;
+      if (activeTab === 'all') return true;
+      if (activeTab === 'pending') return tx.status === 'Pending';
+      
+      const isSender = String(tx.sendStoreId) === String(user?.store_id);
+      const isReceiver = String(tx.receiveStoreId) === String(user?.store_id);
+      
+      if (activeTab === 'incoming') return isReceiver;
+      if (activeTab === 'outgoing') return isSender;
+      return true;
     });
-  }, [transactions, activeTab, filterSender, filterReceiver]);
+  }, [transactions, activeTab, user]);
 
   const paginated = filtered;
 
-  /* ── Tab counts (calculated from all transactions for correct total numbers) ── */
+  /* ── Tab counts ── */
   const tabCounts = useMemo(() => {
-    const counts = { all: mappedAllTransactions.length, 'admin-to-branch': 0, 'branch-to-branch': 0, 'branch-to-admin': 0, 'pending-requests': 0 };
+    const counts = { all: mappedAllTransactions.length, incoming: 0, outgoing: 0, pending: 0 };
     mappedAllTransactions.forEach(tx => {
-      const t = classifyTab(tx);
-      if (counts[t] !== undefined) counts[t]++;
-      if (tx.status === 'Pending') counts['pending-requests']++;
+      const isSender = String(tx.sendStoreId) === String(user?.store_id);
+      const isReceiver = String(tx.receiveStoreId) === String(user?.store_id);
+      
+      if (isReceiver) counts.incoming++;
+      if (isSender) counts.outgoing++;
+      if (tx.status === 'Pending') counts.pending++;
     });
     return counts;
-  }, [mappedAllTransactions]);
+  }, [mappedAllTransactions, user]);
 
   const resetPage = () => setCurrentPage(1);
 
-  const hasFilters = searchTerm || filterSender || filterReceiver || filterType;
+  const hasFilters = searchTerm || filterType;
 
   const handleClearFilters = () => {
     setSearchTerm('');
-    setFilterSender('');
-    setFilterReceiver('');
     setFilterType('');
     resetPage();
   };
 
-  const handleNewTransaction = async (data) => {
-    await createTransactionAsync({
-      type: data.type,
-      payload: data.payload,
-    });
+  const handleNewRequest = async (data) => {
+    await createManagerRequestAsync(data);
+    setShowNewModal(false);
+  };
+
+  const handleNewPush = async (data) => {
+    await createManagerPushAsync(data);
+    setShowNewModal(false);
+  };
+
+  const handleNewPurchase = async (data) => {
+    await createManagerPurchaseAsync(data);
     setShowNewModal(false);
   };
 
@@ -672,7 +659,7 @@ const Transactions = () => {
       {/* ── Breadcrumb + Header ── */}
       <div className="mb-6 sm:mb-8">
         <div className="flex items-center text-sm text-slate-500 font-medium mb-3 space-x-2">
-          <Link to="/admin/dashboard" className="hover:text-slate-800 transition-colors">Dashboard</Link>
+          <Link to="/shopkeeper/dashboard" className="hover:text-slate-800 transition-colors">Dashboard</Link>
           <ChevronRight className="w-4 h-4 flex-shrink-0" />
           <span className="text-slate-900 font-semibold">Transactions</span>
         </div>
@@ -680,10 +667,10 @@ const Transactions = () => {
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
               <ArrowRightLeft className="w-8 h-8 text-blue-500" />
-              Transactions
+              Transactions & Transfers
             </h1>
             <p className="text-slate-500 mt-1.5 text-sm sm:text-base">
-              Track and manage inventory movements across all stores.
+              Request stock from admin or transfer inventory to sister branches.
             </p>
           </div>
           <button
@@ -691,19 +678,18 @@ const Transactions = () => {
             className="flex items-center gap-2 px-5 py-2.5 bg-[#0A0F1F] text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 flex-shrink-0 w-full sm:w-auto justify-center"
           >
             <Plus className="w-4 h-4" />
-            New Transaction
+            New Transfer Request
           </button>
         </div>
       </div>
 
       {/* ── KPI Summary Cards ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4 mb-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
         {[
           { label: 'Total', value: tabCounts.all, color: 'text-slate-700 bg-slate-50 border-slate-200', icon: ArrowRightLeft },
-          { label: 'Admin → Branch', value: tabCounts['admin-to-branch'], color: 'text-blue-700 bg-blue-50 border-blue-200', icon: Truck },
-          { label: 'Branch → Branch', value: tabCounts['branch-to-branch'], color: 'text-purple-700 bg-purple-50 border-purple-200', icon: RefreshCw },
-          { label: 'Branch → Admin', value: tabCounts['branch-to-admin'], color: 'text-emerald-700 bg-emerald-50 border-emerald-200', icon: Building2 },
-          { label: 'Pending Requests', value: tabCounts['pending-requests'], color: 'text-amber-700 bg-amber-50 border-amber-200', icon: Clock },
+          { label: 'Incoming', value: tabCounts.incoming, color: 'text-blue-700 bg-blue-50 border-blue-200', icon: Truck },
+          { label: 'Outgoing', value: tabCounts.outgoing, color: 'text-purple-700 bg-purple-50 border-purple-200', icon: RefreshCw },
+          { label: 'Pending Requests', value: tabCounts.pending, color: 'text-amber-700 bg-amber-50 border-amber-200', icon: Clock },
         ].map(kpi => {
           const Icon = kpi.icon;
           return (
@@ -755,7 +741,7 @@ const Transactions = () => {
             type="text"
             value={searchTerm}
             onChange={e => { setSearchTerm(e.target.value); resetPage(); }}
-            placeholder="Search by ID, store, product, type, status…"
+            placeholder="Search by ID, product, notes…"
             className="w-full pl-10 pr-10 py-2.5 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 text-sm font-medium transition-all shadow-sm placeholder:text-slate-400"
           />
           {searchTerm && (
@@ -769,14 +755,14 @@ const Transactions = () => {
         {/* Toggle filters button */}
         <button
           onClick={() => setShowFilters(p => !p)}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-all flex-shrink-0 ${showFilters || filterSender || filterReceiver || filterType
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-all flex-shrink-0 ${showFilters || filterType
               ? 'bg-blue-50 text-blue-700 border-blue-200'
               : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
             }`}
         >
           <Filter className="w-4 h-4" />
           Filters
-          {(filterSender || filterReceiver || filterType) && (
+          {filterType && (
             <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
           )}
         </button>
@@ -785,26 +771,6 @@ const Transactions = () => {
       {/* ── Expandable Filter Row ── */}
       {showFilters && (
         <div className="flex flex-wrap gap-3 mb-4 p-4 bg-white border border-slate-200 rounded-2xl shadow-sm animate-fade-in">
-          <div className="flex-1 min-w-[160px]">
-            <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5 block">Sender</label>
-            <select value={filterSender} onChange={e => { setFilterSender(e.target.value); resetPage(); }} className={selectCls}>
-              <option value="">All Senders</option>
-              {stores.map(store => {
-                const name = store.store_name || store.name || `Store #${store.id}`;
-                return <option key={store.id} value={name}>{name}</option>;
-              })}
-            </select>
-          </div>
-          <div className="flex-1 min-w-[160px]">
-            <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5 block">Receiver</label>
-            <select value={filterReceiver} onChange={e => { setFilterReceiver(e.target.value); resetPage(); }} className={selectCls}>
-              <option value="">All Receivers</option>
-              {stores.map(store => {
-                const name = store.store_name || store.name || `Store #${store.id}`;
-                return <option key={store.id} value={name}>{name}</option>;
-              })}
-            </select>
-          </div>
           <div className="flex-1 min-w-[160px]">
             <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5 block">Transaction Type</label>
             <select value={filterType} onChange={e => { setFilterType(e.target.value); resetPage(); }} className={selectCls}>
@@ -828,18 +794,6 @@ const Transactions = () => {
       {hasFilters && (
         <div className="flex items-center gap-2 mb-4 flex-wrap">
           <span className="text-xs text-slate-500 font-medium">Active filters:</span>
-          {filterSender && (
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-100 text-slate-700 rounded-full text-xs font-semibold">
-              <Store className="w-3 h-3" /> From: {filterSender}
-              <button onClick={() => setFilterSender('')}><XIcon className="w-3 h-3" /></button>
-            </span>
-          )}
-          {filterReceiver && (
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-100 text-slate-700 rounded-full text-xs font-semibold">
-              <Building2 className="w-3 h-3" /> To: {filterReceiver}
-              <button onClick={() => setFilterReceiver('')}><XIcon className="w-3 h-3" /></button>
-            </span>
-          )}
           {filterType && (
             <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-100 text-slate-700 rounded-full text-xs font-semibold">
               <Tag className="w-3 h-3" /> {filterType}
@@ -859,11 +813,11 @@ const Transactions = () => {
       {/* ── Table / Card listing ── */}
       {isLoadingTransactions ? (
         <div className="bg-white border border-slate-100 rounded-2xl p-12 text-center text-slate-500 font-semibold">
-          Loading transactions...
+          Loading store transactions...
         </div>
       ) : isTransactionsError ? (
         <div className="bg-red-50 border border-red-100 rounded-2xl p-12 text-center text-red-700 font-semibold">
-          Unable to load transactions for this store.
+          Unable to load transactions. Please verify permissions.
         </div>
       ) : filtered.length === 0 ? (
         <div className="bg-white border border-dashed border-slate-200 rounded-2xl p-12 flex flex-col items-center justify-center text-center">
@@ -896,6 +850,18 @@ const Transactions = () => {
                 <tbody className="divide-y divide-slate-50">
                   {paginated.map(tx => {
                     const date = new Date(tx.date);
+                    
+                    // Rules 4 & 5 Approval Authorization Checks
+                    const isPending = tx.status === 'Pending';
+                    const canApprove = isPending && (
+                      (tx.isRequest && String(tx.sendStoreId) === String(user?.store_id)) || // Rule 4: Sender approves pull request
+                      (!tx.isRequest && String(tx.receiveStoreId) === String(user?.store_id)) // Rule 5: Receiver approves push
+                    );
+                    const isInitiator = isPending && (
+                      (tx.isRequest && String(tx.receiveStoreId) === String(user?.store_id)) || 
+                      (!tx.isRequest && String(tx.sendStoreId) === String(user?.store_id))
+                    );
+
                     return (
                       <tr
                         key={tx.id}
@@ -948,6 +914,12 @@ const Transactions = () => {
                             ) : (
                               <StatusBadge status={tx.status} />
                             )}
+
+                            {isInitiator && (
+                              <span className="text-[10px] text-slate-400 font-bold ml-2">
+                                Awaiting Approval
+                              </span>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -958,17 +930,28 @@ const Transactions = () => {
             </div>
           </div>
 
-          {/* Mobile Cards — fully clickable */}
+          {/* Mobile Cards */}
           <div className="md:hidden space-y-3">
             {paginated.map(tx => {
               const date = new Date(tx.date);
+              
+              // Rules 4 & 5 Approval Authorization Checks
+              const isPending = tx.status === 'Pending';
+              const canApprove = isPending && (
+                (tx.isRequest && String(tx.sendStoreId) === String(user?.store_id)) || // Sender approves pull request
+                (!tx.isRequest && String(tx.receiveStoreId) === String(user?.store_id)) // Receiver approves push
+              );
+              const isInitiator = isPending && (
+                (tx.isRequest && String(tx.receiveStoreId) === String(user?.store_id)) || 
+                (!tx.isRequest && String(tx.sendStoreId) === String(user?.store_id))
+              );
+
               return (
                 <div
                   key={tx.id}
                   onClick={() => setViewTx(tx)}
                   className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 space-y-3 cursor-pointer hover:shadow-md hover:border-blue-200 active:scale-[0.99] transition-all"
                 >
-                  {/* Top row */}
                   <div className="flex items-start justify-between gap-2" onClick={(e) => {
                     if (e.target.closest('button')) {
                       e.stopPropagation();
@@ -990,17 +973,21 @@ const Transactions = () => {
                         <StatusBadge status={tx.status} />
                       )}
 
+
+                      {isInitiator && (
+                        <span className="text-[10px] text-slate-400 font-bold">
+                          Awaiting Approval
+                        </span>
+                      )}
                     </div>
                   </div>
 
-                  {/* Transfer arrow */}
                   <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-xl border border-slate-100">
                     <span className="text-xs font-semibold text-slate-700 truncate">{tx.sender}</span>
                     <ArrowRightLeft className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
                     <span className="text-xs font-semibold text-slate-700 truncate">{tx.receiver}</span>
                   </div>
 
-                  {/* Details row */}
                   <div className="flex items-center justify-between gap-2 flex-wrap">
                     <TypeBadge type={tx.type} />
                     <div className="flex items-center gap-2 text-xs text-slate-500 font-semibold">
@@ -1015,7 +1002,7 @@ const Transactions = () => {
           </div>
 
           <Pagination
-            totalItems={filterSender || filterReceiver ? filtered.length : totalTransactions}
+            totalItems={totalTransactions}
             itemsPerPage={ITEMS_PER_PAGE}
             currentPage={currentPage}
             onPageChange={setCurrentPage}
@@ -1027,10 +1014,12 @@ const Transactions = () => {
       <NewTransactionModal
         isOpen={showNewModal}
         onClose={() => setShowNewModal(false)}
-        onSubmit={handleNewTransaction}
-        currentStore={selectedStore}
+        onRequest={handleNewRequest}
+        onPush={handleNewPush}
+        onPurchase={handleNewPurchase}
+        currentUser={user}
         stores={stores}
-        isSubmitting={isCreatingTransaction}
+        isSubmitting={isCreatingTransaction || isCreatingManagerRequest || isCreatingManagerPush || isCreatingManagerPurchase}
       />
       <TransactionDetailModal
         isOpen={!!viewTx}
@@ -1046,7 +1035,10 @@ const Transactions = () => {
         }}
         isApproving={isApprovingTransaction}
         isRejecting={isRejectingTransaction}
-        canApprove={viewTx?.status === 'Pending'}
+        canApprove={viewTx?.status === 'Pending' && (
+          (viewTx.isRequest && String(viewTx.sendStoreId) === String(user?.store_id)) ||
+          (!viewTx.isRequest && String(viewTx.receiveStoreId) === String(user?.store_id))
+        )}
       />
     </div>
   );

@@ -33,8 +33,9 @@ async def transaction_history_endpoint(
     inventory_id: int | None = Query(None),
     transaction_type: str | None = Query(None),
     store_id: int | None = Query(None),
+    search: str | None = Query(None, description="Search term matching product name or ID"),
     page: int = Query(1, ge=1),
-    limit: int = Query(20, ge=1, le=100),
+    limit: int = Query(20, ge=1, le=1000),
     db: AsyncSession = Depends(get_db),
     current_admin: Admin = Depends(get_current_admin),
 ) -> PaginatedResponse[TransactionRead]:
@@ -57,6 +58,7 @@ async def transaction_history_endpoint(
         store_id=store_id,
         limit=limit,
         offset=offset,
+        search=search,
     )
     pages = (total + limit - 1) // limit if limit > 0 else 1
     return PaginatedResponse[TransactionRead](

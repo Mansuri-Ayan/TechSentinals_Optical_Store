@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { LayoutDashboard, LogOut, Glasses, X, Users, Store, Package, ShoppingCart, ChevronLeft, ChevronRight, Wrench, BarChart3, Tag, Layers, Award } from 'lucide-react';
+import { LayoutDashboard, LogOut, Glasses, X, Users, Store, Package, ShoppingCart, ChevronLeft, ChevronRight, Wrench, BarChart3, Tag, Layers, Award, ArrowRightLeft } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useAuthStore } from '../../store/store';
 
@@ -261,6 +261,21 @@ const ShopkeeperSidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) =
           >
             <ShoppingCart className={`w-5 h-5 transition-transform group-hover:scale-110 flex-shrink-0 ${isCollapsed ? '' : 'mr-3'}`} />
             {!isCollapsed && <span className="font-medium text-sm truncate animate-fade-in">Sales</span>}
+          </NavLink>
+
+          <NavLink
+            to="/shopkeeper/transactions"
+            title={isCollapsed ? "Transactions" : undefined}
+            className={({ isActive }) => {
+              const isTxActive = isActive || location.pathname.startsWith('/shopkeeper/transactions');
+              return `flex items-center ${isCollapsed ? 'justify-center px-0' : 'px-4'} py-2.5 rounded-xl transition-all duration-200 group ${isTxActive
+                ? 'bg-emerald-500/10 text-emerald-400 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_0_10px_rgba(16,185,129,0.1)] border border-emerald-500/20'
+                : 'text-slate-400 hover:bg-white/5 hover:text-slate-205 border border-transparent'
+              }`;
+            }}
+          >
+            <ArrowRightLeft className={`w-5 h-5 transition-transform group-hover:scale-110 flex-shrink-0 ${isCollapsed ? '' : 'mr-3'}`} />
+            {!isCollapsed && <span className="font-medium text-sm truncate animate-fade-in">Transactions</span>}
           </NavLink>
 
           <NavLink

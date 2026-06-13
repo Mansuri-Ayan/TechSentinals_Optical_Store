@@ -63,9 +63,39 @@ async def list_inventories(
     db: AsyncSession = Depends(get_db),
     current_user = Depends(get_current_user),
 ) -> InventoryResponse:
-    if not isinstance(current_user, Admin):
-        owner_type = "STORE"
-        owner_id = current_user.store_id
+    from core.deps import get_user_admin_id
+
+    if isinstance(current_user, Admin):
+        # Admin can view any store/warehouse — no restrictions
+        pass
+    else:
+        # Manager: allow querying their own admin warehouse or any store under the same admin
+        admin_id = get_user_admin_id(current_user)
+        requested_owner_type = owner_type.upper()
+
+        if requested_owner_type == "ADMIN":
+            # Manager querying admin warehouse — force owner_id to their admin
+            owner_id = admin_id
+        elif requested_owner_type == "STORE":
+            if owner_id is None:
+                # Default to their own store
+                owner_id = current_user.store_id
+            else:
+                # Validate the store belongs to the same admin
+                from sqlalchemy import select
+                from models.store import Store
+                store_check = await db.execute(
+                    select(Store.admin_id).where(Store.id == owner_id)
+                )
+                store_admin = store_check.scalar_one_or_none()
+                if store_admin != admin_id:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Access denied to this store's inventory",
+                    )
+        else:
+            owner_type = "STORE"
+            owner_id = current_user.store_id
 
     result_dict = await get_inventories_by_owner(
         db,

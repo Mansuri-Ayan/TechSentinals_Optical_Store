@@ -2,6 +2,7 @@
 import enum
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     Column,
     DateTime,
     Enum,
@@ -25,6 +26,19 @@ class TransactionType(str, enum.Enum):
     LOSS = "LOSS"
     AUDIT_ADJUSTMENT = "AUDIT_ADJUSTMENT"
     RETURN = "RETURN"
+
+
+class TransactionStatus(str, enum.Enum):
+    PENDING = "PENDING"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+    COMPLETED = "COMPLETED"
+
+
+class TransferDirection(str, enum.Enum):
+    ADMIN_TO_BRANCH = "ADMIN_TO_BRANCH"
+    BRANCH_TO_BRANCH = "BRANCH_TO_BRANCH"
+    BRANCH_TO_ADMIN = "BRANCH_TO_ADMIN"
 
 
 class InventoryTransaction(Base):
@@ -106,6 +120,62 @@ class InventoryTransaction(Base):
         comment="Transaction timestamp",
     )
 
+    status = Column(
+        Enum(TransactionStatus, name="transaction_status_enum", create_constraint=True),
+        nullable=False,
+        default=TransactionStatus.COMPLETED,
+        server_default="COMPLETED",
+        comment="Approval workflow status",
+    )
+
+    transfer_direction = Column(
+        Enum(TransferDirection, name="transfer_direction_enum", create_constraint=True),
+        nullable=True,
+        comment="Categorization of branch transfers",
+    )
+
+    requested_by_store_id = Column(
+        BigInteger,
+        ForeignKey("stores.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+        comment="FK → stores.id — store that initiated the pull request",
+    )
+
+    approved_by_store_id = Column(
+        BigInteger,
+        ForeignKey("stores.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+        comment="FK → stores.id — store that approved the transfer",
+    )
+
+    approved_by_user_id = Column(
+        BigInteger,
+        nullable=True,
+        comment="User ID who approved the transaction",
+    )
+
+    approved_at = Column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="Timestamp of approval",
+    )
+
+    rejection_reason = Column(
+        Text,
+        nullable=True,
+        comment="Reason if transaction is rejected",
+    )
+
+    is_request = Column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+        comment="True if this transaction is a pending request",
+    )
+
     # ── Relationships ──────────────────────────────────────────
     inventory = relationship(
         "Inventory",
@@ -125,9 +195,20 @@ class InventoryTransaction(Base):
         foreign_keys=[receive_store_id],
         lazy="selectin",
     )
+    requested_by_store = relationship(
+        "Store",
+        foreign_keys=[requested_by_store_id],
+        lazy="selectin",
+    )
+    approved_by_store = relationship(
+        "Store",
+        foreign_keys=[approved_by_store_id],
+        lazy="selectin",
+    )
 
     def __repr__(self) -> str:
         return (
             f"<InventoryTransaction(id={self.id!r}, type={self.transaction_type!r}, "
-            f"qty={self.quantity!r})>"
+            f"qty={self.quantity!r}, status={self.status!r})>"
         )
+

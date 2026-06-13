@@ -1,7 +1,7 @@
 # API: product/read.py
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from core.deps import get_current_admin
+from core.deps import get_current_user, get_user_admin_id
 from db.session import get_db
 from models.admin import Admin
 from schemas.product import ProductRead
@@ -38,11 +38,12 @@ async def list_products(
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin),
+    current_user=Depends(get_current_user),
 ) -> list[ProductRead]:
+    admin_id = get_user_admin_id(current_user)
     products = await get_products_by_admin(
         db,
-        admin_id=current_admin.id,
+        admin_id=admin_id,
         category_id=category_id,
         subcategory_id=subcategory_id,
         brand_id=brand_id,
@@ -62,10 +63,11 @@ async def list_products(
 async def get_product_endpoint(
     product_id: int,
     db: AsyncSession = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin),
+    current_user=Depends(get_current_user),
 ) -> ProductRead:
+    admin_id = get_user_admin_id(current_user)
     product = await get_product(db, product_id)
-    if product is None or product.admin_id != current_admin.id:
+    if product is None or product.admin_id != admin_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Product not found",

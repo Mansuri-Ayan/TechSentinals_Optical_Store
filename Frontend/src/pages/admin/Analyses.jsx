@@ -137,7 +137,7 @@ const DonutChart = ({ data, totalLabel = "Total" }) => {
 
 // 3. Bar Chart (General Visual implementation)
 const BarChart = ({ data }) => {
-  const maxValue = Math.max(...data.map(item => item.value), 1);
+  const maxValue = Math.max(...data.map(item => Number(item.value) || 0), 1);
 
   return (
     <div className="w-full h-48 px-2 pt-2">
@@ -151,7 +151,8 @@ const BarChart = ({ data }) => {
           const barWidth = Math.max(10, Math.min(20, 130 / data.length));
           const spacing = (250 - (data.length * barWidth)) / (data.length + 1);
           const x = 40 + spacing + i * (barWidth + spacing);
-          const height = (bar.value / maxValue) * 105;
+          const barValue = Number(bar.value) || 0;
+          const height = (barValue / maxValue) * 105;
           const y = 130 - height;
 
           return (
@@ -166,12 +167,12 @@ const BarChart = ({ data }) => {
                 className="opacity-90 hover:opacity-100 transition-all duration-350"
               />
               <text x={x + barWidth / 2} y={y - 6} textAnchor="middle" className="text-[7.5px] font-extrabold fill-slate-800 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                {bar.value.toLocaleString()}
+                {(Number(bar.value) || 0).toLocaleString()}
               </text>
               <text x={x + barWidth / 2} y="143" textAnchor="middle" className="text-[8px] font-extrabold fill-slate-400 pointer-events-none">
-                {bar.label.length > 9 ? `${bar.label.substring(0, 6)}..` : bar.label}
+                {(bar.label || '').length > 9 ? `${(bar.label || '').substring(0, 6)}..` : (bar.label || '')}
               </text>
-              <title>{`${bar.label}: ${bar.value.toLocaleString()}`}</title>
+              <title>{`${bar.label || ''}: ${(Number(bar.value) || 0).toLocaleString()}`}</title>
             </g>
           );
         })}

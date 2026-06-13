@@ -1,7 +1,7 @@
 # API: store/read.py
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from core.deps import get_current_admin
+from core.deps import get_current_user, get_user_admin_id
 from db.session import get_db
 from models.admin import Admin
 from schemas.store import StoreRead
@@ -15,7 +15,7 @@ router = APIRouter()
     "/",
     response_model=PaginatedResponse[StoreRead],
     summary="List all stores",
-    description="List all stores owned by the currently authenticated admin with pagination and filtering.",
+    description="List all stores owned by the currently authenticated admin/user with pagination and filtering.",
 )
 async def list_stores(
     page: int = Query(default=1, ge=1, description="Page number"),
@@ -25,15 +25,16 @@ async def list_stores(
     state: str | None = Query(default=None, description="Filter by state name"),
     paginate: bool = Query(default=True),
     db: AsyncSession = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin),
+    current_user = Depends(get_current_user),
 ) -> PaginatedResponse[StoreRead]:
     is_active = None
     if status:
         is_active = status.upper() == "ACTIVE"
         
+    admin_id = get_user_admin_id(current_user)
     stores, total = await get_stores_by_admin(
         db,
-        admin_id=current_admin.id,
+        admin_id=admin_id,
         page=page,
         limit=page_size,
         search=search,
@@ -60,10 +61,11 @@ async def list_stores(
 async def get_store_endpoint(
     store_id: int,
     db: AsyncSession = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin),
+    current_user = Depends(get_current_user),
 ) -> StoreRead:
     store = await get_store(db, store_id)
-    if store is None or store.admin_id != current_admin.id:
+    admin_id = get_user_admin_id(current_user)
+    if store is None or store.admin_id != admin_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Store not found",

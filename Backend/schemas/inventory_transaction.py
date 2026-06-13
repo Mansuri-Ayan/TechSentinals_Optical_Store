@@ -18,10 +18,12 @@ class TransactionTypeEnum(str, Enum):
 
 
 class PurchaseRequest(BaseModel):
-    """Record a stock purchase into the admin warehouse."""
+    """Record a stock purchase into the admin warehouse or a specific store."""
     product_id: int = Field(..., description="Product being purchased")
     quantity: int = Field(..., gt=0, description="Quantity purchased")
     purchase_price: float = Field(..., gt=0, description="Price per unit")
+    owner_type: str = Field(default="ADMIN", description="ADMIN or STORE — where to add the stock")
+    owner_id: int | None = Field(default=None, description="Owner ID (defaults to admin_id for ADMIN)")
     remarks: str | None = Field(default=None)
 
 
@@ -58,10 +60,22 @@ class TransactionRead(BaseModel):
     created_by: int
     created_at: datetime
 
+    # Approval workflows fields
+    status: str
+    transfer_direction: str | None = None
+    requested_by_store_id: int | None = None
+    approved_by_store_id: int | None = None
+    approved_by_user_id: int | None = None
+    approved_at: datetime | None = None
+    rejection_reason: str | None = None
+    is_request: bool = False
+
     # Denormalized info
     product_name: str | None = None
     product_sku: str | None = None
     send_store_name: str | None = None
     receive_store_name: str | None = None
+    requested_by_store_name: str | None = None
+    approved_by_store_name: str | None = None
 
     model_config = {"from_attributes": True}

@@ -11,6 +11,7 @@ export const useStores = (params = {}) => {
   const { setSelectedStore, upsertStore } = useStoreStore();
   const { user } = useAuthStore();
 
+  const isManager = user?.role === 'manager';
   const isManagerOrStaff = user && user.role !== 'admin';
 
   const storesQuery = useQuery({
@@ -18,7 +19,7 @@ export const useStores = (params = {}) => {
     queryFn: () => getStoresApi(params),
     staleTime: 1000 * 60 * 5,
     retry: false,
-    enabled: user?.role === 'admin',
+    enabled: user?.role === 'admin' || user?.role === 'manager',
   });
 
   const createStoreMutation = useMutation({
@@ -67,10 +68,12 @@ export const useStores = (params = {}) => {
   const total = storesQuery.data?.total || 0;
   const pages = storesQuery.data?.pages || 0;
 
-  if (isManagerOrStaff && user) {
+  if (user?.role === 'admin' || user?.role === 'manager') {
+    if (storesQuery.data?.items) {
+      stores = storesQuery.data.items;
+    }
+  } else if (isManagerOrStaff && user) {
     stores = [{ id: user.store_id, store_name: user.store_name }];
-  } else if (storesQuery.data?.items) {
-    stores = storesQuery.data.items;
   }
 
   return {
@@ -78,8 +81,8 @@ export const useStores = (params = {}) => {
     stores,
     total,
     pages,
-    isLoadingStores: user?.role === 'admin' ? storesQuery.isLoading : false,
-    isStoresError: user?.role === 'admin' ? storesQuery.isError : false,
+    isLoadingStores: (user?.role === 'admin' || user?.role === 'manager') ? storesQuery.isLoading : false,
+    isStoresError: (user?.role === 'admin' || user?.role === 'manager') ? storesQuery.isError : false,
     createStore: createStoreMutation.mutate,
     createStoreAsync: createStoreMutation.mutateAsync,
     isCreatingStore: createStoreMutation.isPending,
