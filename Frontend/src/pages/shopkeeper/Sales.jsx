@@ -57,6 +57,7 @@ const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-dig
 
 const Sales = () => {
   const [selectedStatus, setSelectedStatus] = useState('All');
+  const [selectedPayment, setSelectedPayment] = useState('All');
   const [searchInput, setSearchInput] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedSale, setSelectedSale] = useState(null);
@@ -69,6 +70,7 @@ const Sales = () => {
     limit: itemsPerPage,
     search: searchInput,
     status: selectedStatus === 'All' ? undefined : selectedStatus,
+    hasDue: selectedPayment === 'Remaining' ? true : selectedPayment === 'Paid' ? false : undefined,
   });
 
   // Normalize backend sales data for table and details drawer consumption
@@ -159,9 +161,32 @@ const Sales = () => {
         ))}
       </div>
 
-      {/* ── Search Bar ── */}
-      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 mb-6 flex items-center gap-4">
-        <div className="relative flex-1">
+      {/* ── Search Bar & Filter ── */}
+      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 mb-6 flex flex-col sm:flex-row gap-4 items-stretch sm:items-center justify-between">
+        {/* Payment Selector */}
+        <div className="flex gap-3 items-center">
+          <label className="text-xs sm:text-sm font-bold text-slate-650 flex items-center gap-1.5 whitespace-nowrap">
+            <DollarSign className="w-4 h-4 text-slate-400" /> Payment:
+          </label>
+          <div className="relative w-full sm:w-48">
+            <select
+              value={selectedPayment}
+              onChange={(e) => {
+                setSelectedPayment(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full px-3 py-2 text-xs sm:text-sm font-medium border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 bg-white appearance-none pr-8 cursor-pointer"
+            >
+              <option value="All">All Payments</option>
+              <option value="Remaining">Remaining Payment</option>
+              <option value="Paid">Fully Paid</option>
+            </select>
+            <ChevronRight className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none rotate-90" />
+          </div>
+        </div>
+
+        {/* Search Input */}
+        <div className="relative flex-1 max-w-md w-full">
           <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
             <Search className="h-4 w-4 text-slate-400" />
           </span>
@@ -173,7 +198,7 @@ const Sales = () => {
               setCurrentPage(1);
             }}
             placeholder="Search by customer, product, order ID..."
-            className="w-full pl-10 pr-9 py-2.5 text-sm font-medium border border-slate-250 rounded-xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 bg-white transition-all placeholder:text-slate-400 shadow-sm"
+            className="w-full pl-10 pr-9 py-2.5 text-xs sm:text-sm font-medium border border-slate-250 rounded-xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 bg-white transition-all placeholder:text-slate-400 shadow-sm"
           />
           {searchInput && (
             <button onClick={() => setSearchInput('')} className="absolute inset-y-0 right-3 flex items-center text-slate-400 hover:text-slate-700 transition-colors">

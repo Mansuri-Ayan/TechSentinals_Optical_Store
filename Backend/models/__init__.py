@@ -37,3 +37,7 @@ from models.expense_category import ExpenseCategory
 
 # ── Repair & Services ─────────────────────────────────────────
 from models.repair import Repair, RepairType, RepairStatus, RepairStaffType
+
+# ── Notifications ─────────────────────────────────────────────
+from models.notification import Notification, NotificationType
+

@@ -32,11 +32,20 @@ const AnalyticsCard = ({ title, subtitle, children, actions, className = "" }) =
    ───────────────────────────────────────────────────────── */
 
 // 1. Line Chart: Sales Trend (12 Months representation)
-const SalesTrendChart = ({ data }) => {
-  const maxValue = Math.max(...data.map(item => Number(item.value)), 1);
+const SalesTrendChart = ({ data: rawData }) => {
+  if (!rawData || !Array.isArray(rawData) || rawData.length === 0) {
+    return <div className="w-full h-72 sm:h-80 flex items-center justify-center text-xs text-slate-400 font-semibold">No data available</div>;
+  }
+  const data = rawData.filter(item => item != null).map(item => ({
+    value: Number(item.value) || 0,
+    label: String(item.label || ''),
+  }));
+  if (data.length === 0) return <div className="w-full h-72 sm:h-80 flex items-center justify-center text-xs text-slate-400 font-semibold">No data available</div>;
+
+  const maxValue = Math.max(...data.map(item => item.value), 1);
   const points = data.map((item, i) => {
     const x = 40 + i * (250 / 11);
-    const y = 135 - (Number(item.value) / maxValue) * 105;
+    const y = 135 - (item.value / maxValue) * 105;
     return `${x},${y}`;
   }).join(' ');
 
@@ -61,16 +70,19 @@ const SalesTrendChart = ({ data }) => {
 
         {data.map((p, i) => {
           const x = 40 + i * (250 / 11);
-          const y = 135 - (Number(p.value) / maxValue) * 105;
+          const pVal = p.value;
+          const pLabel = p.label;
+          const y = 135 - (pVal / maxValue) * 105;
+          const displayVal = pVal.toLocaleString();
           return (
             <g key={i} className="group cursor-pointer">
               <circle cx={x} cy={y} r="2.5" fill="#FFFFFF" stroke="#10B981" strokeWidth="1.5" className="transition-all duration-200 group-hover:r-4.5 group-hover:stroke-emerald-600" />
               <circle cx={x} cy={y} r="8" fill="transparent" />
               <text x={x} y={y - 8} textAnchor="middle" className="text-[7.5px] font-extrabold fill-slate-800 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                ₹{(Number(p.value) / 1000).toFixed(0)}k
+                ₹{(pVal / 1000).toFixed(0)}k
               </text>
-              <text x={x} y="145" textAnchor="middle" className="text-[8px] font-bold fill-slate-400 pointer-events-none">{p.label}</text>
-              <title>{`${p.label}: ₹${Number(p.value).toLocaleString()}`}</title>
+              <text x={x} y="145" textAnchor="middle" className="text-[8px] font-bold fill-slate-400 pointer-events-none">{pLabel}</text>
+              <title>{pLabel + ': ₹' + displayVal}</title>
             </g>
           );
         })}
@@ -80,7 +92,17 @@ const SalesTrendChart = ({ data }) => {
 };
 
 // 2. Donut Chart (General Visual implementation)
-const DonutChart = ({ data, totalLabel = "Total" }) => {
+const DonutChart = ({ data: rawData, totalLabel = "Total" }) => {
+  if (!rawData || !Array.isArray(rawData) || rawData.length === 0) {
+    return <div className="w-full h-48 flex items-center justify-center text-xs text-slate-400 font-semibold">No data available</div>;
+  }
+  const data = rawData.filter(item => item != null).map(item => ({
+    value: Number(item.value) || 0,
+    name: String(item.name || ''),
+    color: item.color || '#6B7280',
+  }));
+  if (data.length === 0) return <div className="w-full h-48 flex items-center justify-center text-xs text-slate-400 font-semibold">No data available</div>;
+
   const total = data.reduce((sum, item) => sum + item.value, 0);
   let currentOffset = 0;
 
@@ -94,6 +116,7 @@ const DonutChart = ({ data, totalLabel = "Total" }) => {
             const strokeLength = (percentage / 100) * 314.16;
             const strokeOffset = 314.16 - strokeLength + currentOffset;
             currentOffset -= strokeLength;
+            const valDisplay = slice.value.toLocaleString();
 
             return (
               <circle
@@ -109,7 +132,7 @@ const DonutChart = ({ data, totalLabel = "Total" }) => {
                 className="transition-all duration-200 cursor-pointer hover:stroke-[14px]"
                 style={{ transformOrigin: 'center' }}
               >
-                <title>{`${slice.name}: ${slice.value.toLocaleString()} (${Math.round(percentage)}%)`}</title>
+                <title>{slice.name + ': ' + valDisplay + ' (' + Math.round(percentage) + '%)'}</title>
               </circle>
             );
           })}
@@ -136,8 +159,18 @@ const DonutChart = ({ data, totalLabel = "Total" }) => {
 };
 
 // 3. Bar Chart (General Visual implementation)
-const BarChart = ({ data }) => {
-  const maxValue = Math.max(...data.map(item => Number(item.value) || 0), 1);
+const BarChart = ({ data: rawData }) => {
+  if (!rawData || !Array.isArray(rawData) || rawData.length === 0) {
+    return <div className="w-full h-48 flex items-center justify-center text-xs text-slate-400 font-semibold">No data available</div>;
+  }
+  const data = rawData.filter(item => item != null).map(item => ({
+    value: Number(item.value) || 0,
+    label: String(item.label || ''),
+    color: item.color || '#3B82F6',
+  }));
+  if (data.length === 0) return <div className="w-full h-48 flex items-center justify-center text-xs text-slate-400 font-semibold">No data available</div>;
+
+  const maxValue = Math.max(...data.map(item => item.value), 1);
 
   return (
     <div className="w-full h-48 px-2 pt-2">
@@ -151,9 +184,12 @@ const BarChart = ({ data }) => {
           const barWidth = Math.max(10, Math.min(20, 130 / data.length));
           const spacing = (250 - (data.length * barWidth)) / (data.length + 1);
           const x = 40 + spacing + i * (barWidth + spacing);
-          const barValue = Number(bar.value) || 0;
-          const height = (barValue / maxValue) * 105;
+          const barVal = bar.value;
+          const barLabel = bar.label;
+          const height = (barVal / maxValue) * 105;
           const y = 130 - height;
+          const displayVal = barVal.toLocaleString();
+          const displayLabel = barLabel.length > 9 ? (barLabel.substring(0, 6) + '..') : barLabel;
 
           return (
             <g key={i} className="group cursor-pointer">
@@ -167,12 +203,12 @@ const BarChart = ({ data }) => {
                 className="opacity-90 hover:opacity-100 transition-all duration-350"
               />
               <text x={x + barWidth / 2} y={y - 6} textAnchor="middle" className="text-[7.5px] font-extrabold fill-slate-800 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                {(Number(bar.value) || 0).toLocaleString()}
+                {displayVal}
               </text>
               <text x={x + barWidth / 2} y="143" textAnchor="middle" className="text-[8px] font-extrabold fill-slate-400 pointer-events-none">
-                {(bar.label || '').length > 9 ? `${(bar.label || '').substring(0, 6)}..` : (bar.label || '')}
+                {displayLabel}
               </text>
-              <title>{`${bar.label || ''}: ${(Number(bar.value) || 0).toLocaleString()}`}</title>
+              <title>{barLabel + ': ' + displayVal}</title>
             </g>
           );
         })}
@@ -181,12 +217,22 @@ const BarChart = ({ data }) => {
   );
 };
 
+
 // 4. Line Chart: Customer Growth (Jan -> Dec)
-const CustomerGrowthChart = ({ data }) => {
-  const maxValue = Math.max(...data.map(item => Number(item.value)), 1);
+const CustomerGrowthChart = ({ data: rawData }) => {
+  if (!rawData || !Array.isArray(rawData) || rawData.length === 0) {
+    return <div className="w-full h-48 flex items-center justify-center text-xs text-slate-400 font-semibold">No data available</div>;
+  }
+  const data = rawData.filter(item => item != null).map(item => ({
+    value: Number(item.value) || 0,
+    label: String(item.label || ''),
+  }));
+  if (data.length === 0) return <div className="w-full h-48 flex items-center justify-center text-xs text-slate-400 font-semibold">No data available</div>;
+
+  const maxValue = Math.max(...data.map(item => item.value), 1);
   const points = data.map((item, i) => {
     const x = 40 + i * (250 / 11);
-    const y = 130 - (Number(item.value) / maxValue) * 105;
+    const y = 130 - (item.value / maxValue) * 105;
     return `${x},${y}`;
   }).join(' ');
 
@@ -202,16 +248,18 @@ const CustomerGrowthChart = ({ data }) => {
 
         {data.map((p, i) => {
           const x = 40 + i * (250 / 11);
-          const y = 130 - (Number(p.value) / maxValue) * 105;
+          const pVal = p.value;
+          const pLabel = p.label;
+          const y = 130 - (pVal / maxValue) * 105;
           return (
             <g key={i} className="group cursor-pointer">
               <circle cx={x} cy={y} r="2.5" fill="#FFFFFF" stroke="#6366F1" strokeWidth="1.5" className="transition-all duration-200 group-hover:r-4 group-hover:stroke-indigo-600" />
               <circle cx={x} cy={y} r="8" fill="transparent" />
               <text x={x} y={y - 8} textAnchor="middle" className="text-[7.5px] font-extrabold fill-indigo-700 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                {Number(p.value)}
+                {pVal}
               </text>
-              <text x={x} y="143" textAnchor="middle" className="text-[8px] font-extrabold fill-slate-400 pointer-events-none">{p.label}</text>
-              <title>{`${p.label}: ${Number(p.value)} Customers`}</title>
+              <text x={x} y="143" textAnchor="middle" className="text-[8px] font-extrabold fill-slate-400 pointer-events-none">{pLabel}</text>
+              <title>{pLabel + ': ' + pVal + ' Customers'}</title>
             </g>
           );
         })}

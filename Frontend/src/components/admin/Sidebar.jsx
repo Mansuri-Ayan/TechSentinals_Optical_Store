@@ -63,7 +63,11 @@ const Sidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) => {
 
   useEffect(() => {
     if (fetchedStores) {
-      setStores(fetchedStores);
+      const allStores = [
+        { id: 'admin', store_name: 'Admin Warehouse' },
+        ...(fetchedStores.items || fetchedStores || [])
+      ];
+      setStores(allStores);
     }
   }, [fetchedStores, setStores]);
 
@@ -99,13 +103,13 @@ const Sidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) => {
 
   const currentStore = selectedStore || stores[0];
   const getStoreName = (store) => store?.store_name || store?.name || 'Select Store';
-  const staffRoute = currentStore ? `/admin/store/${currentStore.id}/staff` : '/admin/dashboard';
+  const staffRoute = currentStore && currentStore.id !== 'admin' ? `/admin/store/${currentStore.id}/staff` : '/admin/dashboard';
   const inventoryRoute = currentStore ? `/admin/store/${currentStore.id}/inventory` : '/admin/dashboard';
   const brandsRoute = currentStore ? `/admin/store/${currentStore.id}/brands` : '/admin/dashboard';
   const categoriesRoute = currentStore ? `/admin/store/${currentStore.id}/categories` : '/admin/dashboard';
   const transactionsRoute = currentStore ? `/admin/store/${currentStore.id}/transactions` : '/admin/dashboard';
   const suppliersRoute = currentStore ? `/admin/store/${currentStore.id}/suppliers` : '/admin/dashboard';
-  const expensesRoute = currentStore ? `/admin/store/${currentStore.id}/expenses` : '/admin/dashboard';
+  const expensesRoute = currentStore && currentStore.id !== 'admin' ? `/admin/store/${currentStore.id}/expenses` : '/admin/dashboard';
 
   const handleStoreSelect = (store) => {
     setSelectedStore(store);
@@ -113,12 +117,20 @@ const Sidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) => {
 
     // If on Stores Directory or Store Detail, navigate to the new store's detail
     if (location.pathname.startsWith('/admin/stores')) {
-      navigate(`/admin/stores/${store.id}`);
+      if (store.id === 'admin') {
+        navigate('/admin/dashboard');
+      } else {
+        navigate(`/admin/stores/${store.id}`);
+      }
       return;
     }
 
     if (location.pathname.startsWith('/admin/store/') && location.pathname.endsWith('/staff')) {
-      navigate(`/admin/store/${store.id}/staff`);
+      if (store.id === 'admin') {
+        navigate('/admin/dashboard');
+      } else {
+        navigate(`/admin/store/${store.id}/staff`);
+      }
     } else if (location.pathname.startsWith('/admin/store/') && location.pathname.endsWith('/inventory')) {
       navigate(`/admin/store/${store.id}/inventory`);
     } else if (location.pathname.startsWith('/admin/store/') && location.pathname.endsWith('/brands')) {
@@ -130,10 +142,18 @@ const Sidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) => {
     } else if (location.pathname.startsWith('/admin/store/') && location.pathname.includes('/suppliers')) {
       navigate(`/admin/store/${store.id}/suppliers`);
     } else if (location.pathname.startsWith('/admin/store/') && location.pathname.includes('/expenses')) {
-      navigate(`/admin/store/${store.id}/expenses`);
+      if (store.id === 'admin') {
+        navigate('/admin/dashboard');
+      } else {
+        navigate(`/admin/store/${store.id}/expenses`);
+      }
     } else {
       // Default fallback
-      navigate(`/admin/stores/${store.id}`);
+      if (store.id === 'admin') {
+        navigate('/admin/dashboard');
+      } else {
+        navigate(`/admin/stores/${store.id}`);
+      }
     }
   };
 

@@ -41,6 +41,7 @@ const Sales = () => {
 
   const [selectedBranch, setSelectedBranch] = useState(queryBranch || 'All');
   const [selectedStatus, setSelectedStatus] = useState(queryStatus || 'All');
+  const [selectedPayment, setSelectedPayment] = useState('All');
   const [searchInput, setSearchInput] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -64,7 +65,7 @@ const Sales = () => {
   // Reset page when filtering
   useEffect(() => {
     setCurrentPage(1);
-  }, [selectedBranch, selectedStatus, searchTerm]);
+  }, [selectedBranch, selectedStatus, selectedPayment, searchTerm]);
 
   // Fetch sales from backend
   const { sales, total, pages, kpis, isLoading } = useSales({
@@ -73,6 +74,7 @@ const Sales = () => {
     storeId: selectedBranch,
     status: selectedStatus,
     search: searchTerm,
+    hasDue: selectedPayment === 'Remaining' ? true : selectedPayment === 'Paid' ? false : undefined,
   });
 
   const fmt = (n) => `₹${Number(n).toLocaleString('en-IN')}`;
@@ -122,21 +124,37 @@ const Sales = () => {
       {/* Filter and Select Bar */}
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 mb-6 flex flex-col md:flex-row gap-4 items-stretch md:items-center justify-between">
         
-        {/* Branch Selector */}
+        {/* Branch and Payment Selectors */}
         <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
           <label className="text-sm font-semibold text-slate-600 flex items-center gap-1.5 whitespace-nowrap">
             <Store className="w-4 h-4 text-slate-400" /> Branch:
           </label>
-          <div className="relative w-full sm:w-60">
+          <div className="relative w-full sm:w-48">
             <select
               value={selectedBranch}
               onChange={(e) => setSelectedBranch(e.target.value)}
-              className="w-full px-3 py-2 text-sm font-medium border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 bg-white appearance-none"
+              className="w-full px-3 py-2 text-sm font-medium border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 bg-white appearance-none pr-8"
             >
               <option value="All">All Branches</option>
               {stores.map(store => (
                 <option key={store.id} value={store.id}>{store.store_name}</option>
               ))}
+            </select>
+            <ChevronRight className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none rotate-90" />
+          </div>
+
+          <label className="text-sm font-semibold text-slate-600 flex items-center gap-1.5 whitespace-nowrap sm:ml-4">
+            <DollarSign className="w-4 h-4 text-slate-400" /> Payment:
+          </label>
+          <div className="relative w-full sm:w-48">
+            <select
+              value={selectedPayment}
+              onChange={(e) => setSelectedPayment(e.target.value)}
+              className="w-full px-3 py-2 text-sm font-medium border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 bg-white appearance-none pr-8"
+            >
+              <option value="All">All Payments</option>
+              <option value="Remaining">Remaining Payment</option>
+              <option value="Paid">Fully Paid</option>
             </select>
             <ChevronRight className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none rotate-90" />
           </div>
@@ -200,6 +218,7 @@ const Sales = () => {
             onClick={() => {
               setSelectedBranch('All');
               setSelectedStatus('All');
+              setSelectedPayment('All');
               setSearchInput('');
               setSearchTerm('');
             }}

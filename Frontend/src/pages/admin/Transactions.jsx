@@ -49,6 +49,7 @@ const TABS = [
 
 // Helper: classify a transaction into a tab
 const classifyTab = (tx) => {
+  if (tx.type === 'Purchase') return 'other';
   const senderIsAdmin = tx.sender.toLowerCase().includes('admin');
   const receiverIsAdmin = tx.receiver.toLowerCase().includes('admin');
   if (senderIsAdmin && !receiverIsAdmin) return 'admin-to-branch';
@@ -262,6 +263,8 @@ const NewTransactionModal = ({
         product_id: Number(form.product),
         quantity: Number(form.quantity),
         purchase_price: Number(form.purchasePrice),
+        owner_type: currentStore?.id === 'admin' ? 'ADMIN' : 'STORE',
+        owner_id: currentStore?.id === 'admin' ? user?.id : Number(currentStore?.id),
         remarks: form.remarks || null,
       };
     } else {
@@ -370,7 +373,7 @@ const NewTransactionModal = ({
               <div>
                 <label className="text-xs font-semibold text-slate-600 mb-1.5 block">Destination Store</label>
                 <input
-                  value="Admin Warehouse"
+                  value={currentStore?.id === 'admin' ? 'Admin Warehouse' : currentStore?.store_name || currentStore?.name || 'Admin Warehouse'}
                   disabled
                   className={`${inputCls('destination')} disabled:bg-slate-50 disabled:text-slate-500`}
                 />

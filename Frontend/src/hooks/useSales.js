@@ -18,6 +18,7 @@ export const useSales = (filters = {}) => {
     ...(filters.search ? { search: filters.search } : {}),
     ...(filters.dateFrom ? { date_from: filters.dateFrom } : {}),
     ...(filters.dateTo ? { date_to: filters.dateTo } : {}),
+    ...(filters.hasDue !== undefined ? { has_due: filters.hasDue } : {}),
   };
 
   const query = useQuery({

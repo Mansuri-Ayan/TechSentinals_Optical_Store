@@ -89,7 +89,8 @@ const TransactionDetailModal = ({
   onReject,
   isApproving,
   isRejecting,
-  canApprove
+  canApprove,
+  onRecordPayment
 }) => {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [decisionReason, setDecisionReason] = useState('');
@@ -105,7 +106,6 @@ const TransactionDetailModal = ({
       setIsDrawerOpen(false);
     }
   }, [transaction]);
-
   if (!isOpen || !transaction) return null;
 
   const date = new Date(transaction.date || transaction.created_at);
@@ -308,7 +308,7 @@ const TransactionDetailModal = ({
             </div>
 
             {/* Product */}
-            <div className="p-4 bg-slate-50 border border-slate-100 rounded-xl">
+            <div className="p-4 bg-slate-50 border border-slate-105 rounded-xl">
               <div className="flex items-center gap-1.5 mb-1">
                 <Package className="w-3.5 h-3.5 text-slate-400" />
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Subcategory</span>
@@ -436,11 +436,17 @@ const TransactionDetailModal = ({
         </div>
 
         {/* Footer */}
-        <div className="px-5 py-4 border-t border-slate-100 flex items-center justify-end bg-slate-50 flex-shrink-0">
+        <div className="px-5 py-4 border-t border-slate-100 flex items-center justify-end gap-3 bg-slate-50 flex-shrink-0">
           <button type="button" onClick={onClose}
             className="px-5 py-2 text-sm font-semibold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors shadow-sm">
             Close Details
           </button>
+          {transaction.dueAmount > 0 && onRecordPayment && (
+            <button type="button" onClick={() => onRecordPayment(transaction)}
+              className="px-5 py-2 text-sm font-semibold text-white bg-blue-600 rounded-xl hover:bg-blue-750 transition-colors shadow-md hover:shadow-lg">
+              Record Payment
+            </button>
+          )}
         </div>
 
       </div>

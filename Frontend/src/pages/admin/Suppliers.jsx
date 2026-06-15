@@ -4,13 +4,14 @@ import {
   Search, Plus, Truck, ChevronRight,
   Edit2, Trash2, X as XIcon,
   Package, ShoppingCart, CheckCircle,
-  Phone, MapPin,
+  Phone, MapPin, DollarSign
 } from 'lucide-react';
 import Pagination from '../../components/shared/Pagination';
 import AddEditSupplierModal from '../../components/admin/suppliers/AddEditSupplierModal';
 import DeleteConfirmModal from '../../components/admin/suppliers/DeleteConfirmModal';
 import { useStoreStore } from '../../store/store';
 import { useSuppliers } from '../../hooks/useSuppliers';
+import { usePurchaseOrders } from '../../hooks/usePurchaseOrders';
 
 const ITEMS_PER_PAGE = 12;
 
@@ -20,6 +21,23 @@ const StatusBadge = ({ status }) => {
   return (
     <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border ${active ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-slate-600 bg-slate-100 border-slate-200'}`}>
       <span className={`w-1.5 h-1.5 rounded-full ${active ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+      {status}
+    </span>
+  );
+};
+
+/* ── PO Status badge ── */
+const POStatusBadge = ({ status }) => {
+  let cls = 'text-slate-600 bg-slate-100 border-slate-200';
+  if (status === 'RECEIVED' || status === 'Completed') {
+    cls = 'text-emerald-700 bg-emerald-50 border-emerald-200';
+  } else if (status === 'CANCELLED' || status === 'Cancelled') {
+    cls = 'text-rose-700 bg-rose-50 border-rose-200';
+  } else if (status === 'PARTIALLY_RECEIVED' || status === 'DRAFT' || status === 'SENT') {
+    cls = 'text-amber-700 bg-amber-50 border-amber-200';
+  }
+  return (
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border ${cls}`}>
       {status}
     </span>
   );
@@ -65,16 +83,16 @@ const SupplierCard = ({ supplier: s, onClick, onEdit, onDelete }) => (
       {/* Stats row */}
       <div className="flex items-center gap-2 pt-3 border-t border-slate-100">
         <div className="flex-1 flex items-center gap-1.5 px-3 py-2 bg-purple-50 border border-purple-100 rounded-xl">
-          <Package className="w-3.5 h-3.5 text-purple-600" />
+          <DollarSign className="w-3.5 h-3.5 text-purple-600" />
           <div>
-            <p className="text-[10px] font-semibold text-purple-500">Products</p>
-            <p className="text-sm font-bold text-slate-900 leading-none">{s.totalProducts}</p>
+            <p className="text-[10px] font-semibold text-purple-500">Remaining Due</p>
+            <p className="text-sm font-bold text-slate-900 leading-none">₹{(s.remainingDue || 0).toLocaleString('en-IN')}</p>
           </div>
         </div>
         <div className="flex-1 flex items-center gap-1.5 px-3 py-2 bg-blue-50 border border-blue-100 rounded-xl">
           <ShoppingCart className="w-3.5 h-3.5 text-blue-600" />
           <div>
-            <p className="text-[10px] font-semibold text-blue-500">Orders</p>
+            <p className="text-[10px] font-semibold text-blue-500">Orders to Receive</p>
             <p className="text-sm font-bold text-slate-900 leading-none">{s.totalOrders}</p>
           </div>
         </div>
@@ -114,6 +132,38 @@ const Suppliers = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState('All');
+
+  const { purchaseOrders } = usePurchaseOrders({ limit: 1000, include_nested: false });
+
+  const supplierDues = useMemo(() => {
+    if (!purchaseOrders) return {};
+    const dues = {};
+    purchaseOrders.forEach(po => {
+      const sId = po.supplier_id;
+      const due = Number(po.due_amount || 0);
+      dues[sId] = (dues[sId] || 0) + due;
+    });
+    return dues;
+  }, [purchaseOrders]);
+
+  const supplierOrdersToReceive = useMemo(() => {
+    if (!purchaseOrders) return {};
+    const counts = {};
+    purchaseOrders.forEach(po => {
+      const sId = po.supplier_id;
+      if (po.status !== 'RECEIVED' && po.status !== 'CANCELLED') {
+        counts[sId] = (counts[sId] || 0) + 1;
+      }
+    });
+    return counts;
+  }, [purchaseOrders]);
+
+  const totalRemainingPayment = useMemo(() => {
+    return Object.values(supplierDues).reduce((sum, val) => sum + val, 0);
+  }, [supplierDues]);
+
+  const isGlobalFetch = statusFilter === 'RemainingPayment' || statusFilter === 'TotalOrders';
+
   const {
     suppliers: backendSuppliers,
     totalSuppliers,
@@ -123,20 +173,60 @@ const Suppliers = () => {
     updateSupplierAsync,
     deleteSupplierAsync,
   } = useSuppliers(storeId, {
-    page: currentPage,
-    limit: ITEMS_PER_PAGE,
+    page: isGlobalFetch ? 1 : currentPage,
+    limit: isGlobalFetch ? 1000 : ITEMS_PER_PAGE,
     search: searchTerm.trim(),
     status: statusFilter === 'Active' ? 'ACTIVE' : undefined,
+    global: isGlobalFetch,
   });
-  const suppliers = useMemo(() => backendSuppliers.map((supplier) => ({
-    ...supplier,
-    name: supplier.company_name,
-    contactPerson: supplier.contact_person || 'No contact person',
-    status: supplier.status === 'ACTIVE' ? 'Active' : supplier.status,
-    totalProducts: supplier.totalProducts || 0,
-    totalOrders: supplier.totalOrders || 0,
-    totalAmount: supplier.totalAmount || 0,
-  })), [backendSuppliers]);
+
+  const suppliers = useMemo(() => {
+    let list = backendSuppliers.map((supplier) => ({
+      ...supplier,
+      name: supplier.company_name,
+      contactPerson: supplier.contact_person || 'No contact person',
+      status: supplier.status === 'ACTIVE' ? 'Active' : supplier.status,
+      totalProducts: supplier.totalProducts || 0,
+      totalOrders: supplierOrdersToReceive[supplier.id] || 0,
+      totalAmount: supplier.totalAmount || 0,
+      remainingDue: supplierDues[supplier.id] || 0,
+    }));
+
+    if (statusFilter === 'RemainingPayment') {
+      list = list.filter(s => s.remainingDue > 0);
+    }
+    return list;
+  }, [backendSuppliers, supplierDues, supplierOrdersToReceive, statusFilter]);
+
+  const displayedSuppliers = useMemo(() => {
+    if (statusFilter === 'RemainingPayment') {
+      const start = (currentPage - 1) * ITEMS_PER_PAGE;
+      return suppliers.slice(start, start + ITEMS_PER_PAGE);
+    }
+    return suppliers;
+  }, [suppliers, currentPage, statusFilter]);
+
+  const filteredPurchaseOrders = useMemo(() => {
+    if (!purchaseOrders) return [];
+    let list = [...purchaseOrders];
+    
+    list.sort((a, b) => new Date(b.order_date) - new Date(a.order_date));
+
+    if (searchTerm.trim()) {
+      const q = searchTerm.toLowerCase();
+      list = list.filter(po => 
+        (po.po_number || '').toLowerCase().includes(q) ||
+        (po.supplier_name || '').toLowerCase().includes(q) ||
+        (po.status || '').toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }, [purchaseOrders, searchTerm]);
+
+  const displayedPurchaseOrders = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredPurchaseOrders.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredPurchaseOrders, currentPage]);
 
   const [editSupplier, setEditSupplier]   = useState(null);
   const [deleteSupplier, setDeleteSupplier] = useState(null);
@@ -197,12 +287,13 @@ const Suppliers = () => {
   };
 
   /* ── KPI stats ── */
-  const kpi = useMemo(() => ({
-    total: totalSuppliers,
-    active: suppliers.filter(s => s.status === 'Active').length,
-    products: suppliers.reduce((sum, s) => sum + s.totalProducts, 0),
-    orders: suppliers.reduce((sum, s) => sum + s.totalOrders, 0),
-  }), [suppliers, totalSuppliers]);
+  const kpi = useMemo(() => {
+    return {
+      total: totalSuppliers,
+      active: statusFilter === 'Active' ? totalSuppliers : backendSuppliers.filter(s => s.status === 'ACTIVE').length,
+      orders: purchaseOrders ? purchaseOrders.length : 0,
+    };
+  }, [backendSuppliers, totalSuppliers, purchaseOrders, statusFilter]);
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto animate-fade-in font-sans">
@@ -239,8 +330,8 @@ const Suppliers = () => {
         {[
           { label: 'Total Suppliers', value: kpi.total, icon: Truck, color: 'text-blue-600 bg-blue-50 border-blue-200', activeColor: 'ring-2 ring-blue-500 bg-blue-100/80', onClick: () => { setStatusFilter('All'); setCurrentPage(1); }, active: statusFilter === 'All' },
           { label: 'Active', value: kpi.active, icon: CheckCircle, color: 'text-emerald-600 bg-emerald-50 border-emerald-200', activeColor: 'ring-2 ring-emerald-500 bg-emerald-100/80', onClick: () => { setStatusFilter('Active'); setCurrentPage(1); }, active: statusFilter === 'Active' },
-          { label: 'Products Tracked', value: kpi.products, icon: Package, color: 'text-purple-600 bg-purple-50 border-purple-200', link: storeId ? `/admin/store/${storeId}/inventory` : '/admin/inventory' },
-          { label: 'Total Orders', value: kpi.orders, icon: ShoppingCart, color: 'text-amber-600 bg-amber-50 border-amber-200', link: storeId ? `/admin/store/${storeId}/transactions` : '/admin/transactions' },
+          { label: 'Remaining Payment', value: `₹${totalRemainingPayment.toLocaleString('en-IN')}`, icon: DollarSign, color: 'text-purple-600 bg-purple-50 border-purple-200', activeColor: 'ring-2 ring-purple-500 bg-purple-100/80', onClick: () => { setStatusFilter('RemainingPayment'); setCurrentPage(1); }, active: statusFilter === 'RemainingPayment' },
+          { label: 'Total Orders', value: kpi.orders, icon: ShoppingCart, color: 'text-amber-600 bg-amber-50 border-amber-200', activeColor: 'ring-2 ring-amber-500 bg-amber-100/80', onClick: () => { setStatusFilter('TotalOrders'); setCurrentPage(1); }, active: statusFilter === 'TotalOrders' },
         ].map(card => {
           const Icon = card.icon;
           const content = (
@@ -301,8 +392,116 @@ const Suppliers = () => {
       )}
 
       {/* ── Grid/Table Listing ── */}
-      {isLoadingSuppliers ? (
-        <div className="bg-white border border-slate-100 rounded-2xl p-12 text-center text-slate-500 font-semibold">
+      {statusFilter === 'TotalOrders' ? (
+        filteredPurchaseOrders.length === 0 ? (
+          <div className="bg-white border border-dashed border-slate-200 rounded-2xl p-12 flex flex-col items-center justify-center text-center">
+            <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4 border border-slate-100">
+              <ShoppingCart className="w-8 h-8 text-slate-300" />
+            </div>
+            <h3 className="text-base font-bold text-slate-900 mb-1">No transactions found</h3>
+            <p className="text-slate-500 text-sm">Try adjusting your search or register a new purchase order.</p>
+          </div>
+        ) : (
+          <>
+            {/* Desktop Table View */}
+            <div className="hidden md:block bg-white border border-slate-100 rounded-2xl overflow-hidden shadow-sm mb-6 animate-fade-in">
+              <table className="w-full text-sm text-left">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-100">
+                    {['PO Number / Date', 'Supplier', 'Items Qty', 'Total Amount', 'Paid', 'Due', 'Status', 'Action'].map(col => (
+                      <th key={col} className="px-5 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">
+                        {col}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {displayedPurchaseOrders.map(po => (
+                    <tr
+                      key={po.id}
+                      onClick={() => navigate(`/admin/store/${storeId}/suppliers/${po.supplier_id}`)}
+                      className="hover:bg-blue-50/40 transition-colors cursor-pointer"
+                    >
+                      <td className="px-5 py-4">
+                        <div className="flex flex-col">
+                          <span className="font-mono font-bold text-slate-800">{po.po_number}</span>
+                          <span className="text-xs text-slate-400 mt-0.5">{new Date(po.order_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                        </div>
+                      </td>
+                      <td className="px-5 py-4 font-bold text-slate-950">
+                        {po.supplier_name}
+                      </td>
+                      <td className="px-5 py-4">
+                        <span className="inline-flex items-center justify-center px-2.5 py-1 bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold rounded-lg">
+                          {po.items?.reduce((sum, item) => sum + (item.quantity_ordered || 0), 0) || 0} items
+                        </span>
+                      </td>
+                      <td className="px-5 py-4 font-bold text-slate-900">
+                        ₹{Number(po.total_amount).toLocaleString('en-IN')}
+                      </td>
+                      <td className="px-5 py-4 font-semibold text-emerald-600">
+                        ₹{Number(po.paid_amount).toLocaleString('en-IN')}
+                      </td>
+                      <td className="px-5 py-4 font-semibold text-rose-600">
+                        ₹{Number(po.due_amount).toLocaleString('en-IN')}
+                      </td>
+                      <td className="px-5 py-4">
+                        <POStatusBadge status={po.status} />
+                      </td>
+                      <td className="px-5 py-4" onClick={e => e.stopPropagation()}>
+                        <button
+                          onClick={() => navigate(`/admin/store/${storeId}/suppliers/${po.supplier_id}`)}
+                          className="px-3 py-1.5 bg-[#0A0F1F] text-white hover:bg-slate-800 text-xs font-semibold rounded-lg shadow-sm transition-all flex items-center gap-1 cursor-pointer"
+                        >
+                          View Supplier <ChevronRight className="w-3 h-3" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Cards View */}
+            <div className="md:hidden space-y-3 mb-6">
+              {displayedPurchaseOrders.map(po => (
+                <div
+                  key={po.id}
+                  onClick={() => navigate(`/admin/store/${storeId}/suppliers/${po.supplier_id}`)}
+                  className="p-4 bg-white border border-slate-100 rounded-2xl shadow-sm hover:shadow-md cursor-pointer transition-shadow"
+                >
+                  <div className="flex justify-between items-start mb-3">
+                    <div>
+                      <p className="font-mono font-bold text-sm text-slate-800">{po.po_number}</p>
+                      <p className="text-[10px] text-slate-400">{new Date(po.order_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+                    </div>
+                    <POStatusBadge status={po.status} />
+                  </div>
+                  <p className="font-bold text-slate-950 text-sm mb-2">{po.supplier_name}</p>
+                  <div className="grid grid-cols-2 gap-2 text-xs border-t border-slate-50 pt-2.5">
+                    <div>
+                      <p className="text-slate-400 font-semibold mb-0.5">Total Amount</p>
+                      <p className="font-bold text-slate-900">₹{Number(po.total_amount).toLocaleString('en-IN')}</p>
+                    </div>
+                    <div>
+                      <p className="text-slate-400 font-semibold mb-0.5">Due Amount</p>
+                      <p className="font-bold text-rose-600">₹{Number(po.due_amount).toLocaleString('en-IN')}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <Pagination
+              totalItems={filteredPurchaseOrders.length}
+              itemsPerPage={ITEMS_PER_PAGE}
+              currentPage={currentPage}
+              onPageChange={setCurrentPage}
+            />
+          </>
+        )
+      ) : isLoadingSuppliers ? (
+        <div className="bg-white border border-slate-100 rounded-2xl p-12 text-center text-slate-500 font-semibold animate-pulse">
           Loading suppliers...
         </div>
       ) : isSuppliersError ? (
@@ -320,8 +519,8 @@ const Suppliers = () => {
       ) : (
         <>
           {/* Card-based Grid Layout for all screen sizes */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 mb-6">
-            {suppliers.map(s => (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 mb-6 animate-fade-in">
+            {displayedSuppliers.map(s => (
               <SupplierCard
                 key={s.id}
                 supplier={s}
@@ -333,7 +532,7 @@ const Suppliers = () => {
           </div>
 
           <Pagination
-            totalItems={totalSuppliers}
+            totalItems={statusFilter === 'RemainingPayment' ? suppliers.length : totalSuppliers}
             itemsPerPage={ITEMS_PER_PAGE}
             currentPage={currentPage}
             onPageChange={setCurrentPage}

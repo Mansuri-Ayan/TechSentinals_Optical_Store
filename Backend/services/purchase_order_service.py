@@ -180,6 +180,7 @@ async def list_purchase_orders(
     limit: int = 100,
     offset: int = 0,
     include_nested: bool = False,
+    has_due: bool | None = None,
 ) -> list[PurchaseOrder]:
     """List POs for an admin with optional filters."""
     from models.purchase_order_item import PurchaseOrderItem
@@ -204,6 +205,11 @@ async def list_purchase_orders(
         stmt = stmt.where(PurchaseOrder.store_id == store_id)
     if status_filter:
         stmt = stmt.where(PurchaseOrder.status == status_filter.upper())
+    if has_due is not None:
+        if has_due:
+            stmt = stmt.where(PurchaseOrder.due_amount > 0)
+        else:
+            stmt = stmt.where(PurchaseOrder.due_amount == 0)
     stmt = stmt.order_by(PurchaseOrder.created_at.desc()).limit(limit).offset(offset)
     result = await db.execute(stmt)
     return list(result.scalars().all())

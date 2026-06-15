@@ -124,6 +124,7 @@ async def list_sales_endpoint(
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=10000),
     paginate: bool = Query(True),
+    has_due: bool | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
     current_user = Depends(get_current_user),
 ):
@@ -145,6 +146,7 @@ async def list_sales_endpoint(
         page=page,
         limit=limit,
         paginate=paginate,
+        has_due=has_due,
     )
 
     # Batch resolve staff info to avoid N+1 queries

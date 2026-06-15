@@ -1162,7 +1162,7 @@ async def get_transaction_history(
     product_id: int | None = None,
     inventory_id: int | None = None,
     transaction_type: str | None = None,
-    store_id: int | None = None,
+    store_id: int | str | None = None,
     limit: int = 50,
     offset: int = 0,
     search: str | None = None,
@@ -1189,7 +1189,7 @@ async def get_transactions_filtered(
     status: str | None = None,
     transfer_direction: str | None = None,
     is_request: bool | None = None,
-    store_id: int | None = None,
+    store_id: int | str | None = None,
     product_id: int | None = None,
     date_from: datetime | None = None,
     date_to: datetime | None = None,
@@ -1202,6 +1202,17 @@ async def get_transactions_filtered(
     Fetch transaction history with advanced query filters.
     Scoped to the admin's inventory records and stores.
     """
+    is_admin_warehouse = False
+    numeric_store_id = None
+    if store_id is not None:
+        if str(store_id).lower() == "admin":
+            is_admin_warehouse = True
+        else:
+            try:
+                numeric_store_id = int(store_id)
+            except ValueError:
+                pass
+
     # Get valid store IDs for this admin
     store_ids_stmt = select(Store.id).where(Store.admin_id == admin_id)
     store_result = await db.execute(store_ids_stmt)
@@ -1231,10 +1242,16 @@ async def get_transactions_filtered(
         filters.append(InventoryTransaction.status == status.upper())
     if transfer_direction:
         td_upper = transfer_direction.upper()
-        if td_upper == "INCOMING" and store_id is not None:
-            filters.append(InventoryTransaction.receive_store_id == store_id)
-        elif td_upper == "OUTGOING" and store_id is not None:
-            filters.append(InventoryTransaction.send_store_id == store_id)
+        if td_upper == "INCOMING":
+            if is_admin_warehouse:
+                filters.append(InventoryTransaction.receive_store_id == None)
+            elif numeric_store_id is not None:
+                filters.append(InventoryTransaction.receive_store_id == numeric_store_id)
+        elif td_upper == "OUTGOING":
+            if is_admin_warehouse:
+                filters.append(InventoryTransaction.send_store_id == None)
+            elif numeric_store_id is not None:
+                filters.append(InventoryTransaction.send_store_id == numeric_store_id)
         else:
             filters.append(InventoryTransaction.transfer_direction == td_upper)
     if is_request is not None:
@@ -1259,13 +1276,38 @@ async def get_transactions_filtered(
     if date_to:
         filters.append(InventoryTransaction.created_at <= date_to)
 
-    if store_id is not None:
+    if is_admin_warehouse:
+        admin_inv_stmt = select(Inventory.id).where(
+            Inventory.owner_type == OwnerType.ADMIN,
+            Inventory.owner_id == admin_id
+        )
+        admin_inv_result = await db.execute(admin_inv_stmt)
+        admin_inv_ids = [row[0] for row in admin_inv_result.fetchall()]
+
         filters.append(
             or_(
-                InventoryTransaction.send_store_id == store_id,
-                InventoryTransaction.receive_store_id == store_id,
-                InventoryTransaction.requested_by_store_id == store_id,
-                InventoryTransaction.approved_by_store_id == store_id,
+                InventoryTransaction.inventory_id.in_(admin_inv_ids),
+                and_(
+                    InventoryTransaction.transaction_type.in_([
+                        TransactionType.ADMIN_TRANSFER_OUT,
+                        TransactionType.ADMIN_TRANSFER_IN,
+                        TransactionType.STORE_TRANSFER_OUT,
+                        TransactionType.STORE_TRANSFER_IN,
+                    ]),
+                    or_(
+                        InventoryTransaction.send_store_id == None,
+                        InventoryTransaction.receive_store_id == None,
+                    )
+                )
+            )
+        )
+    elif numeric_store_id is not None:
+        filters.append(
+            or_(
+                InventoryTransaction.send_store_id == numeric_store_id,
+                InventoryTransaction.receive_store_id == numeric_store_id,
+                InventoryTransaction.requested_by_store_id == numeric_store_id,
+                InventoryTransaction.approved_by_store_id == numeric_store_id,
             )
         )
 

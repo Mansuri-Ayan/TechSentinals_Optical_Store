@@ -268,6 +268,7 @@ async def list_sales(
     page: int = 1,
     limit: int = 20,
     paginate: bool = True,
+    has_due: bool | None = None,
 ) -> tuple[list[Sale], int]:
     """List sales for an admin with optional filters, search, and pagination."""
     from models.customer import Customer
@@ -292,6 +293,11 @@ async def list_sales(
         conditions.append(Sale.sale_date >= date_from)
     if date_to:
         conditions.append(Sale.sale_date <= date_to)
+    if has_due is not None:
+        if has_due:
+            conditions.append(Sale.due_amount > 0)
+        else:
+            conditions.append(Sale.due_amount == 0)
 
     if search:
         search_term = f"%{search.strip()}%"

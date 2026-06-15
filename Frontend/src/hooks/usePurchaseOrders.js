@@ -22,6 +22,7 @@ export const usePurchaseOrders = (filters = {}) => {
     ...(filters.supplier_id ? { supplier_id: Number(filters.supplier_id) } : {}),
     ...(filters.store_id ? { store_id: Number(filters.store_id) } : {}),
     ...(filters.status ? { status: filters.status } : {}),
+    ...(filters.has_due !== undefined ? { has_due: filters.has_due } : {}),
   };
 
   const query = useQuery({
@@ -107,6 +108,19 @@ export const usePurchaseOrders = (filters = {}) => {
     },
   });
 
+  const recordPaymentMutation = useMutation({
+    mutationFn: async ({ poId, payload }) => {
+      return recordSupplierPaymentApi(poId, payload);
+    },
+    onSuccess: () => {
+      invalidatePurchaseOrders();
+      toast.success('Payment recorded successfully.');
+    },
+    onError: (error) => {
+      toast.error(error.response?.data?.detail || error.message || 'Failed to record payment.');
+    },
+  });
+
   return {
     purchaseOrders: query.data || [],
     isLoadingPurchaseOrders: query.isLoading,
@@ -115,5 +129,7 @@ export const usePurchaseOrders = (filters = {}) => {
     purchaseOrdersQuery: query,
     recordPurchaseAsync: recordPurchaseMutation.mutateAsync,
     isRecordingPurchase: recordPurchaseMutation.isPending,
+    recordPaymentAsync: recordPaymentMutation.mutateAsync,
+    isRecordingPayment: recordPaymentMutation.isPending,
   };
 };

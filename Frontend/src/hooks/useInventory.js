@@ -7,15 +7,20 @@ import {
   createInventoryApi,
   updateInventoryApi,
 } from "../api/inventory/inventory.api";
+import { useAuthStore } from "../store/store";
 
 export const inventoryQueryKey = ["inventory"];
 
 export const useInventory = (storeId, filters = {}) => {
   const queryClient = useQueryClient();
+  const { user } = useAuthStore();
+  const isLocAdmin = storeId === 'admin';
+  const ownerType = isLocAdmin ? 'ADMIN' : 'STORE';
+  const ownerId = isLocAdmin ? user?.id : storeId;
 
   const params = {
-    owner_type: 'STORE',
-    owner_id: storeId,
+    owner_type: ownerType,
+    owner_id: ownerId,
     page: filters.page || 1,
     limit: filters.limit || 20,
     paginate: true,
@@ -32,7 +37,7 @@ export const useInventory = (storeId, filters = {}) => {
   const query = useQuery({
     queryKey: [inventoryQueryKey, storeId, params],
     queryFn: () => getInventoryApi(params),
-    enabled: !!storeId,
+    enabled: !!storeId && (isLocAdmin ? !!user?.id : true),
     staleTime: 1000 * 60 * 2,
     retry: false,
     placeholderData: (previousData) => previousData,
@@ -43,7 +48,7 @@ export const useInventory = (storeId, filters = {}) => {
     queryKey: [inventoryQueryKey, storeId, "kpis"],
     queryFn: async () => {
       const res = await getInventoryApi(
-        { owner_type: 'STORE', owner_id: storeId, paginate: false }
+        { owner_type: ownerType, owner_id: ownerId, paginate: false }
       );
       // Handle both response shapes:
       // Shape 1: { items: [...], total: N }
@@ -54,7 +59,7 @@ export const useInventory = (storeId, filters = {}) => {
       if (Array.isArray(res?.data)) return res.data;
       return [];
     },
-    enabled: !!storeId,
+    enabled: !!storeId && (isLocAdmin ? !!user?.id : true),
     staleTime: 1000 * 60 * 2,
     retry: false,
   });

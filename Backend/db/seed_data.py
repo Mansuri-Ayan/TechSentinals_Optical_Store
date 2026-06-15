@@ -1518,21 +1518,42 @@ async def seed() -> None:
                 if existing:
                     continue
                 
+                total_po_amt = (PRODUCTS[i]["cost_price"] * 10) * 1.18
+                
+                if i == 1:
+                    po_status = POStatus.SENT
+                    qty_received = 0
+                    rec_date = None
+                    po_paid = 0
+                    po_due = total_po_amt
+                elif i == 3:
+                    po_status = POStatus.PARTIALLY_RECEIVED
+                    qty_received = 5
+                    rec_date = None
+                    po_paid = total_po_amt / 2
+                    po_due = total_po_amt / 2
+                else:
+                    po_status = POStatus.RECEIVED
+                    qty_received = 10
+                    rec_date = date(2025, 6, 4)
+                    po_due = total_po_amt / 2 if i == 0 else 0
+                    po_paid = total_po_amt - po_due
+
                 po = PurchaseOrder(
                     po_number=po_num,
                     admin_id=admin_id,
                     store_id=store_id,
                     supplier_id=s_ids[i],
-                    status=POStatus.RECEIVED,
+                    status=po_status,
                     order_date=date(2025, 6, 1),
                     expected_delivery_date=date(2025, 6, 4),
-                    received_date=date(2025, 6, 4),
+                    received_date=rec_date,
                     subtotal=PRODUCTS[i]["cost_price"] * 10,
                     tax_amount=(PRODUCTS[i]["cost_price"] * 10) * 0.18,
                     discount_amount=0,
-                    total_amount=(PRODUCTS[i]["cost_price"] * 10) * 1.18,
-                    paid_amount=(PRODUCTS[i]["cost_price"] * 10) * 1.18,
-                    due_amount=0,
+                    total_amount=total_po_amt,
+                    paid_amount=po_paid,
+                    due_amount=po_due,
                     created_by=admin_id
                 )
                 session.add(po)
@@ -1543,7 +1564,7 @@ async def seed() -> None:
                     product_id=p_ids[i],
                     inventory_id=admin_inv_ids[i],
                     quantity_ordered=10,
-                    quantity_received=10,
+                    quantity_received=qty_received,
                     unit_price=PRODUCTS[i]["cost_price"],
                     tax_percent=18.00,
                     discount_percent=0.00,
@@ -1551,17 +1572,18 @@ async def seed() -> None:
                 )
                 session.add(po_item)
                 
-                payment = SupplierPayment(
-                    purchase_order_id=po.id,
-                    supplier_id=s_ids[i],
-                    admin_id=admin_id,
-                    payment_date=date(2025, 6, 5),
-                    amount=po.total_amount,
-                    payment_method=SupplierPaymentMethod.BANK_TRANSFER,
-                    reference_number=f"UTR-{uuid.uuid4().hex[:8].upper()}",
-                    created_by=admin_id
-                )
-                session.add(payment)
+                if po_paid > 0:
+                    payment = SupplierPayment(
+                        purchase_order_id=po.id,
+                        supplier_id=s_ids[i],
+                        admin_id=admin_id,
+                        payment_date=date(2025, 6, 5),
+                        amount=po_paid,
+                        payment_method=SupplierPaymentMethod.BANK_TRANSFER,
+                        reference_number=f"UTR-{uuid.uuid4().hex[:8].upper()}",
+                        created_by=admin_id
+                    )
+                    session.add(payment)
             print(f"  [OK] seeded 5 purchase orders, items, and payments for Admin {admin_id}")
 
         # ── 17. Seed Customers ─────────────────────────────────
@@ -1630,6 +1652,11 @@ async def seed() -> None:
                 if existing:
                     continue
                 
+                total_sale_amt = PRODUCTS[i]["selling_price"] * 1.18
+                sale_due = total_sale_amt / 2 if i == 0 else 0
+                sale_paid = total_sale_amt - sale_due
+                sale_status = SaleStatus.PARTIALLY_PAID if i == 0 else SaleStatus.COMPLETED
+
                 sale = Sale(
                     invoice_number=inv_num,
                     admin_id=admin_id,
@@ -1638,13 +1665,13 @@ async def seed() -> None:
                     sold_by_type=sold_by_type,
                     sold_by_id=sold_by_id,
                     sale_date=date(2025, 6, 5),
-                    status=SaleStatus.COMPLETED,
+                    status=sale_status,
                     subtotal=PRODUCTS[i]["selling_price"],
                     discount_amount=0,
                     tax_amount=PRODUCTS[i]["selling_price"] * 0.18,
-                    total_amount=PRODUCTS[i]["selling_price"] * 1.18,
-                    paid_amount=PRODUCTS[i]["selling_price"] * 1.18,
-                    due_amount=0
+                    total_amount=total_sale_amt,
+                    paid_amount=sale_paid,
+                    due_amount=sale_due
                 )
                 session.add(sale)
                 await session.flush()
@@ -1664,7 +1691,7 @@ async def seed() -> None:
                 
                 payment = SalePayment(
                     sale_id=sale.id,
-                    amount=sale.total_amount,
+                    amount=sale_paid,
                     payment_method=SalePaymentMethod.UPI,
                     reference_number=f"TXN-{uuid.uuid4().hex[:8].upper()}"
                 )

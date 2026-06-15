@@ -117,7 +117,10 @@ const HomeRoute = () => {
 
 const StaffRouteRedirect = () => {
   const { selectedStore, stores } = useStoreStore();
-  const targetStore = selectedStore || stores[0];
+  let targetStore = selectedStore || stores[0];
+  if (targetStore?.id === 'admin') {
+    targetStore = stores.find(s => s.id !== 'admin');
+  }
 
   if (!targetStore) {
     return <Navigate to="/admin/dashboard" replace />;
@@ -173,7 +176,10 @@ const TransactionsRouteRedirect = () => {
 };
 const StoreRouteRedirect = ({ path }) => {
   const { selectedStore, stores } = useStoreStore();
-  const targetStore = selectedStore || stores[0];
+  let targetStore = selectedStore || stores[0];
+  if (targetStore?.id === 'admin' && (path === 'expenses' || path === 'staff')) {
+    targetStore = stores.find(s => s.id !== 'admin');
+  }
   if (!targetStore) return <Navigate to="/admin/dashboard" replace />;
   return <Navigate to={`/admin/store/${targetStore.id}/${path}`} replace />;
 };

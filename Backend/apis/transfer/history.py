@@ -32,7 +32,7 @@ async def transaction_history_endpoint(
     product_id: int | None = Query(None),
     inventory_id: int | None = Query(None),
     transaction_type: str | None = Query(None),
-    store_id: int | None = Query(None),
+    store_id: str | None = Query(None),
     search: str | None = Query(None, description="Search term matching product name or ID"),
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=1000),
@@ -40,13 +40,24 @@ async def transaction_history_endpoint(
     current_admin: Admin = Depends(get_current_admin),
 ) -> PaginatedResponse[TransactionRead]:
     if store_id is not None:
-        store = await get_store(db, store_id)
-        if store is None or store.admin_id != current_admin.id:
-            from fastapi import HTTPException, status
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Store not found",
-            )
+        if store_id.lower() == "admin":
+            pass
+        else:
+            try:
+                numeric_store_id = int(store_id)
+            except ValueError:
+                from fastapi import HTTPException, status
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid store_id format",
+                )
+            store = await get_store(db, numeric_store_id)
+            if store is None or store.admin_id != current_admin.id:
+                from fastapi import HTTPException, status
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Store not found",
+                )
 
     offset = (page - 1) * limit
     transactions, total = await get_transaction_history(

@@ -10,6 +10,7 @@ import AddTransactionModal from '../../components/admin/suppliers/AddTransaction
 import TransactionDetailModal from '../../components/admin/suppliers/TransactionDetailModal';
 import AddEditSupplierModal from '../../components/admin/suppliers/AddEditSupplierModal';
 import DeleteConfirmModal from '../../components/admin/suppliers/DeleteConfirmModal';
+import AddPaymentModal from '../../components/admin/suppliers/AddPaymentModal';
 import { useStoreStore } from '../../store/store';
 import { useSupplier, useSupplierProducts, useSuppliers } from '../../hooks/useSuppliers';
 import { usePurchaseOrders } from '../../hooks/usePurchaseOrders';
@@ -78,11 +79,12 @@ const SupplierDetail = () => {
   }, [stores, storeId]);
 
   // React Query queries
+  const [selectedPaymentFilter, setSelectedPaymentFilter] = useState('All');
   const { supplier, isLoadingSupplier, isSupplierError } = useSupplier(id);
   const { products: catalogueProducts, addProductAsync } = useSupplierProducts(id);
-  const { purchaseOrders, recordPurchaseAsync, isLoadingPurchaseOrders } = usePurchaseOrders({
+  const { purchaseOrders, recordPurchaseAsync, recordPaymentAsync, isLoadingPurchaseOrders } = usePurchaseOrders({
     supplier_id: id,
-    store_id: storeId,
+    has_due: selectedPaymentFilter === 'Remaining' ? true : selectedPaymentFilter === 'Paid' ? false : undefined,
   });
   const { updateSupplierAsync, deleteSupplierAsync } = useSuppliers(storeId);
 
@@ -91,6 +93,20 @@ const SupplierDetail = () => {
   const [selectedTransaction, setSelectedTransaction] = useState(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showAddPayment, setShowAddPayment] = useState(false);
+  const [paymentTargetTransaction, setPaymentTargetTransaction] = useState(null);
+
+  const handleRecordPaymentSubmit = async (poId, payload) => {
+    await recordPaymentAsync({ poId, payload });
+    setShowAddPayment(false);
+    setPaymentTargetTransaction(null);
+    setSelectedTransaction(null);
+  };
+
+  const handleOpenPaymentFromDetail = (tx) => {
+    setPaymentTargetTransaction(tx);
+    setShowAddPayment(true);
+  };
 
   // Map API Supplier to UI Model
   const s = useMemo(() => {
@@ -478,12 +494,33 @@ const SupplierDetail = () => {
 
         {/* ── HISTORY TAB ── */}
         {activeTab === 'history' && (
-          <div>
+          <div className="space-y-4">
+            {/* Payment Filter Bar */}
+            <div className="flex justify-between items-center bg-slate-50 p-4 rounded-2xl border border-slate-100 flex-wrap gap-3">
+              <span className="text-xs font-extrabold text-slate-500 uppercase tracking-wider">Purchase Order History</span>
+              <div className="flex items-center gap-2">
+                <label className="text-xs font-semibold text-slate-600">Payment Status:</label>
+                <select
+                  value={selectedPaymentFilter}
+                  onChange={(e) => setSelectedPaymentFilter(e.target.value)}
+                  className="px-3 py-1.5 text-xs font-semibold border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 bg-white cursor-pointer"
+                >
+                  <option value="All">All Transactions</option>
+                  <option value="Remaining">Remaining Payment (Due)</option>
+                  <option value="Paid">Fully Paid</option>
+                </select>
+              </div>
+            </div>
+
             {transactionsList.length === 0 ? (
-              <div className="text-center py-16 text-slate-400">
-                <ArrowRightLeft className="w-12 h-12 mx-auto mb-4 text-slate-200" />
+              <div className="text-center py-16 text-slate-400 bg-white border border-dashed border-slate-200 rounded-2xl">
+                <ArrowRightLeft className="w-12 h-12 mx-auto mb-4 text-slate-250" />
                 <p className="font-bold text-base text-slate-700">No transactions recorded</p>
-                <p className="text-xs text-slate-400 mt-1">Click "Record Purchase" to register history.</p>
+                <p className="text-xs text-slate-400 mt-1">
+                  {selectedPaymentFilter !== 'All'
+                    ? 'No transactions match the selected payment status.'
+                    : 'Click "Record Purchase" to register history.'}
+                </p>
               </div>
             ) : (
               <>
@@ -669,6 +706,18 @@ const SupplierDetail = () => {
         isOpen={Boolean(selectedTransaction)}
         transaction={selectedTransaction}
         onClose={() => setSelectedTransaction(null)}
+        onRecordPayment={handleOpenPaymentFromDetail}
+      />
+
+      <AddPaymentModal
+        isOpen={showAddPayment}
+        po={paymentTargetTransaction}
+        supplierName={s.name}
+        onClose={() => {
+          setShowAddPayment(false);
+          setPaymentTargetTransaction(null);
+        }}
+        onSubmit={handleRecordPaymentSubmit}
       />
 
       <AddEditSupplierModal

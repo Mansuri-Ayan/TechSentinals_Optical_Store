@@ -19,7 +19,7 @@ export const useSuppliers = (storeId, filters = {}) => {
   const params = {
     page: filters.page || 1,
     limit: filters.limit || 20,
-    ...(storeId ? { store_id: storeId } : {}),
+    ...(storeId && !filters.global ? { store_id: storeId } : {}),
     ...(filters.status ? { status: filters.status } : {}),
     ...(filters.search ? { search: filters.search } : {}),
   };
@@ -27,7 +27,7 @@ export const useSuppliers = (storeId, filters = {}) => {
   const query = useQuery({
     queryKey: [suppliersQueryKey, storeId, params],
     queryFn: () => getSuppliersApi(params),
-    enabled: Boolean(storeId),
+    enabled: Boolean(storeId) || filters.global === true,
     retry: false,
     staleTime: 1000 * 60 * 2,
   });
@@ -58,9 +58,9 @@ export const useSuppliers = (storeId, filters = {}) => {
 
   const updateSupplierMutation = useMutation({
     mutationFn: ({ id, payload }) => updateSupplierApi(id, payload),
-    onSuccess: () => {
+    onSuccess: (data, variables) => {
       invalidateSuppliers();
-      queryClient.invalidateQueries({ queryKey: ['supplier', id] });
+      queryClient.invalidateQueries({ queryKey: ['supplier', variables.id] });
       toast.success('Supplier updated successfully.');
     },
     onError: (error) => {

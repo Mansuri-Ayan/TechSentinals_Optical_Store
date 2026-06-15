@@ -52,9 +52,10 @@ async def list_po_endpoint(
     supplier_id: int | None = Query(default=None),
     store_id: int | None = Query(default=None),
     status_filter: str | None = Query(default=None, alias="status"),
-    limit: int = Query(100, ge=1, le=500),
+    limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0),
     include_nested: bool = Query(default=False),
+    has_due: bool | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
     current_admin: Admin = Depends(get_current_admin),
 ) -> list[PurchaseOrderRead]:
@@ -67,6 +68,7 @@ async def list_po_endpoint(
         limit=limit,
         offset=offset,
         include_nested=include_nested,
+        has_due=has_due,
     )
     return [_po_to_read(po, include_nested=include_nested) for po in pos]
 

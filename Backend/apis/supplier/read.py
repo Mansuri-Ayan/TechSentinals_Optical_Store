@@ -29,7 +29,7 @@ async def list_suppliers_endpoint(
     search: str | None = Query(default=None),
     store_id: int | None = Query(default=None),
     page: int = Query(1, ge=1),
-    limit: int = Query(20, ge=1, le=100),
+    limit: int = Query(20, ge=1, le=1000),
     db: AsyncSession = Depends(get_db),
     current_admin: Admin = Depends(get_current_admin),
 ) -> PaginatedResponse[SupplierRead]:

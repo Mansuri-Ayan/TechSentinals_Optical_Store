@@ -33,7 +33,25 @@ const AnalyticsCard = ({ title, subtitle, children, className = "" }) => (
 /* ── PURE SVG CHART COMPONENTS ── */
 
 // 1. Line Area Chart: Sales Trend
-const SalesTrendChart = ({ data }) => {
+const SalesTrendChart = ({ data: rawData }) => {
+  if (!rawData || !Array.isArray(rawData) || rawData.length === 0) {
+    return <div className="w-full h-72 sm:h-80 flex items-center justify-center text-xs text-slate-400 font-semibold">No data available</div>;
+  }
+
+  const data = [];
+  for (let i = 0; i < rawData.length; i++) {
+    const item = rawData[i];
+    if (!item) continue;
+    data.push({
+      value: typeof item.value === 'number' ? item.value : (Number(item.value) || 0),
+      label: typeof item.label === 'string' ? item.label : String(item.label || ''),
+    });
+  }
+
+  if (data.length === 0) {
+    return <div className="w-full h-72 sm:h-80 flex items-center justify-center text-xs text-slate-400 font-semibold">No data available</div>;
+  }
+
   const maxValue = Math.max(...data.map(item => item.value), 50000);
   const points = data.map((item, i) => {
     const x = 40 + i * (250 / 5);
@@ -62,15 +80,18 @@ const SalesTrendChart = ({ data }) => {
 
         {data.map((p, i) => {
           const x = 40 + i * (250 / 5);
-          const y = 135 - (p.value / maxValue) * 105;
+          const pVal = typeof p.value === 'number' ? p.value : 0;
+          const pLabel = p.label || '';
+          const y = 135 - (pVal / maxValue) * 105;
+          const displayVal = typeof pVal === 'number' ? pVal.toLocaleString() : '0';
           return (
             <g key={i} className="group cursor-pointer">
               <circle cx={x} cy={y} r="2.5" fill="#FFFFFF" stroke="#3B82F6" strokeWidth="1.5" className="transition-all duration-200 group-hover:r-4.5 group-hover:stroke-blue-600" />
               <text x={x} y={y - 8} textAnchor="middle" className="text-[7.5px] font-extrabold fill-slate-800 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                ₹{(p.value / 1000).toFixed(0)}k
+                ₹{(pVal / 1000).toFixed(0)}k
               </text>
-              <text x={x} y="145" textAnchor="middle" className="text-[8px] font-bold fill-slate-400 pointer-events-none">{p.label}</text>
-              <title>{`${p.label}: ₹${p.value.toLocaleString()}`}</title>
+              <text x={x} y="145" textAnchor="middle" className="text-[8px] font-bold fill-slate-400 pointer-events-none">{pLabel}</text>
+              <title>{pLabel + ': ₹' + displayVal}</title>
             </g>
           );
         })}
@@ -80,7 +101,26 @@ const SalesTrendChart = ({ data }) => {
 };
 
 // 2. Donut Chart
-const DonutChart = ({ data, totalLabel = "Total" }) => {
+const DonutChart = ({ data: rawData, totalLabel = "Total" }) => {
+  if (!rawData || !Array.isArray(rawData) || rawData.length === 0) {
+    return <div className="w-full h-48 flex items-center justify-center text-xs text-slate-400 font-semibold">No data available</div>;
+  }
+
+  const data = [];
+  for (let i = 0; i < rawData.length; i++) {
+    const item = rawData[i];
+    if (!item) continue;
+    data.push({
+      value: typeof item.value === 'number' ? item.value : (Number(item.value) || 0),
+      name: typeof item.name === 'string' ? item.name : String(item.name || ''),
+      color: item.color || '#6B7280',
+    });
+  }
+
+  if (data.length === 0) {
+    return <div className="w-full h-48 flex items-center justify-center text-xs text-slate-400 font-semibold">No data available</div>;
+  }
+
   const total = data.reduce((sum, item) => sum + item.value, 0);
   let currentOffset = 0;
 
@@ -94,6 +134,7 @@ const DonutChart = ({ data, totalLabel = "Total" }) => {
             const strokeLength = (percentage / 100) * 314.16;
             const strokeOffset = 314.16 - strokeLength + currentOffset;
             currentOffset -= strokeLength;
+            const valDisplay = typeof slice.value === 'number' ? slice.value.toLocaleString() : '0';
 
             return (
               <circle
@@ -109,7 +150,7 @@ const DonutChart = ({ data, totalLabel = "Total" }) => {
                 className="transition-all duration-200 cursor-pointer hover:stroke-[14px]"
                 style={{ transformOrigin: 'center' }}
               >
-                <title>{`${slice.name}: ${slice.value.toLocaleString()} (${Math.round(percentage)}%)`}</title>
+                <title>{slice.name + ': ' + valDisplay + ' (' + Math.round(percentage) + '%)'}</title>
               </circle>
             );
           })}
@@ -117,29 +158,51 @@ const DonutChart = ({ data, totalLabel = "Total" }) => {
         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
           <span className="text-[8px] text-slate-400 font-extrabold uppercase tracking-wider">{totalLabel}</span>
           <span className="text-base font-black text-slate-800 leading-none mt-0.5 truncate max-w-[90px] text-center">
-            {total >= 100000 ? `${(total / 1000).toFixed(0)}k` : total.toLocaleString()}
+            {total >= 100000 ? ((total / 1000).toFixed(0) + 'k') : (typeof total === 'number' ? total.toLocaleString() : '0')}
           </span>
         </div>
       </div>
 
       <div className="flex flex-col gap-1.5 text-xs text-slate-655 w-full max-w-[130px] overflow-y-auto max-h-36 pr-1 hide-scrollbar">
-        {data.map((slice, i) => (
-          <div key={i} className="flex items-center justify-between gap-1.5 bg-slate-50 p-2 rounded-xl border border-slate-100/50">
-            <div className="flex items-center gap-1 min-w-0">
-              <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: slice.color }} />
-              <span className="font-extrabold truncate text-[9px] text-slate-700">{slice.name}</span>
+        {data.map((slice, i) => {
+          const valDisplay = typeof slice.value === 'number' ? slice.value.toLocaleString() : '0';
+          return (
+            <div key={i} className="flex items-center justify-between gap-1.5 bg-slate-50 p-2 rounded-xl border border-slate-100/50">
+              <div className="flex items-center gap-1 min-w-0">
+                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: slice.color }} />
+                <span className="font-extrabold truncate text-[9px] text-slate-700">{slice.name}</span>
+              </div>
+              <span className="font-black text-[9px] text-slate-900 ml-auto">{valDisplay}</span>
             </div>
-            <span className="font-black text-[9px] text-slate-900 ml-auto">{slice.value.toLocaleString()}</span>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
 };
 
 // 3. Bar Chart
-const BarChart = ({ data }) => {
-  const maxValue = Math.max(...data.map(item => item.value), 1);
+const BarChart = ({ data: rawData }) => {
+  if (!rawData || !Array.isArray(rawData) || rawData.length === 0) {
+    return <div className="w-full h-48 flex items-center justify-center text-xs text-slate-400 font-semibold">No data available</div>;
+  }
+
+  const safeData = [];
+  for (let i = 0; i < rawData.length; i++) {
+    const item = rawData[i];
+    if (!item) continue;
+    safeData.push({
+      value: typeof item.value === 'number' ? item.value : (Number(item.value) || 0),
+      label: typeof item.label === 'string' ? item.label : String(item.label || ''),
+      color: item.color || '#3B82F6',
+    });
+  }
+
+  if (safeData.length === 0) {
+    return <div className="w-full h-48 flex items-center justify-center text-xs text-slate-400 font-semibold">No data available</div>;
+  }
+
+  const maxValue = Math.max(...safeData.map(item => item.value), 1);
 
   return (
     <div className="w-full h-48 px-2 pt-2">
@@ -149,12 +212,16 @@ const BarChart = ({ data }) => {
         <line x1="40" y1="100" x2="290" y2="100" stroke="#F8FAFC" strokeWidth="1" strokeDasharray="3 3" />
         <line x1="40" y1="130" x2="290" y2="130" stroke="#E2E8F0" strokeWidth="1.25" />
 
-        {data.map((bar, i) => {
-          const barWidth = Math.max(10, Math.min(20, 130 / data.length));
-          const spacing = (250 - (data.length * barWidth)) / (data.length + 1);
+        {safeData.map((bar, i) => {
+          const barWidth = Math.max(10, Math.min(20, 130 / safeData.length));
+          const spacing = (250 - (safeData.length * barWidth)) / (safeData.length + 1);
           const x = 40 + spacing + i * (barWidth + spacing);
-          const height = (bar.value / maxValue) * 105;
+          const barVal = bar.value;
+          const barLabel = bar.label;
+          const height = (barVal / maxValue) * 105;
           const y = 130 - height;
+          const displayVal = typeof barVal === 'number' ? barVal.toLocaleString() : '0';
+          const displayLabel = barLabel.length > 9 ? (barLabel.substring(0, 6) + '..') : barLabel;
 
           return (
             <g key={i} className="group cursor-pointer">
@@ -168,12 +235,12 @@ const BarChart = ({ data }) => {
                 className="opacity-90 hover:opacity-100 transition-all duration-350"
               />
               <text x={x + barWidth / 2} y={y - 6} textAnchor="middle" className="text-[7.5px] font-extrabold fill-slate-800 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                {bar.value.toLocaleString()}
+                {displayVal}
               </text>
               <text x={x + barWidth / 2} y="143" textAnchor="middle" className="text-[8px] font-extrabold fill-slate-400 pointer-events-none">
-                {bar.label.length > 9 ? `${bar.label.substring(0, 6)}..` : bar.label}
+                {displayLabel}
               </text>
-              <title>{`${bar.label}: ${bar.value.toLocaleString()}`}</title>
+              <title>{barLabel + ': ' + displayVal}</title>
             </g>
           );
         })}
@@ -183,7 +250,25 @@ const BarChart = ({ data }) => {
 };
 
 // 4. Line Chart: Customer Growth
-const CustomerGrowthChart = ({ data }) => {
+const CustomerGrowthChart = ({ data: rawData }) => {
+  if (!rawData || !Array.isArray(rawData) || rawData.length === 0) {
+    return <div className="w-full h-48 flex items-center justify-center text-xs text-slate-400 font-semibold">No data available</div>;
+  }
+
+  const data = [];
+  for (let i = 0; i < rawData.length; i++) {
+    const item = rawData[i];
+    if (!item) continue;
+    data.push({
+      value: typeof item.value === 'number' ? item.value : (Number(item.value) || 0),
+      label: typeof item.label === 'string' ? item.label : String(item.label || ''),
+    });
+  }
+
+  if (data.length === 0) {
+    return <div className="w-full h-48 flex items-center justify-center text-xs text-slate-400 font-semibold">No data available</div>;
+  }
+
   const maxValue = Math.max(...data.map(item => item.value), 5);
   const points = data.map((item, i) => {
     const x = 40 + i * (250 / 5);
@@ -203,15 +288,17 @@ const CustomerGrowthChart = ({ data }) => {
 
         {data.map((p, i) => {
           const x = 40 + i * (250 / 5);
-          const y = 130 - (p.value / maxValue) * 105;
+          const pVal = typeof p.value === 'number' ? p.value : 0;
+          const pLabel = p.label || '';
+          const y = 130 - (pVal / maxValue) * 105;
           return (
             <g key={i} className="group cursor-pointer">
               <circle cx={x} cy={y} r="2.5" fill="#FFFFFF" stroke="#6366F1" strokeWidth="1.5" className="transition-all duration-200 group-hover:r-4 group-hover:stroke-indigo-600" />
               <text x={x} y={y - 8} textAnchor="middle" className="text-[7.5px] font-extrabold fill-indigo-700 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                {p.value}
+                {pVal}
               </text>
-              <text x={x} y="143" textAnchor="middle" className="text-[8px] font-extrabold fill-slate-400 pointer-events-none">{p.label}</text>
-              <title>{`${p.label}: ${p.value} Customers`}</title>
+              <text x={x} y="143" textAnchor="middle" className="text-[8px] font-extrabold fill-slate-400 pointer-events-none">{pLabel}</text>
+              <title>{pLabel + ': ' + pVal + ' Customers'}</title>
             </g>
           );
         })}
