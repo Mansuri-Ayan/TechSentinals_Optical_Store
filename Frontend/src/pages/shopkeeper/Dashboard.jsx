@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { IndianRupee, ShoppingCart, TrendingUp, Users, ArrowUpRight, BarChart3, Clock, Package } from 'lucide-react';
 import { useSales } from '../../hooks/useSales';
 import { useCustomers } from '../../hooks/useCustomers';
+import NotificationBell from '../../components/shared/NotificationBell';
 
 const fmtDate = (d) => d
   ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
@@ -171,6 +172,9 @@ const Dashboard = () => {
         <div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">Inventory Dashboard</h1>
           <p className="text-slate-555 mt-1.5 text-xs sm:text-sm font-semibold">Welcome back! Here's a live overview of your optical store transactions and CRM activity.</p>
+        </div>
+        <div className="flex items-center gap-3 w-full md:w-auto justify-between md:justify-end">
+          <NotificationBell role="shopkeeper" />
         </div>
       </div>
 

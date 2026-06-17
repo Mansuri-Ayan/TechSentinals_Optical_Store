@@ -11,7 +11,7 @@ const roleOptions = [
 ];
 
 /* ---------- Default values ---------- */
-const getDefaultValues = (initialData) => {
+const getDefaultValues = (initialData, storeId) => {
   if (!initialData) {
     return {
       firstName: '',
@@ -24,6 +24,7 @@ const getDefaultValues = (initialData) => {
       isActive: true,
       password: '',
       confirmPassword: '',
+      store_id: storeId === 'admin' ? '' : storeId,
     };
   }
   return {
@@ -37,6 +38,7 @@ const getDefaultValues = (initialData) => {
     isActive: Boolean(initialData.is_active),
     password: '',
     confirmPassword: '',
+    store_id: initialData.store_id || '',
   };
 };
 
@@ -58,7 +60,7 @@ const inputCls = (hasError) =>
   }`;
 
 /* ---------- Component ---------- */
-const AddStaffModal = ({ isOpen, onClose, onSubmitStaff, initialData, isSaving = false }) => {
+const AddStaffModal = ({ isOpen, onClose, onSubmitStaff, initialData, isSaving = false, storeId, stores = [] }) => {
   const isEditing = Boolean(initialData);
   const [imagePreview, setImagePreview] = useState(initialData?.profile_image || null);
   const [showPassword, setShowPassword] = useState(false);
@@ -72,7 +74,7 @@ const AddStaffModal = ({ isOpen, onClose, onSubmitStaff, initialData, isSaving =
     setValue,
     reset,
     formState: { errors },
-  } = useForm({ defaultValues: getDefaultValues(initialData) });
+  } = useForm({ defaultValues: getDefaultValues(initialData, storeId) });
 
   const watchedRole = watch('role');
   const watchedIsActive = watch('isActive');
@@ -104,6 +106,7 @@ const AddStaffModal = ({ isOpen, onClose, onSubmitStaff, initialData, isSaving =
       email: data.email,
       phone: data.phone,
       is_active: data.isActive,
+      store_id: Number(data.store_id || storeId),
     };
 
     const createPayload = {
@@ -260,6 +263,31 @@ const AddStaffModal = ({ isOpen, onClose, onSubmitStaff, initialData, isSaving =
                   </select>
                   <FieldError message={errors.role?.message} />
                 </div>
+
+                {/* Assign Store (Visible only in Admin Warehouse mode) */}
+                {storeId === 'admin' && (
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+                      Assign Store <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      {...register('store_id', { required: 'Assigning a store is required' })}
+                      disabled={isEditing}
+                      className={`${inputCls(!!errors.store_id)} disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed`}
+                    >
+                      <option value="">Select Store...</option>
+                      {stores
+                        .filter(s => s.id !== 'admin') // Filter out central admin warehouse option
+                        .map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.store_name || s.name}
+                          </option>
+                        ))
+                      }
+                    </select>
+                    <FieldError message={errors.store_id?.message} />
+                  </div>
+                )}
 
                 {/* Joining Date — create only */}
                 {!isEditing && (

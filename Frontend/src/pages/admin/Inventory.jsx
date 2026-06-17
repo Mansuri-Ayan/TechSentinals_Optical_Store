@@ -20,6 +20,8 @@ import {
   Info,
   ShoppingCart,
   Loader2,
+  Store,
+  ChevronDown,
 } from "lucide-react";
 
 import Pagination from "../../components/shared/Pagination";
@@ -28,7 +30,7 @@ import InventoryDetailDrawer from "../../components/admin/InventoryDetailDrawer"
 import ProductViewModal from "../../components/admin/ProductViewModal";
 import PlaceOrderModal from "../../components/admin/PlaceOrderModal";
 
-import { useStoreStore } from "../../store/store";
+import { useStoreStore, useAuthStore } from "../../store/store";
 import { useCategories, useSubcategories } from "../../hooks/useCategories";
 import { useBrands } from "../../hooks/useBrands";
 import { useInventory } from "../../hooks/useInventory";
@@ -279,6 +281,7 @@ const ProductCard = ({ item, onViewProduct, onViewDetails, onDelete }) => {
    ───────────────────────────────────────────────────────── */
 const Inventory = () => {
   const { storeId } = useParams();
+  const { user } = useAuthStore();
   const { stores, selectedStore, setSelectedStore } = useStoreStore();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -288,6 +291,7 @@ const Inventory = () => {
   const queryStockStatus = searchParams.get("stock_status");
 
   /* Filters & Pagination states */
+  const [inPageStoreId, setInPageStoreId] = useState(storeId);
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState(
@@ -305,6 +309,10 @@ const Inventory = () => {
   const [detailItem, setDetailItem] = useState(null);
   const [viewProductItem, setViewProductItem] = useState(null);
   const [orderItem, setOrderItem] = useState(null);
+
+  useEffect(() => {
+    setInPageStoreId(storeId);
+  }, [storeId]);
 
   /* Sync URL Store ID to store management store */
   useEffect(() => {
@@ -377,7 +385,7 @@ const Inventory = () => {
     isFetching,
     createInventoryAsync,
     updateInventoryAsync,
-  } = useInventory(storeId, {
+  } = useInventory(inPageStoreId, {
     page: currentPage,
     limit: ITEMS_PER_PAGE,
     search: debouncedSearch,
@@ -397,7 +405,7 @@ const Inventory = () => {
       brand: item.brand_name || item.brand,
       image: item.image_url || item.image,
       quantity: item.available_quantity,
-      store: selectedStore?.store_name || "Store",
+      store: item.owner_name || selectedStore?.store_name || "Store",
       supplier: "Vision Supply Co.",
     }));
   }, [items, selectedStore]);
@@ -412,7 +420,7 @@ const Inventory = () => {
       brand: detailItem.brand_name || detailItem.brand,
       image: detailItem.image_url || detailItem.image,
       quantity: detailItem.available_quantity,
-      store: selectedStore?.store_name || "Store",
+      store: detailItem.owner_name || selectedStore?.store_name || "Store",
       supplier: "Vision Supply Co.",
     };
   }, [detailItem, selectedStore]);
@@ -428,7 +436,7 @@ const Inventory = () => {
       brand: viewProductItem.brand_name || viewProductItem.brand,
       image: viewProductItem.image_url || viewProductItem.image,
       quantity: viewProductItem.available_quantity,
-      store: selectedStore?.store_name || "Store",
+      store: viewProductItem.owner_name || selectedStore?.store_name || "Store",
       supplier: "Vision Supply Co.",
     };
   }, [viewProductItem, selectedStore]);
@@ -495,10 +503,15 @@ const Inventory = () => {
 
     const product = await createProductApi(productPayload);
 
+    const targetStoreId = data.store_id || inPageStoreId;
+    const isTargetAdmin = targetStoreId === "admin";
+    const resolvedOwnerType = isTargetAdmin ? "ADMIN" : "STORE";
+    const resolvedOwnerId = isTargetAdmin ? user?.id : Number(targetStoreId);
+
     // 2. Create the Inventory record
     await createInventoryAsync({
-      owner_type: "STORE",
-      owner_id: data.store_id ? Number(data.store_id) : Number(storeId),
+      owner_type: resolvedOwnerType,
+      owner_id: resolvedOwnerId,
       product_id: product.id,
       quantity: Number(data.quantity),
       reorder_level: Number(data.reorder_level),
@@ -636,13 +649,31 @@ const Inventory = () => {
               Browse and manage dynamic optical products for the selected store.
             </p>
           </div>
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="flex items-center gap-2 px-5 py-2.5 bg-[#0A0F1F] text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 flex-shrink-0"
-          >
-            <Plus className="w-4 h-4" />
-            Add Inventory
-          </button>
+          <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
+            {storeId === 'admin' && (
+              <div className="relative">
+                <select
+                  value={inPageStoreId}
+                  onChange={(e) => setInPageStoreId(e.target.value)}
+                  className="pl-9 pr-10 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-sm font-semibold focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 shadow-sm appearance-none cursor-pointer"
+                >
+                  <option value="admin">All Store</option>
+                  {stores.filter(s => s.id !== 'admin' && s.store_name !== 'All Store' && s.name !== 'All Store').map(s => (
+                    <option key={s.id} value={s.id}>{s.store_name}</option>
+                  ))}
+                </select>
+                <Store className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+              </div>
+            )}
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="flex items-center gap-2 px-5 py-2.5 bg-[#0A0F1F] text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 flex-shrink-0"
+            >
+              <Plus className="w-4 h-4" />
+              Add Inventory
+            </button>
+          </div>
         </div>
       </div>
 

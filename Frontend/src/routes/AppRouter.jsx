@@ -20,6 +20,9 @@ import Stores from "../pages/admin/Stores";
 import StoreDetail from "../pages/admin/StoreDetail";
 import AdminLoyalty from "../pages/admin/Loyalty";
 import AdminLoyaltyCustomerDetail from "../pages/admin/LoyaltyCustomerDetail";
+import AdminRepair from "../pages/admin/Repair";
+import AdminCustomers from "../pages/admin/Customers";
+import AdminCustomerDetail from "../pages/admin/CustomerDetail";
 
 // Shopkeeper imports
 import ShopKeeperLayout from "../layouts/ShopKeeperLayout";
@@ -117,10 +120,7 @@ const HomeRoute = () => {
 
 const StaffRouteRedirect = () => {
   const { selectedStore, stores } = useStoreStore();
-  let targetStore = selectedStore || stores[0];
-  if (targetStore?.id === 'admin') {
-    targetStore = stores.find(s => s.id !== 'admin');
-  }
+  const targetStore = selectedStore || stores[0];
 
   if (!targetStore) {
     return <Navigate to="/admin/dashboard" replace />;
@@ -176,12 +176,20 @@ const TransactionsRouteRedirect = () => {
 };
 const StoreRouteRedirect = ({ path }) => {
   const { selectedStore, stores } = useStoreStore();
-  let targetStore = selectedStore || stores[0];
-  if (targetStore?.id === 'admin' && (path === 'expenses' || path === 'staff')) {
-    targetStore = stores.find(s => s.id !== 'admin');
-  }
+  const targetStore = selectedStore || stores[0];
   if (!targetStore) return <Navigate to="/admin/dashboard" replace />;
   return <Navigate to={`/admin/store/${targetStore.id}/${path}`} replace />;
+};
+
+const RepairsRouteRedirect = () => {
+  const { selectedStore, stores } = useStoreStore();
+  const targetStore = selectedStore || stores[0];
+
+  if (!targetStore) {
+    return <Navigate to="/admin/dashboard" replace />;
+  }
+
+  return <Navigate to={`/admin/store/${targetStore.id}/repairs`} replace />;
 };
 
 const SuppliersRouteRedirect = () => {
@@ -249,7 +257,6 @@ function AppRouter() {
           element={<SupplierDetail />}
         />
         <Route path="sales" element={<Sales />} />
-        <Route path="expenses" element={<Expenses />} />
         <Route path="analyses" element={<Analyses />} />
         <Route path="stores" element={<Stores />} />
         <Route path="stores/:storeId" element={<StoreDetail />} />
@@ -261,9 +268,24 @@ function AppRouter() {
         />
         <Route path="store/:store_id/expenses" element={<Expenses />} />
 
+        {/* Repairs */}
+        <Route
+          path="repairs"
+          element={<RepairsRouteRedirect />}
+        />
+        <Route path="store/:storeId/repairs" element={<AdminRepair />} />
+
         {/* Loyalty Program */}
         <Route path="loyalty" element={<AdminLoyalty />} />
         <Route path="loyalty/customer/:id" element={<AdminLoyaltyCustomerDetail />} />
+
+        {/* Customers */}
+        <Route
+          path="customers"
+          element={<StoreRouteRedirect path="customers" />}
+        />
+        <Route path="store/:storeId/customers" element={<AdminCustomers />} />
+        <Route path="store/:storeId/customers/:customerId" element={<AdminCustomerDetail />} />
       </Route>
 
       {/* Shopkeeper Routes */}

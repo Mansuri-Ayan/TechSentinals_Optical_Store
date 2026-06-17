@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { 
-  Search, Plus, Tag, ChevronRight, Edit2, Trash2, Eye, Loader2,
+  Search, Plus, Tag, ChevronRight, Edit2, Trash2, Eye, Loader2, Store, ChevronDown
 } from 'lucide-react';
 import Pagination from '../../components/shared/Pagination';
 import AddEditBrandModal from '../../components/admin/AddEditBrandModal';
@@ -23,6 +23,11 @@ const Brands = () => {
   const navigate = useNavigate();
   const { storeId } = useParams();
   const { selectedStore, setSelectedStore, stores } = useStoreStore();
+  const [inPageStoreId, setInPageStoreId] = useState(storeId);
+
+  useEffect(() => {
+    setInPageStoreId(storeId);
+  }, [storeId]);
 
   // Sync storeId from URL with global store state
   useEffect(() => {
@@ -67,7 +72,7 @@ const Brands = () => {
     updateBrandAsync,
     deleteBrandAsync,
     isSaving,
-  } = useBrands(storeId, {
+  } = useBrands(inPageStoreId, {
     page: currentPage,
     limit: ITEMS_PER_PAGE,
     search: debouncedSearch || undefined,
@@ -102,7 +107,7 @@ const Brands = () => {
   }, [deleteBrandAsync]);
 
   const handleViewBrandItems = (brandId) => {
-    navigate(`/admin/store/${storeId}/inventory?brand_id=${brandId}`);
+    navigate(`/admin/store/${inPageStoreId}/inventory?brand_id=${brandId}`);
   };
 
   return (
@@ -124,13 +129,34 @@ const Brands = () => {
               Manage product brands, tracking active status and inventory associations.
             </p>
           </div>
-          <button
-            onClick={() => setModalState({ isOpen: true, item: null })}
-            className="flex items-center gap-2 px-5 py-2.5 bg-[#0A0F1F] text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 flex-shrink-0 w-full sm:w-auto justify-center"
-          >
-            <Plus className="w-4 h-4" />
-            Add Brand
-          </button>
+          <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
+            {storeId === 'admin' && (
+              <div className="relative">
+                <select
+                  value={inPageStoreId}
+                  onChange={(e) => {
+                    setInPageStoreId(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="pl-9 pr-10 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-sm font-semibold focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 shadow-sm appearance-none cursor-pointer"
+                >
+                  <option value="admin">All Store</option>
+                  {stores.filter(s => s.id !== 'admin' && s.store_name !== 'All Store' && s.name !== 'All Store').map(s => (
+                    <option key={s.id} value={s.id}>{s.store_name}</option>
+                  ))}
+                </select>
+                <Store className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+              </div>
+            )}
+            <button
+              onClick={() => setModalState({ isOpen: true, item: null })}
+              className="flex items-center gap-2 px-5 py-2.5 bg-[#0A0F1F] text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 flex-shrink-0 justify-center animate-fade-in"
+            >
+              <Plus className="w-4 h-4" />
+              Add Brand
+            </button>
+          </div>
         </div>
       </div>
 

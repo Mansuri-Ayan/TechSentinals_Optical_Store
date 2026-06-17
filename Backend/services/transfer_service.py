@@ -1277,30 +1277,9 @@ async def get_transactions_filtered(
         filters.append(InventoryTransaction.created_at <= date_to)
 
     if is_admin_warehouse:
-        admin_inv_stmt = select(Inventory.id).where(
-            Inventory.owner_type == OwnerType.ADMIN,
-            Inventory.owner_id == admin_id
-        )
-        admin_inv_result = await db.execute(admin_inv_stmt)
-        admin_inv_ids = [row[0] for row in admin_inv_result.fetchall()]
-
-        filters.append(
-            or_(
-                InventoryTransaction.inventory_id.in_(admin_inv_ids),
-                and_(
-                    InventoryTransaction.transaction_type.in_([
-                        TransactionType.ADMIN_TRANSFER_OUT,
-                        TransactionType.ADMIN_TRANSFER_IN,
-                        TransactionType.STORE_TRANSFER_OUT,
-                        TransactionType.STORE_TRANSFER_IN,
-                    ]),
-                    or_(
-                        InventoryTransaction.send_store_id == None,
-                        InventoryTransaction.receive_store_id == None,
-                    )
-                )
-            )
-        )
+        # Aggregated view: do not narrow transactions to only the admin warehouse.
+        # Shows all transactions across all branches owned by this admin.
+        pass
     elif numeric_store_id is not None:
         filters.append(
             or_(

@@ -50,6 +50,7 @@ class InventoryRead(BaseModel):
     id: int
     owner_type: OwnerTypeEnum
     owner_id: int
+    owner_name: str | None = None
     product_id: int
     quantity: int
     reserved_quantity: int

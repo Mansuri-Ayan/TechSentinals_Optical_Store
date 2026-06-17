@@ -24,6 +24,8 @@ import {
   Clock,
   Mail,
   Phone,
+  Store,
+  ChevronDown,
 } from "lucide-react";
 import AddStaffModal from "../../components/admin/AddStaffModal";
 import Pagination from "../../components/shared/Pagination";
@@ -219,6 +221,7 @@ const StaffDetailDrawer = ({ staff, onClose, isLoading }) => {
 const Staff = () => {
   const { storeId } = useParams();
   const { stores, selectedStore, setSelectedStore } = useStoreStore();
+  const [inPageStoreId, setInPageStoreId] = useState(storeId);
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
@@ -229,6 +232,10 @@ const Staff = () => {
   const [selectedStaff, setSelectedStaff] = useState(null);
   const [drawerLoading, setDrawerLoading] = useState(false);
   const ITEMS_PER_PAGE = 20;
+
+  useEffect(() => {
+    setInPageStoreId(storeId);
+  }, [storeId]);
 
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -272,7 +279,7 @@ const Staff = () => {
     deleteStaffAsync,
     isSavingStaff,
     isDeletingStaff,
-  } = useStoreStaff(storeId, apiParams);
+  } = useStoreStaff(inPageStoreId, apiParams);
 
   useEffect(() => {
     const routeStore = stores.find(
@@ -376,10 +383,13 @@ const Staff = () => {
       return;
     }
 
+    const targetStoreId = payload.store_id || inPageStoreId;
+    const { store_id, ...restPayload } = payload;
+
     await createStaffAsync({
-      storeId,
+      storeId: targetStoreId,
       role,
-      payload,
+      payload: restPayload,
     });
   };
 
@@ -429,6 +439,22 @@ const Staff = () => {
           </div>
 
           <div className="flex items-center space-x-3">
+            {storeId === 'admin' && (
+              <div className="relative">
+                <select
+                  value={inPageStoreId}
+                  onChange={(e) => setInPageStoreId(e.target.value)}
+                  className="pl-9 pr-10 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-sm font-semibold focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 shadow-sm appearance-none cursor-pointer"
+                >
+                  <option value="admin">All Store</option>
+                  {stores.filter(s => s.id !== 'admin' && s.store_name !== 'All Store' && s.name !== 'All Store').map(s => (
+                    <option key={s.id} value={s.id}>{s.store_name}</option>
+                  ))}
+                </select>
+                <Store className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+              </div>
+            )}
             <button className="flex items-center px-4 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-sm font-semibold hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm">
               <Upload className="w-4 h-4 mr-2 text-slate-400" />
               Import
@@ -580,6 +606,12 @@ const Staff = () => {
                         <div className="text-xs md:text-sm font-medium text-slate-500 mt-0.5 truncate">
                           {person.email || "No email added"}
                         </div>
+                        {storeId === "admin" && person.store_name && (
+                          <div className="text-[11px] font-semibold text-emerald-600 mt-1 flex items-center gap-1">
+                            <Store className="w-3.5 h-3.5 flex-shrink-0" />
+                            <span>{person.store_name}</span>
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -685,6 +717,8 @@ const Staff = () => {
           onSubmitStaff={handleSubmitStaff}
           initialData={editingStaff}
           isSaving={isSavingStaff}
+          storeId={inPageStoreId}
+          stores={stores}
         />
       )}
 

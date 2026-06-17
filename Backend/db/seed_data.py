@@ -55,7 +55,7 @@ from models.expense_category import ExpenseCategory
 ADMINS = [
     {
         "business_name": "Visionary Optics",
-        "owner_first_name": "Ayan",
+        "owner_first_name": "Ayan", 
         "owner_last_name": "Mansuri",
         "email": "ayan@visionary.in",
         "phone": "9876543210",
@@ -930,6 +930,53 @@ EXPENSES_DATA = [
 #  SEED FUNCTIONS
 # ===============================================================
 
+def _expand_list(lst, target=30):
+    original_len = len(lst)
+    if original_len == 0 or original_len >= target:
+        return
+    for i in range(original_len, target):
+        base_item = lst[i % original_len]
+        new_item = dict(base_item)
+        if "email" in new_item and new_item["email"]:
+            parts = new_item["email"].split("@")
+            new_item["email"] = f"{parts[0]}{i+1}@{parts[1]}"
+        if "phone" in new_item and new_item["phone"]:
+            new_item["phone"] = f"9{str(i+1).zfill(9)}"
+        if "business_name" in new_item and new_item["business_name"]:
+            new_item["business_name"] = f"{base_item['business_name']} {i+1}"
+        if "store_code" in new_item and new_item["store_code"]:
+            new_item["store_code"] = f"{base_item['store_code']}-{i+1}"
+        if "employee_code" in new_item and new_item["employee_code"]:
+            new_item["employee_code"] = f"{base_item['employee_code']}-{i+1}"
+        if "sku" in new_item and new_item["sku"]:
+            new_item["sku"] = f"{base_item['sku']}-{i+1}"
+        if "name" in new_item and new_item["name"]:
+            new_item["name"] = f"{base_item['name']} {i+1}"
+        if "company_name" in new_item and new_item["company_name"]:
+            new_item["company_name"] = f"{base_item['company_name']} {i+1}"
+        if "category_index" in new_item:
+            new_item["category_index"] = i % target
+        if "subcategory_index" in new_item:
+            new_item["subcategory_index"] = i % target
+        if "brand_index" in new_item:
+            new_item["brand_index"] = i % target
+        lst.append(new_item)
+
+_expand_list(ADMINS)
+_expand_list(STORES)
+_expand_list(WORKERS)
+_expand_list(OPTICIANS)
+_expand_list(MANAGERS)
+_expand_list(BRANDS)
+_expand_list(CATEGORIES)
+_expand_list(SUBCATEGORIES)
+_expand_list(PRODUCTS)
+_expand_list(SUPPLIERS_DATA)
+_expand_list(CUSTOMERS_DATA)
+_expand_list(PRESCRIPTIONS_DATA)
+_expand_list(EXPENSE_CATEGORIES_DATA)
+_expand_list(EXPENSES_DATA)
+
 async def seed() -> None:
     async with async_session_maker() as session:
         admin_ids: list[int] = []
@@ -1267,7 +1314,7 @@ async def seed() -> None:
                 if existing:
                     admin_invs.append(existing.id)
                 else:
-                    wh_qty = warehouse_quantities[i]
+                    wh_qty = warehouse_quantities[i % len(warehouse_quantities)]
                     inv = Inventory(
                         owner_type=OwnerType.ADMIN,
                         owner_id=admin_id,
@@ -1276,7 +1323,7 @@ async def seed() -> None:
                         available_quantity=wh_qty,
                         reserved_quantity=0,
                         reorder_level=10,
-                        last_purchase_price=PRODUCTS[i]["cost_price"],
+                        last_purchase_price=PRODUCTS[i % len(PRODUCTS)]["cost_price"],
                     )
                     session.add(inv)
                     await session.flush()
@@ -1293,7 +1340,7 @@ async def seed() -> None:
                 if existing:
                     store_invs.append(existing.id)
                 else:
-                    st_qty = store_quantities[i]
+                    st_qty = store_quantities[i % len(store_quantities)]
                     inv = Inventory(
                         owner_type=OwnerType.STORE,
                         owner_id=store_id,

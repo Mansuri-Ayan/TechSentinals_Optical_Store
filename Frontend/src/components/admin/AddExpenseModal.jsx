@@ -118,7 +118,7 @@ const formatPaymentMethodFromBackend = (method) => {
 /* ─────────────────────────────────────────────────────────
    ADD EXPENSE MODAL
    ───────────────────────────────────────────────────────── */
-export const AddExpenseModal = ({ isOpen, onClose, onSubmit, categories, isSubmitting, storeName, initialData }) => {
+export const AddExpenseModal = ({ isOpen, onClose, onSubmit, categories, isSubmitting, storeName, initialData, storeId, stores }) => {
   const [form, setForm]             = useState({ ...EMPTY_FORM });
   const [errors, setErrors]         = useState({});
   const [showAddCat, setShowAddCat] = useState(false);
@@ -139,9 +139,10 @@ export const AddExpenseModal = ({ isOpen, onClose, onSubmit, categories, isSubmi
           receipt_url: initialData.receipt_url || '',
           is_recurring: Boolean(initialData.is_recurring),
           recurring_interval: initialData.recurring_interval ? (initialData.recurring_interval.charAt(0).toUpperCase() + initialData.recurring_interval.slice(1).toLowerCase()) : '',
+          target_store_id: initialData.owner_type === 'ADMIN' ? 'admin' : (initialData.owner_id || ''),
         });
       } else {
-        setForm({ ...EMPTY_FORM });
+        setForm({ ...EMPTY_FORM, target_store_id: 'admin' });
       }
       setErrors({});
     }
@@ -168,6 +169,8 @@ export const AddExpenseModal = ({ isOpen, onClose, onSubmit, categories, isSubmi
       e.payment_method = 'Please select a payment method';
     if (form.is_recurring && !form.recurring_interval)
       e.recurring_interval = 'Select an interval';
+    if (storeId === 'admin' && !form.target_store_id)
+      e.target_store_id = 'Please select a store / branch';
     
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -279,10 +282,24 @@ export const AddExpenseModal = ({ isOpen, onClose, onSubmit, categories, isSubmi
                   <label className="text-xs font-semibold text-slate-600 mb-1.5 block">
                     Store / Branch <span className="text-red-500">*</span>
                   </label>
-                  <div className="w-full px-3 py-2.5 text-sm font-medium border border-slate-200 rounded-xl bg-slate-50 text-slate-500 opacity-60 cursor-not-allowed flex items-center gap-2">
-                    <Store className="w-4 h-4" />
-                    {storeName || 'Loading store...'}
-                  </div>
+                  {storeId === 'admin' ? (
+                    <select
+                      value={form.target_store_id}
+                      onChange={e => handleChange('target_store_id', e.target.value)}
+                      className={ic('target_store_id')}
+                    >
+                      <option value="admin">All Store (Central)</option>
+                      {stores?.map(s => (
+                        <option key={s.id} value={s.id}>{s.store_name} ({s.store_code})</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div className="w-full px-3 py-2.5 text-sm font-medium border border-slate-200 rounded-xl bg-slate-50 text-slate-500 opacity-60 cursor-not-allowed flex items-center gap-2">
+                      <Store className="w-4 h-4" />
+                      {storeName || 'Loading store...'}
+                    </div>
+                  )}
+                  {errors.target_store_id && <p className="text-xs text-red-500 mt-1">{errors.target_store_id}</p>}
                 </div>
                 <div>
                   <label className="text-xs font-semibold text-slate-600 mb-1.5 block">

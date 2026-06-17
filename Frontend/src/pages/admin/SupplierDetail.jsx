@@ -181,7 +181,7 @@ const SupplierDetail = () => {
         dueAmount: Number(po.due_amount),
         paymentMethod: po.payments?.[0]?.payment_method || 'Credit',
         paymentDate: po.payments?.[0]?.payment_date || po.order_date,
-        sentTo: po.store_name || 'Store Warehouse',
+        sentTo: po.store_name || 'All Store',
         status: mappedStatus,
         remarks: po.notes,
       };

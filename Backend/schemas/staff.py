@@ -5,6 +5,7 @@ from pydantic import BaseModel
 class StaffRead(BaseModel):
     id: int
     store_id: int
+    store_name: str | None = None
     role: str  # "manager", "worker", "optician"
     first_name: str
     last_name: str

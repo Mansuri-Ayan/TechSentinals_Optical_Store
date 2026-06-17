@@ -1,15 +1,14 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Link } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import {
   Search, Wrench, Plus, X, AlertTriangle, Calendar,
-  ChevronRight, Check, Clock, User, DollarSign, Package, RefreshCw
+  ChevronRight, Check, Clock, User, DollarSign, Package, RefreshCw, Store, ChevronDown
 } from 'lucide-react';
 import { useCustomers } from '../../hooks/useCustomers';
 import { useRepairs, useRepairMutations } from '../../hooks/useRepairs';
 import { useAuthStore, useStoreStore } from '../../store/store';
 import Pagination from '../../components/shared/Pagination';
-import NotificationBell from '../../components/shared/NotificationBell';
 
 /* ── Constants ── */
 const REPAIR_TYPES = [
@@ -59,32 +58,33 @@ const getStatusLabel = (status) =>
 
 /* ── MAIN COMPONENT ── */
 const Repair = () => {
+  const { storeId } = useParams();
   const { user } = useAuthStore();
-  const { stores, selectedStore } = useStoreStore();
+  const { stores } = useStoreStore();
   const { customers, isLoading: customersLoading } = useCustomers();
   const { updateRepairStatusAsync, isUpdatingStatus } = useRepairMutations();
 
   /* ── Filters & Pagination ── */
+  const [inPageStoreId, setInPageStoreId] = useState(storeId);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  /* ── Active store resolution ── */
-  const activeStoreId = useMemo(() => {
-    return selectedStore?.id || user?.store_id || stores?.[0]?.id || 1;
-  }, [selectedStore, user, stores]);
+  useEffect(() => {
+    setInPageStoreId(storeId);
+  }, [storeId]);
 
   /* ── Fetch repairs from backend ── */
   const repairsFilters = useMemo(() => {
     const f = { limit: itemsPerPage, offset: (currentPage - 1) * itemsPerPage };
-    if (activeStoreId) f.store_id = activeStoreId;
+    if (inPageStoreId && inPageStoreId !== 'admin') f.store_id = inPageStoreId;
     if (statusFilter) f.status = statusFilter;
     if (typeFilter) f.repair_type = typeFilter;
     if (searchTerm.trim()) f.search = searchTerm.trim();
     return f;
-  }, [activeStoreId, statusFilter, typeFilter, currentPage, searchTerm]);
+  }, [inPageStoreId, statusFilter, typeFilter, currentPage, searchTerm]);
 
   const { data: repairsData, isLoading: repairsLoading, refetch } = useRepairs(repairsFilters);
 
@@ -107,8 +107,16 @@ const Repair = () => {
     is_warranty: false,
     description: '',
     notes: '',
+    store_id: storeId === 'admin' ? '' : storeId,
   });
   const [errors, setErrors] = useState({});
+
+  useEffect(() => {
+    setForm(prev => ({
+      ...prev,
+      store_id: inPageStoreId === 'admin' ? '' : inPageStoreId
+    }));
+  }, [inPageStoreId, showAddModal]);
 
   /* ── Derived: selected customer's order warranty ── */
   const selectedCustomerObj = useMemo(() =>
@@ -143,7 +151,15 @@ const Repair = () => {
     setSelectedCustomerId('');
     setSelectedOrderId('');
     setCustomerSearchQuery('');
-    setForm({ customer_name: '', repair_type: 'FRAME_REPAIR', estimated_cost: '', is_warranty: false, description: '', notes: '' });
+    setForm({
+      customer_name: '',
+      repair_type: 'FRAME_REPAIR',
+      estimated_cost: '',
+      is_warranty: false,
+      description: '',
+      notes: '',
+      store_id: inPageStoreId === 'admin' ? '' : inPageStoreId,
+    });
     setErrors({});
   };
 
@@ -187,6 +203,9 @@ const Repair = () => {
 
   const validate = () => {
     const e = {};
+    if (storeId === 'admin' && !form.store_id) {
+      e.store_id = 'Please select a store branch';
+    }
     if (customerType === 'new') {
       if (!form.customer_name.trim()) e.customer_name = 'Customer name is required';
     } else {
@@ -209,7 +228,7 @@ const Repair = () => {
     if (!validate()) return;
 
     const payload = {
-      store_id: activeStoreId || (stores?.[0]?.id),
+      store_id: storeId === 'admin' ? Number(form.store_id) : Number(inPageStoreId),
       customer_id: customerType === 'old' ? Number(selectedCustomerId) : null,
       sale_id: customerType === 'old' && selectedOrderId
         ? (selectedOrderObj?.dbId || null)
@@ -247,7 +266,7 @@ const Repair = () => {
       {/* Breadcrumbs */}
       <div className="mb-6 sm:mb-8">
         <div className="flex items-center text-sm text-slate-500 font-medium mb-3 space-x-2">
-          <Link to="/shopkeeper/dashboard" className="hover:text-slate-800 transition-colors">Dashboard</Link>
+          <Link to="/admin/dashboard" className="hover:text-slate-800 transition-colors">Dashboard</Link>
           <ChevronRight className="w-4 h-4 flex-shrink-0" />
           <span className="text-slate-900 font-semibold">Repairs & Services</span>
         </div>
@@ -263,7 +282,25 @@ const Repair = () => {
             </p>
           </div>
           <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
-            <NotificationBell role="shopkeeper" />
+            {storeId === 'admin' && (
+              <div className="relative">
+                <select
+                  value={inPageStoreId}
+                  onChange={(e) => {
+                    setInPageStoreId(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="pl-9 pr-10 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-sm font-semibold focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 shadow-sm appearance-none cursor-pointer"
+                >
+                  <option value="admin">All Store</option>
+                  {stores.filter(s => s.id !== 'admin' && s.store_name !== 'All Store' && s.name !== 'All Store').map(s => (
+                    <option key={s.id} value={s.id}>{s.store_name}</option>
+                  ))}
+                </select>
+                <Store className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+              </div>
+            )}
             <button
               onClick={() => refetch()}
               className="flex items-center gap-1.5 px-3 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-50 transition-all cursor-pointer"
@@ -344,7 +381,7 @@ const Repair = () => {
               <table className="w-full text-sm min-w-[1100px]">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-100 text-left">
-                    {['Repair ID', 'Customer', 'Type', 'Description', 'Date Received', 'Cost', 'Warranty', 'Status'].map(col => (
+                    {['Repair ID', 'Customer', ...(storeId === 'admin' ? ['Store'] : []), 'Type', 'Description', 'Date Received', 'Cost', 'Warranty', 'Status'].map(col => (
                       <th key={col} className="px-5 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">
                         {col}
                       </th>
@@ -362,6 +399,13 @@ const Repair = () => {
                       <td className="px-5 py-4 text-sm font-bold text-slate-800">
                         {repair.customer_full_name || repair.customer_name || '—'}
                       </td>
+                      {storeId === 'admin' && (
+                        <td className="px-5 py-4 text-xs font-bold">
+                          <span className="inline-block px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200">
+                            {repair.store_name || 'All Store'}
+                          </span>
+                        </td>
+                      )}
                       <td className="px-5 py-4">
                         <span className="inline-block px-2.5 py-0.5 rounded-lg bg-blue-50 text-blue-700 border border-blue-100 text-[10px] font-bold">
                           {getTypeBadge(repair.repair_type)}
@@ -414,9 +458,16 @@ const Repair = () => {
                       <p className="font-mono text-xs font-bold text-slate-800">{repair.repair_number}</p>
                       <p className="text-[10px] text-slate-400">{fmtDate(repair.received_date)}</p>
                     </div>
-                    <span className="inline-block px-2.5 py-0.5 rounded-lg bg-blue-50 text-blue-700 border border-blue-100 text-[10px] font-bold">
-                      {getTypeBadge(repair.repair_type)}
-                    </span>
+                    <div className="flex flex-col items-end gap-1">
+                      <span className="inline-block px-2.5 py-0.5 rounded-lg bg-blue-50 text-blue-700 border border-blue-100 text-[10px] font-bold">
+                        {getTypeBadge(repair.repair_type)}
+                      </span>
+                      {storeId === 'admin' && (
+                        <span className="inline-block px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200 text-[9px] font-bold">
+                          {repair.store_name || 'All Store'}
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   <div className="space-y-1">
@@ -497,6 +548,26 @@ const Repair = () => {
             {/* Form */}
             <form onSubmit={handleAddRepairSubmit} className="flex-1 overflow-y-auto">
               <div className="px-5 sm:px-6 py-5 space-y-4">
+
+                {/* Store selection dropdown (Admin Warehouse view only) */}
+                {storeId === 'admin' && (
+                  <div>
+                    <label className="text-xs font-semibold text-slate-600 mb-1.5 block">Store Branch <span className="text-red-500">*</span></label>
+                    <select
+                      value={form.store_id}
+                      onChange={e => setForm(p => ({ ...p, store_id: e.target.value }))}
+                      className={`w-full px-3 py-2.5 text-sm font-semibold rounded-xl border bg-white focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 ${
+                        errors.store_id ? 'border-red-400 focus:ring-4 focus:ring-red-100' : 'border-slate-200'
+                      }`}
+                    >
+                      <option value="">Select Store Branch...</option>
+                      {stores.filter(s => s.id !== 'admin').map(s => (
+                        <option key={s.id} value={s.id}>{s.store_name}</option>
+                      ))}
+                    </select>
+                    {errors.store_id && <p className="text-xs text-red-500 mt-1">{errors.store_id}</p>}
+                  </div>
+                )}
 
                 {/* Customer Type Toggle */}
                 <div>
@@ -788,7 +859,7 @@ const RepairDetailDrawer = ({ repair, onClose, onStatusChange, isUpdatingStatus 
           <Section icon={User} title="Customer Information" color="blue">
             <DetailRow label="Customer Name" value={
               repair.customer_id
-                ? <Link to={`/shopkeeper/customers/${repair.customer_id}`} className="text-blue-600 hover:underline font-bold">{repair.customer_full_name}</Link>
+                ? <Link to={`/admin/loyalty/customer/${repair.customer_id}`} className="text-blue-600 hover:underline font-bold">{repair.customer_full_name}</Link>
                 : (repair.customer_full_name || repair.customer_name || '—')
             } />
             <DetailRow label="Customer Type" value={repair.customer_id ? 'Registered Customer' : 'Walk-in / New Customer'} />

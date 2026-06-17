@@ -27,14 +27,20 @@ def _supplier_to_read(s) -> SupplierRead:
 async def list_suppliers_endpoint(
     status_filter: str | None = Query(default=None, alias="status"),
     search: str | None = Query(default=None),
-    store_id: int | None = Query(default=None),
+    store_id: str | None = Query(default=None),
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=1000),
     db: AsyncSession = Depends(get_db),
     current_admin: Admin = Depends(get_current_admin),
 ) -> PaginatedResponse[SupplierRead]:
-    if store_id is not None:
-        store = await get_store(db, store_id)
+    numeric_store_id = None
+    if store_id and store_id.lower() != "admin":
+        try:
+            numeric_store_id = int(store_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid store_id format")
+        
+        store = await get_store(db, numeric_store_id)
         if store is None or store.admin_id != current_admin.id:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -45,7 +51,7 @@ async def list_suppliers_endpoint(
     suppliers, total = await list_suppliers(
         db,
         admin_id=current_admin.id,
-        store_id=store_id,
+        store_id=numeric_store_id,
         status_filter=status_filter,
         search=search,
         limit=limit,

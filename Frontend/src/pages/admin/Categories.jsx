@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { 
   Search, Plus, Layers, ChevronRight, Edit2, Trash2, Eye, 
-  ArrowLeft, Package, Loader2, Glasses, ShoppingBag
+  ArrowLeft, Package, Loader2, Glasses, ShoppingBag, Store, ChevronDown
 } from 'lucide-react';
 import Pagination from '../../components/shared/Pagination';
 import AddEditCategoryModal from '../../components/admin/AddEditCategoryModal';
@@ -82,6 +82,11 @@ const Categories = () => {
   const navigate = useNavigate();
   const { storeId } = useParams();
   const { selectedStore, setSelectedStore, stores } = useStoreStore();
+  const [inPageStoreId, setInPageStoreId] = useState(storeId);
+
+  useEffect(() => {
+    setInPageStoreId(storeId);
+  }, [storeId]);
 
   // Sync storeId from URL with global store state
   useEffect(() => {
@@ -125,7 +130,7 @@ const Categories = () => {
     updateCategoryAsync,
     deleteCategoryAsync,
     isSavingCategory,
-  } = useCategories(storeId, {
+  } = useCategories(inPageStoreId, {
     page: catPage,
     limit: 100, // Load all on the dashboard view for simple display
   });
@@ -143,7 +148,7 @@ const Categories = () => {
     isSavingSubcategory,
   } = useSubcategories(
     selectedCategory?.id || null,
-    storeId,
+    inPageStoreId,
     {
       page: currentPage,
       limit: ITEMS_PER_PAGE,
@@ -199,11 +204,11 @@ const Categories = () => {
   }, [deleteSubcategoryAsync]);
 
   const handleViewCategoryItems = (categoryId) => {
-    navigate(`/admin/store/${storeId}/inventory?category_id=${categoryId}`);
+    navigate(`/admin/store/${inPageStoreId}/inventory?category_id=${categoryId}`);
   };
 
   const handleViewSubcategoryItems = (subcategoryId) => {
-    navigate(`/admin/store/${storeId}/inventory?category_id=${selectedCategory.id}&subcategory_id=${subcategoryId}`);
+    navigate(`/admin/store/${inPageStoreId}/inventory?category_id=${selectedCategory.id}&subcategory_id=${subcategoryId}`);
   };
 
   const selectedCatTheme = useMemo(() => {
@@ -248,32 +253,58 @@ const Categories = () => {
             </div>
           </div>
           
-          {selectedCategory ? (
-            <div className="flex items-center gap-2 w-full sm:w-auto">
+          <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
+            {storeId === 'admin' && (
+              <div className="relative">
+                <select
+                  value={inPageStoreId}
+                  onChange={(e) => {
+                    setInPageStoreId(e.target.value);
+                    if (selectedCategory) {
+                      setCurrentPage(1);
+                    } else {
+                      setCatPage(1);
+                    }
+                  }}
+                  className="pl-9 pr-10 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-sm font-semibold focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 shadow-sm appearance-none cursor-pointer"
+                >
+                  <option value="admin">All Store</option>
+                  {stores.filter(s => s.id !== 'admin' && s.store_name !== 'All Store' && s.name !== 'All Store').map(s => (
+                    <option key={s.id} value={s.id}>{s.store_name}</option>
+                  ))}
+                </select>
+                <Store className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+              </div>
+            )}
+            
+            {selectedCategory ? (
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <button
+                  onClick={() => handleViewCategoryItems(selectedCategory.id)}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl text-sm font-semibold hover:bg-emerald-100 transition-all flex-shrink-0"
+                >
+                  <Package className="w-4 h-4" />
+                  View All in Inventory
+                </button>
+                <button
+                  onClick={() => setAddEditModal({ isOpen: true, item: null, mode: 'subcategory' })}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-[#0A0F1F] text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 flex-shrink-0 justify-center"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add Option
+                </button>
+              </div>
+            ) : (
               <button
-                onClick={() => handleViewCategoryItems(selectedCategory.id)}
-                className="flex items-center gap-2 px-4 py-2.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl text-sm font-semibold hover:bg-emerald-100 transition-all flex-shrink-0"
-              >
-                <Package className="w-4 h-4" />
-                View All in Inventory
-              </button>
-              <button
-                onClick={() => setAddEditModal({ isOpen: true, item: null, mode: 'subcategory' })}
+                onClick={() => setAddEditModal({ isOpen: true, item: null, mode: 'category' })}
                 className="flex items-center gap-2 px-5 py-2.5 bg-[#0A0F1F] text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 flex-shrink-0 justify-center"
               >
                 <Plus className="w-4 h-4" />
-                Add Option
+                Add Category
               </button>
-            </div>
-          ) : (
-            <button
-              onClick={() => setAddEditModal({ isOpen: true, item: null, mode: 'category' })}
-              className="flex items-center gap-2 px-5 py-2.5 bg-[#0A0F1F] text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 flex-shrink-0 w-full sm:w-auto justify-center"
-            >
-              <Plus className="w-4 h-4" />
-              Add Category
-            </button>
-          )}
+            )}
+          </div>
         </div>
       </div>
 

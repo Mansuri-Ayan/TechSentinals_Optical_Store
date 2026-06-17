@@ -5,7 +5,6 @@ import { toast } from 'react-toastify';
 import { X, Package, Image as ImageIcon, Loader2 } from 'lucide-react';
 import { useCategories, useSubcategories } from '../../hooks/useCategories';
 import { useBrands } from '../../hooks/useBrands';
-import { useStores } from '../../hooks/useStores';
 import { useStoreStore } from '../../store/store';
 
 /* ─── helpers ─────────────────────────────────────── */
@@ -35,8 +34,7 @@ const SectionHeading = ({ num, label }) => (
 
 /* ─── component ───────────────────────────────────── */
 const AddInventoryModal = ({ isOpen, onClose, onSubmit: onSubmitProp }) => {
-  const { selectedStore } = useStoreStore();
-  const { stores } = useStores();
+  const { selectedStore, stores } = useStoreStore();
   const { categories, isLoadingCategories } = useCategories();
   const { brands, createBrandAsync } = useBrands();
   const [imagePreview, setImagePreview] = useState(null);

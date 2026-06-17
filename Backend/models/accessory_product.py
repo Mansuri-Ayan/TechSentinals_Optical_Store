@@ -10,7 +10,6 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from db.session import Base
 
-
 class AccessoryProduct(Base):
     __tablename__ = "accessory_products"
 

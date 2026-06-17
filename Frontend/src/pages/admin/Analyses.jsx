@@ -271,12 +271,12 @@ const CustomerGrowthChart = ({ data: rawData }) => {
 const Analyses = () => {
   const navigate = useNavigate();
   const { stores, selectedStore, setSelectedStore } = useStoreStore();
-  const [selectedStoreFilter, setSelectedStoreFilter] = useState('All');
+  const [selectedStoreFilter, setSelectedStoreFilter] = useState('All Store');
   const [dateRange, setDateRange] = useState('This Year');
 
   // Find active store ID based on selectedStoreFilter name
   const activeStoreId = useMemo(() => {
-    if (selectedStoreFilter === 'All') return null;
+    if (selectedStoreFilter === 'All' || selectedStoreFilter === 'All Store') return null;
     const matchedStore = stores.find(s => (s.store_name || s.name) === selectedStoreFilter);
     return matchedStore?.id || null;
   }, [selectedStoreFilter, stores]);
@@ -289,7 +289,7 @@ const Analyses = () => {
     if (selectedStore) {
       setSelectedStoreFilter(selectedStore.store_name || selectedStore.name);
     } else {
-      setSelectedStoreFilter('All');
+      setSelectedStoreFilter('All Store');
     }
   }, [selectedStore]);
 
@@ -417,12 +417,6 @@ const Analyses = () => {
             selectedStoreFilter={selectedStoreFilter}
             onStoreChange={(val) => {
               setSelectedStoreFilter(val);
-              const matchedStore = stores.find(s => (s.store_name || s.name) === val);
-              if (matchedStore) {
-                setSelectedStore(matchedStore);
-              } else if (val === 'All') {
-                setSelectedStore(null);
-              }
             }}
           />
 

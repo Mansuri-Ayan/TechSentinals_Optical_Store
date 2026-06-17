@@ -87,29 +87,31 @@ async def get_categories_by_admin(
 
     # ── Base conditions ──
     conditions = [Category.admin_id == admin_id]
-    if store_id is not None:
-        conditions.append(Category.id.in_(select(prod_sq.c.category_id)))
     if active_only:
         conditions.append(Category.is_active.is_(True))
     if search:
         conditions.append(Category.name.ilike(f"%{search.strip()}%"))
 
     # ── Total count ──
-    count_stmt = select(sa_func.count(Category.id)).where(*conditions)
+    if store_id is not None:
+        count_stmt = select(sa_func.count(Category.id)).join(prod_sq, Category.id == prod_sq.c.category_id).where(*conditions)
+    else:
+        count_stmt = select(sa_func.count(Category.id)).where(*conditions)
     total = (await db.execute(count_stmt)).scalar() or 0
 
     # ── Data query ──
-    data_stmt = (
-        select(
-            Category,
-            sa_func.coalesce(sub_sq.c.sub_cnt, 0).label("subcategories_count"),
-            sa_func.coalesce(prod_sq.c.cnt, 0).label("products_count"),
-        )
-        .outerjoin(sub_sq, Category.id == sub_sq.c.category_id)
-        .outerjoin(prod_sq, Category.id == prod_sq.c.category_id)
-        .where(*conditions)
-        .order_by(Category.name)
-    )
+    data_stmt = select(
+        Category,
+        sa_func.coalesce(sub_sq.c.sub_cnt, 0).label("subcategories_count"),
+        sa_func.coalesce(prod_sq.c.cnt, 0).label("products_count"),
+    ).outerjoin(sub_sq, Category.id == sub_sq.c.category_id)
+
+    if store_id is not None:
+        data_stmt = data_stmt.join(prod_sq, Category.id == prod_sq.c.category_id)
+    else:
+        data_stmt = data_stmt.outerjoin(prod_sq, Category.id == prod_sq.c.category_id)
+
+    data_stmt = data_stmt.where(*conditions).order_by(Category.name)
 
     if paginate:
         offset = (page - 1) * limit
@@ -218,27 +220,30 @@ async def get_subcategories_by_category(
 
     # ── Base conditions ──
     conditions = [Subcategory.category_id == category_id]
-    if store_id is not None:
-        conditions.append(Subcategory.id.in_(select(prod_sq.c.subcategory_id)))
     if active_only:
         conditions.append(Subcategory.is_active.is_(True))
     if search:
         conditions.append(Subcategory.name.ilike(f"%{search.strip()}%"))
 
     # ── Total count ──
-    count_stmt = select(sa_func.count(Subcategory.id)).where(*conditions)
+    if store_id is not None:
+        count_stmt = select(sa_func.count(Subcategory.id)).join(prod_sq, Subcategory.id == prod_sq.c.subcategory_id).where(*conditions)
+    else:
+        count_stmt = select(sa_func.count(Subcategory.id)).where(*conditions)
     total = (await db.execute(count_stmt)).scalar() or 0
 
     # ── Data query ──
-    data_stmt = (
-        select(
-            Subcategory,
-            sa_func.coalesce(prod_sq.c.cnt, 0).label("products_count"),
-        )
-        .outerjoin(prod_sq, Subcategory.id == prod_sq.c.subcategory_id)
-        .where(*conditions)
-        .order_by(Subcategory.name)
+    data_stmt = select(
+        Subcategory,
+        sa_func.coalesce(prod_sq.c.cnt, 0).label("products_count"),
     )
+
+    if store_id is not None:
+        data_stmt = data_stmt.join(prod_sq, Subcategory.id == prod_sq.c.subcategory_id)
+    else:
+        data_stmt = data_stmt.outerjoin(prod_sq, Subcategory.id == prod_sq.c.subcategory_id)
+
+    data_stmt = data_stmt.where(*conditions).order_by(Subcategory.name)
 
     if paginate:
         offset = (page - 1) * limit

@@ -1,11 +1,12 @@
  import { useState, useMemo, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useParams } from 'react-router-dom';
+import { useStoreStore, useAuthStore } from '../../store/store';
 import {
   Search, Store, ChevronRight, X, Filter,
   Plus, Receipt, TrendingDown, CheckCircle, Clock,
   XCircle, CreditCard, Tag, FileText,
-  Upload, RefreshCw, Repeat, IndianRupee,
+  Upload, RefreshCw, Repeat, IndianRupee, ChevronDown,
 } from 'lucide-react';
 import { 
   getExpenses, 
@@ -78,6 +79,9 @@ const ApprovalBadge = ({ isApproved, isRejected }) => {
 ───────────────────────────────────────────────────────── */
 const Expenses = () => {
   const { store_id } = useParams();
+  const { stores } = useStoreStore();
+  const { user } = useAuthStore();
+  const [inPageStoreId, setInPageStoreId] = useState(store_id);
   
   const [searchInput, setSearchInput]         = useState('');
   const [search, setSearch]                   = useState('');
@@ -101,6 +105,10 @@ const Expenses = () => {
   const [tabCounts, setTabCounts]             = useState({ all: 0, pending: 0, approved: 0, rejected: 0 });
   const [approvalLoading, setApprovalLoading] = useState(false);
 
+  useEffect(() => {
+    setInPageStoreId(store_id);
+  }, [store_id]);
+
   // Map tab to approval_status param
   const tabToApprovalParam = {
     all: undefined,
@@ -122,10 +130,10 @@ const Expenses = () => {
   const fetchTabCounts = useCallback(async () => {
     try {
       const [all, pending, approved, rejected] = await Promise.all([
-        getExpenses({ store_id, page: 1, page_size: 1 }),
-        getExpenses({ store_id, page: 1, page_size: 1, approval_status: 'PENDING' }),
-        getExpenses({ store_id, page: 1, page_size: 1, approval_status: 'APPROVED' }),
-        getExpenses({ store_id, page: 1, page_size: 1, approval_status: 'REJECTED' }),
+        getExpenses({ store_id: inPageStoreId, page: 1, page_size: 1 }),
+        getExpenses({ store_id: inPageStoreId, page: 1, page_size: 1, approval_status: 'PENDING' }),
+        getExpenses({ store_id: inPageStoreId, page: 1, page_size: 1, approval_status: 'APPROVED' }),
+        getExpenses({ store_id: inPageStoreId, page: 1, page_size: 1, approval_status: 'REJECTED' }),
       ]);
       setTabCounts({
         all: all.data.total,
@@ -136,13 +144,13 @@ const Expenses = () => {
     } catch (err) {
       console.error('Failed to fetch tab counts:', err);
     }
-  }, [store_id]);
+  }, [inPageStoreId]);
 
   const fetchExpenses = useCallback(async () => {
     setIsLoading(true);
     try {
       const res = await getExpenses({
-        store_id,
+        store_id: inPageStoreId,
         page,
         page_size: ITEMS_PER_PAGE,
         ...(search && { search }),
@@ -166,21 +174,21 @@ const Expenses = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [store_id, page, search, categoryId, startDate, endDate, paymentMethod, activeTab, storeName]);
+  }, [inPageStoreId, page, search, categoryId, startDate, endDate, paymentMethod, activeTab, storeName]);
 
   // Fallback: fetch store name if expenses list is empty
   useEffect(() => {
     const resolveStoreName = async () => {
-      if (expenses.length === 0 && store_id) {
+      if (expenses.length === 0 && inPageStoreId) {
         try {
           const res = await getStoresApi();
-          const currentStore = res.items?.find(s => String(s.id) === String(store_id));
+          const currentStore = res.items?.find(s => String(s.id) === String(inPageStoreId));
           if (currentStore) setStoreName(currentStore.store_name);
         } catch (err) { console.error(err); }
       }
     };
     resolveStoreName();
-  }, [expenses.length, store_id]);
+  }, [expenses.length, inPageStoreId]);
 
   useEffect(() => {
     fetchExpenses();
@@ -193,12 +201,12 @@ const Expenses = () => {
   useEffect(() => {
     const fetchCategories = async () => {
       try {
-        const res = await getExpenseCategories(store_id);
+        const res = await getExpenseCategories(inPageStoreId);
         setCategories(res.data);
       } catch (err) { console.error(err); }
     };
     fetchCategories();
-  }, [store_id]);
+  }, [inPageStoreId]);
 
   const kpis = useMemo(() => {
     const totalAmt = expenses.reduce((s, e) => s + e.amount, 0);
@@ -249,10 +257,14 @@ const Expenses = () => {
   const handleAddExpense = async (form) => {
     setIsSubmitting(true);
     try {
-      // FIX 3: Ensure payload matches backend and includes store_id
+      const isCentral = store_id === 'admin';
+      const isTargetCentral = isCentral && form.target_store_id === 'admin';
+      const owner_type = isTargetCentral ? 'ADMIN' : 'STORE';
+      const owner_id = isTargetCentral ? user?.id : Number(isCentral ? form.target_store_id : store_id);
+
       await createExpense({
-        owner_type: 'STORE',
-        owner_id: Number(store_id),
+        owner_type,
+        owner_id,
         category_id: Number(form.category_id),
         title: form.title.trim(),
         description: form.description || null,
@@ -302,13 +314,31 @@ const Expenses = () => {
               Track, manage, and approve business expenses across all branches.
             </p>
           </div>
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="flex items-center justify-center gap-2 px-5 py-2.5 bg-violet-600 text-white rounded-xl text-sm font-semibold hover:bg-violet-700 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 w-full sm:w-auto flex-shrink-0"
-          >
-            <Plus className="w-4 h-4" />
-            Add Expense
-          </button>
+          <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
+            {store_id === 'admin' && (
+              <div className="relative">
+                <select
+                  value={inPageStoreId}
+                  onChange={(e) => setInPageStoreId(e.target.value)}
+                  className="pl-9 pr-10 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-sm font-semibold focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 shadow-sm appearance-none cursor-pointer"
+                >
+                  <option value="admin">All Store</option>
+                  {stores.filter(s => s.id !== 'admin' && s.store_name !== 'All Store' && s.name !== 'All Store').map(s => (
+                    <option key={s.id} value={s.id}>{s.store_name}</option>
+                  ))}
+                </select>
+                <Store className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+              </div>
+            )}
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="flex items-center justify-center gap-2 px-5 py-2.5 bg-violet-600 text-white rounded-xl text-sm font-semibold hover:bg-violet-700 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 w-full sm:w-auto flex-shrink-0"
+            >
+              <Plus className="w-4 h-4" />
+              Add Expense
+            </button>
+          </div>
         </div>
       </div>
 
@@ -625,6 +655,8 @@ const Expenses = () => {
         categories={categories}
         isSubmitting={isSubmitting}
         storeName={storeName}
+        storeId={inPageStoreId}
+        stores={stores}
       />
     </div>
   );

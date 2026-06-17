@@ -70,8 +70,6 @@ async def get_brands_by_admin(
 
     # ── Base conditions ──
     conditions = [Brand.admin_id == admin_id]
-    if store_id is not None:
-        conditions.append(Brand.id.in_(select(count_sq.c.brand_id)))
     if active_status == "active":
         conditions.append(Brand.is_active.is_(True))
     elif active_status == "inactive":
@@ -80,25 +78,30 @@ async def get_brands_by_admin(
         conditions.append(Brand.name.ilike(f"%{search.strip()}%"))
 
     # ── Total count of matching records ──
-    count_stmt = select(sa_func.count(Brand.id)).where(*conditions)
+    if store_id is not None:
+        count_stmt = select(sa_func.count(Brand.id)).join(count_sq, Brand.id == count_sq.c.brand_id).where(*conditions)
+    else:
+        count_stmt = select(sa_func.count(Brand.id)).where(*conditions)
     total = (await db.execute(count_stmt)).scalar() or 0
 
     # ── Global count statistics ──
     count_conditions = [Brand.admin_id == admin_id]
     if store_id is not None:
-        count_conditions.append(Brand.id.in_(select(count_sq.c.brand_id)))
-    active_stmt = select(sa_func.count(Brand.id)).where(*count_conditions, Brand.is_active.is_(True))
-    inactive_stmt = select(sa_func.count(Brand.id)).where(*count_conditions, Brand.is_active.is_(False))
+        active_stmt = select(sa_func.count(Brand.id)).join(count_sq, Brand.id == count_sq.c.brand_id).where(*count_conditions, Brand.is_active.is_(True))
+        inactive_stmt = select(sa_func.count(Brand.id)).join(count_sq, Brand.id == count_sq.c.brand_id).where(*count_conditions, Brand.is_active.is_(False))
+    else:
+        active_stmt = select(sa_func.count(Brand.id)).where(*count_conditions, Brand.is_active.is_(True))
+        inactive_stmt = select(sa_func.count(Brand.id)).where(*count_conditions, Brand.is_active.is_(False))
     active_cnt = (await db.execute(active_stmt)).scalar() or 0
     inactive_cnt = (await db.execute(inactive_stmt)).scalar() or 0
 
     # ── Data query with product count ──
-    data_stmt = (
-        select(Brand, sa_func.coalesce(count_sq.c.cnt, 0).label("products_count"))
-        .outerjoin(count_sq, Brand.id == count_sq.c.brand_id)
-        .where(*conditions)
-        .order_by(Brand.name)
-    )
+    data_stmt = select(Brand, sa_func.coalesce(count_sq.c.cnt, 0).label("products_count"))
+    if store_id is not None:
+        data_stmt = data_stmt.join(count_sq, Brand.id == count_sq.c.brand_id)
+    else:
+        data_stmt = data_stmt.outerjoin(count_sq, Brand.id == count_sq.c.brand_id)
+    data_stmt = data_stmt.where(*conditions).order_by(Brand.name)
 
     if paginate:
         offset = (page - 1) * limit

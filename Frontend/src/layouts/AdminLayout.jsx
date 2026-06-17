@@ -22,24 +22,20 @@ function AdminLayout() {
       />
       
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* Top Header Navbar */}
-        <header className="sticky top-0 z-30 flex items-center justify-between h-16 px-6 bg-white border-b border-slate-200/80 shadow-sm">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setIsSidebarOpen(true)}
-              className="lg:hidden p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors"
-              aria-label="Open sidebar menu"
-            >
-              <Menu className="w-6 h-6" />
-            </button>
-            <span className="lg:hidden text-[#0A0F1F] font-bold text-lg tracking-tight">TechSentinals</span>
-          </div>
+      <div className="flex-1 flex flex-col min-w-0 relative">
+        {/* Floating Mobile Menu Button */}
+        <button
+          onClick={() => setIsSidebarOpen(true)}
+          className="lg:hidden absolute top-4 left-4 sm:top-5 sm:left-6 z-40 p-2.5 text-slate-500 hover:text-slate-700 bg-white border border-slate-200/60 rounded-xl shadow-sm hover:shadow-md transition-all"
+          aria-label="Open sidebar menu"
+        >
+          <Menu className="w-5 h-5" />
+        </button>
 
-          <div className="flex items-center gap-4">
-            <NotificationBell role="admin" />
-          </div>
-        </header>
+        {/* Global Notification Bell */}
+        <div className="absolute top-4 right-4 sm:top-5 sm:right-6 lg:right-8 z-[1000] flex items-center">
+          <NotificationBell role="admin" />
+        </div>
 
         {/* Page Content */}
         <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-50 hide-scrollbar">

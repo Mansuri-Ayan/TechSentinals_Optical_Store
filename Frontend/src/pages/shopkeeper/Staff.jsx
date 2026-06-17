@@ -23,6 +23,7 @@ import Pagination from "../../components/shared/Pagination";
 import InventoryDetailDrawer from "../../components/admin/InventoryDetailDrawer";
 import { useAuthStore } from "../../store/store";
 import { useStoreStaff } from "../../hooks/useStaff";
+import NotificationBell from "../../components/shared/NotificationBell";
 import { getWorkerById, getOpticianById, getManagerById } from "../../api/staff/staff.api";
 
 const roleOptions = [
@@ -264,14 +265,16 @@ const Staff = () => {
               Manage optical store employees, roles, and contact information.
             </p>
           </div>
-
-          <button
-            onClick={() => setShowAddStaff(true)}
-            className="flex items-center justify-center gap-2 px-5 py-2.5 bg-slate-900 text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 w-full sm:w-auto flex-shrink-0"
-          >
-            <Plus className="w-4 h-4" />
-            Add Staff
-          </button>
+          <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
+            <NotificationBell role="shopkeeper" />
+            <button
+              onClick={() => setShowAddStaff(true)}
+              className="flex items-center justify-center gap-2 px-5 py-2.5 bg-slate-900 text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 w-full sm:w-auto flex-shrink-0"
+            >
+              <Plus className="w-4 h-4" />
+              Add Staff
+            </button>
+          </div>
         </div>
       </div>
 

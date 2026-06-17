@@ -3,7 +3,7 @@ import { Link, useParams, useSearchParams } from 'react-router-dom';
 import TransactionDetailModal from '../../components/admin/suppliers/TransactionDetailModal';
 import { useQuery } from '@tanstack/react-query';
 import {
-  ArrowRightLeft, Plus, Search, ChevronRight,
+  ArrowRightLeft, Plus, Search, ChevronRight, ChevronDown,
   X as XIcon, Building2, Store, Package, Filter,
   CheckCircle, Clock, XCircle, AlertTriangle, Tag,
   Layers, RotateCcw, ShoppingCart, TrendingUp, Truck,
@@ -154,6 +154,25 @@ const NewTransactionModal = ({
   const [form, setForm] = useState(EMPTY_FORM);
   const [errors, setErrors] = useState({});
 
+  const isSingleStore = stores.length <= 1;
+
+  const transactionTypeOptions = useMemo(() => {
+    if (isSingleStore) {
+      return TRANSACTION_TYPE_OPTIONS.filter(opt => opt.value !== 'Inventory Transfer');
+    }
+    return TRANSACTION_TYPE_OPTIONS;
+  }, [isSingleStore]);
+
+  const storeOptions = useMemo(() => {
+    if (isSingleStore) {
+      return stores.map(st => ({ id: String(st.id), name: st.store_name || st.name || `Store #${st.id}` }));
+    }
+    return [
+      { id: 'admin', name: 'All Store' },
+      ...stores.map(st => ({ id: String(st.id), name: st.store_name || st.name || `Store #${st.id}` }))
+    ];
+  }, [stores, isSingleStore]);
+
   const { categories } = useCategories(null, { limit: 100 });
 
   const senderType = form.sender === 'admin' ? 'ADMIN' : 'STORE';
@@ -181,11 +200,12 @@ const NewTransactionModal = ({
     if (isOpen) {
       setForm({
         ...EMPTY_FORM,
-        sender: currentStore?.id ? String(currentStore.id) : '',
+        sender: isSingleStore ? (stores[0]?.id ? String(stores[0].id) : '') : (currentStore?.id ? String(currentStore.id) : ''),
+        type: isSingleStore ? 'Purchase' : 'Inventory Transfer',
       });
       setErrors({});
     }
-  }, [isOpen, currentStore]);
+  }, [isOpen, currentStore, stores, isSingleStore]);
 
   if (!isOpen) return null;
 
@@ -194,7 +214,13 @@ const NewTransactionModal = ({
       const next = {
         ...prev,
         [key]: val,
-        ...(key === 'type' ? { product: '', quantity: '', purchasePrice: '', receiver: '' } : {}),
+        ...(key === 'type' ? { 
+          product: '', 
+          quantity: '', 
+          purchasePrice: '', 
+          receiver: '',
+          sender: isSingleStore ? (stores[0]?.id ? String(stores[0].id) : '') : ''
+        } : {}),
         ...(key === 'sender' ? { product: '', quantity: '', receiver: prev.receiver === val ? '' : prev.receiver } : {}),
         ...(key === 'categoryId' ? { product: '' } : {}),
       };
@@ -300,10 +326,7 @@ const NewTransactionModal = ({
       : 'border-slate-200 focus:ring-blue-500/10 focus:border-blue-500'
     }`;
 
-  const storeOptions = [
-    { id: 'admin', name: 'Admin Warehouse' },
-    ...stores.map(st => ({ id: String(st.id), name: st.store_name || st.name || `Store #${st.id}` }))
-  ];
+
 
   const productOptions = form.type === 'Purchase'
     ? catalogProducts
@@ -334,7 +357,7 @@ const NewTransactionModal = ({
             <div>
               <label className="text-xs font-semibold text-slate-600 mb-1.5 block">Transaction Type <span className="text-red-500">*</span></label>
               <select value={form.type} onChange={e => set('type', e.target.value)} className={inputCls('type')}>
-                {TRANSACTION_TYPE_OPTIONS.map(opt => (
+                {transactionTypeOptions.map(opt => (
                   <option key={opt.value} value={opt.value}>{opt.label}</option>
                 ))}
               </select>
@@ -347,12 +370,20 @@ const NewTransactionModal = ({
                   <label className="text-xs font-semibold text-slate-600 mb-1.5 block">
                     {form.type === 'Inventory Transfer' ? 'Sender Store' : 'Affected Store/Owner'} <span className="text-red-500">*</span>
                   </label>
-                  <select value={form.sender} onChange={e => set('sender', e.target.value)} className={inputCls('sender')}>
-                    <option value="">Select store/warehouse...</option>
-                    {storeOptions.map(opt => (
-                      <option key={opt.id} value={opt.id}>{opt.name}</option>
-                    ))}
-                  </select>
+                  {isSingleStore ? (
+                    <input
+                      value={stores[0]?.store_name || stores[0]?.name || ''}
+                      disabled
+                      className={`${inputCls('sender')} disabled:bg-slate-50 disabled:text-slate-500`}
+                    />
+                  ) : (
+                    <select value={form.sender} onChange={e => set('sender', e.target.value)} className={inputCls('sender')}>
+                      <option value="">Select store/warehouse...</option>
+                      {storeOptions.map(opt => (
+                        <option key={opt.id} value={opt.id}>{opt.name}</option>
+                      ))}
+                    </select>
+                  )}
                   {errors.sender && <p className="text-xs text-red-500 mt-1">{errors.sender}</p>}
                 </div>
 
@@ -373,7 +404,7 @@ const NewTransactionModal = ({
               <div>
                 <label className="text-xs font-semibold text-slate-600 mb-1.5 block">Destination Store</label>
                 <input
-                  value={currentStore?.id === 'admin' ? 'Admin Warehouse' : currentStore?.store_name || currentStore?.name || 'Admin Warehouse'}
+                  value={currentStore?.id === 'admin' ? 'All Store' : currentStore?.store_name || currentStore?.name || 'All Store'}
                   disabled
                   className={`${inputCls('destination')} disabled:bg-slate-50 disabled:text-slate-500`}
                 />
@@ -508,6 +539,11 @@ const Transactions = () => {
   const { storeId } = useParams();
   const { selectedStore, setSelectedStore, stores } = useStoreStore();
   const [searchParams, setSearchParams] = useSearchParams();
+  const [inPageStoreId, setInPageStoreId] = useState(storeId);
+
+  useEffect(() => {
+    setInPageStoreId(storeId);
+  }, [storeId]);
   const queryType = searchParams.get('type');
   const querySearch = searchParams.get('search');
   const [activeTab, setActiveTab] = useState('all');
@@ -551,7 +587,7 @@ const Transactions = () => {
     rejectTransactionAsync,
     isApprovingTransaction,
     isRejectingTransaction,
-  } = useTransactions(storeId, {
+  } = useTransactions(inPageStoreId, {
     page: currentPage,
     limit: ITEMS_PER_PAGE,
     search: searchTerm || undefined,
@@ -562,7 +598,7 @@ const Transactions = () => {
       : undefined,
   });
 
-  const { transactions: allTransactions } = useTransactions(storeId, {
+  const { transactions: allTransactions } = useTransactions(inPageStoreId, {
     limit: 1000,
     search: searchTerm || undefined,
     transaction_type: filterType || undefined,
@@ -587,8 +623,8 @@ const Transactions = () => {
       id: displayId,
       rawId: tx.id,
       date: tx.created_at,
-      sender: tx.send_store_name || 'Admin Warehouse',
-      receiver: tx.receive_store_name || 'Admin Warehouse',
+      sender: tx.send_store_name || 'All Store',
+      receiver: tx.receive_store_name || 'All Store',
       category: 'Inventory',
       product: tx.product_name || tx.product_sku || `Product #${tx.product_id}`,
       quantity: tx.quantity,
@@ -689,13 +725,34 @@ const Transactions = () => {
               Track and manage inventory movements across all stores.
             </p>
           </div>
-          <button
-            onClick={() => setShowNewModal(true)}
-            className="flex items-center gap-2 px-5 py-2.5 bg-[#0A0F1F] text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 flex-shrink-0 w-full sm:w-auto justify-center"
-          >
-            <Plus className="w-4 h-4" />
-            New Transaction
-          </button>
+          <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
+            {storeId === 'admin' && (
+              <div className="relative animate-fade-in">
+                <select
+                  value={inPageStoreId}
+                  onChange={(e) => {
+                    setInPageStoreId(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="pl-9 pr-10 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-sm font-semibold focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 shadow-sm appearance-none cursor-pointer"
+                >
+                  <option value="admin">All Store</option>
+                  {stores.filter(s => s.id !== 'admin' && s.store_name !== 'All Store' && s.name !== 'All Store').map(s => (
+                    <option key={s.id} value={s.id}>{s.store_name}</option>
+                  ))}
+                </select>
+                <Store className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+              </div>
+            )}
+            <button
+              onClick={() => setShowNewModal(true)}
+              className="flex items-center gap-2 px-5 py-2.5 bg-[#0A0F1F] text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 flex-shrink-0 justify-center animate-fade-in"
+            >
+              <Plus className="w-4 h-4" />
+              New Transaction
+            </button>
+          </div>
         </div>
       </div>
 
@@ -724,28 +781,30 @@ const Transactions = () => {
       </div>
 
       {/* ── Tabs ── */}
-      <div className="flex items-center gap-2 mb-5 overflow-x-auto hide-scrollbar pb-1">
-        {TABS.map(tab => {
-          const isActive = activeTab === tab.id;
-          const Icon = tab.icon;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => { setActiveTab(tab.id); resetPage(); }}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all whitespace-nowrap flex-shrink-0 ${isActive
-                  ? 'bg-[#0A0F1F] text-white shadow-md'
-                  : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 hover:border-slate-300'
-                }`}
-            >
-              <Icon className="w-4 h-4" />
-              {tab.label}
-              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${isActive ? 'bg-white/20' : 'bg-slate-100 text-slate-500'}`}>
-                {tabCounts[tab.id]}
-              </span>
-            </button>
-          );
-        })}
-      </div>
+      {stores.length > 1 && (
+        <div className="flex items-center gap-2 mb-5 overflow-x-auto hide-scrollbar pb-1">
+          {TABS.map(tab => {
+            const isActive = activeTab === tab.id;
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => { setActiveTab(tab.id); resetPage(); }}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all whitespace-nowrap flex-shrink-0 ${isActive
+                    ? 'bg-[#0A0F1F] text-white shadow-md'
+                    : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 hover:border-slate-300'
+                  }`}
+              >
+                <Icon className="w-4 h-4" />
+                {tab.label}
+                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${isActive ? 'bg-white/20' : 'bg-slate-100 text-slate-500'}`}>
+                  {tabCounts[tab.id]}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* ── Search + Filter Bar ── */}
       <div className="flex flex-col sm:flex-row gap-3 mb-4">
@@ -788,26 +847,30 @@ const Transactions = () => {
       {/* ── Expandable Filter Row ── */}
       {showFilters && (
         <div className="flex flex-wrap gap-3 mb-4 p-4 bg-white border border-slate-200 rounded-2xl shadow-sm animate-fade-in">
-          <div className="flex-1 min-w-[160px]">
-            <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5 block">Sender</label>
-            <select value={filterSender} onChange={e => { setFilterSender(e.target.value); resetPage(); }} className={selectCls}>
-              <option value="">All Senders</option>
-              {stores.map(store => {
-                const name = store.store_name || store.name || `Store #${store.id}`;
-                return <option key={store.id} value={name}>{name}</option>;
-              })}
-            </select>
-          </div>
-          <div className="flex-1 min-w-[160px]">
-            <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5 block">Receiver</label>
-            <select value={filterReceiver} onChange={e => { setFilterReceiver(e.target.value); resetPage(); }} className={selectCls}>
-              <option value="">All Receivers</option>
-              {stores.map(store => {
-                const name = store.store_name || store.name || `Store #${store.id}`;
-                return <option key={store.id} value={name}>{name}</option>;
-              })}
-            </select>
-          </div>
+          {stores.length > 1 && (
+            <>
+              <div className="flex-1 min-w-[160px]">
+                <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5 block">Sender</label>
+                <select value={filterSender} onChange={e => { setFilterSender(e.target.value); resetPage(); }} className={selectCls}>
+                  <option value="">All Senders</option>
+                  {stores.map(store => {
+                    const name = store.store_name || store.name || `Store #${store.id}`;
+                    return <option key={store.id} value={name}>{name}</option>;
+                  })}
+                </select>
+              </div>
+              <div className="flex-1 min-w-[160px]">
+                <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5 block">Receiver</label>
+                <select value={filterReceiver} onChange={e => { setFilterReceiver(e.target.value); resetPage(); }} className={selectCls}>
+                  <option value="">All Receivers</option>
+                  {stores.map(store => {
+                    const name = store.store_name || store.name || `Store #${store.id}`;
+                    return <option key={store.id} value={name}>{name}</option>;
+                  })}
+                </select>
+              </div>
+            </>
+          )}
           <div className="flex-1 min-w-[160px]">
             <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5 block">Transaction Type</label>
             <select value={filterType} onChange={e => { setFilterType(e.target.value); resetPage(); }} className={selectCls}>

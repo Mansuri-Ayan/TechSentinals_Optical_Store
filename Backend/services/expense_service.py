@@ -148,7 +148,7 @@ async def get_expense(db: AsyncSession, expense_id: int) -> Expense | None:
 async def list_expenses(
     db: AsyncSession,
     admin_id: int,
-    store_id: int,
+    store_id: str,
     page: int = 1,
     page_size: int = 10,
     search: str | None = None,
@@ -160,13 +160,21 @@ async def list_expenses(
     approval_status: str | None = None,
 ) -> dict:
     """List expenses with filter options, returning items and pagination metadata."""
-    # Build base query with store filter first
+    # Build base query
     query = select(Expense).where(
         Expense.admin_id == admin_id,
-        Expense.owner_type == ExpenseOwnerType.STORE,
-        Expense.owner_id == store_id,
         Expense.deleted_at.is_(None),
     )
+
+    if store_id.lower() != "admin":
+        try:
+            store_id_int = int(store_id)
+            query = query.where(
+                Expense.owner_type == ExpenseOwnerType.STORE,
+                Expense.owner_id == store_id_int
+            )
+        except ValueError:
+            pass
 
     # Apply all other filters to the SAME query object
     if category_id is not None:

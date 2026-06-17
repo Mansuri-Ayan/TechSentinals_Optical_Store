@@ -4,7 +4,7 @@ import {
   Search, Plus, Truck, ChevronRight,
   Edit2, Trash2, X as XIcon,
   Package, ShoppingCart, CheckCircle,
-  Phone, MapPin, DollarSign
+  Phone, MapPin, DollarSign, Store, ChevronDown
 } from 'lucide-react';
 import Pagination from '../../components/shared/Pagination';
 import AddEditSupplierModal from '../../components/admin/suppliers/AddEditSupplierModal';
@@ -132,8 +132,18 @@ const Suppliers = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState('All');
+  const [inPageStoreId, setInPageStoreId] = useState(storeId);
 
-  const { purchaseOrders } = usePurchaseOrders({ limit: 1000, include_nested: false });
+  useEffect(() => {
+    setInPageStoreId(storeId);
+  }, [storeId]);
+
+  const targetStoreId = inPageStoreId === 'admin' ? undefined : Number(inPageStoreId);
+  const { purchaseOrders } = usePurchaseOrders({ 
+    limit: 1000, 
+    include_nested: false,
+    store_id: targetStoreId
+  });
 
   const supplierDues = useMemo(() => {
     if (!purchaseOrders) return {};
@@ -172,7 +182,7 @@ const Suppliers = () => {
     createSupplierAsync,
     updateSupplierAsync,
     deleteSupplierAsync,
-  } = useSuppliers(storeId, {
+  } = useSuppliers(inPageStoreId, {
     page: isGlobalFetch ? 1 : currentPage,
     limit: isGlobalFetch ? 1000 : ITEMS_PER_PAGE,
     search: searchTerm.trim(),
@@ -315,13 +325,34 @@ const Suppliers = () => {
               Manage all product suppliers and their purchase histories.
             </p>
           </div>
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="flex items-center gap-2 px-5 py-2.5 bg-[#0A0F1F] text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 flex-shrink-0 w-full sm:w-auto justify-center"
-          >
-            <Plus className="w-4 h-4" />
-            Add Supplier
-          </button>
+          <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
+            {storeId === 'admin' && (
+              <div className="relative animate-fade-in">
+                <select
+                  value={inPageStoreId}
+                  onChange={(e) => {
+                    setInPageStoreId(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="pl-9 pr-10 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-sm font-semibold focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 shadow-sm appearance-none cursor-pointer"
+                >
+                  <option value="admin">All Store</option>
+                  {stores.filter(s => s.id !== 'admin' && s.store_name !== 'All Store' && s.name !== 'All Store').map(s => (
+                    <option key={s.id} value={s.id}>{s.store_name}</option>
+                  ))}
+                </select>
+                <Store className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+              </div>
+            )}
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="flex items-center gap-2 px-5 py-2.5 bg-[#0A0F1F] text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 flex-shrink-0 justify-center animate-fade-in"
+            >
+              <Plus className="w-4 h-4" />
+              Add Supplier
+            </button>
+          </div>
         </div>
       </div>
 
@@ -419,7 +450,7 @@ const Suppliers = () => {
                   {displayedPurchaseOrders.map(po => (
                     <tr
                       key={po.id}
-                      onClick={() => navigate(`/admin/store/${storeId}/suppliers/${po.supplier_id}`)}
+                      onClick={() => navigate(`/admin/store/${inPageStoreId}/suppliers/${po.supplier_id}`)}
                       className="hover:bg-blue-50/40 transition-colors cursor-pointer"
                     >
                       <td className="px-5 py-4">
@@ -450,7 +481,7 @@ const Suppliers = () => {
                       </td>
                       <td className="px-5 py-4" onClick={e => e.stopPropagation()}>
                         <button
-                          onClick={() => navigate(`/admin/store/${storeId}/suppliers/${po.supplier_id}`)}
+                          onClick={() => navigate(`/admin/store/${inPageStoreId}/suppliers/${po.supplier_id}`)}
                           className="px-3 py-1.5 bg-[#0A0F1F] text-white hover:bg-slate-800 text-xs font-semibold rounded-lg shadow-sm transition-all flex items-center gap-1 cursor-pointer"
                         >
                           View Supplier <ChevronRight className="w-3 h-3" />
@@ -467,7 +498,7 @@ const Suppliers = () => {
               {displayedPurchaseOrders.map(po => (
                 <div
                   key={po.id}
-                  onClick={() => navigate(`/admin/store/${storeId}/suppliers/${po.supplier_id}`)}
+                  onClick={() => navigate(`/admin/store/${inPageStoreId}/suppliers/${po.supplier_id}`)}
                   className="p-4 bg-white border border-slate-100 rounded-2xl shadow-sm hover:shadow-md cursor-pointer transition-shadow"
                 >
                   <div className="flex justify-between items-start mb-3">
@@ -524,7 +555,7 @@ const Suppliers = () => {
               <SupplierCard
                 key={s.id}
                 supplier={s}
-                onClick={() => navigate(`/admin/store/${storeId}/suppliers/${s.id}`)}
+                onClick={() => navigate(`/admin/store/${inPageStoreId}/suppliers/${s.id}`)}
                 onEdit={setEditSupplier}
                 onDelete={setDeleteSupplier}
               />

@@ -115,7 +115,7 @@ def _sale_to_read(sale, include_nested: bool = True, staff_map: dict = None) -> 
     description="List sales with optional filters (store, customer, status, date range, search).",
 )
 async def list_sales_endpoint(
-    store_id: int | None = Query(default=None),
+    store_id: str | None = Query(default=None),
     customer_id: int | None = Query(default=None),
     status_filter: str | None = Query(default=None, alias="status"),
     date_from: str | None = Query(default=None),
@@ -130,14 +130,20 @@ async def list_sales_endpoint(
 ):
     if isinstance(current_user, Admin):
         admin_id = current_user.id
+        numeric_store_id = None
+        if store_id and store_id.lower() != "admin":
+            try:
+                numeric_store_id = int(store_id)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid store_id format")
     else:
         admin_id = current_user.store.admin_id
-        store_id = current_user.store_id
+        numeric_store_id = current_user.store_id
 
     sales, total = await list_sales(
         db,
         admin_id=admin_id,
-        store_id=store_id,
+        store_id=numeric_store_id,
         customer_id=customer_id,
         status_filter=status_filter,
         date_from=date_from,
@@ -173,8 +179,8 @@ async def list_sales_endpoint(
     # Calculate KPIs dynamically under the same store / date filters
     from sqlalchemy import func as sa_func
     kpi_conditions = [Sale.admin_id == admin_id]
-    if store_id:
-        kpi_conditions.append(Sale.store_id == store_id)
+    if numeric_store_id:
+        kpi_conditions.append(Sale.store_id == numeric_store_id)
     if date_from:
         kpi_conditions.append(Sale.sale_date >= date_from)
     if date_to:

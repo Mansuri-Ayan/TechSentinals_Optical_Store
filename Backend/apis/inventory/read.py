@@ -14,11 +14,19 @@ from services.inventory_service import (
 router = APIRouter()
 
 
-def _inventory_to_read(inv) -> InventoryRead:
+def _inventory_to_read(inv, store_map: dict | None = None) -> InventoryRead:
     product = inv.product
     selling_price = product.selling_price if product else None
+    owner_name = None
+    ot_str = inv.owner_type.value if hasattr(inv.owner_type, "value") else str(inv.owner_type)
+    if "ADMIN" in ot_str:
+        owner_name = "Admin Warehouse"
+    elif store_map:
+        owner_name = store_map.get(inv.owner_id, "Unknown Store")
+
     return InventoryRead(
         **{c.key: getattr(inv, c.key) for c in inv.__table__.columns},
+        owner_name=owner_name,
         product_name=product.name if product else None,
         product_sku=product.sku if product else None,
         category_id=product.category_id if product else None,
@@ -64,13 +72,20 @@ async def list_inventories(
     current_user = Depends(get_current_user),
 ) -> InventoryResponse:
     from core.deps import get_user_admin_id
+    from sqlalchemy import select
+    from models.store import Store
 
     if isinstance(current_user, Admin):
-        # Admin can view any store/warehouse — no restrictions
-        pass
+        admin_id = current_user.id
     else:
-        # Manager: allow querying their own admin warehouse or any store under the same admin
         admin_id = get_user_admin_id(current_user)
+
+    stores_stmt = select(Store.id, Store.store_name).where(Store.admin_id == admin_id)
+    stores_res = await db.execute(stores_stmt)
+    store_map = {row[0]: row[1] for row in stores_res.fetchall()}
+
+    if not isinstance(current_user, Admin):
+        # Manager: allow querying their own admin warehouse or any store under the same admin
         requested_owner_type = owner_type.upper()
 
         if requested_owner_type == "ADMIN":
@@ -82,8 +97,6 @@ async def list_inventories(
                 owner_id = current_user.store_id
             else:
                 # Validate the store belongs to the same admin
-                from sqlalchemy import select
-                from models.store import Store
                 store_check = await db.execute(
                     select(Store.admin_id).where(Store.id == owner_id)
                 )
@@ -113,7 +126,7 @@ async def list_inventories(
     )
     
     return InventoryResponse(
-        items=[_inventory_to_read(inv) for inv in result_dict["items"]],
+        items=[_inventory_to_read(inv, store_map) for inv in result_dict["items"]],
         total=result_dict["total"],
         page=result_dict["page"],
         limit=result_dict["limit"],
@@ -135,6 +148,19 @@ async def low_stock_items(
     db: AsyncSession = Depends(get_db),
     current_user = Depends(get_current_user),
 ) -> list[InventoryRead]:
+    from core.deps import get_user_admin_id
+    from sqlalchemy import select
+    from models.store import Store
+
+    if isinstance(current_user, Admin):
+        admin_id = current_user.id
+    else:
+        admin_id = get_user_admin_id(current_user)
+
+    stores_stmt = select(Store.id, Store.store_name).where(Store.admin_id == admin_id)
+    stores_res = await db.execute(stores_stmt)
+    store_map = {row[0]: row[1] for row in stores_res.fetchall()}
+
     if isinstance(current_user, Admin):
         items = await get_low_stock_items(db, admin_id=current_user.id)
     else:
@@ -146,7 +172,7 @@ async def low_stock_items(
             stock_status="low_stock",
             paginate=False,
         )
-    return [_inventory_to_read(inv) for inv in items]
+    return [_inventory_to_read(inv, store_map) for inv in items]
 
 
 @router.get(
@@ -165,10 +191,24 @@ async def get_inventory_endpoint(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Inventory record not found",
         )
+    
+    from core.deps import get_user_admin_id
+    from sqlalchemy import select
+    from models.store import Store
+
+    if isinstance(current_user, Admin):
+        admin_id = current_user.id
+    else:
+        admin_id = get_user_admin_id(current_user)
+
+    stores_stmt = select(Store.id, Store.store_name).where(Store.admin_id == admin_id)
+    stores_res = await db.execute(stores_stmt)
+    store_map = {row[0]: row[1] for row in stores_res.fetchall()}
+
     if not isinstance(current_user, Admin):
         if inv.owner_type != "STORE" or inv.owner_id != current_user.store_id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied to this store's inventory",
             )
-    return _inventory_to_read(inv)
+    return _inventory_to_read(inv, store_map)

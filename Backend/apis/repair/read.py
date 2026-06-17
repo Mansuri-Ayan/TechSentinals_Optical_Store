@@ -47,7 +47,7 @@ def _repair_to_read(repair) -> RepairRead:
     description="List all repair jobs with optional filtering by store, customer, status, type, and search.",
 )
 async def list_repairs_endpoint(
-    store_id: int | None = Query(None, description="Filter by store ID"),
+    store_id: str | None = Query(None, description="Filter by store ID"),
     customer_id: int | None = Query(None, description="Filter by customer ID"),
     status: str | None = Query(None, description="Filter by status"),
     repair_type: str | None = Query(None, description="Filter by repair type"),
@@ -61,12 +61,23 @@ async def list_repairs_endpoint(
 
     # Scoping: if not admin, restrict queries to their store
     if not isinstance(current_user, Admin):
-        store_id = current_user.store_id
+        store_id_int = current_user.store_id
+    else:
+        if store_id is not None:
+            if str(store_id).lower() == "admin":
+                store_id_int = None
+            else:
+                try:
+                    store_id_int = int(store_id)
+                except ValueError:
+                    store_id_int = None
+        else:
+            store_id_int = None
 
     repairs, total = await list_repairs(
         db,
         admin_id=admin_id,
-        store_id=store_id,
+        store_id=store_id_int,
         customer_id=customer_id,
         status=status,
         repair_type=repair_type,

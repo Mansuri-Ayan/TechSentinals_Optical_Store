@@ -32,12 +32,12 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const { stores, selectedStore, setSelectedStore } = useStoreStore();
   const [showAddStore, setShowAddStore] = useState(false);
-  const [selectedStoreFilter, setSelectedStoreFilter] = useState('All');
+  const [selectedStoreFilter, setSelectedStoreFilter] = useState('All Store');
   const [activityTab, setActivityTab] = useState('orders'); // orders, transactions, customers
 
   // Find active store ID based on selectedStoreFilter name
   const activeStoreId = useMemo(() => {
-    if (selectedStoreFilter === 'All') return null;
+    if (selectedStoreFilter === 'All' || selectedStoreFilter === 'All Store') return null;
     const matchedStore = stores.find(s => (s.store_name || s.name) === selectedStoreFilter);
     return matchedStore?.id || null;
   }, [selectedStoreFilter, stores]);
@@ -52,7 +52,7 @@ const Dashboard = () => {
     if (selectedStore) {
       setSelectedStoreFilter(selectedStore.store_name || selectedStore.name);
     } else {
-      setSelectedStoreFilter('All');
+      setSelectedStoreFilter('All Store');
     }
   }, [selectedStore]);
 
@@ -199,19 +199,16 @@ const Dashboard = () => {
         </div>
 
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 w-full lg:w-auto">
+
           {/* Store switcher */}
-          <StoreSwitcher
-            selectedStoreFilter={selectedStoreFilter}
-            onStoreChange={(val) => {
-              setSelectedStoreFilter(val);
-              const matchedStore = stores.find(s => (s.store_name || s.name) === val);
-              if (matchedStore) {
-                setSelectedStore(matchedStore);
-              } else if (val === 'All') {
-                setSelectedStore(null);
-              }
-            }}
-          />
+          {stores.length > 1 && (
+            <StoreSwitcher
+              selectedStoreFilter={selectedStoreFilter}
+              onStoreChange={(val) => {
+                setSelectedStoreFilter(val);
+              }}
+            />
+          )}
 
           {/* Quick Actions Group */}
           <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">

@@ -18,6 +18,8 @@ const StoreSwitcher = ({ selectedStoreFilter, onStoreChange }) => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [dropdownRef]);
 
+  if (stores.length <= 1) return null;
+
   const getStoreName = (store) => store?.store_name || store?.name || 'Select Store';
 
   return (
@@ -30,29 +32,29 @@ const StoreSwitcher = ({ selectedStoreFilter, onStoreChange }) => {
         <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
           <Store className="w-4 h-4" />
         </span>
-        <span className="truncate pr-2">{selectedStoreFilter === 'All' ? 'All Stores' : selectedStoreFilter}</span>
+        <span className="truncate pr-2">{(selectedStoreFilter === 'All' || selectedStoreFilter === 'All Store') ? 'All Store' : selectedStoreFilter}</span>
         <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform flex-shrink-0 ${isOpen ? 'rotate-180' : ''}`} />
       </button>
-
+ 
       {isOpen && (
         <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden z-50 animate-fade-in max-h-60 overflow-y-auto hide-scrollbar">
           <button
             type="button"
             onClick={() => {
-              onStoreChange('All');
+              onStoreChange('All Store');
               setIsOpen(false);
             }}
             className={`w-full text-left px-4 py-3 flex items-center justify-between text-sm transition-colors ${
-              selectedStoreFilter === 'All'
+              (selectedStoreFilter === 'All' || selectedStoreFilter === 'All Store')
                 ? 'bg-emerald-50 text-emerald-600 font-bold'
                 : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
             }`}
           >
-            <span className="truncate">All Stores</span>
-            {selectedStoreFilter === 'All' && <Check className="w-4 h-4" />}
+            <span className="truncate">All Store</span>
+            {(selectedStoreFilter === 'All' || selectedStoreFilter === 'All Store') && <Check className="w-4 h-4" />}
           </button>
           
-          {stores.map((store) => {
+          {stores.filter(s => s.id !== 'admin' && s.store_name !== 'All Store' && s.name !== 'All Store').map((store) => {
             const name = getStoreName(store);
             const isSelected = selectedStoreFilter === name;
             return (

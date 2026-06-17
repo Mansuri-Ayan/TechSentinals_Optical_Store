@@ -3,7 +3,7 @@ import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Users, LogOut, Glasses, ChevronDown, Check, X,
   Archive, Tag, Layers, ArrowRightLeft, Truck, ShoppingCart, Receipt,
-  Store, ChevronLeft, ChevronRight, BarChart3
+  Store, ChevronLeft, ChevronRight, BarChart3, Wrench, UserCheck
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useAuthStore, useStoreStore } from '../../store/store';
@@ -63,10 +63,11 @@ const Sidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) => {
 
   useEffect(() => {
     if (fetchedStores) {
-      const allStores = [
-        { id: 'admin', store_name: 'Admin Warehouse' },
-        ...(fetchedStores.items || fetchedStores || [])
-      ];
+      const actualStores = fetchedStores.items || fetchedStores || [];
+      const storesArray = Array.isArray(actualStores) ? actualStores : [];
+      const allStores = storesArray.length > 1
+        ? [{ id: 'admin', store_name: 'All Store' }, ...storesArray]
+        : storesArray;
       setStores(allStores);
     }
   }, [fetchedStores, setStores]);
@@ -103,13 +104,15 @@ const Sidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) => {
 
   const currentStore = selectedStore || stores[0];
   const getStoreName = (store) => store?.store_name || store?.name || 'Select Store';
-  const staffRoute = currentStore && currentStore.id !== 'admin' ? `/admin/store/${currentStore.id}/staff` : '/admin/dashboard';
+  const staffRoute = currentStore ? `/admin/store/${currentStore.id}/staff` : '/admin/dashboard';
   const inventoryRoute = currentStore ? `/admin/store/${currentStore.id}/inventory` : '/admin/dashboard';
   const brandsRoute = currentStore ? `/admin/store/${currentStore.id}/brands` : '/admin/dashboard';
   const categoriesRoute = currentStore ? `/admin/store/${currentStore.id}/categories` : '/admin/dashboard';
   const transactionsRoute = currentStore ? `/admin/store/${currentStore.id}/transactions` : '/admin/dashboard';
   const suppliersRoute = currentStore ? `/admin/store/${currentStore.id}/suppliers` : '/admin/dashboard';
-  const expensesRoute = currentStore && currentStore.id !== 'admin' ? `/admin/store/${currentStore.id}/expenses` : '/admin/dashboard';
+  const expensesRoute = currentStore ? `/admin/store/${currentStore.id}/expenses` : '/admin/dashboard';
+  const repairsRoute = currentStore ? `/admin/store/${currentStore.id}/repairs` : '/admin/dashboard';
+  const customersRoute = currentStore ? `/admin/store/${currentStore.id}/customers` : '/admin/dashboard';
 
   const handleStoreSelect = (store) => {
     setSelectedStore(store);
@@ -126,11 +129,7 @@ const Sidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) => {
     }
 
     if (location.pathname.startsWith('/admin/store/') && location.pathname.endsWith('/staff')) {
-      if (store.id === 'admin') {
-        navigate('/admin/dashboard');
-      } else {
-        navigate(`/admin/store/${store.id}/staff`);
-      }
+      navigate(`/admin/store/${store.id}/staff`);
     } else if (location.pathname.startsWith('/admin/store/') && location.pathname.endsWith('/inventory')) {
       navigate(`/admin/store/${store.id}/inventory`);
     } else if (location.pathname.startsWith('/admin/store/') && location.pathname.endsWith('/brands')) {
@@ -142,11 +141,11 @@ const Sidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) => {
     } else if (location.pathname.startsWith('/admin/store/') && location.pathname.includes('/suppliers')) {
       navigate(`/admin/store/${store.id}/suppliers`);
     } else if (location.pathname.startsWith('/admin/store/') && location.pathname.includes('/expenses')) {
-      if (store.id === 'admin') {
-        navigate('/admin/dashboard');
-      } else {
-        navigate(`/admin/store/${store.id}/expenses`);
-      }
+      navigate(`/admin/store/${store.id}/expenses`);
+    } else if (location.pathname.startsWith('/admin/store/') && location.pathname.includes('/repairs')) {
+      navigate(`/admin/store/${store.id}/repairs`);
+    } else if (location.pathname.startsWith('/admin/store/') && location.pathname.includes('/customers')) {
+      navigate(`/admin/store/${store.id}/customers`);
     } else {
       // Default fallback
       if (store.id === 'admin') {
@@ -222,7 +221,7 @@ const Sidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) => {
               {/* Custom Dropdown Menu */}
               {!isCollapsed && isDropdownOpen && (
                 <div className="absolute top-full left-0 right-0 mt-2 bg-[#1E293B] border border-slate-700 rounded-xl shadow-xl overflow-hidden z-50 animate-fade-in max-h-60 overflow-y-auto hide-scrollbar">
-                  {stores.map(store => (
+                  {stores.filter(s => s.id === 'admin' || (s.store_name !== 'All Store' && s.name !== 'All Store')).map(store => (
                     <button
                       key={store.id}
                       onClick={() => {
@@ -359,6 +358,28 @@ const Sidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) => {
           </NavLink>
 
           <NavLink
+            to="/admin/customers"
+            end
+            title={isCollapsed ? "Customers" : undefined}
+            className={({ isActive }) => {
+              const isCustomersActive = isActive || location.pathname.includes('/customers');
+              return `flex items-center ${isCollapsed ? 'justify-center px-0' : 'px-4'} py-2.5 rounded-xl transition-all duration-200 group ${isCustomersActive
+                ? 'bg-emerald-500/10 text-emerald-400 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_0_10px_rgba(16,185,129,0.1)] border border-emerald-500/20'
+                : 'text-slate-400 hover:bg-white/5 hover:text-slate-202 border border-transparent'
+              }`;
+            }}
+            onClick={(e) => {
+              if (currentStore) {
+                e.preventDefault();
+                navigate(customersRoute);
+              }
+            }}
+          >
+            <UserCheck className={`w-5 h-5 transition-transform group-hover:scale-110 flex-shrink-0 ${isCollapsed ? '' : 'mr-3'}`} />
+            {!isCollapsed && <span className="font-medium text-sm">Customers</span>}
+          </NavLink>
+
+          <NavLink
             to="/admin/brands"
             end
             title={isCollapsed ? "Brands" : undefined}
@@ -450,6 +471,28 @@ const Sidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) => {
           >
             <Receipt className={`w-5 h-5 transition-transform group-hover:scale-110 flex-shrink-0 ${isCollapsed ? '' : 'mr-3'}`} />
             {!isCollapsed && <span className="font-medium text-sm">Expenses</span>}
+          </NavLink>
+
+          <NavLink
+            to="/admin/repairs"
+            end
+            title={isCollapsed ? "Repairs & Services" : undefined}
+            className={({ isActive }) => {
+              const isRepairsActive = isActive || location.pathname.includes('/repairs');
+              return `flex items-center ${isCollapsed ? 'justify-center px-0' : 'px-4'} py-2.5 rounded-xl transition-all duration-200 group ${isRepairsActive
+                ? 'bg-emerald-500/10 text-emerald-400 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_0_10px_rgba(16,185,129,0.1)] border border-emerald-500/20'
+                : 'text-slate-400 hover:bg-white/5 hover:text-slate-202 border border-transparent'
+              }`;
+            }}
+            onClick={(e) => {
+              if (currentStore) {
+                e.preventDefault();
+                navigate(repairsRoute);
+              }
+            }}
+          >
+            <Wrench className={`w-5 h-5 transition-transform group-hover:scale-110 flex-shrink-0 ${isCollapsed ? '' : 'mr-3'}`} />
+            {!isCollapsed && <span className="font-medium text-sm">Repairs & Services</span>}
           </NavLink>
         </nav>
 

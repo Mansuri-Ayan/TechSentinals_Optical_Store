@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { useSales } from '../../hooks/useSales';
 import { useStores } from '../../hooks/useStores';
+import { useStoreStore } from '../../store/store';
 import Pagination from '../../components/shared/Pagination';
 import InventoryDetailDrawer from '../../components/admin/InventoryDetailDrawer';
 
@@ -39,6 +40,8 @@ const Sales = () => {
   const queryBranch = searchParams.get('branch');
   const queryStatus = searchParams.get('status');
 
+  const { selectedStore } = useStoreStore();
+
   const [selectedBranch, setSelectedBranch] = useState(queryBranch || 'All');
   const [selectedStatus, setSelectedStatus] = useState(queryStatus || 'All');
   const [selectedPayment, setSelectedPayment] = useState('All');
@@ -48,6 +51,12 @@ const Sales = () => {
   const [selectedSale, setSelectedSale] = useState(null);
 
   const { stores } = useStores();
+
+  useEffect(() => {
+    if (selectedStore && selectedStore.id !== 'admin') {
+      setSelectedBranch(selectedStore.id);
+    }
+  }, [selectedStore]);
 
   // Debounce search term
   useEffect(() => {
@@ -98,6 +107,8 @@ const Sales = () => {
               Track and monitor optical customer sales, pending laboratory orders, and store revenues.
             </p>
           </div>
+          <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
+          </div>
         </div>
       </div>
 
@@ -126,22 +137,26 @@ const Sales = () => {
         
         {/* Branch and Payment Selectors */}
         <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
-          <label className="text-sm font-semibold text-slate-600 flex items-center gap-1.5 whitespace-nowrap">
-            <Store className="w-4 h-4 text-slate-400" /> Branch:
-          </label>
-          <div className="relative w-full sm:w-48">
-            <select
-              value={selectedBranch}
-              onChange={(e) => setSelectedBranch(e.target.value)}
-              className="w-full px-3 py-2 text-sm font-medium border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 bg-white appearance-none pr-8"
-            >
-              <option value="All">All Branches</option>
-              {stores.map(store => (
-                <option key={store.id} value={store.id}>{store.store_name}</option>
-              ))}
-            </select>
-            <ChevronRight className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none rotate-90" />
-          </div>
+          {selectedStore?.id === 'admin' && (
+            <>
+              <label className="text-sm font-semibold text-slate-600 flex items-center gap-1.5 whitespace-nowrap">
+                <Store className="w-4 h-4 text-slate-400" /> Branch:
+              </label>
+              <div className="relative w-full sm:w-48">
+                <select
+                  value={selectedBranch}
+                  onChange={(e) => setSelectedBranch(e.target.value)}
+                  className="w-full px-3 py-2 text-sm font-medium border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 bg-white appearance-none pr-8"
+                >
+                  <option value="All">All Branches</option>
+                  {stores.filter(s => s.id !== 'admin' && s.store_name !== 'All Store' && s.name !== 'All Store').map(store => (
+                    <option key={store.id} value={store.id}>{store.store_name}</option>
+                  ))}
+                </select>
+                <ChevronRight className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none rotate-90" />
+              </div>
+            </>
+          )}
 
           <label className="text-sm font-semibold text-slate-600 flex items-center gap-1.5 whitespace-nowrap sm:ml-4">
             <DollarSign className="w-4 h-4 text-slate-400" /> Payment:

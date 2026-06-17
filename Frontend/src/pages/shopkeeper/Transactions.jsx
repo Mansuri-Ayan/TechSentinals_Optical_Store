@@ -12,6 +12,7 @@ import {
 import Pagination from '../../components/shared/Pagination';
 import { useAuthStore } from '../../store/store';
 import { useTransactions } from '../../hooks/useTransactions';
+import NotificationBell from '../../components/shared/NotificationBell';
 import { useCategories } from '../../hooks/useCategories';
 import { useProducts } from '../../hooks/useProducts';
 import { useStores } from '../../hooks/useStores';
@@ -360,7 +361,7 @@ const NewTransactionModal = ({
                 </label>
                 <select value={form.targetStore} onChange={e => set('targetStore', e.target.value)} className={inputCls('targetStore')}>
                   <option value="">Select store/warehouse...</option>
-                  <option value="admin">Admin Warehouse</option>
+                  <option value="admin">All Store</option>
                   {otherStores.map(st => (
                     <option key={st.id} value={String(st.id)}>{st.store_name || st.name || `Store #${st.id}`}</option>
                   ))}
@@ -567,8 +568,8 @@ const Transactions = () => {
       id: displayId,
       rawId: tx.id,
       date: tx.created_at,
-      sender: tx.send_store_name || 'Admin Warehouse',
-      receiver: tx.receive_store_name || 'Admin Warehouse',
+      sender: tx.send_store_name || 'All Store',
+      receiver: tx.receive_store_name || 'All Store',
       category: 'Inventory',
       product: tx.product_name || tx.product_sku || `Product #${tx.product_id}`,
       quantity: tx.quantity,
@@ -673,13 +674,16 @@ const Transactions = () => {
               Request stock from admin or transfer inventory to sister branches.
             </p>
           </div>
-          <button
-            onClick={() => setShowNewModal(true)}
-            className="flex items-center gap-2 px-5 py-2.5 bg-[#0A0F1F] text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 flex-shrink-0 w-full sm:w-auto justify-center"
-          >
-            <Plus className="w-4 h-4" />
-            New Transfer Request
-          </button>
+          <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
+            <NotificationBell role="shopkeeper" />
+            <button
+              onClick={() => setShowNewModal(true)}
+              className="flex items-center gap-2 px-5 py-2.5 bg-[#0A0F1F] text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 flex-shrink-0 w-full sm:w-auto justify-center"
+            >
+              <Plus className="w-4 h-4" />
+              New Transfer Request
+            </button>
+          </div>
         </div>
       </div>
 

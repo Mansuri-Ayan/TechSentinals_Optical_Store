@@ -7,6 +7,7 @@ import {
 import { FRAME_SUBCATEGORIES, LENS_SUBCATEGORIES } from '../../data/productsData';
 import { useAuthStore, useStoreStore } from '../../store/store';
 import { useInventory } from '../../hooks/useInventory';
+import NotificationBell from '../../components/shared/NotificationBell';
 
 const getCategoryConfig = (name) => {
   const normalized = (name || '').toLowerCase();
@@ -210,6 +211,9 @@ const Inventory = () => {
             <p className="text-slate-500 mt-1 text-xs sm:text-sm font-semibold">
               Live dashboard of store stock status, reorder quantities, and brand selections.
             </p>
+          </div>
+          <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
+            <NotificationBell role="shopkeeper" />
           </div>
         </div>
       </div>

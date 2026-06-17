@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import Pagination from '../../components/shared/Pagination';
 import { useSales } from '../../hooks/useSales';
+import NotificationBell from '../../components/shared/NotificationBell';
 
 const STATUS_CFG = {
   Completed:   { color: 'text-emerald-700 bg-emerald-50 border-emerald-200', dot: 'bg-emerald-500' },
@@ -137,6 +138,9 @@ const Sales = () => {
             <p className="text-slate-505 mt-1.5 text-xs sm:text-sm font-semibold">
               Track and monitor optical customer sales, pending orders, and store revenues.
             </p>
+          </div>
+          <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
+            <NotificationBell role="shopkeeper" />
           </div>
         </div>
       </div>

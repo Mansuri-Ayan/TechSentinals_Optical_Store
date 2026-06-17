@@ -45,7 +45,7 @@ async def list_all_transactions(
     status_filter: Optional[str] = Query(None, alias="status"),
     transfer_direction: Optional[str] = Query(None),
     is_request: Optional[bool] = Query(None),
-    store_id: Optional[int] = Query(None),
+    store_id: Optional[str] = Query(None),
     product_id: Optional[int] = Query(None),
     date_from: Optional[datetime] = Query(None),
     date_to: Optional[datetime] = Query(None),
@@ -78,7 +78,7 @@ async def list_all_transactions(
 
 @router.get("/store/{store_id}", response_model=list[TransactionRead])
 async def list_store_transactions(
-    store_id: int,
+    store_id: str,
     status_filter: Optional[str] = Query(None, alias="status"),
     transfer_direction: Optional[str] = Query(None),
     is_request: Optional[bool] = Query(None),

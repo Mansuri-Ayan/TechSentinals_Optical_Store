@@ -19,6 +19,7 @@ import InventoryDetailDrawer from '../../components/admin/InventoryDetailDrawer'
 import { AddExpenseModal } from '../../components/admin/AddExpenseModal';
 import { useAuthStore } from '../../store/store';
 import { getStoresApi } from '../../api/stores/store.api';
+import NotificationBell from '../../components/shared/NotificationBell';
 
 const ITEMS_PER_PAGE = 10;
 const TODAY = new Date().toISOString().split('T')[0];
@@ -302,17 +303,20 @@ const Expenses = () => {
             <h1 className="text-2xl sm:text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-slate-900 to-slate-600 tracking-tight">
               Expense Management
             </h1>
-            <p className="text-slate-505 mt-1 text-sm sm:text-base">
+            <p className="text-slate-555 mt-1 text-sm sm:text-base">
               Track, record, and review business expenses for your branch.
             </p>
           </div>
-          <button
-            onClick={() => { setEditingExpense(null); setShowAddModal(true); }}
-            className="flex items-center justify-center gap-2 px-5 py-2.5 bg-violet-600 text-white rounded-xl text-sm font-semibold hover:bg-violet-700 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 w-full sm:w-auto flex-shrink-0"
-          >
-            <Plus className="w-4 h-4" />
-            Add Expense
-          </button>
+          <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
+            <NotificationBell role="shopkeeper" />
+            <button
+              onClick={() => { setEditingExpense(null); setShowAddModal(true); }}
+              className="flex items-center justify-center gap-2 px-5 py-2.5 bg-violet-600 text-white rounded-xl text-sm font-semibold hover:bg-violet-700 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 w-full sm:w-auto flex-shrink-0"
+            >
+              <Plus className="w-4 h-4" />
+              Add Expense
+            </button>
+          </div>
         </div>
       </div>
 

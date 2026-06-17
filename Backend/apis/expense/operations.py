@@ -116,7 +116,7 @@ async def create_expense_endpoint(
     summary="List all expenses",
 )
 async def list_expenses_endpoint(
-    store_id: int = Query(..., description="The store ID to filter by"),
+    store_id: str = Query(..., description="The store ID to filter by (or 'admin' for warehouse)"),
     category_id: int | None = Query(None),
     search: str | None = Query(None),
     is_approved: bool | None = Query(None),
@@ -131,8 +131,18 @@ async def list_expenses_endpoint(
 ):
     admin_id = _get_user_admin_id(current_user)
 
+    store_id_int = None
+    if store_id.lower() != "admin":
+        try:
+            store_id_int = int(store_id)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid store ID format",
+            )
+
     if not isinstance(current_user, Admin):
-        if store_id != current_user.store_id:
+        if store_id_int is None or store_id_int != current_user.store_id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied to this store's expense records.",

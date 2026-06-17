@@ -11,6 +11,7 @@ import { createCustomerApi, updateCustomerApi, createPrescriptionApi } from '../
 import { createSaleApi } from '../../api/sales/sales.api';
 import { useAuthStore, useStoreStore } from '../../store/store';
 import { toast } from 'react-toastify';
+import NotificationBell from '../../components/shared/NotificationBell';
 
 const POS_KEYS = {
   step: 'pos_activeStep',
@@ -386,6 +387,9 @@ const Shopkeeper = () => {
           <p className="text-slate-500 mt-1 text-xs sm:text-sm font-medium">
             POS & CRM Unified Flow: Products selection, customer records, optical prescriptions, and billing.
           </p>
+        </div>
+        <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
+          <NotificationBell role="shopkeeper" />
         </div>
       </div>
 

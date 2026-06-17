@@ -1,10 +1,9 @@
-import { useState, useMemo } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { Search, Users, ChevronRight, X as XIcon, UserCheck, UserPlus, Repeat } from 'lucide-react';
+import { useState, useMemo, useEffect } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Search, Users, ChevronRight, X as XIcon, UserCheck, UserPlus, Repeat, Store, ChevronDown } from 'lucide-react';
 import Pagination from '../../components/shared/Pagination';
 import { useCustomers } from '../../hooks/useCustomers';
-import { useAuthStore, useStoreStore } from '../../store/store';
-import NotificationBell from '../../components/shared/NotificationBell';
+import { useStoreStore } from '../../store/store';
 
 const ITEMS_PER_PAGE = 12;
 
@@ -12,7 +11,7 @@ const ITEMS_PER_PAGE = 12;
 const StatusBadge = ({ status }) => {
   const colors = {
     Active: 'text-emerald-700 bg-emerald-50 border-emerald-200',
-    Inactive: 'text-slate-655 bg-slate-100 border-slate-200',
+    Inactive: 'text-slate-650 bg-slate-105 border-slate-200',
     VIP: 'text-amber-700 bg-amber-50 border-amber-200',
   };
   const dots = {
@@ -36,12 +35,27 @@ const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-dig
 ───────────────────────────────────────────────────────── */
 const Customers = () => {
   const navigate = useNavigate();
-  const { user } = useAuthStore();
-  const { selectedStore } = useStoreStore();
-  const storeId = user?.role === 'admin' ? selectedStore?.id : user?.store_id;
-  
+  const { storeId } = useParams();
+  const { selectedStore, setSelectedStore, stores } = useStoreStore();
+  const [inPageStoreId, setInPageStoreId] = useState(storeId);
+
+  useEffect(() => {
+    setInPageStoreId(storeId);
+  }, [storeId]);
+
+  useEffect(() => {
+    if (storeId && stores.length > 0) {
+      const urlStore = stores.find(s => String(s.id) === String(storeId));
+      if (urlStore && (!selectedStore || String(selectedStore.id) !== String(storeId))) {
+        setSelectedStore(urlStore);
+      }
+    }
+  }, [storeId, stores, selectedStore, setSelectedStore]);
+
+  const queryStoreId = inPageStoreId === 'admin' ? undefined : Number(inPageStoreId);
+
   // Load customers via service layer
-  const { customers, isLoading } = useCustomers({ store_id: storeId });
+  const { customers, isLoading } = useCustomers({ store_id: queryStoreId });
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState('All');
@@ -91,7 +105,7 @@ const Customers = () => {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500" />
       </div>
     );
   }
@@ -102,14 +116,14 @@ const Customers = () => {
       {/* ── Breadcrumb + Header ── */}
       <div className="mb-6 sm:mb-8">
         <div className="flex items-center text-sm text-slate-500 font-medium mb-3 space-x-2">
-          <Link to="/shopkeeper/dashboard" className="hover:text-slate-800 transition-colors">Dashboard</Link>
+          <Link to="/admin/dashboard" className="hover:text-slate-800 transition-colors">Dashboard</Link>
           <ChevronRight className="w-4 h-4 flex-shrink-0" />
           <span className="text-slate-900 font-semibold">Customers</span>
         </div>
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
           <div>
             <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
-              <Users className="w-8 h-8 text-blue-500" />
+              <Users className="w-8 h-8 text-emerald-500" />
               Customers
             </h1>
             <p className="text-slate-500 mt-1.5 text-sm sm:text-base font-medium">
@@ -117,7 +131,25 @@ const Customers = () => {
             </p>
           </div>
           <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
-            <NotificationBell role="shopkeeper" />
+            {storeId === 'admin' && (
+              <div className="relative animate-fade-in">
+                <select
+                  value={inPageStoreId}
+                  onChange={(e) => {
+                    setInPageStoreId(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="pl-9 pr-10 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-sm font-semibold focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 shadow-sm appearance-none cursor-pointer"
+                >
+                  <option value="admin">All Store</option>
+                  {stores.filter(s => s.id !== 'admin' && s.store_name !== 'All Store' && s.name !== 'All Store').map(s => (
+                    <option key={s.id} value={s.id}>{s.store_name}</option>
+                  ))}
+                </select>
+                <Store className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -125,7 +157,7 @@ const Customers = () => {
       {/* ── KPI Cards ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4 mb-6">
         {[
-          { label: 'Total Customers', value: kpi.total, icon: Users, color: 'text-blue-600 bg-blue-50 border-blue-200', activeColor: 'ring-2 ring-blue-500 bg-blue-100/80', onClick: () => { setStatusFilter('All'); setCurrentPage(1); }, active: statusFilter === 'All' },
+          { label: 'Total Customers', value: kpi.total, icon: Users, color: 'text-blue-650 bg-blue-50 border-blue-200', activeColor: 'ring-2 ring-blue-500 bg-blue-100/80', onClick: () => { setStatusFilter('All'); setCurrentPage(1); }, active: statusFilter === 'All' },
           { label: 'Active Customers', value: kpi.active, icon: UserCheck, color: 'text-emerald-600 bg-emerald-50 border-emerald-200', activeColor: 'ring-2 ring-emerald-500 bg-emerald-100/80', onClick: () => { setStatusFilter('Active'); setCurrentPage(1); }, active: statusFilter === 'Active' },
           { label: 'New This Month', value: kpi.newThisMonth, icon: UserPlus, color: 'text-purple-600 bg-purple-50 border-purple-200', onClick: () => { setStatusFilter('All'); setCurrentPage(1); } },
           { label: 'Repeat Customers', value: kpi.repeat, icon: Repeat, color: 'text-amber-600 bg-amber-50 border-amber-200', onClick: () => { setStatusFilter('All'); setCurrentPage(1); } },
@@ -156,14 +188,14 @@ const Customers = () => {
       {/* ── Search Bar ── */}
       <div className="relative w-full mb-5 group">
         <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-          <Search className="h-5 w-5 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
+          <Search className="h-5 w-5 text-slate-400 group-focus-within:text-emerald-505 transition-colors" />
         </div>
         <input
           type="text"
           value={searchTerm}
           onChange={e => { setSearchTerm(e.target.value); setCurrentPage(1); }}
           placeholder="Search by name, email, phone, city or status…"
-          className="w-full pl-11 pr-10 py-3 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 text-sm font-medium transition-all shadow-sm placeholder:text-slate-400"
+          className="w-full pl-11 pr-10 py-3 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 text-sm font-medium transition-all shadow-sm placeholder:text-slate-400"
         />
         {searchTerm && (
           <button onClick={() => { setSearchTerm(''); setCurrentPage(1); }}
@@ -182,7 +214,7 @@ const Customers = () => {
 
       {/* ── Tabular Listing ── */}
       {filtered.length === 0 ? (
-        <div className="bg-white border border-dashed border-slate-200 rounded-2xl p-12 flex flex-col items-center justify-center text-center">
+        <div className="bg-white border border-dashed border-slate-200 rounded-2xl p-12 flex flex-col items-center justify-center text-center shadow-sm">
           <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4 border border-slate-100">
             <Users className="w-8 h-8 text-slate-350" />
           </div>
@@ -192,11 +224,11 @@ const Customers = () => {
       ) : (
         <>
           {/* Desktop Table Layout */}
-          <div className="hidden md:block bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+          <div className="hidden md:block bg-white rounded-2xl border border-slate-200/60 shadow-sm overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm min-w-[1000px]">
                 <thead>
-                  <tr className="bg-slate-50 border-b border-slate-105">
+                  <tr className="bg-slate-50 border-b border-slate-100">
                     {['Customer', 'Phone Number', 'Email', 'Last Visit', 'Total Orders', 'Total Purchases', 'Status'].map(col => (
                       <th key={col} className="px-5 py-3.5 text-left text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">
                         {col}
@@ -204,7 +236,7 @@ const Customers = () => {
                     ))}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-50">
+                <tbody className="divide-y divide-slate-55">
                   {paginated.map(c => {
                     const fName = c.firstName || c.first_name || '';
                     const lName = c.lastName || c.last_name || '';
@@ -213,11 +245,11 @@ const Customers = () => {
                     return (
                       <tr
                         key={c.id}
-                        onClick={() => navigate(`/shopkeeper/customers/${c.id}`)}
+                        onClick={() => navigate(`/admin/store/${inPageStoreId}/customers/${c.id}`)}
                         className="hover:bg-blue-50/40 transition-colors cursor-pointer group"
                       >
                         <td className="px-5 py-4">
-                  <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-3">
                             <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-slate-700 to-slate-900 flex items-center justify-center text-white font-bold text-sm shadow-sm flex-shrink-0">
                               {initials}
                             </div>
@@ -237,7 +269,7 @@ const Customers = () => {
                           <span className="text-xs font-semibold text-slate-700">{fmtDate(c.lastVisit)}</span>
                         </td>
                         <td className="px-5 py-4 whitespace-nowrap">
-                          <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-slate-100 text-slate-850 text-xs font-bold">
+                          <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-slate-105 text-slate-850 text-xs font-bold">
                             {c.totalOrders}
                           </span>
                         </td>
@@ -265,8 +297,8 @@ const Customers = () => {
               return (
                 <div
                   key={c.id}
-                  onClick={() => navigate(`/shopkeeper/customers/${c.id}`)}
-                  className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 space-y-3 cursor-pointer hover:shadow-md hover:border-blue-200 active:scale-[0.99] transition-all"
+                  onClick={() => navigate(`/admin/store/${inPageStoreId}/customers/${c.id}`)}
+                  className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-4 space-y-3 cursor-pointer hover:shadow-md hover:border-blue-200 active:scale-[0.99] transition-all"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-3">

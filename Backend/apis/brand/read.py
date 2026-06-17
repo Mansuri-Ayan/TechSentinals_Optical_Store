@@ -18,7 +18,7 @@ router = APIRouter()
 async def list_brands(
     active_status: str | None = Query(None, description="active, inactive, or None/all"),
     search: str | None = Query(None),
-    store_id: int | None = Query(None),
+    store_id: str | None = Query(None),
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
     paginate: bool = Query(True),
@@ -27,16 +27,22 @@ async def list_brands(
 ):
     if isinstance(current_user, Admin):
         admin_id = current_user.id
+        numeric_store_id = None
+        if store_id and store_id.lower() != "admin":
+            try:
+                numeric_store_id = int(store_id)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid store_id format")
     else:
         admin_id = current_user.store.admin_id
-        store_id = current_user.store_id
+        numeric_store_id = current_user.store_id
 
     items, total, active_cnt, inactive_cnt = await get_brands_by_admin(
         db,
         admin_id=admin_id,
         active_status=active_status,
         search=search,
-        store_id=store_id,
+        store_id=numeric_store_id,
         page=page,
         limit=limit,
         paginate=paginate,

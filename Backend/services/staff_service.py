@@ -1,13 +1,14 @@
 # Service: staff_service.py
-from sqlalchemy import select
+from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from models.manager import Manager
 from models.worker import Worker
 from models.optician import Optician
+from models.store import Store
 
 async def get_staff_by_store(
     db: AsyncSession,
-    store_id: int,
+    store_id: int | list[int],
     page: int = 1,
     limit: int = 20,
     search: str | None = None,
@@ -18,6 +19,25 @@ async def get_staff_by_store(
     """List all non-deleted staff (managers, workers, opticians) in a store with pagination and filtering."""
     offset = (page - 1) * limit
     
+    # Resolve store names mapping
+    store_ids = store_id if isinstance(store_id, list) else [store_id]
+    store_names_map = {}
+    if store_ids:
+        st_stmt = select(Store.id, Store.store_name).where(Store.id.in_(store_ids))
+        st_res = await db.execute(st_stmt)
+        for row in st_res.all():
+            store_names_map[row[0]] = row[1]
+
+    # Build filters based on store ID(s)
+    if isinstance(store_id, list):
+        mgr_store_filter = Manager.store_id.in_(store_id)
+        wrk_store_filter = Worker.store_id.in_(store_id)
+        opt_store_filter = Optician.store_id.in_(store_id)
+    else:
+        mgr_store_filter = Manager.store_id == store_id
+        wrk_store_filter = Worker.store_id == store_id
+        opt_store_filter = Optician.store_id == store_id
+
     managers = []
     workers = []
     opticians = []
@@ -25,7 +45,7 @@ async def get_staff_by_store(
     roles_to_query = [role.lower().strip()] if role else ["manager", "worker", "optician"]
     
     if "manager" in roles_to_query:
-        stmt = select(Manager).where(Manager.store_id == store_id, Manager.deleted_at.is_(None))
+        stmt = select(Manager).where(mgr_store_filter, Manager.deleted_at.is_(None))
         if is_active is not None:
             stmt = stmt.where(Manager.is_active == is_active)
         if search:
@@ -42,6 +62,7 @@ async def get_staff_by_store(
             {
                 "id": m.id,
                 "store_id": m.store_id,
+                "store_name": store_names_map.get(m.store_id, "Unknown Store"),
                 "role": "manager",
                 "first_name": m.first_name,
                 "last_name": m.last_name,
@@ -59,7 +80,7 @@ async def get_staff_by_store(
         ]
         
     if "worker" in roles_to_query:
-        stmt = select(Worker).where(Worker.store_id == store_id, Worker.deleted_at.is_(None))
+        stmt = select(Worker).where(wrk_store_filter, Worker.deleted_at.is_(None))
         if is_active is not None:
             stmt = stmt.where(Worker.is_active == is_active)
         if search:
@@ -76,6 +97,7 @@ async def get_staff_by_store(
             {
                 "id": w.id,
                 "store_id": w.store_id,
+                "store_name": store_names_map.get(w.store_id, "Unknown Store"),
                 "role": "worker",
                 "first_name": w.first_name,
                 "last_name": w.last_name,
@@ -93,7 +115,7 @@ async def get_staff_by_store(
         ]
         
     if "optician" in roles_to_query:
-        stmt = select(Optician).where(Optician.store_id == store_id, Optician.deleted_at.is_(None))
+        stmt = select(Optician).where(opt_store_filter, Optician.deleted_at.is_(None))
         if is_active is not None:
             stmt = stmt.where(Optician.is_active == is_active)
         if search:
@@ -110,6 +132,7 @@ async def get_staff_by_store(
             {
                 "id": o.id,
                 "store_id": o.store_id,
+                "store_name": store_names_map.get(o.store_id, "Unknown Store"),
                 "role": "optician",
                 "first_name": o.first_name,
                 "last_name": o.last_name,
