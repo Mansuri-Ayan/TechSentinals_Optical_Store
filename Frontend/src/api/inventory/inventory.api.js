@@ -9,6 +9,16 @@ export const getInventoryApi = async (params) => {
   return response.data;
 };
 
+export const getWarehouseInventoryApi = async (params) => {
+  const response = await api.get('/inventory/warehouse', { params });
+  return response.data;
+};
+
+export const getUniversalInventoryApi = async (params) => {
+  const response = await api.get('/inventory/universal', { params });
+  return response.data;
+};
+
 /**
  * Fetch a single inventory record by ID.
  */

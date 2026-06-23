@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { getStoreOverviewApi } from '../../../api/stores/store.api';
+import { useChartAnimation } from '../../../hooks/useChartAnimation';
 
 /* ─────────────────────────────────────────────────────────
    REUSABLE LAYOUT CARD
@@ -27,11 +28,12 @@ const ChartCard = ({ title, children, onRefresh }) => (
    ───────────────────────────────────────────────────────── */
 
 const LineChart = ({ data, color = '#10B981' }) => {
+  const [progress, elementRef] = useChartAnimation(data);
   const maxValue = Math.max(...data.map(item => item.value || item.count || 0), 1);
   const points = data.map((item, i) => {
     const val = item.value !== undefined ? item.value : (item.count !== undefined ? item.count : 0);
     const x = 50 + (i * (230 / (data.length - 1 || 1)));
-    const y = 130 - (val / maxValue) * 100;
+    const y = 130 - (val / maxValue) * 100 * progress;
     const label = item.label || item.week || item.month;
     return { x, y, val, label };
   });
@@ -43,7 +45,7 @@ const LineChart = ({ data, color = '#10B981' }) => {
 
   return (
     <div className="w-full h-56 px-2">
-      <svg viewBox="0 0 300 160" className="w-full h-full">
+      <svg ref={elementRef} viewBox="0 0 300 160" className="w-full h-full">
         <defs>
           <linearGradient id="lineGradDetail" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor={color} stopOpacity="0.3" />
@@ -73,19 +75,20 @@ const LineChart = ({ data, color = '#10B981' }) => {
 };
 
 const DonutChart = ({ data }) => {
+  const [progress, elementRef] = useChartAnimation(data);
   const total = data.reduce((sum, item) => sum + (item.value || item.amount || 0), 0);
   let currentOffset = 0;
   const colors = ['#3B82F6', '#10B981', '#8B5CF6', '#F59E0B', '#EF4444', '#6366F1'];
 
   return (
-    <div className="relative w-full h-52 flex flex-col sm:flex-row items-center justify-around gap-4 px-2">
+    <div ref={elementRef} className="relative w-full h-52 flex flex-col sm:flex-row items-center justify-around gap-4 px-2">
       <div className="relative w-32 h-32 flex-shrink-0">
         <svg viewBox="0 0 140 140" className="w-full h-full transform -rotate-90">
           <circle cx="70" cy="70" r="50" fill="transparent" stroke="#F8FAFC" strokeWidth="14" />
           {data.map((slice, i) => {
             const val = slice.value || slice.amount || 0;
             const percentage = total > 0 ? (val / total) * 100 : 0;
-            const strokeLength = (percentage / 100) * 314.16;
+            const strokeLength = (percentage / 100) * 314.16 * progress;
             const strokeOffset = 314.16 - strokeLength + currentOffset;
             currentOffset -= strokeLength;
             const color = slice.color || colors[i % colors.length];
@@ -135,11 +138,12 @@ const DonutChart = ({ data }) => {
 };
 
 const BarChart = ({ data }) => {
+  const [progress, elementRef] = useChartAnimation(data);
   const maxValue = Math.max(...data.map(item => item.value || item.amount || 0), 1);
 
   return (
     <div className="w-full h-52 px-2">
-      <svg viewBox="0 0 300 160" className="w-full h-full">
+      <svg ref={elementRef} viewBox="0 0 300 160" className="w-full h-full">
         <line x1="40" y1="20" x2="290" y2="20" stroke="#F8FAFC" strokeWidth="1" strokeDasharray="4 4" />
         <line x1="40" y1="60" x2="290" y2="60" stroke="#F8FAFC" strokeWidth="1" strokeDasharray="4 4" />
         <line x1="40" y1="100" x2="290" y2="100" stroke="#F8FAFC" strokeWidth="1" strokeDasharray="4 4" />
@@ -151,7 +155,7 @@ const BarChart = ({ data }) => {
           const barWidth = Math.max(12, Math.min(24, 150 / data.length));
           const spacing = (250 - (data.length * barWidth)) / (data.length + 1);
           const x = 40 + spacing + i * (barWidth + spacing);
-          const height = (val / maxValue) * 110;
+          const height = (val / maxValue) * 110 * progress;
           const y = 130 - height;
 
           return (

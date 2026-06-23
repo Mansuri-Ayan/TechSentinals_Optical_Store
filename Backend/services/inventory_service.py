@@ -101,6 +101,7 @@ async def get_inventories_by_owner(
     page: int = 1,
     limit: int = 20,
     paginate: bool = True,
+    warehouse_only: bool = False,
 ) -> dict:
     """List inventory records for a given owner with pagination, filtering, and stats.
     
@@ -113,7 +114,7 @@ async def get_inventories_by_owner(
     owner_type = owner_type.upper()
 
     # ── Base filter conditions ──
-    if owner_type == "ADMIN":
+    if owner_type == "ADMIN" and not warehouse_only:
         # Warehouse view: show ALL inventory for this admin's stores + warehouse
         from sqlalchemy import or_ as _or
         from models.store import Store

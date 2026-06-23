@@ -16,3 +16,13 @@ export const getProductsApi = async (params = {}) => {
   const response = await api.get('/products/', { params });
   return response.data;
 };
+
+/**
+ * Update an existing product.
+ * @param {number|string} id - Product ID
+ * @param {Object} payload - Product update payload
+ */
+export const updateProductApi = async (id, payload) => {
+  const response = await api.put(`/products/${id}`, payload);
+  return response.data;
+};

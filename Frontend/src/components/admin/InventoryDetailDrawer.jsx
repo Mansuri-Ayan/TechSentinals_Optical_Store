@@ -111,7 +111,7 @@ const RejectReasonPrompt = ({ onConfirm, onCancel }) => {
    MAIN DRAWER COMPONENT
    Props: item, onClose, onApprove, onReject, isApproving, isRejecting, isLoading
 ───────────────────────────────────────────────────────── */
-const InventoryDetailDrawer = ({ item, onClose, onApprove, onReject, isApproving, isRejecting, isLoading }) => {
+const InventoryDetailDrawer = ({ item, onClose, onApprove, onReject, isApproving, isRejecting, isLoading, onTransfer }) => {
   const [showRejectPrompt, setShowRejectPrompt] = useState(false);
 
   if (!item) return null;
@@ -527,9 +527,9 @@ const InventoryDetailDrawer = ({ item, onClose, onApprove, onReject, isApproving
     : null;
 
   return portal(
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[999] flex justify-end animate-fade-in">
-      <div className="absolute inset-0" onClick={onClose} aria-hidden />
-      <div className="relative w-full sm:max-w-md h-full bg-slate-50 shadow-2xl flex flex-col animate-slide-up">
+    <>
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[998] animate-fade-in" onClick={onClose} aria-hidden />
+      <div className="fixed top-0 right-0 w-full sm:max-w-md h-full bg-slate-50 shadow-2xl flex flex-col z-[1000] animate-slide-up">
 
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 bg-white border-b border-slate-100 flex-shrink-0">
@@ -641,13 +641,26 @@ const InventoryDetailDrawer = ({ item, onClose, onApprove, onReject, isApproving
         </div>
 
         <div className="px-5 py-4 bg-white border-t border-slate-100 flex-shrink-0">
-          <button onClick={onClose}
-            className="w-full py-2.5 bg-slate-900 text-white rounded-xl font-semibold text-sm hover:bg-slate-700 transition-all shadow-md hover:shadow-lg">
-            Close
-          </button>
+          {(item.owner_type === 'ADMIN' || item.owner_name === 'Admin Warehouse') && onTransfer ? (
+            <div className="grid grid-cols-2 gap-2.5">
+              <button onClick={onClose}
+                className="w-full py-2.5 bg-slate-100 text-slate-700 rounded-xl font-semibold text-sm hover:bg-slate-200 border border-slate-200 transition-colors">
+                Close
+              </button>
+              <button onClick={() => { onTransfer(item); onClose(); }}
+                className="w-full py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-xl font-semibold text-sm hover:from-emerald-600 hover:to-teal-700 transition-all shadow-md hover:shadow-lg">
+                Transfer Stock
+              </button>
+            </div>
+          ) : (
+            <button onClick={onClose}
+              className="w-full py-2.5 bg-slate-900 text-white rounded-xl font-semibold text-sm hover:bg-slate-700 transition-all shadow-md hover:shadow-lg">
+              Close
+            </button>
+          )}
         </div>
       </div>
-    </div>,
+    </>,
     document.body
   );
 };

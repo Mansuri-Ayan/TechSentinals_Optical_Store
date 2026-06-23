@@ -4,6 +4,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "react-toastify";
 import {
   getInventoryApi,
+  getWarehouseInventoryApi,
+  getUniversalInventoryApi,
   createInventoryApi,
   updateInventoryApi,
 } from "../api/inventory/inventory.api";
@@ -15,12 +17,12 @@ export const useInventory = (storeId, filters = {}) => {
   const queryClient = useQueryClient();
   const { user } = useAuthStore();
   const isLocAdmin = storeId === 'admin';
-  const ownerType = isLocAdmin ? 'ADMIN' : 'STORE';
-  const ownerId = isLocAdmin ? user?.id : storeId;
+  const isWarehouse = storeId === 'warehouse';
+  const ownerType = (isWarehouse || isLocAdmin) ? 'ADMIN' : 'STORE';
+  const ownerId = (isWarehouse || isLocAdmin) ? user?.id : storeId;
 
   const params = {
-    owner_type: ownerType,
-    owner_id: ownerId,
+    ...((!isWarehouse || filters.universal) ? { owner_type: ownerType, owner_id: ownerId } : {}),
     page: filters.page || 1,
     limit: filters.limit || 20,
     paginate: true,
@@ -35,9 +37,9 @@ export const useInventory = (storeId, filters = {}) => {
 
   // Main paginated query
   const query = useQuery({
-    queryKey: [inventoryQueryKey, storeId, params],
-    queryFn: () => getInventoryApi(params),
-    enabled: !!storeId && (isLocAdmin ? !!user?.id : true),
+    queryKey: [inventoryQueryKey, storeId, params, filters.universal],
+    queryFn: () => filters.universal ? getUniversalInventoryApi(params) : (isWarehouse ? getWarehouseInventoryApi(params) : getInventoryApi(params)),
+    enabled: !!storeId && ((isWarehouse || isLocAdmin) ? !!user?.id : true),
     staleTime: 1000 * 60 * 2,
     retry: false,
     placeholderData: (previousData) => previousData,
@@ -47,9 +49,10 @@ export const useInventory = (storeId, filters = {}) => {
   const kpiQuery = useQuery({
     queryKey: [inventoryQueryKey, storeId, "kpis"],
     queryFn: async () => {
-      const res = await getInventoryApi(
-        { owner_type: ownerType, owner_id: ownerId, paginate: false }
-      );
+      const apiParams = isWarehouse 
+        ? { paginate: false } 
+        : { owner_type: ownerType, owner_id: ownerId, paginate: false };
+      const res = isWarehouse ? await getWarehouseInventoryApi(apiParams) : await getInventoryApi(apiParams);
       // Handle both response shapes:
       // Shape 1: { items: [...], total: N }
       // Shape 2: [...] flat array
@@ -59,7 +62,7 @@ export const useInventory = (storeId, filters = {}) => {
       if (Array.isArray(res?.data)) return res.data;
       return [];
     },
-    enabled: !!storeId && (isLocAdmin ? !!user?.id : true),
+    enabled: !!storeId && ((isWarehouse || isLocAdmin) ? !!user?.id : true),
     staleTime: 1000 * 60 * 2,
     retry: false,
   });

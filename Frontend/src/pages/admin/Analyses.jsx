@@ -8,6 +8,7 @@ import {
 import { useStoreStore } from '../../store/store';
 import StoreSwitcher from '../../components/admin/stores/StoreSwitcher';
 import { useAnalyses } from '../../hooks/useAnalyses';
+import { useChartAnimation } from '../../hooks/useChartAnimation';
 
 /* ─────────────────────────────────────────────────────────
    PREMIUM WIDGET CARD (STRIPE-LIKE NOTION AESTHETICS)
@@ -33,6 +34,8 @@ const AnalyticsCard = ({ title, subtitle, children, actions, className = "" }) =
 
 // 1. Line Chart: Sales Trend (12 Months representation)
 const SalesTrendChart = ({ data: rawData }) => {
+  const [progress, elementRef] = useChartAnimation(rawData);
+
   if (!rawData || !Array.isArray(rawData) || rawData.length === 0) {
     return <div className="w-full h-72 sm:h-80 flex items-center justify-center text-xs text-slate-400 font-semibold">No data available</div>;
   }
@@ -45,7 +48,7 @@ const SalesTrendChart = ({ data: rawData }) => {
   const maxValue = Math.max(...data.map(item => item.value), 1);
   const points = data.map((item, i) => {
     const x = 40 + i * (250 / 11);
-    const y = 135 - (item.value / maxValue) * 105;
+    const y = 135 - (item.value / maxValue) * 105 * progress;
     return `${x},${y}`;
   }).join(' ');
 
@@ -53,7 +56,7 @@ const SalesTrendChart = ({ data: rawData }) => {
 
   return (
     <div className="w-full h-72 sm:h-80 px-2 pt-2">
-      <svg viewBox="0 0 300 160" className="w-full h-full">
+      <svg ref={elementRef} viewBox="0 0 300 160" className="w-full h-full">
         <defs>
           <linearGradient id="salesGrad" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="#10B981" stopOpacity="0.08" />
@@ -72,7 +75,7 @@ const SalesTrendChart = ({ data: rawData }) => {
           const x = 40 + i * (250 / 11);
           const pVal = p.value;
           const pLabel = p.label;
-          const y = 135 - (pVal / maxValue) * 105;
+          const y = 135 - (pVal / maxValue) * 105 * progress;
           const displayVal = pVal.toLocaleString();
           return (
             <g key={i} className="group cursor-pointer">
@@ -93,6 +96,8 @@ const SalesTrendChart = ({ data: rawData }) => {
 
 // 2. Donut Chart (General Visual implementation)
 const DonutChart = ({ data: rawData, totalLabel = "Total" }) => {
+  const [progress, elementRef] = useChartAnimation(rawData);
+
   if (!rawData || !Array.isArray(rawData) || rawData.length === 0) {
     return <div className="w-full h-48 flex items-center justify-center text-xs text-slate-400 font-semibold">No data available</div>;
   }
@@ -107,13 +112,13 @@ const DonutChart = ({ data: rawData, totalLabel = "Total" }) => {
   let currentOffset = 0;
 
   return (
-    <div className="relative w-full h-48 flex flex-col sm:flex-row items-center justify-around gap-4 px-2">
+    <div ref={elementRef} className="relative w-full h-48 flex flex-col sm:flex-row items-center justify-around gap-4 px-2">
       <div className="relative w-32 h-32 flex-shrink-0">
         <svg viewBox="0 0 140 140" className="w-full h-full transform -rotate-90">
           <circle cx="70" cy="70" r="50" fill="transparent" stroke="#F8FAFC" strokeWidth="12" />
           {data.map((slice, i) => {
             const percentage = total > 0 ? (slice.value / total) * 100 : 0;
-            const strokeLength = (percentage / 100) * 314.16;
+            const strokeLength = (percentage / 100) * 314.16 * progress;
             const strokeOffset = 314.16 - strokeLength + currentOffset;
             currentOffset -= strokeLength;
             const valDisplay = slice.value.toLocaleString();
@@ -143,7 +148,7 @@ const DonutChart = ({ data: rawData, totalLabel = "Total" }) => {
         </div>
       </div>
 
-      <div className="flex flex-col gap-1.5 text-xs text-slate-650 w-full max-w-[130px] overflow-y-auto max-h-36 pr-1 hide-scrollbar">
+      <div className="flex flex-col gap-1.5 text-xs text-slate-655 w-full max-w-[130px] overflow-y-auto max-h-36 pr-1 hide-scrollbar">
         {data.map((slice, i) => (
           <div key={i} className="flex items-center justify-between gap-1.5 bg-slate-50 p-2 rounded-xl border border-slate-100/50">
             <div className="flex items-center gap-1 min-w-0">
@@ -160,6 +165,8 @@ const DonutChart = ({ data: rawData, totalLabel = "Total" }) => {
 
 // 3. Bar Chart (General Visual implementation)
 const BarChart = ({ data: rawData }) => {
+  const [progress, elementRef] = useChartAnimation(rawData);
+
   if (!rawData || !Array.isArray(rawData) || rawData.length === 0) {
     return <div className="w-full h-48 flex items-center justify-center text-xs text-slate-400 font-semibold">No data available</div>;
   }
@@ -174,7 +181,7 @@ const BarChart = ({ data: rawData }) => {
 
   return (
     <div className="w-full h-48 px-2 pt-2">
-      <svg viewBox="0 0 300 160" className="w-full h-full">
+      <svg ref={elementRef} viewBox="0 0 300 160" className="w-full h-full">
         <line x1="40" y1="20" x2="290" y2="20" stroke="#F8FAFC" strokeWidth="1" strokeDasharray="3 3" />
         <line x1="40" y1="60" x2="290" y2="60" stroke="#F8FAFC" strokeWidth="1" strokeDasharray="3 3" />
         <line x1="40" y1="100" x2="290" y2="100" stroke="#F8FAFC" strokeWidth="1" strokeDasharray="3 3" />
@@ -186,7 +193,7 @@ const BarChart = ({ data: rawData }) => {
           const x = 40 + spacing + i * (barWidth + spacing);
           const barVal = bar.value;
           const barLabel = bar.label;
-          const height = (barVal / maxValue) * 105;
+          const height = (barVal / maxValue) * 105 * progress;
           const y = 130 - height;
           const displayVal = barVal.toLocaleString();
           const displayLabel = barLabel.length > 9 ? (barLabel.substring(0, 6) + '..') : barLabel;
@@ -220,6 +227,8 @@ const BarChart = ({ data: rawData }) => {
 
 // 4. Line Chart: Customer Growth (Jan -> Dec)
 const CustomerGrowthChart = ({ data: rawData }) => {
+  const [progress, elementRef] = useChartAnimation(rawData);
+
   if (!rawData || !Array.isArray(rawData) || rawData.length === 0) {
     return <div className="w-full h-48 flex items-center justify-center text-xs text-slate-400 font-semibold">No data available</div>;
   }
@@ -232,13 +241,13 @@ const CustomerGrowthChart = ({ data: rawData }) => {
   const maxValue = Math.max(...data.map(item => item.value), 1);
   const points = data.map((item, i) => {
     const x = 40 + i * (250 / 11);
-    const y = 130 - (item.value / maxValue) * 105;
+    const y = 130 - (item.value / maxValue) * 105 * progress;
     return `${x},${y}`;
   }).join(' ');
 
   return (
     <div className="w-full h-48 px-2 pt-2">
-      <svg viewBox="0 0 300 160" className="w-full h-full">
+      <svg ref={elementRef} viewBox="0 0 300 160" className="w-full h-full">
         <line x1="40" y1="20" x2="290" y2="20" stroke="#F8FAFC" strokeWidth="1" strokeDasharray="3 3" />
         <line x1="40" y1="60" x2="290" y2="60" stroke="#F8FAFC" strokeWidth="1" strokeDasharray="3 3" />
         <line x1="40" y1="100" x2="290" y2="100" stroke="#F8FAFC" strokeWidth="1" strokeDasharray="3 3" />
@@ -250,7 +259,7 @@ const CustomerGrowthChart = ({ data: rawData }) => {
           const x = 40 + i * (250 / 11);
           const pVal = p.value;
           const pLabel = p.label;
-          const y = 130 - (pVal / maxValue) * 105;
+          const y = 130 - (pVal / maxValue) * 105 * progress;
           return (
             <g key={i} className="group cursor-pointer">
               <circle cx={x} cy={y} r="2.5" fill="#FFFFFF" stroke="#6366F1" strokeWidth="1.5" className="transition-all duration-200 group-hover:r-4 group-hover:stroke-indigo-600" />
@@ -417,6 +426,8 @@ const Analyses = () => {
             selectedStoreFilter={selectedStoreFilter}
             onStoreChange={(val) => {
               setSelectedStoreFilter(val);
+              const matchedStore = stores.find(s => (s.store_name || s.name) === val);
+              setSelectedStore(matchedStore || null);
             }}
           />
 

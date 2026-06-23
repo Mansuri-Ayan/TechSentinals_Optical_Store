@@ -211,6 +211,9 @@ const SupplierDetail = () => {
       paymentMethod: data.method,
       date: data.date,
       remarks: data.remarks,
+      costPrice: data.costPrice,
+      sellingPrice: data.sellingPrice,
+      discountPercent: data.discountPercent,
     });
 
     setShowAddTransaction(false);

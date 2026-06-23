@@ -1364,3 +1364,131 @@ async def get_transactions_filtered(
     )
     result = await db.execute(stmt)
     return list(result.scalars().all()), total
+
+
+async def get_warehouse_transactions(
+    db: AsyncSession,
+    admin_id: int,
+    status: str | None = None,
+    product_id: int | None = None,
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
+    transaction_type: str | None = None,
+    search: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> tuple[list[InventoryTransaction], int]:
+    """
+    Fetch transaction history for the admin warehouse.
+    Only returns transactions that mutated or occurred on the warehouse inventory.
+    """
+    # 1. Get warehouse inventory IDs
+    warehouse_inv_stmt = select(Inventory.id).where(
+        Inventory.owner_type == OwnerType.ADMIN,
+        Inventory.owner_id == admin_id
+    )
+    warehouse_inv_res = await db.execute(warehouse_inv_stmt)
+    warehouse_inv_ids = [row[0] for row in warehouse_inv_res.fetchall()]
+
+    if not warehouse_inv_ids:
+        return [], 0
+
+    filters = [
+        InventoryTransaction.inventory_id.in_(warehouse_inv_ids),
+        InventoryTransaction.transaction_type.not_in([
+            TransactionType.ADMIN_TRANSFER_IN,
+            TransactionType.STORE_TRANSFER_IN,
+        ])
+    ]
+
+    if status:
+        filters.append(InventoryTransaction.status == status.upper())
+    if product_id is not None:
+        filters.append(InventoryTransaction.product_id == product_id)
+    if transaction_type:
+        t_type = transaction_type.upper()
+        if t_type == "INVENTORY TRANSFER" or t_type == "TRANSFER":
+            filters.append(
+                InventoryTransaction.transaction_type.in_([
+                    TransactionType.ADMIN_TRANSFER_OUT,
+                    TransactionType.ADMIN_TRANSFER_IN,
+                    TransactionType.STORE_TRANSFER_OUT,
+                    TransactionType.STORE_TRANSFER_IN,
+                ])
+            )
+        else:
+            filters.append(InventoryTransaction.transaction_type == t_type)
+    if date_from:
+        filters.append(InventoryTransaction.created_at >= date_from)
+    if date_to:
+        filters.append(InventoryTransaction.created_at <= date_to)
+
+    if search and search.strip():
+        search_term = f"%{search.strip()}%"
+        search_filters = [
+            Product.name.ilike(search_term),
+            Product.sku.ilike(search_term),
+            InventoryTransaction.remarks.ilike(search_term),
+        ]
+        raw = search.strip()
+        numeric_str = raw
+        if raw.upper().startswith("TXN-"):
+            numeric_str = raw[4:]
+        try:
+            val = int(numeric_str)
+            check_stmt = select(
+                InventoryTransaction.transaction_type,
+                InventoryTransaction.reference_id
+            ).where(InventoryTransaction.id == val)
+            check_res = await db.execute(check_stmt)
+            row = check_res.first()
+            if row:
+                txn_type, ref_id = row
+                if txn_type in (TransactionType.ADMIN_TRANSFER_IN, TransactionType.STORE_TRANSFER_IN) and ref_id:
+                    search_filters.append(InventoryTransaction.id == ref_id)
+                else:
+                    search_filters.append(InventoryTransaction.id == val)
+            else:
+                search_filters.append(InventoryTransaction.id == val)
+        except ValueError:
+            pass
+
+        # Subquery to search matching store names
+        store_search_stmt = select(Store.id).where(Store.store_name.ilike(search_term))
+        matched_stores = [row[0] for row in (await db.execute(store_search_stmt)).fetchall()]
+        if matched_stores:
+            search_filters.append(
+                or_(
+                    InventoryTransaction.send_store_id.in_(matched_stores),
+                    InventoryTransaction.receive_store_id.in_(matched_stores),
+                )
+            )
+
+        filters.append(or_(*search_filters))
+
+    count_stmt = (
+        select(func.count())
+        .select_from(InventoryTransaction)
+        .join(Product, Product.id == InventoryTransaction.product_id)
+        .where(*filters)
+    )
+    total_result = await db.execute(count_stmt)
+    total = int(total_result.scalar_one() or 0)
+
+    stmt = (
+        select(InventoryTransaction)
+        .join(Product, Product.id == InventoryTransaction.product_id)
+        .options(
+            selectinload(InventoryTransaction.product),
+            selectinload(InventoryTransaction.send_store),
+            selectinload(InventoryTransaction.receive_store),
+            selectinload(InventoryTransaction.requested_by_store),
+            selectinload(InventoryTransaction.approved_by_store),
+        )
+        .where(*filters)
+        .order_by(desc(InventoryTransaction.created_at))
+        .limit(limit)
+        .offset(offset)
+    )
+    result = await db.execute(stmt)
+    return list(result.scalars().all()), total

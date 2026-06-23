@@ -1,9 +1,10 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { IndianRupee, ShoppingCart, TrendingUp, Users, ArrowUpRight, BarChart3, Clock, Package } from 'lucide-react';
 import { useSales } from '../../hooks/useSales';
 import { useCustomers } from '../../hooks/useCustomers';
 import NotificationBell from '../../components/shared/NotificationBell';
+import { useChartAnimation } from '../../hooks/useChartAnimation';
 
 const fmtDate = (d) => d
   ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
@@ -11,6 +12,7 @@ const fmtDate = (d) => d
 
 const Dashboard = () => {
   const navigate = useNavigate();
+  const [hoveredPoint, setHoveredPoint] = useState(null);
 
   // Load real API query states
   const { sales, isLoading: salesLoading } = useSales({ limit: 1000 });
@@ -90,6 +92,8 @@ const Dashboard = () => {
 
     return last6;
   }, [sales]);
+
+  const [animationProgress, elementRef] = useChartAnimation(monthlySales);
 
   // Dynamic Top Selling Products
   const topProducts = useMemo(() => {
@@ -203,27 +207,150 @@ const Dashboard = () => {
       {/* Charts & Activity Section */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
         {/* Sales Chart */}
-        <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-100 p-4 sm:p-6">
+        <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-100 p-4 sm:p-6 relative">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-2">
-              <BarChart3 className="w-5 h-5 text-blue-500" />
+              <TrendingUp className="w-5 h-5 text-blue-500" />
               <h2 className="text-base sm:text-lg font-bold text-slate-900">Sales Overview</h2>
             </div>
             <span className="text-xs font-semibold text-slate-455 bg-slate-50 px-3 py-1 rounded-lg border border-slate-100">Last 6 months</span>
           </div>
-          <div className="flex items-end justify-between gap-2 sm:gap-4 h-48 sm:h-64">
-            {monthlySales.map((item, idx) => (
-              <div key={idx} className="flex-1 flex flex-col items-center gap-2">
-                <span className="text-[10px] font-bold text-slate-500">₹{(item.amount / 1000).toFixed(1)}k</span>
-                <div className="w-full bg-slate-50 rounded-xl overflow-hidden relative h-32 sm:h-44">
-                  <div
-                    className="absolute bottom-0 w-full bg-gradient-to-t from-blue-600 to-indigo-500 rounded-xl transition-all duration-350 hover:from-blue-700 hover:to-indigo-600"
-                    style={{ height: `${Math.max(5, (item.amount / item.max) * 100)}%` }}
+          
+          <div className="relative h-48 sm:h-64 w-full">
+            <svg ref={elementRef} className="w-full h-full" viewBox="0 0 600 240" preserveAspectRatio="none">
+              <defs>
+                <linearGradient id="salesAreaGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#2563EB" stopOpacity="0.25" />
+                  <stop offset="100%" stopColor="#2563EB" stopOpacity="0.01" />
+                </linearGradient>
+              </defs>
+
+              {/* Horizontal Gridlines */}
+              <line x1="55" y1="40" x2="580" y2="40" stroke="#F1F5F9" strokeWidth="1" strokeDasharray="3 3" />
+              <line x1="55" y1="93" x2="580" y2="93" stroke="#F1F5F9" strokeWidth="1" strokeDasharray="3 3" />
+              <line x1="55" y1="147" x2="580" y2="147" stroke="#F1F5F9" strokeWidth="1" strokeDasharray="3 3" />
+              <line x1="55" y1="200" x2="580" y2="200" stroke="#E2E8F0" strokeWidth="1" />
+
+              {/* Y-Axis Value Labels */}
+              <text x="45" y="44" textAnchor="end" className="text-[10px] font-bold fill-slate-400 font-sans">
+                ₹{((monthlySales[0]?.max || 50000) / 1000).toFixed(0)}k
+              </text>
+              <text x="45" y="97" textAnchor="end" className="text-[10px] font-bold fill-slate-400 font-sans">
+                ₹{(((monthlySales[0]?.max || 50000) * 0.66) / 1000).toFixed(0)}k
+              </text>
+              <text x="45" y="150" textAnchor="end" className="text-[10px] font-bold fill-slate-400 font-sans">
+                ₹{(((monthlySales[0]?.max || 50000) * 0.33) / 1000).toFixed(0)}k
+              </text>
+              <text x="45" y="204" textAnchor="end" className="text-[10px] font-bold fill-slate-400 font-sans">
+                ₹0
+              </text>
+
+              {/* Area Path under the line */}
+              <path
+                d={`M 55 200 ${monthlySales.map((item, idx) => `L ${55 + idx * 105} ${200 - (item.amount / item.max) * 160 * animationProgress}`).join(' ')} L 580 200 Z`}
+                fill="url(#salesAreaGradient)"
+              />
+
+              {/* Smooth segmented line */}
+              <path
+                d={monthlySales.map((item, idx) => `${idx === 0 ? 'M' : 'L'} ${55 + idx * 105} ${200 - (item.amount / item.max) * 160 * animationProgress}`).join(' ')}
+                stroke="#2563EB"
+                strokeWidth="3.5"
+                fill="none"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+
+              {/* Vertical Guide line on hover */}
+              {hoveredPoint && (
+                <line
+                  x1={hoveredPoint.x}
+                  y1="40"
+                  x2={hoveredPoint.x}
+                  y2="200"
+                  stroke="#93C5FD"
+                  strokeWidth="1.5"
+                  strokeDasharray="3 3"
+                />
+              )}
+
+              {/* Value Markers (dots) */}
+              {monthlySales.map((item, idx) => {
+                const x = 55 + idx * 105;
+                const y = 200 - (item.amount / item.max) * 160 * animationProgress;
+                const isHovered = hoveredPoint && hoveredPoint.key === item.key;
+                return (
+                  <g key={idx}>
+                    {isHovered && (
+                      <circle
+                        cx={x}
+                        cy={y}
+                        r="8"
+                        fill="#2563EB"
+                        fillOpacity="0.25"
+                        className="animate-ping"
+                      />
+                    )}
+                    <circle
+                      cx={x}
+                      cy={y}
+                      r={isHovered ? "6.5" : "4.5"}
+                      fill={isHovered ? "#2563EB" : "#FFFFFF"}
+                      stroke="#2563EB"
+                      strokeWidth={isHovered ? "2.5" : "3"}
+                      style={{ transition: 'all 0.15s ease-in-out' }}
+                    />
+                  </g>
+                );
+              })}
+
+              {/* Bottom Labels (X-Axis) */}
+              {monthlySales.map((item, idx) => (
+                <text
+                  key={idx}
+                  x={55 + idx * 105}
+                  y="222"
+                  textAnchor="middle"
+                  className="text-xs font-bold fill-slate-500 font-sans"
+                >
+                  {item.month}
+                </text>
+              ))}
+
+              {/* Invisible interactive columns for easy hovering */}
+              {monthlySales.map((item, idx) => {
+                const x = 55 + idx * 105;
+                const y = 200 - (item.amount / item.max) * 160 * animationProgress;
+                return (
+                  <rect
+                    key={idx}
+                    x={x - 52.5}
+                    y="30"
+                    width="105"
+                    height="180"
+                    fill="transparent"
+                    className="cursor-pointer"
+                    onMouseEnter={() => setHoveredPoint({ x, y, amount: item.amount, month: item.month, key: item.key })}
+                    onMouseLeave={() => setHoveredPoint(null)}
                   />
-                </div>
-                <span className="text-xs font-bold text-slate-500">{item.month}</span>
+                );
+              })}
+            </svg>
+
+            {/* Custom Tooltip */}
+            {hoveredPoint && (
+              <div
+                className="absolute z-25 bg-slate-900/95 backdrop-blur-md text-white px-3.5 py-2 rounded-xl shadow-xl text-xs font-bold pointer-events-none flex flex-col border border-slate-700/50 transition-all duration-100 ease-out"
+                style={{
+                  left: `${(hoveredPoint.x / 600) * 100}%`,
+                  top: `${(hoveredPoint.y / 240) * 100 - 55}%`,
+                  transform: 'translate(-50%, -50%)',
+                }}
+              >
+                <span className="text-[10px] text-slate-350 font-bold uppercase tracking-wider mb-0.5">{hoveredPoint.month}</span>
+                <span className="text-sm font-black text-blue-200">₹{hoveredPoint.amount.toLocaleString('en-IN')}</span>
               </div>
-            ))}
+            )}
           </div>
         </div>
 

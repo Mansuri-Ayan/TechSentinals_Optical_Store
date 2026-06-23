@@ -22,6 +22,8 @@ import { getInventoryApi } from '../../api/inventory/inventory.api';
 ───────────────────────────────────────────────────────── */
 const TRANSACTION_TYPES = [
   { value: 'Inventory Transfer', icon: ArrowRightLeft, color: 'text-blue-600 bg-blue-50 border-blue-200' },
+  { value: 'Warehouse Send', icon: ArrowRightLeft, color: 'text-orange-600 bg-orange-50 border-orange-200' },
+  { value: 'Warehouse Receive', icon: ArrowRightLeft, color: 'text-cyan-600 bg-cyan-50 border-cyan-200' },
   { value: 'Sale', icon: ShoppingCart, color: 'text-emerald-600 bg-emerald-50 border-emerald-200' },
   { value: 'Purchase', icon: TrendingUp, color: 'text-purple-600 bg-purple-50 border-purple-200' },
   { value: 'Return', icon: RotateCcw, color: 'text-amber-600 bg-amber-50 border-amber-200' },
@@ -628,13 +630,13 @@ const Transactions = () => {
       category: 'Inventory',
       product: tx.product_name || tx.product_sku || `Product #${tx.product_id}`,
       quantity: tx.quantity,
-      type: (tx.transaction_type === 'ADMIN_TRANSFER_OUT' || 
-            tx.transaction_type === 'ADMIN_TRANSFER_IN' || 
-            tx.transaction_type === 'STORE_TRANSFER_OUT' || 
-            tx.transaction_type === 'STORE_TRANSFER_IN' || 
-            tx.transaction_type === 'TRANSFER')
-        ? 'Inventory Transfer'
-        : tx.transaction_type.charAt(0).toUpperCase() + tx.transaction_type.slice(1).toLowerCase(),
+      type: tx.transaction_type === 'ADMIN_TRANSFER_OUT' ? 'Warehouse Send' :
+            tx.transaction_type === 'ADMIN_TRANSFER_IN' ? 'Warehouse Receive' :
+            (tx.transaction_type === 'STORE_TRANSFER_OUT' || 
+             tx.transaction_type === 'STORE_TRANSFER_IN' || 
+             tx.transaction_type === 'TRANSFER')
+              ? 'Inventory Transfer'
+              : tx.transaction_type.charAt(0).toUpperCase() + tx.transaction_type.slice(1).toLowerCase(),
       status: tx.status === 'COMPLETED' ? 'Completed' :
               tx.status === 'APPROVED' ? 'Approved' :
               tx.status === 'PENDING' ? 'Pending' :
@@ -737,6 +739,7 @@ const Transactions = () => {
                   className="pl-9 pr-10 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-sm font-semibold focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 shadow-sm appearance-none cursor-pointer"
                 >
                   <option value="admin">All Store</option>
+                  <option value="warehouse">Warehouse (Central)</option>
                   {stores.filter(s => s.id !== 'admin' && s.store_name !== 'All Store' && s.name !== 'All Store').map(s => (
                     <option key={s.id} value={s.id}>{s.store_name}</option>
                   ))}

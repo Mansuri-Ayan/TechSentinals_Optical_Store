@@ -20,10 +20,16 @@ const EMPTY = {
   dueAmount: '',
   method: '',
   date: new Date().toISOString().split('T')[0],
-  remarks: ''
+  remarks: '',
+  
+  enterUnitCostPrice: true,
+  unitCostPrice: '',
+  unitSellingPrice: '',
+  discountPercent: '0.00',
+  profitMargin: '',
 };
 
-const AddTransactionModal = ({ isOpen, supplierName, storeName, activeStoreId, onClose, onSubmit }) => {
+const AddTransactionModal = ({ isOpen, defaultProductId, supplierName, storeName, activeStoreId, onClose, onSubmit }) => {
   const [form, setForm] = useState(EMPTY);
   const [errors, setErrors] = useState({});
   const { stores } = useStores();
@@ -45,15 +51,43 @@ const AddTransactionModal = ({ isOpen, supplierName, storeName, activeStoreId, o
     limit: 500
   });
 
+  // Fetch all products (for defaultProductId lookup when category/subcategory aren't selected yet)
+  const { products: allProducts } = useProducts({ limit: 1000 });
+
   useEffect(() => {
     if (isOpen) {
       setForm({
         ...EMPTY,
         storeId: activeStoreId ? String(activeStoreId) : '',
+        enterUnitCostPrice: true,
       });
       setErrors({});
     }
   }, [isOpen, activeStoreId]);
+
+  // Set category and subcategory from defaultProductId once products list is fetched
+  useEffect(() => {
+    if (isOpen && defaultProductId && allProducts.length > 0) {
+      const prod = allProducts.find(p => String(p.id) === String(defaultProductId));
+      if (prod) {
+        const cp = Number(prod.cost_price || 0);
+        const sp = Number(prod.selling_price || 0);
+        const marginVal = sp > 0 ? (((sp - cp) / sp) * 100).toFixed(2) : '';
+        setForm(p => ({
+          ...p,
+          categoryId: String(prod.category_id),
+          subcategoryId: String(prod.subcategory_id),
+          productId: String(prod.id),
+          unitCostPrice: String(cp),
+          unitSellingPrice: String(sp),
+          discountPercent: String(prod.discount_percent || 0),
+          profitMargin: marginVal,
+          amount: String(cp * (Number(p.quantity) || 1)),
+          dueAmount: String(Math.max(0, cp * (Number(p.quantity) || 1) - (Number(p.paidAmount) || 0))),
+        }));
+      }
+    }
+  }, [isOpen, defaultProductId, allProducts]);
 
   if (!isOpen) return null;
 
@@ -68,26 +102,101 @@ const AddTransactionModal = ({ isOpen, supplierName, storeName, activeStoreId, o
 
       // Auto-populate unit price or product default cost if product is selected
       if (k === 'productId' && v) {
-        const prod = products.find(p => String(p.id) === String(v));
-        if (prod && prod.cost_price) {
-          next.amount = String(Number(prod.cost_price) * (Number(next.quantity) || 1));
+        const prod = products.find(p => String(p.id) === String(v)) || allProducts.find(p => String(p.id) === String(v));
+        if (prod) {
+          const cp = Number(prod.cost_price || 0);
+          const sp = Number(prod.selling_price || 0);
+          next.unitCostPrice = String(cp);
+          next.unitSellingPrice = String(sp);
+          next.discountPercent = String(prod.discount_percent || 0);
+          next.profitMargin = sp > 0 ? (((sp - cp) / sp) * 100).toFixed(2) : '';
+          
+          if (next.enterUnitCostPrice) {
+            next.amount = String(cp * (Number(next.quantity) || 1));
+          }
         }
       }
 
-      // Recompute amount if quantity changes and a product is selected
-      if (k === 'quantity' && v && next.productId) {
-        const prod = products.find(p => String(p.id) === String(next.productId));
-        if (prod && prod.cost_price) {
-          next.amount = String(Number(prod.cost_price) * Number(v));
+      // Recompute amount if quantity changes
+      if (k === 'quantity') {
+        const qty = Number(v) || 0;
+        if (next.enterUnitCostPrice) {
+          const ucp = Number(next.unitCostPrice || 0);
+          next.amount = String(ucp * qty);
+        } else {
+          const amt = Number(next.amount || 0);
+          if (qty > 0) {
+            next.unitCostPrice = (amt / qty).toFixed(2);
+          }
+        }
+      }
+
+      // Recompute if enterUnitCostPrice checkbox is toggled
+      if (k === 'enterUnitCostPrice') {
+        if (v) { // switched to entering unit cost
+          const ucp = Number(next.unitCostPrice || 0);
+          const qty = Number(next.quantity || 1);
+          next.amount = String(ucp * qty);
+        } else { // switched to entering total cost
+          const amt = Number(next.amount || 0);
+          const qty = Number(next.quantity || 1);
+          if (qty > 0) {
+            next.unitCostPrice = (amt / qty).toFixed(2);
+          }
+        }
+      }
+
+      // Recompute if unitCostPrice changes
+      if (k === 'unitCostPrice') {
+        const ucp = Number(v) || 0;
+        const qty = Number(next.quantity || 1);
+        if (next.enterUnitCostPrice) {
+          next.amount = String(ucp * qty);
+        }
+        // Update margin
+        const usp = Number(next.unitSellingPrice || 0);
+        if (usp > 0) {
+          next.profitMargin = (((usp - ucp) / usp) * 100).toFixed(2);
+        }
+      }
+
+      // Recompute if unitSellingPrice changes
+      if (k === 'unitSellingPrice') {
+        const usp = Number(v) || 0;
+        const ucp = Number(next.unitCostPrice || 0);
+        if (usp > 0) {
+          next.profitMargin = (((usp - ucp) / usp) * 100).toFixed(2);
+        }
+      }
+
+      // Recompute if profitMargin changes
+      if (k === 'profitMargin') {
+        const marginVal = Number(v);
+        const ucp = Number(next.unitCostPrice || 0);
+        if (!isNaN(marginVal) && marginVal < 100 && marginVal >= -1000) {
+          const usp = ucp / (1 - marginVal / 100);
+          next.unitSellingPrice = isFinite(usp) ? usp.toFixed(2) : '';
+        }
+      }
+
+      // Recompute if total amount changes
+      if (k === 'amount') {
+        const amt = Number(v) || 0;
+        const qty = Number(next.quantity || 1);
+        if (!next.enterUnitCostPrice && qty > 0) {
+          next.unitCostPrice = (amt / qty).toFixed(2);
+          // Recompute margin
+          const usp = Number(next.unitSellingPrice || 0);
+          const ucp = Number(next.unitCostPrice);
+          if (usp > 0) {
+            next.profitMargin = (((usp - ucp) / usp) * 100).toFixed(2);
+          }
         }
       }
       
-      if (k === 'amount' || k === 'paidAmount' || k === 'quantity') {
-        const totalVal = k === 'amount' ? v : next.amount;
-        const paidVal = k === 'paidAmount' ? v : next.paidAmount;
-        
-        const total = totalVal === '' ? 0 : Number(totalVal);
-        const paid = paidVal === '' ? 0 : Number(paidVal);
+      if (k === 'amount' || k === 'paidAmount' || k === 'quantity' || k === 'unitCostPrice' || k === 'enterUnitCostPrice') {
+        const total = next.amount === '' ? 0 : Number(next.amount);
+        const paid = next.paidAmount === '' ? 0 : Number(next.paidAmount);
         
         if (!isNaN(total) && !isNaN(paid)) {
           next.dueAmount = String(Math.max(0, total - paid));
@@ -116,6 +225,13 @@ const AddTransactionModal = ({ isOpen, supplierName, storeName, activeStoreId, o
       e.paidAmount = 'Paid amount cannot exceed total amount';
     if (!form.method)      e.method      = 'Payment method is required';
     if (!form.date)        e.date        = 'Date is required';
+
+    if (form.unitCostPrice === '' || isNaN(form.unitCostPrice) || Number(form.unitCostPrice) < 0)
+      e.unitCostPrice = 'Enter a valid unit cost price (≥ 0)';
+    if (form.unitSellingPrice === '' || isNaN(form.unitSellingPrice) || Number(form.unitSellingPrice) < 0)
+      e.unitSellingPrice = 'Enter a valid unit selling price (≥ 0)';
+    if (form.discountPercent === '' || isNaN(form.discountPercent) || Number(form.discountPercent) < 0 || Number(form.discountPercent) > 100)
+      e.discountPercent = 'Enter a valid discount (0-100)';
     
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -128,14 +244,18 @@ const AddTransactionModal = ({ isOpen, supplierName, storeName, activeStoreId, o
       categoryId: Number(form.categoryId),
       subcategoryId: Number(form.subcategoryId),
       productId: Number(form.productId),
-      storeId: Number(form.storeId),
+      storeId: form.storeId === 'warehouse' ? 'warehouse' : Number(form.storeId),
       quantity: Number(form.quantity),
       amount: Number(form.amount),
       paidAmount: Number(form.paidAmount),
       dueAmount: Number(form.dueAmount),
       method: form.method,
       date: form.date,
-      remarks: form.remarks
+      remarks: form.remarks,
+      
+      costPrice: Number(form.unitCostPrice),
+      sellingPrice: Number(form.unitSellingPrice),
+      discountPercent: Number(form.discountPercent || 0),
     });
   };
 
@@ -257,11 +377,101 @@ const AddTransactionModal = ({ isOpen, supplierName, storeName, activeStoreId, o
                   <div className="relative">
                     <select value={form.storeId} onChange={e => set('storeId', e.target.value)} className={inputCls('storeId')}>
                       <option value="">Select receiving store…</option>
+                      <option value="warehouse">Warehouse (Central)</option>
                       {stores.map(st => <option key={st.id} value={st.id}>{st.store_name || st.name || `Store #${st.id}`}</option>)}
                     </select>
                     <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                   </div>
                   {errors.storeId && <p className="text-xs text-red-500 mt-1">{errors.storeId}</p>}
+                </div>
+
+                {/* Pricing details section */}
+                <div className="pt-2 border-t border-slate-100 space-y-3 md:col-span-2">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">1.5 Pricing details</h4>
+                    <label className="inline-flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={form.enterUnitCostPrice}
+                        onChange={(e) => set('enterUnitCostPrice', e.target.checked)}
+                        className="rounded border-slate-300 text-blue-600 focus:ring-blue-500/10 focus:ring-4"
+                      />
+                      <span className="text-xs font-bold text-slate-600">Enter Unit Cost Price</span>
+                    </label>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {/* Unit Cost Price */}
+                    <div>
+                      <label className="text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
+                        <IndianRupee className="w-3.5 h-3.5 text-slate-400" /> Unit Cost Price (₹) <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        disabled={!form.enterUnitCostPrice}
+                        value={form.unitCostPrice}
+                        onChange={(e) => set('unitCostPrice', e.target.value)}
+                        placeholder="0.00"
+                        className={inputCls('unitCostPrice')}
+                      />
+                      {errors.unitCostPrice && <p className="text-xs text-red-500 mt-1">{errors.unitCostPrice}</p>}
+                    </div>
+
+                    {/* Unit Selling Price */}
+                    <div>
+                      <label className="text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
+                        <IndianRupee className="w-3.5 h-3.5 text-slate-400" /> Unit Selling Price (₹) <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={form.unitSellingPrice}
+                        onChange={(e) => set('unitSellingPrice', e.target.value)}
+                        placeholder="0.00"
+                        className={inputCls('unitSellingPrice')}
+                      />
+                      {errors.unitSellingPrice && <p className="text-xs text-red-500 mt-1">{errors.unitSellingPrice}</p>}
+                    </div>
+
+                    {/* Profit Margin (%) */}
+                    <div>
+                      <label className="text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
+                        <Hash className="w-3.5 h-3.5 text-slate-400" /> Profit Margin (%)
+                      </label>
+                      <input
+                        type="number"
+                        min="-1000"
+                        max="99.99"
+                        step="0.01"
+                        value={form.profitMargin}
+                        onChange={(e) => set('profitMargin', e.target.value)}
+                        placeholder="0.00"
+                        className={inputCls('profitMargin')}
+                      />
+                      <p className="mt-0.5 text-[10px] text-slate-400 font-medium">Recalculates Unit Selling Price</p>
+                    </div>
+
+                    {/* Discount (%) */}
+                    <div>
+                      <label className="text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
+                        <Hash className="w-3.5 h-3.5 text-slate-400" /> Discount (%)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.01"
+                        value={form.discountPercent}
+                        onChange={(e) => set('discountPercent', e.target.value)}
+                        placeholder="0.00"
+                        className={inputCls('discountPercent')}
+                      />
+                      {errors.discountPercent && <p className="text-xs text-red-500 mt-1">{errors.discountPercent}</p>}
+                    </div>
+                  </div>
                 </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -273,6 +483,7 @@ const AddTransactionModal = ({ isOpen, supplierName, storeName, activeStoreId, o
                   <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-semibold">₹</span>
                     <input type="number" min="0" step="0.01" value={form.amount}
+                      disabled={form.enterUnitCostPrice}
                       onChange={e => set('amount', e.target.value)}
                       placeholder="0.00"
                       className={`${inputCls('amount')} pl-7`} />

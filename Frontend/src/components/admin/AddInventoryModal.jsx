@@ -33,7 +33,7 @@ const SectionHeading = ({ num, label }) => (
 );
 
 /* ─── component ───────────────────────────────────── */
-const AddInventoryModal = ({ isOpen, onClose, onSubmit: onSubmitProp }) => {
+const AddInventoryModal = ({ isOpen, onClose, onSubmit: onSubmitProp, forceOwnerType }) => {
   const { selectedStore, stores } = useStoreStore();
   const { categories, isLoadingCategories } = useCategories();
   const { brands, createBrandAsync } = useBrands();
@@ -115,10 +115,57 @@ const AddInventoryModal = ({ isOpen, onClose, onSubmit: onSubmitProp }) => {
 
   // Set store_id when selectedStore changes
   useEffect(() => {
-    if (selectedStore?.id) {
+    if (forceOwnerType === 'ADMIN') {
+      setValue('store_id', 'admin');
+    } else if (selectedStore?.id) {
       setValue('store_id', String(selectedStore.id));
     }
-  }, [selectedStore, setValue]);
+  }, [selectedStore, setValue, forceOwnerType]);
+
+  const [margin, setMargin] = useState('');
+  const [enterTotalCost, setEnterTotalCost] = useState(false);
+  const [totalCost, setTotalCost] = useState('');
+
+  const watchedQuantity = watch('quantity');
+  const watchedCostPrice = watch('cost_price');
+  const watchedSellingPrice = watch('selling_price');
+
+  // Recalculate profit margin whenever cost price or selling price changes
+  useEffect(() => {
+    const cp = Number(watchedCostPrice || 0);
+    const sp = Number(watchedSellingPrice || 0);
+    if (sp > 0) {
+      const calculatedMargin = ((sp - cp) / sp) * 100;
+      setMargin(calculatedMargin.toFixed(2));
+    } else {
+      setMargin('');
+    }
+  }, [watchedCostPrice, watchedSellingPrice]);
+
+  // Recalculate unit cost when total cost or quantity changes
+  useEffect(() => {
+    if (enterTotalCost) {
+      const qty = Number(watchedQuantity || 0);
+      const tot = Number(totalCost || 0);
+      if (qty > 0) {
+        const unitCost = tot / qty;
+        setValue('cost_price', unitCost.toFixed(2));
+      } else {
+        setValue('cost_price', '');
+      }
+    }
+  }, [enterTotalCost, watchedQuantity, totalCost, setValue]);
+
+  const handleMarginChange = (e) => {
+    const val = e.target.value;
+    setMargin(val);
+    const m = Number(val);
+    const cp = Number(watchedCostPrice || 0);
+    if (!isNaN(m) && m < 100 && m >= -1000) {
+      const sp = cp / (1 - m / 100);
+      setValue('selling_price', isFinite(sp) ? sp.toFixed(2) : '');
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -135,6 +182,8 @@ const AddInventoryModal = ({ isOpen, onClose, onSubmit: onSubmitProp }) => {
     if (isPending) return;
     reset();
     setImagePreview(null);
+    setEnterTotalCost(false);
+    setTotalCost('');
     onClose();
   };
 
@@ -200,6 +249,8 @@ const AddInventoryModal = ({ isOpen, onClose, onSubmit: onSubmitProp }) => {
       // Clear, reset form, and close modal only on success
       reset();
       setImagePreview(null);
+      setEnterTotalCost(false);
+      setTotalCost('');
       onClose();
       toast.success('Inventory item added successfully.');
     } catch (err) {
@@ -562,8 +613,27 @@ const AddInventoryModal = ({ isOpen, onClose, onSubmit: onSubmitProp }) => {
             {/* 4 – Pricing */}
             <section>
               <SectionHeading num="4" label="Pricing & Warranty Details" />
+              
+              <div className="mb-4">
+                <label className="inline-flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={enterTotalCost}
+                    onChange={(e) => {
+                      setEnterTotalCost(e.target.checked);
+                      if (!e.target.checked) {
+                        setTotalCost('');
+                      }
+                    }}
+                    disabled={isPending}
+                    className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500/10 focus:ring-4"
+                  />
+                  <span className="text-xs font-bold text-slate-600">Enter Total Cost instead of Unit Cost</span>
+                </label>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-4">
-                <div>
+                <div className={enterTotalCost ? "hidden" : "block"}>
                   <label className="block text-sm font-semibold text-slate-700 mb-1.5">Cost Price (₹) <span className="text-red-500">*</span></label>
                   <input {...register('cost_price', {
                     required: 'Cost price is required',
@@ -572,6 +642,42 @@ const AddInventoryModal = ({ isOpen, onClose, onSubmit: onSubmitProp }) => {
                   <FieldError message={errors.cost_price?.message} />
                 </div>
 
+                {enterTotalCost && (
+                  <>
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 mb-1.5">Total Cost Price (Bulk) (₹) <span className="text-red-500">*</span></label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        disabled={isPending}
+                        value={totalCost}
+                        onChange={(e) => setTotalCost(e.target.value)}
+                        placeholder="0.00"
+                        className={inputCls(!watchedCostPrice && errors.cost_price)}
+                      />
+                      {!watchedCostPrice && errors.cost_price && (
+                        <FieldError message="Total cost is required to calculate unit cost" />
+                      )}
+                      {watchedQuantity > 0 && totalCost > 0 && (
+                        <p className="mt-1 text-xs text-slate-500 font-medium">
+                          Calculated Unit Cost: ₹{(Number(totalCost) / Number(watchedQuantity)).toFixed(2)} / unit
+                        </p>
+                      )}
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 mb-1.5">Calculated Unit Cost Price (₹)</label>
+                      <input
+                        type="number"
+                        disabled
+                        value={watchedCostPrice || ''}
+                        placeholder="0.00"
+                        className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-500 text-sm"
+                      />
+                    </div>
+                  </>
+                )}
+
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-1.5">Selling Price (₹) <span className="text-red-500">*</span></label>
                   <input {...register('selling_price', {
@@ -579,6 +685,22 @@ const AddInventoryModal = ({ isOpen, onClose, onSubmit: onSubmitProp }) => {
                     min: { value: 0, message: 'Price cannot be negative' },
                   })} type="number" min="0" step="0.01" disabled={isPending} placeholder="0.00" className={inputCls(!!errors.selling_price)} />
                   <FieldError message={errors.selling_price?.message} />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1.5">Profit Margin (%)</label>
+                  <input
+                    type="number"
+                    min="-1000"
+                    max="99.99"
+                    step="0.01"
+                    disabled={isPending}
+                    value={margin}
+                    onChange={handleMarginChange}
+                    placeholder="0.00"
+                    className={inputCls(false)}
+                  />
+                  <p className="mt-1 text-xs text-slate-400 font-medium">Recalculates Selling Price dynamically</p>
                 </div>
 
                 <div>
@@ -604,23 +726,25 @@ const AddInventoryModal = ({ isOpen, onClose, onSubmit: onSubmitProp }) => {
             <div className="border-t border-slate-100" />
 
             {/* 5 – Store */}
-            <section>
-              <SectionHeading num="5" label="Store Information" />
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1.5">Store <span className="text-red-500">*</span></label>
-                <select
-                  {...register('store_id', { required: 'Store is required' })}
-                  className={inputCls(!!errors.store_id)}
-                  disabled={isPending}
-                >
-                  <option value="">Select Store</option>
-                  {stores.map((st) => (
-                    <option key={st.id} value={st.id}>{st.store_name || st.name || `Store #${st.id}`}</option>
-                  ))}
-                </select>
-                <FieldError message={errors.store_id?.message} />
-              </div>
-            </section>
+            {forceOwnerType !== 'ADMIN' && (
+              <section>
+                <SectionHeading num="5" label="Store Information" />
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1.5">Store <span className="text-red-500">*</span></label>
+                  <select
+                    {...register('store_id', { required: 'Store is required' })}
+                    className={inputCls(!!errors.store_id)}
+                    disabled={isPending}
+                  >
+                    <option value="">Select Store</option>
+                    {stores.map((st) => (
+                      <option key={st.id} value={st.id}>{st.store_name || st.name || `Store #${st.id}`}</option>
+                    ))}
+                  </select>
+                  <FieldError message={errors.store_id?.message} />
+                </div>
+              </section>
+            )}
           </div>
 
           {/* Footer */}

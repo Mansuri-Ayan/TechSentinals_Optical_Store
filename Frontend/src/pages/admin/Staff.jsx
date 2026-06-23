@@ -124,10 +124,9 @@ const StaffDetailDrawer = ({ staff, onClose, isLoading }) => {
   const initials = staff.first_name ? staff.first_name.charAt(0) : (staff.name ? staff.name.charAt(0) : '?');
 
   return createPortal(
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[999] flex justify-end animate-fade-in font-sans">
-      <div className="absolute inset-0" onClick={onClose} aria-hidden />
-      
-      <div className={`relative w-full sm:max-w-md h-full bg-slate-50 shadow-2xl flex flex-col transition-transform duration-300 transform ${isAnimating ? 'translate-x-0' : 'translate-x-full'}`}>
+    <>
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[998] animate-fade-in font-sans" onClick={onClose} aria-hidden />
+      <div className={`fixed top-0 right-0 w-full sm:max-w-md h-full bg-slate-50 shadow-2xl flex flex-col transition-transform duration-300 transform z-[1000] ${isAnimating ? 'translate-x-0' : 'translate-x-full'}`}>
         
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 bg-white border-b border-slate-100 flex-shrink-0">
@@ -210,7 +209,7 @@ const StaffDetailDrawer = ({ staff, onClose, isLoading }) => {
           </button>
         </div>
       </div>
-    </div>,
+    </>,
     document.body
   );
 };

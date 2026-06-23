@@ -6,6 +6,7 @@ import {
   receiveGoodsApi,
   recordSupplierPaymentApi,
 } from '../api/purchase_order/purchase_order.api';
+import { updateProductApi } from '../api/product/product.api';
 
 export const purchaseOrdersQueryKey = ['purchaseOrders'];
 
@@ -37,12 +38,28 @@ export const usePurchaseOrders = (filters = {}) => {
 
   // Composite mutation to record a complete purchase: create draft PO -> receive goods -> record payment
   const recordPurchaseMutation = useMutation({
-    mutationFn: async ({ supplierId, storeId, productId, quantity, totalAmount, paidAmount, paymentMethod, date, remarks }) => {
+    mutationFn: async ({ supplierId, storeId, productId, quantity, totalAmount, paidAmount, paymentMethod, date, remarks, costPrice, sellingPrice, discountPercent }) => {
+      // 0. Update product details if pricing info is provided
+      if (costPrice !== undefined || sellingPrice !== undefined || discountPercent !== undefined) {
+        const updatePayload = {};
+        if (costPrice !== undefined && costPrice !== null) updatePayload.cost_price = Number(costPrice);
+        if (sellingPrice !== undefined && sellingPrice !== null) updatePayload.selling_price = Number(sellingPrice);
+        if (discountPercent !== undefined && discountPercent !== null) updatePayload.discount_percent = Number(discountPercent);
+        if (Object.keys(updatePayload).length > 0) {
+          try {
+            await updateProductApi(productId, updatePayload);
+          } catch (err) {
+            console.error('Failed to update product details before purchase order:', err);
+            // Non-blocking: proceed with purchase order even if catalog update fails
+          }
+        }
+      }
+
       // 1. Create the Purchase Order
       const unitPrice = totalAmount / quantity;
       const poPayload = {
         supplier_id: Number(supplierId),
-        store_id: Number(storeId),
+        store_id: (storeId === 'warehouse' || storeId === -1 || !storeId) ? null : Number(storeId),
         order_date: date,
         expected_delivery_date: date,
         notes: remarks || '',

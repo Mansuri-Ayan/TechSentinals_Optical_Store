@@ -50,6 +50,11 @@ export const createManagerRequestApi = async (payload) => {
   return response.data;
 };
 
+export const createAdminRequestApi = async (payload) => {
+  const response = await api.post('/api/transactions/request', payload);
+  return response.data;
+};
+
 export const createManagerPushApi = async (payload) => {
   const response = await api.post('/api/shopkeeper/transactions/push', payload);
   return response.data;
@@ -77,5 +82,10 @@ export const markNotificationReadApi = async (id) => {
 
 export const markAllNotificationsReadApi = async () => {
   const response = await api.put('/api/notifications/read-all');
+  return response.data;
+};
+
+export const getWarehouseTransactionsApi = async (params = {}) => {
+  const response = await api.get('/api/transactions/warehouse', { params });
   return response.data;
 };

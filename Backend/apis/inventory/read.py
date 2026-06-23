@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.deps import get_current_user
 from db.session import get_db
 from models.admin import Admin
-from schemas.inventory import InventoryRead, InventoryResponse
+from schemas.inventory import InventoryRead, InventoryResponse, UniversalInventoryResponse
 from services.inventory_service import (
     get_inventory,
     get_inventories_by_owner,
@@ -44,7 +44,85 @@ def _inventory_to_read(inv, store_map: dict | None = None) -> InventoryRead:
         frame_product=product.frame_product if product else None,
         lens_product=product.lens_product if product else None,
         accessory_product=product.accessory_product if product else None,
+        other_stocks=getattr(inv, "other_stocks", []),
     )
+
+
+async def _populate_other_stocks(
+    db: AsyncSession,
+    inventories: list,
+    admin_id: int,
+    store_map: dict,
+    resolved_owner_type: str,
+    resolved_owner_id: int,
+) -> None:
+    if not inventories:
+        return
+
+    from sqlalchemy import select, and_, or_
+    from models.inventory import Inventory
+    from schemas.inventory import StoreStockRead
+
+    product_ids = [inv.product_id for inv in inventories if inv.product_id]
+    if not product_ids:
+        return
+
+    # Fetch all active inventory records for these products across all stores of this admin
+    store_ids = list(store_map.keys())
+    conditions = [
+        and_(Inventory.owner_type == "ADMIN", Inventory.owner_id == admin_id),
+    ]
+    if store_ids:
+        conditions.append(
+            and_(Inventory.owner_type == "STORE", Inventory.owner_id.in_(store_ids))
+        )
+
+    inv_stmt = select(Inventory).where(
+        Inventory.product_id.in_(product_ids),
+        Inventory.is_active.is_(True),
+        or_(*conditions)
+    )
+    inv_res = await db.execute(inv_stmt)
+    all_inventories = inv_res.scalars().all()
+
+    # Group inventories by product_id
+    from collections import defaultdict
+    inv_by_product = defaultdict(list)
+    for inv in all_inventories:
+        inv_by_product[inv.product_id].append(inv)
+
+    for item in inventories:
+        p_invs = inv_by_product[item.product_id]
+        
+        other_stocks = []
+        # 1. Admin Warehouse
+        if not (resolved_owner_type == "ADMIN" and resolved_owner_id == admin_id):
+            admin_inv = next((inv for inv in p_invs if inv.owner_type == "ADMIN" and inv.owner_id == admin_id), None)
+            other_stocks.append(
+                StoreStockRead(
+                    store_id=admin_id,
+                    store_name="Admin Warehouse",
+                    owner_type="ADMIN",
+                    quantity=admin_inv.quantity if admin_inv else 0,
+                    available_quantity=admin_inv.available_quantity if admin_inv else 0
+                )
+            )
+        # 2. Store Branches
+        for s_id, s_name in store_map.items():
+            if resolved_owner_type == "STORE" and resolved_owner_id == s_id:
+                continue
+            
+            store_inv = next((inv for inv in p_invs if inv.owner_type == "STORE" and inv.owner_id == s_id), None)
+            other_stocks.append(
+                StoreStockRead(
+                    store_id=s_id,
+                    store_name=s_name,
+                    owner_type="STORE",
+                    quantity=store_inv.quantity if store_inv else 0,
+                    available_quantity=store_inv.available_quantity if store_inv else 0
+                )
+            )
+        item.other_stocks = other_stocks
 
 
 @router.get(
@@ -125,6 +203,89 @@ async def list_inventories(
         paginate=paginate,
     )
     
+    await _populate_other_stocks(
+        db,
+        result_dict["items"],
+        admin_id=admin_id,
+        store_map=store_map,
+        resolved_owner_type=owner_type,
+        resolved_owner_id=owner_id,
+    )
+
+    return InventoryResponse(
+        items=[_inventory_to_read(inv, store_map) for inv in result_dict["items"]],
+        total=result_dict["total"],
+        page=result_dict["page"],
+        limit=result_dict["limit"],
+        pages=result_dict["pages"],
+        total_products=result_dict["total_products"],
+        low_stock_count=result_dict["low_stock_count"],
+        out_of_stock_count=result_dict["out_of_stock_count"],
+        total_valuation=result_dict["total_valuation"],
+    )
+
+
+@router.get(
+    "/warehouse",
+    response_model=InventoryResponse,
+    summary="List warehouse-only inventories",
+    description="List warehouse-only inventory records for the current admin.",
+)
+async def list_warehouse_inventories(
+    active_only: bool = Query(True),
+    search: str | None = Query(default=None, description="Search product name or SKU"),
+    category_id: int | None = Query(default=None, description="Filter by category ID"),
+    subcategory_id: int | None = Query(default=None, description="Filter by subcategory ID"),
+    brand_id: int | None = Query(default=None, description="Filter by brand ID"),
+    stock_status: str | None = Query(
+        default=None,
+        description="Filter by stock status: in_stock, low_stock, out_of_stock",
+    ),
+    page: int = Query(default=1, ge=1, description="Page number"),
+    limit: int = Query(default=20, ge=1, le=100, description="Page size"),
+    paginate: bool = Query(default=True, description="Enable pagination"),
+    db: AsyncSession = Depends(get_db),
+    current_user = Depends(get_current_user),
+) -> InventoryResponse:
+    from core.deps import get_user_admin_id
+    from sqlalchemy import select
+    from models.store import Store
+    from models.admin import Admin
+
+    if isinstance(current_user, Admin):
+        admin_id = current_user.id
+    else:
+        admin_id = get_user_admin_id(current_user)
+
+    stores_stmt = select(Store.id, Store.store_name).where(Store.admin_id == admin_id)
+    stores_res = await db.execute(stores_stmt)
+    store_map = {row[0]: row[1] for row in stores_res.fetchall()}
+
+    result_dict = await get_inventories_by_owner(
+        db,
+        owner_type="ADMIN",
+        owner_id=admin_id,
+        active_only=active_only,
+        search=search,
+        category_id=category_id,
+        subcategory_id=subcategory_id,
+        brand_id=brand_id,
+        stock_status=stock_status,
+        page=page,
+        limit=limit,
+        paginate=paginate,
+        warehouse_only=True,
+    )
+    
+    await _populate_other_stocks(
+        db,
+        result_dict["items"],
+        admin_id=admin_id,
+        store_map=store_map,
+        resolved_owner_type="ADMIN",
+        resolved_owner_id=admin_id,
+    )
+
     return InventoryResponse(
         items=[_inventory_to_read(inv, store_map) for inv in result_dict["items"]],
         total=result_dict["total"],
@@ -176,6 +337,310 @@ async def low_stock_items(
 
 
 @router.get(
+    "/universal",
+    response_model=UniversalInventoryResponse,
+    summary="Universal search inventories",
+    description="Search products with stock levels at all stores and warehouse.",
+)
+async def universal_search_inventories(
+    owner_type: str = Query(..., description="ADMIN or STORE"),
+    owner_id: int | None = Query(default=None, description="Admin ID or Store ID. Omit for default."),
+    search: str | None = Query(default=None, description="Search product name or SKU"),
+    category_id: int | None = Query(default=None, description="Filter by category ID"),
+    subcategory_id: int | None = Query(default=None, description="Filter by subcategory ID"),
+    brand_id: int | None = Query(default=None, description="Filter by brand ID"),
+    stock_status: str | None = Query(
+        default=None,
+        description="Filter by stock status: in_stock, low_stock, out_of_stock",
+    ),
+    page: int = Query(default=1, ge=1, description="Page number"),
+    limit: int = Query(default=20, ge=1, le=100, description="Page size"),
+    paginate: bool = Query(default=True, description="Enable pagination"),
+    db: AsyncSession = Depends(get_db),
+    current_user = Depends(get_current_user),
+) -> UniversalInventoryResponse:
+    from core.deps import get_user_admin_id
+    from sqlalchemy import select, and_, or_, func
+    from sqlalchemy.orm import aliased, selectinload
+    from models.product import Product
+    from models.store import Store
+    from models.inventory import Inventory
+    from schemas.inventory import StoreStockRead, UniversalInventoryRead, UniversalInventoryResponse
+    import math
+
+    if isinstance(current_user, Admin):
+        admin_id = current_user.id
+    else:
+        admin_id = get_user_admin_id(current_user)
+
+    # Resolve default owner_id
+    resolved_owner_type = owner_type.upper()
+    resolved_owner_id = owner_id
+    if not isinstance(current_user, Admin):
+        if resolved_owner_type == "ADMIN":
+            resolved_owner_id = admin_id
+        elif resolved_owner_type == "STORE":
+            if resolved_owner_id is None:
+                resolved_owner_id = current_user.store_id
+            else:
+                # check permission
+                store_check = await db.execute(
+                    select(Store.admin_id).where(Store.id == resolved_owner_id)
+                )
+                store_admin = store_check.scalar_one_or_none()
+                if store_admin != admin_id:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Access denied to this store's inventory",
+                    )
+    else:
+        if resolved_owner_id is None:
+            if resolved_owner_type == "ADMIN":
+                resolved_owner_id = admin_id
+            else:
+                # Default to admin ID or first store
+                resolved_owner_id = admin_id
+
+    # Fetch store details for mapping
+    stores_stmt = select(Store.id, Store.store_name).where(Store.admin_id == admin_id)
+    stores_res = await db.execute(stores_stmt)
+    store_map = {row[0]: row[1] for row in stores_res.fetchall()}
+    
+    # We want to query products that belong to this admin and are active
+    product_conditions = [
+        Product.admin_id == admin_id,
+        Product.is_active.is_(True)
+    ]
+
+    if search:
+        search_term = f"%{search.strip()}%"
+        product_conditions.append(
+            or_(
+                Product.name.ilike(search_term),
+                Product.sku.ilike(search_term),
+            )
+        )
+    
+    if category_id is not None:
+        product_conditions.append(Product.category_id == category_id)
+    if subcategory_id is not None:
+        product_conditions.append(Product.subcategory_id == subcategory_id)
+    if brand_id is not None:
+        product_conditions.append(Product.brand_id == brand_id)
+
+    local_inv = aliased(Inventory)
+    local_inv_join_cond = and_(
+        Product.id == local_inv.product_id,
+        local_inv.owner_type == resolved_owner_type,
+        local_inv.owner_id == resolved_owner_id,
+        local_inv.is_active.is_(True)
+    )
+
+    stmt_count = select(func.count(Product.id)).where(*product_conditions)
+    stmt_data = (
+        select(Product)
+        .where(*product_conditions)
+        .options(
+            selectinload(Product.category),
+            selectinload(Product.subcategory),
+            selectinload(Product.brand),
+            selectinload(Product.frame_product),
+            selectinload(Product.lens_product),
+            selectinload(Product.accessory_product),
+        )
+        .order_by(Product.id.desc())
+    )
+
+    if stock_status:
+        stmt_count = stmt_count.outerjoin(local_inv, local_inv_join_cond)
+        stmt_data = stmt_data.outerjoin(local_inv, local_inv_join_cond)
+
+        if stock_status == "out_of_stock":
+            stmt_count = stmt_count.where(or_(local_inv.id.is_(None), local_inv.available_quantity == 0))
+            stmt_data = stmt_data.where(or_(local_inv.id.is_(None), local_inv.available_quantity == 0))
+        elif stock_status == "low_stock":
+            stmt_count = stmt_count.where(
+                and_(
+                    local_inv.id.is_not(None),
+                    local_inv.available_quantity > 0,
+                    or_(
+                        and_(local_inv.reorder_level > 0, local_inv.available_quantity <= local_inv.reorder_level),
+                        and_(local_inv.reorder_level == 0, local_inv.available_quantity <= 10)
+                    )
+                )
+            )
+            stmt_data = stmt_data.where(
+                and_(
+                    local_inv.id.is_not(None),
+                    local_inv.available_quantity > 0,
+                    or_(
+                        and_(local_inv.reorder_level > 0, local_inv.available_quantity <= local_inv.reorder_level),
+                        and_(local_inv.reorder_level == 0, local_inv.available_quantity <= 10)
+                    )
+                )
+            )
+        elif stock_status == "in_stock":
+            stmt_count = stmt_count.where(
+                and_(
+                    local_inv.id.is_not(None),
+                    or_(
+                        and_(local_inv.reorder_level > 0, local_inv.available_quantity > local_inv.reorder_level),
+                        and_(local_inv.reorder_level == 0, local_inv.available_quantity > 10)
+                    )
+                )
+            )
+            stmt_data = stmt_data.where(
+                and_(
+                    local_inv.id.is_not(None),
+                    or_(
+                        and_(local_inv.reorder_level > 0, local_inv.available_quantity > local_inv.reorder_level),
+                        and_(local_inv.reorder_level == 0, local_inv.available_quantity > 10)
+                    )
+                )
+            )
+
+    # Execute count
+    res_count = await db.execute(stmt_count)
+    total = res_count.scalar() or 0
+
+    # Paginate
+    if paginate:
+        offset = (page - 1) * limit
+        stmt_data = stmt_data.offset(offset).limit(limit)
+
+    res_data = await db.execute(stmt_data)
+    products = list(res_data.scalars().unique().all())
+
+    # If no products, return early
+    if not products:
+        return UniversalInventoryResponse(
+            items=[],
+            total=total,
+            page=page,
+            limit=limit,
+            pages=1
+        )
+
+    # Fetch all active inventory records for these products across all stores of this admin
+    store_ids = list(store_map.keys())
+    conditions = [
+        and_(Inventory.owner_type == "ADMIN", Inventory.owner_id == admin_id),
+    ]
+    if store_ids:
+        conditions.append(
+            and_(Inventory.owner_type == "STORE", Inventory.owner_id.in_(store_ids))
+        )
+
+    inv_stmt = select(Inventory).where(
+        Inventory.product_id.in_([p.id for p in products]),
+        Inventory.is_active.is_(True),
+        or_(*conditions)
+    )
+    inv_res = await db.execute(inv_stmt)
+    all_inventories = inv_res.scalars().all()
+
+    # Group inventories by product_id
+    from collections import defaultdict
+    inv_by_product = defaultdict(list)
+    for inv in all_inventories:
+        inv_by_product[inv.product_id].append(inv)
+
+    items = []
+    for p in products:
+        p_invs = inv_by_product[p.id]
+        
+        # Find local inventory record
+        local_rec = None
+        for inv in p_invs:
+            if inv.owner_type == resolved_owner_type and inv.owner_id == resolved_owner_id:
+                local_rec = inv
+                break
+
+        # Calculate other stocks (include all other stores and the warehouse under the same admin, even with 0 stock)
+        other_stocks = []
+        
+        # 1. Admin Warehouse (if not current local context)
+        if not (resolved_owner_type == "ADMIN" and resolved_owner_id == admin_id):
+            admin_inv = next((inv for inv in p_invs if inv.owner_type == "ADMIN" and inv.owner_id == admin_id), None)
+            other_stocks.append(
+                StoreStockRead(
+                    store_id=admin_id,
+                    store_name="Admin Warehouse",
+                    owner_type="ADMIN",
+                    quantity=admin_inv.quantity if admin_inv else 0,
+                    available_quantity=admin_inv.available_quantity if admin_inv else 0
+                )
+            )
+
+        # 2. Store Branches (excluding current local context)
+        for s_id, s_name in store_map.items():
+            if resolved_owner_type == "STORE" and resolved_owner_id == s_id:
+                continue
+            
+            store_inv = next((inv for inv in p_invs if inv.owner_type == "STORE" and inv.owner_id == s_id), None)
+            other_stocks.append(
+                StoreStockRead(
+                    store_id=s_id,
+                    store_name=s_name,
+                    owner_type="STORE",
+                    quantity=store_inv.quantity if store_inv else 0,
+                    available_quantity=store_inv.available_quantity if store_inv else 0
+                )
+            )
+
+        # Build UniversalInventoryRead
+        owner_name = None
+        if resolved_owner_type == "ADMIN":
+            owner_name = "Admin Warehouse"
+        else:
+            owner_name = store_map.get(resolved_owner_id, f"Store {resolved_owner_id}")
+
+        items.append(
+            UniversalInventoryRead(
+                id=local_rec.id if local_rec else None,
+                product_id=p.id,
+                product_name=p.name,
+                product_sku=p.sku,
+                category_id=p.category_id,
+                category_name=p.category.name if p.category else None,
+                subcategory_id=p.subcategory_id,
+                subcategory_name=p.subcategory.name if p.subcategory else None,
+                brand_id=p.brand_id,
+                brand_name=p.brand.name if p.brand else None,
+                cost_price=p.cost_price,
+                selling_price=p.selling_price,
+                price=p.selling_price,
+                image_url=p.image_url,
+                discount_percent=p.discount_percent,
+                warranty_months=p.warranty_months,
+                
+                # local stock
+                quantity=local_rec.quantity if local_rec else 0,
+                available_quantity=local_rec.available_quantity if local_rec else 0,
+                reorder_level=local_rec.reorder_level if local_rec else 0,
+                is_active=local_rec.is_active if local_rec else True,
+                owner_type=resolved_owner_type,
+                owner_id=resolved_owner_id,
+                owner_name=owner_name,
+
+                other_stocks=other_stocks,
+
+                frame_product=p.frame_product,
+                lens_product=p.lens_product,
+                accessory_product=p.accessory_product
+            )
+        )
+
+    return UniversalInventoryResponse(
+        items=items,
+        total=total,
+        page=page,
+        limit=limit,
+        pages=math.ceil(total / limit) if total > 0 else 1
+    )
+
+
+@router.get(
     "/{inventory_id}",
     response_model=InventoryRead,
     summary="Get single inventory record",
@@ -206,9 +671,14 @@ async def get_inventory_endpoint(
     store_map = {row[0]: row[1] for row in stores_res.fetchall()}
 
     if not isinstance(current_user, Admin):
-        if inv.owner_type != "STORE" or inv.owner_id != current_user.store_id:
+        ot_str = inv.owner_type.value if hasattr(inv.owner_type, "value") else str(inv.owner_type)
+        is_own_store = ot_str == "STORE" and inv.owner_id == current_user.store_id
+        is_warehouse = ot_str == "ADMIN" and inv.owner_id == admin_id
+        if not (is_own_store or is_warehouse):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Access denied to this store's inventory",
+                detail="Access denied to this inventory record",
             )
     return _inventory_to_read(inv, store_map)
+
+

@@ -201,8 +201,11 @@ async def list_purchase_orders(
         )
     if supplier_id:
         stmt = stmt.where(PurchaseOrder.supplier_id == supplier_id)
-    if store_id:
-        stmt = stmt.where(PurchaseOrder.store_id == store_id)
+    if store_id is not None:
+        if store_id == -1:
+            stmt = stmt.where(PurchaseOrder.store_id.is_(None))
+        else:
+            stmt = stmt.where(PurchaseOrder.store_id == store_id)
     if status_filter:
         stmt = stmt.where(PurchaseOrder.status == status_filter.upper())
     if has_due is not None:

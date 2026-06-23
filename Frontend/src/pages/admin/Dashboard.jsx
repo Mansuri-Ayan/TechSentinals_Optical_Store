@@ -9,6 +9,7 @@ import { useStoreStore } from '../../store/store';
 import AddStoreModal from '../../components/admin/AddStoreModal';
 import StoreSwitcher from '../../components/admin/stores/StoreSwitcher';
 import { useDashboard } from '../../hooks/useDashboard';
+import { useChartAnimation } from '../../hooks/useChartAnimation';
 
 /* ─────────────────────────────────────────────────────────
    PREMIUM WIDGET CARD (STRIPE-LIKE NOTION AESTHETICS)
@@ -46,6 +47,12 @@ const Dashboard = () => {
 
   // Fetch real dashboard data from backend
   const { data, isLoading } = useDashboard(activeStoreId);
+
+  const [trendProgress, trendRef] = useChartAnimation(data);
+  const [statusProgress, statusRef] = useChartAnimation(data);
+  const [branchProgress, branchRef] = useChartAnimation(data);
+  const [inventoryProgress, inventoryRef] = useChartAnimation(data);
+  const [distributionProgress, distributionRef] = useChartAnimation(data);
 
   // Sync state if selectedStore changes from sidebar selector
   useEffect(() => {
@@ -97,7 +104,7 @@ const Dashboard = () => {
   const salesTrendMax = Math.max(...salesTrendData.map(d => Number(d.value)), 1);
   const salesTrendPoints = salesTrendData.map((d, i) => {
     const x = 40 + i * (250 / 11);
-    const y = 135 - (Number(d.value) / salesTrendMax) * 105;
+    const y = 135 - (Number(d.value) / salesTrendMax) * 105 * trendProgress;
     return `${x},${y}`;
   }).join(' ');
 
@@ -206,6 +213,8 @@ const Dashboard = () => {
               selectedStoreFilter={selectedStoreFilter}
               onStoreChange={(val) => {
                 setSelectedStoreFilter(val);
+                const matchedStore = stores.find(s => (s.store_name || s.name) === val);
+                setSelectedStore(matchedStore || null);
               }}
             />
           )}
@@ -319,7 +328,7 @@ const Dashboard = () => {
                 }
               >
                 <div className="w-full h-72 sm:h-80 pt-4 px-2">
-                  <svg viewBox="0 0 300 160" className="w-full h-full">
+                  <svg ref={trendRef} viewBox="0 0 300 160" className="w-full h-full">
                     <defs>
                       <linearGradient id="trendGrad" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="0%" stopColor="#10B981" stopOpacity="0.08" />
@@ -336,7 +345,7 @@ const Dashboard = () => {
 
                     {salesTrendData.map((d, i) => {
                       const x = 40 + i * (250 / 11);
-                      const y = 135 - (Number(d.value) / salesTrendMax) * 105;
+                      const y = 135 - (Number(d.value) / salesTrendMax) * 105 * trendProgress;
                       return (
                         <g key={i} className="group cursor-pointer">
                           <circle cx={x} cy={y} r="2.5" fill="#FFFFFF" stroke="#10B981" strokeWidth="1.5" className="transition-all duration-200 group-hover:r-4 group-hover:stroke-emerald-600" />
@@ -359,13 +368,13 @@ const Dashboard = () => {
                 title="Sales Status Breakdown"
                 subtitle="Categorization of order statuses logged during the operational period."
               >
-                <div className="relative w-full h-72 flex flex-col items-center justify-center gap-6 pt-2">
+                <div ref={statusRef} className="relative w-full h-72 flex flex-col items-center justify-center gap-6 pt-2">
                   <div className="relative w-36 h-36 flex-shrink-0">
                     <svg viewBox="0 0 140 140" className="w-full h-full transform -rotate-90">
                       <circle cx="70" cy="70" r="50" fill="transparent" stroke="#F8FAFC" strokeWidth="12" />
                       {salesStatusData.map((d, i) => {
                         const percentage = salesStatusTotal > 0 ? (d.value / salesStatusTotal) * 100 : 0;
-                        const strokeLength = (percentage / 100) * 314.16;
+                        const strokeLength = (percentage / 100) * 314.16 * statusProgress;
                         const strokeOffset = 314.16 - strokeLength + accumulatedPercent;
                         accumulatedPercent -= strokeLength;
                         return (
@@ -415,7 +424,7 @@ const Dashboard = () => {
               subtitle="Relative comparison of total processed orders across registered branches."
             >
               <div className="w-full h-64 px-2 pt-2">
-                <svg viewBox="0 0 300 160" className="w-full h-full">
+                <svg ref={branchRef} viewBox="0 0 300 160" className="w-full h-full">
                   <line x1="40" y1="20" x2="290" y2="20" stroke="#F8FAFC" strokeWidth="1" strokeDasharray="3 3" />
                   <line x1="40" y1="60" x2="290" y2="60" stroke="#F8FAFC" strokeWidth="1" strokeDasharray="3 3" />
                   <line x1="40" y1="100" x2="290" y2="100" stroke="#F8FAFC" strokeWidth="1" strokeDasharray="3 3" />
@@ -425,7 +434,7 @@ const Dashboard = () => {
                     const barWidth = 16;
                     const spacing = (250 - (branchPerformanceData.length * barWidth)) / (branchPerformanceData.length + 1);
                     const x = 40 + spacing + i * (barWidth + spacing);
-                    const height = (d.orders / branchPerformanceMax) * 105;
+                    const height = (d.orders / branchPerformanceMax) * 105 * branchProgress;
                     const y = 130 - height;
 
                     return (
@@ -503,7 +512,7 @@ const Dashboard = () => {
               subtitle="Proportion of total stocked items categorized by availability levels."
             >
               <div className="w-full h-64 px-2 pt-2">
-                <svg viewBox="0 0 300 160" className="w-full h-full">
+                <svg ref={inventoryRef} viewBox="0 0 300 160" className="w-full h-full">
                   <line x1="40" y1="20" x2="290" y2="20" stroke="#F8FAFC" strokeWidth="1" strokeDasharray="3 3" />
                   <line x1="40" y1="60" x2="290" y2="60" stroke="#F8FAFC" strokeWidth="1" strokeDasharray="3 3" />
                   <line x1="40" y1="100" x2="290" y2="100" stroke="#F8FAFC" strokeWidth="1" strokeDasharray="3 3" />
@@ -513,7 +522,7 @@ const Dashboard = () => {
                     const barWidth = 20;
                     const spacing = (250 - (inventoryStatusData.length * barWidth)) / (inventoryStatusData.length + 1);
                     const x = 40 + spacing + i * (barWidth + spacing);
-                    const height = (d.value / inventoryStatusMax) * 105;
+                    const height = (d.value / inventoryStatusMax) * 105 * inventoryProgress;
                     const y = 130 - height;
 
                     return (
@@ -546,13 +555,13 @@ const Dashboard = () => {
               title="Store-wise Inventory Distribution"
               subtitle="Relative breakdown of active inventory volumes allocated to each branch."
             >
-              <div className="relative w-full h-64 flex flex-col sm:flex-row items-center justify-around gap-4 px-2">
+              <div ref={distributionRef} className="relative w-full h-64 flex flex-col sm:flex-row items-center justify-around gap-4 px-2">
                 <div className="relative w-36 h-36 flex-shrink-0">
                   <svg viewBox="0 0 140 140" className="w-full h-full transform -rotate-90">
                     <circle cx="70" cy="70" r="50" fill="transparent" stroke="#F8FAFC" strokeWidth="12" />
                     {storeInventoryDistribution.map((d, i) => {
                       const percentage = storeInventoryDistributionTotal > 0 ? (d.value / storeInventoryDistributionTotal) * 100 : 0;
-                      const strokeLength = (percentage / 100) * 314.16;
+                      const strokeLength = (percentage / 100) * 314.16 * distributionProgress;
                       const strokeOffset = 314.16 - strokeLength + accumInventoryPercent;
                       accumInventoryPercent -= strokeLength;
                       return (

@@ -818,9 +818,9 @@ const RepairDetailDrawer = ({ repair, onClose, onStatusChange, isUpdatingStatus 
     : { label: 'Out of Warranty (Paid)', color: 'text-slate-600 bg-slate-100 border-slate-200' };
 
   return createPortal(
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[1000] flex justify-end animate-fade-in font-sans">
-      <div className="absolute inset-0" onClick={onClose} aria-hidden="true" />
-      <div className="relative w-full sm:max-w-md h-full bg-slate-50 shadow-2xl flex flex-col overflow-hidden">
+    <>
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[998] animate-fade-in font-sans" onClick={onClose} aria-hidden="true" />
+      <div className="fixed top-0 right-0 w-full sm:max-w-md h-full bg-slate-50 shadow-2xl flex flex-col z-[1000] overflow-hidden">
 
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 bg-white border-b border-slate-100 flex-shrink-0">
@@ -908,7 +908,7 @@ const RepairDetailDrawer = ({ repair, onClose, onStatusChange, isUpdatingStatus 
 
         </div>
       </div>
-    </div>,
+    </>,
     document.body
   );
 };

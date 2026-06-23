@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Outlet } from 'react-router-dom';
 import { Menu } from 'lucide-react';
 import Sidebar from '../components/admin/Sidebar';
@@ -33,9 +34,12 @@ function AdminLayout() {
         </button>
 
         {/* Global Notification Bell */}
-        <div className="absolute top-4 right-4 sm:top-5 sm:right-6 lg:right-8 z-[1000] flex items-center">
-          <NotificationBell role="admin" />
-        </div>
+        {createPortal(
+          <div className="fixed top-4 right-4 sm:top-5 sm:right-6 lg:right-8 z-[999] flex items-center">
+            <NotificationBell role="admin" />
+          </div>,
+          document.body
+        )}
 
         {/* Page Content */}
         <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-50 hide-scrollbar">

@@ -1,7 +1,10 @@
 import { useMemo } from 'react';
 import { getLoyaltyTier } from '../../data/loyaltyData';
+import { useChartAnimation } from '../../hooks/useChartAnimation';
 
 const LoyaltyDistributionChart = ({ customers }) => {
+  const [progress, elementRef] = useChartAnimation(customers);
+
   const chartData = useMemo(() => {
     let silver = 0;
     let gold = 0;
@@ -33,11 +36,11 @@ const LoyaltyDistributionChart = ({ customers }) => {
 
       <div className="relative w-full flex flex-col sm:flex-row items-center justify-around gap-6 py-2">
         <div className="relative w-36 h-36 flex-shrink-0">
-          <svg viewBox="0 0 140 140" className="w-full h-full transform -rotate-90">
+          <svg ref={elementRef} viewBox="0 0 140 140" className="w-full h-full transform -rotate-90">
             <circle cx="70" cy="70" r="50" fill="transparent" stroke="#F8FAFC" strokeWidth="12" />
             {chartData.map((slice, i) => {
               const percentage = total > 0 ? (slice.value / total) * 100 : 0;
-              const strokeLength = (percentage / 100) * 314.16;
+              const strokeLength = (percentage / 100) * 314.16 * progress;
               const strokeOffset = 314.16 - strokeLength + currentOffset;
               currentOffset -= strokeLength;
 

@@ -46,6 +46,14 @@ class InventoryAdjustment(BaseModel):
     )
 
 
+class StoreStockRead(BaseModel):
+    store_id: int
+    store_name: str
+    owner_type: str
+    quantity: int
+    available_quantity: int
+
+
 class InventoryRead(BaseModel):
     id: int
     owner_type: OwnerTypeEnum
@@ -84,6 +92,8 @@ class InventoryRead(BaseModel):
     lens_product: LensDetailsRead | None = None
     accessory_product: AccessoryDetailsRead | None = None
 
+    other_stocks: list[StoreStockRead] = []
+
     model_config = {"from_attributes": True}
 
 
@@ -97,3 +107,47 @@ class InventoryResponse(BaseModel):
     low_stock_count: int
     out_of_stock_count: int
     total_valuation: float
+
+
+class UniversalInventoryRead(BaseModel):
+    id: int | None = None
+    product_id: int
+    product_name: str
+    product_sku: str
+    category_id: int | None = None
+    category_name: str | None = None
+    subcategory_id: int | None = None
+    subcategory_name: str | None = None
+    brand_id: int | None = None
+    brand_name: str | None = None
+    cost_price: Decimal | None = None
+    selling_price: Decimal | None = None
+    price: Decimal | None = None
+    image_url: str | None = None
+    discount_percent: Decimal = Decimal("0.00")
+    warranty_months: int = 0
+
+    quantity: int = 0
+    available_quantity: int = 0
+    reorder_level: int = 0
+    is_active: bool = True
+    owner_type: str | None = None
+    owner_id: int | None = None
+    owner_name: str | None = None
+
+    other_stocks: list[StoreStockRead] = []
+
+    frame_product: FrameDetailsRead | None = None
+    lens_product: LensDetailsRead | None = None
+    accessory_product: AccessoryDetailsRead | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class UniversalInventoryResponse(BaseModel):
+    items: list[UniversalInventoryRead]
+    total: int
+    page: int
+    limit: int
+    pages: int
+

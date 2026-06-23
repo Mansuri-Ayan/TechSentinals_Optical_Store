@@ -1,6 +1,8 @@
 import { useMemo } from 'react';
+import { useChartAnimation } from '../../hooks/useChartAnimation';
 
 const LoyaltyGrowthChart = ({ customers }) => {
+  const [progress, elementRef] = useChartAnimation(customers);
   // Generate last 6 months labels
   const monthlyData = useMemo(() => {
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -42,13 +44,13 @@ const LoyaltyGrowthChart = ({ customers }) => {
   // Compute SVG points
   const memberPoints = monthlyData.map((d, i) => {
     const x = 40 + i * (235 / 5);
-    const y = 130 - (d.members / maxMembers) * 95;
+    const y = 130 - (d.members / maxMembers) * 95 * progress;
     return `${x},${y}`;
   }).join(' ');
 
   const pointPoints = monthlyData.map((d, i) => {
     const x = 40 + i * (235 / 5);
-    const y = 130 - (d.points / maxPoints) * 95;
+    const y = 130 - (d.points / maxPoints) * 95 * progress;
     return `${x},${y}`;
   }).join(' ');
 
@@ -74,7 +76,7 @@ const LoyaltyGrowthChart = ({ customers }) => {
       </div>
 
       <div className="w-full h-48 px-2 pt-2 relative">
-        <svg viewBox="0 0 300 150" className="w-full h-full">
+        <svg ref={elementRef} viewBox="0 0 300 150" className="w-full h-full">
           <defs>
             <linearGradient id="pointsGrad" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#10B981" stopOpacity="0.08" />
@@ -90,16 +92,16 @@ const LoyaltyGrowthChart = ({ customers }) => {
           {areaDPoints && <path d={areaDPoints} fill="url(#pointsGrad)" />}
 
           {/* Points Line */}
-          {pointPoints && <path d={`M 40,${130 - (monthlyData[0].points / maxPoints) * 95} L ${pointPoints}`} fill="none" stroke="#10B981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />}
+          {pointPoints && <path d={`M 40,${130 - (monthlyData[0].points / maxPoints) * 95 * progress} L ${pointPoints}`} fill="none" stroke="#10B981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />}
           
           {/* Members Line */}
-          {memberPoints && <path d={`M 40,${130 - (monthlyData[0].members / maxMembers) * 95} L ${memberPoints}`} fill="none" stroke="#3B82F6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />}
+          {memberPoints && <path d={`M 40,${130 - (monthlyData[0].members / maxMembers) * 95 * progress} L ${memberPoints}`} fill="none" stroke="#3B82F6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />}
 
           {/* Data Points */}
           {monthlyData.map((d, i) => {
             const x = 40 + i * (235 / 5);
-            const yM = 130 - (d.members / maxMembers) * 95;
-            const yP = 130 - (d.points / maxPoints) * 95;
+            const yM = 130 - (d.members / maxMembers) * 95 * progress;
+            const yP = 130 - (d.points / maxPoints) * 95 * progress;
             
             return (
               <g key={i} className="group cursor-pointer">

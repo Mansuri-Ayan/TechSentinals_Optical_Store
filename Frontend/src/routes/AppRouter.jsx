@@ -23,6 +23,7 @@ import AdminLoyaltyCustomerDetail from "../pages/admin/LoyaltyCustomerDetail";
 import AdminRepair from "../pages/admin/Repair";
 import AdminCustomers from "../pages/admin/Customers";
 import AdminCustomerDetail from "../pages/admin/CustomerDetail";
+import Warehouse from "../pages/admin/Warehouse";
 
 // Shopkeeper imports
 import ShopKeeperLayout from "../layouts/ShopKeeperLayout";
@@ -41,6 +42,7 @@ import ShopkeeperCategories from "../pages/shopkeeper/Categories";
 import ShopkeeperLoyalty from "../pages/shopkeeper/Loyalty";
 import ShopkeeperLoyaltyCustomerDetail from "../pages/shopkeeper/LoyaltyCustomerDetail";
 import ShopkeeperTransactions from "../pages/shopkeeper/Transactions";
+import ShopkeeperWarehouse from "../pages/shopkeeper/Warehouse";
 
 // Responsive loading spinner component
 const LoadingSpinner = () => (
@@ -258,6 +260,7 @@ function AppRouter() {
         />
         <Route path="sales" element={<Sales />} />
         <Route path="analyses" element={<Analyses />} />
+        <Route path="warehouse" element={<Warehouse />} />
         <Route path="stores" element={<Stores />} />
         <Route path="stores/:storeId" element={<StoreDetail />} />
 
@@ -306,6 +309,7 @@ function AppRouter() {
         <Route path="loyalty" element={<ShopkeeperLoyalty />} />
         <Route path="loyalty/customer/:id" element={<ShopkeeperLoyaltyCustomerDetail />} />
         <Route path="transactions" element={<ShopkeeperTransactions />} />
+        <Route path="warehouse" element={<ShopkeeperWarehouse />} />
       </Route>
 
       {/* Fallback root redirect */}

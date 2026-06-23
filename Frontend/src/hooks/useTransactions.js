@@ -14,6 +14,8 @@ import {
   createManagerRequestApi,
   createManagerPushApi,
   createManagerPurchaseApi,
+  getWarehouseTransactionsApi,
+  createAdminRequestApi,
 } from '../api/transactions/transaction.api';
 
 export const transactionsQueryKey = ['transactions'];
@@ -23,7 +25,7 @@ export const useTransactions = (storeId, filters = {}, isManager = false) => {
   const params = {
     page: filters.page || 1,
     limit: filters.limit || 20,
-    ...(storeId ? { store_id: storeId } : {}),
+    ...(storeId && storeId !== 'warehouse' ? { store_id: storeId } : {}),
     ...(filters.transaction_type ? { transaction_type: filters.transaction_type } : {}),
     ...(filters.product_id ? { product_id: filters.product_id } : {}),
     ...(filters.status ? { status: filters.status } : {}),
@@ -34,7 +36,12 @@ export const useTransactions = (storeId, filters = {}, isManager = false) => {
 
   const query = useQuery({
     queryKey: [transactionsQueryKey, storeId, params, isManager],
-    queryFn: () => isManager ? getManagerTransactionsApi(params) : getTransactionsApi(params),
+    queryFn: () => {
+      if (storeId === 'warehouse') {
+        return getWarehouseTransactionsApi(params);
+      }
+      return isManager ? getManagerTransactionsApi(params) : getTransactionsApi(params);
+    },
     enabled: isManager ? true : Boolean(storeId),
     retry: false,
     staleTime: 1000 * 60 * 2,
@@ -104,6 +111,18 @@ export const useTransactions = (storeId, filters = {}, isManager = false) => {
     },
   });
 
+  const createAdminRequestMutation = useMutation({
+    mutationFn: (payload) => createAdminRequestApi(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [transactionsQueryKey] });
+      queryClient.invalidateQueries({ queryKey: ['inventory'] });
+      toast.success('Stock request sent successfully.');
+    },
+    onError: (error) => {
+      toast.error(error.response?.data?.detail || 'Failed to send stock request.');
+    },
+  });
+
   const createManagerPushMutation = useMutation({
     mutationFn: (payload) => createManagerPushApi(payload),
     onSuccess: () => {
@@ -147,5 +166,7 @@ export const useTransactions = (storeId, filters = {}, isManager = false) => {
     isCreatingManagerPush: createManagerPushMutation.isPending,
     createManagerPurchaseAsync: createManagerPurchaseMutation.mutateAsync,
     isCreatingManagerPurchase: createManagerPurchaseMutation.isPending,
+    createAdminRequestAsync: createAdminRequestMutation.mutateAsync,
+    isCreatingAdminRequest: createAdminRequestMutation.isPending,
   };
 };

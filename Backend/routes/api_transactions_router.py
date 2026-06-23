@@ -16,6 +16,8 @@ from services.transfer_service import (
     store_to_store_transfer,
     approve_transaction_service,
     reject_transaction_service,
+    get_warehouse_transactions,
+    create_pending_request_service,
 )
 
 router = APIRouter(
@@ -26,6 +28,16 @@ router = APIRouter(
 
 class RejectionPayload(BaseModel):
     reason: str
+
+
+class AdminRequestPayload(BaseModel):
+    product_id: int
+    quantity: int
+    from_owner_type: str  # "ADMIN" or "STORE"
+    from_owner_id: int    # Source store ID (or Admin ID if ADMIN)
+    to_owner_type: str    # "STORE" (always STORE for requests)
+    to_owner_id: int      # Destination store ID
+    remarks: Optional[str] = None
 
 
 def _txn_to_read(txn) -> TransactionRead:
@@ -112,6 +124,36 @@ async def list_store_transactions(
     return [_txn_to_read(item) for item in items]
 
 
+@router.get("/warehouse", response_model=list[TransactionRead])
+async def list_warehouse_transactions(
+    status_filter: Optional[str] = Query(None, alias="status"),
+    product_id: Optional[int] = Query(None),
+    date_from: Optional[datetime] = Query(None),
+    date_to: Optional[datetime] = Query(None),
+    transaction_type: Optional[str] = Query(None),
+    search: Optional[str] = Query(None),
+    page: int = Query(1, ge=1),
+    limit: int = Query(50, ge=1, le=1000),
+    db: AsyncSession = Depends(get_db),
+    current_admin: Admin = Depends(get_current_admin),
+):
+    """List transactions specifically for the admin warehouse (Admin only)."""
+    offset = (page - 1) * limit
+    items, total = await get_warehouse_transactions(
+        db=db,
+        admin_id=current_admin.id,
+        status=status_filter,
+        product_id=product_id,
+        date_from=date_from,
+        date_to=date_to,
+        transaction_type=transaction_type,
+        search=search,
+        limit=limit,
+        offset=offset,
+    )
+    return [_txn_to_read(item) for item in items]
+
+
 @router.post("/", response_model=list[TransactionRead], status_code=status.HTTP_201_CREATED)
 async def create_admin_transaction(
     payload: TransferRequest,
@@ -165,6 +207,45 @@ async def create_admin_transaction(
             detail=f"Unsupported transfer direction: {from_type} → {to_type}",
         )
 
+    return [_txn_to_read(txn_out), _txn_to_read(txn_in)]
+
+
+@router.post("/request", response_model=list[TransactionRead], status_code=status.HTTP_201_CREATED)
+async def create_admin_transfer_request(
+    payload: AdminRequestPayload,
+    db: AsyncSession = Depends(get_db),
+    current_admin: Admin = Depends(get_current_admin),
+):
+    """
+    Create a pending transfer request (pull request) as Admin on behalf of a store.
+    Here, the destination store (to_owner_id) is requesting from the source store (from_owner_id).
+    """
+    from_type = payload.from_owner_type.upper()
+    to_type = payload.to_owner_type.upper()
+
+    if from_type == to_type and payload.from_owner_id == payload.to_owner_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Source and destination must be different",
+        )
+
+    if to_type != "STORE":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Destination of a pending request must be a store branch",
+        )
+
+    # Use create_pending_request_service
+    txn_out, txn_in = await create_pending_request_service(
+        db=db,
+        manager_user_id=current_admin.id,
+        manager_store_id=payload.to_owner_id,
+        product_id=payload.product_id,
+        quantity=payload.quantity,
+        from_owner_type=from_type,
+        from_owner_id=payload.from_owner_id,
+        remarks=payload.remarks,
+    )
     return [_txn_to_read(txn_out), _txn_to_read(txn_in)]
 
 
