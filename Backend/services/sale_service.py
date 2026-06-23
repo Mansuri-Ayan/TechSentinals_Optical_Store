@@ -16,7 +16,13 @@ from models.sale_payment import SalePayment, SalePaymentMethod
 from models.product import Product
 from models.inventory import Inventory
 from models.inventory_transaction import InventoryTransaction, TransactionType
+from models.customer import Customer, CustomerMembershipTier # Import CustomerMembershipTier
+from models.loyalty_config import LoyaltyConfig # Import LoyaltyConfig
+from models.store_category_loyalty import StoreCategoryLoyalty # Import StoreCategoryLoyalty
+from models.loyalty_transaction import LoyaltyTransaction, LoyaltyTransactionType # Import LoyaltyTransaction and Type
 from services.inventory_service import get_or_create_inventory
+from services import loyalty_service # Import loyalty_service
+
 from schemas.sale import (
     SaleCreate,
     SaleUpdate,
@@ -151,14 +157,60 @@ async def create_sale(
     else:
         sale_status = SaleStatus.PENDING
 
-    # Compute loyalty earned (1 point per ₹100 spent)
-    loyalty_points_earned = int(total_amount // Decimal("100"))
+    customer_id_for_sale = payload.customer_id
 
+    if customer_id_for_sale is None:
+        if payload.new_customer_details:
+            # Create a new customer
+            new_customer_data = payload.new_customer_details
+            new_customer = Customer(
+                admin_id=admin_id,
+                store_id=payload.store_id, # New customer is associated with the store where sale happens
+                first_visit_store_id=payload.store_id,
+                first_name=new_customer_data.first_name,
+                last_name=new_customer_data.last_name,
+                phone=new_customer_data.phone,
+                email=new_customer_data.email,
+                gender=new_customer_data.gender,
+                date_of_birth=new_customer_data.date_of_birth,
+                address=new_customer_data.address,
+                city=new_customer_data.city,
+                state=new_customer_data.state,
+                pincode=new_customer_data.pincode,
+                remark=new_customer_data.remark,
+                is_active=True,
+            )
+            db.add(new_customer)
+            await db.flush() # Get the ID for the new customer
+            customer_id_for_sale = new_customer.id
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Either an existing customer_id or new_customer_details must be provided for the sale."
+            )
+    else:
+        # Validate existing customer_id
+        existing_customer = await db.scalar(
+            select(Customer).where(Customer.id == customer_id_for_sale, Customer.admin_id == admin_id)
+        )
+        if not existing_customer:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Customer with ID {customer_id_for_sale} not found or does not belong to this admin."
+            )
+        # If customer_id is provided and valid, ensure new_customer_details is not also provided
+        if payload.new_customer_details:
+             raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot provide both an existing customer_id and new_customer_details."
+            )
+    
+    # ... (rest of the sale creation logic)
     sale = Sale(
         invoice_number=invoice_number,
         admin_id=admin_id,
         store_id=payload.store_id,
-        customer_id=payload.customer_id,
+        customer_id=customer_id_for_sale, # Use the determined customer_id
         sold_by_type=payload.sold_by_type,
         sold_by_id=payload.sold_by_id,
         sale_date=payload.sale_date,
@@ -169,14 +221,114 @@ async def create_sale(
         total_amount=total_amount,
         paid_amount=paid_amount.quantize(Decimal("0.01")),
         due_amount=max(due_amount, Decimal("0")),
-        loyalty_points_earned=loyalty_points_earned,
-        loyalty_points_redeemed=loyalty_points_redeemed,
+        loyalty_points_earned=0,
+        loyalty_points_redeemed=0,
         notes=payload.notes,
         items=sale_items,
         payments=sale_payments,
     )
     db.add(sale)
-    await db.flush()  # Get IDs before inventory operations
+    await db.flush()  # Get sale.id before loyalty operations
+
+    # --- LOYALTY INTEGRATION ---
+    if customer_id_for_sale:
+        customer = await db.scalar(select(Customer).where(Customer.id == customer_id_for_sale))
+        config = await db.scalar(select(LoyaltyConfig).where(LoyaltyConfig.store_id == payload.store_id))
+        category_loyalties = (await db.execute(select(StoreCategoryLoyalty).where(StoreCategoryLoyalty.store_id == payload.store_id))).scalars().all()
+
+        if not customer or not config:
+            raise HTTPException(status_code=500, detail="Loyalty config or customer missing")
+
+        # Skip all loyalty operations if program is disabled
+        if getattr(config, "is_enabled", True):
+            # Step 1: Redemption
+            rupee_discount = Decimal("0.00")
+            if payload.points_to_redeem > 0:
+                redemption_res = await loyalty_service.validate_redemption(
+                    customer_current_points=customer.current_points,
+                    points_to_redeem=payload.points_to_redeem,
+                    sale_total=total_amount,
+                    config=config
+                )
+                if not redemption_res["valid"]:
+                    raise HTTPException(status_code=400, detail=redemption_res["error"])
+                
+                points_redeemed = redemption_res["points_redeemed"]
+                rupee_discount = redemption_res["rupee_discount"]
+
+                txn = LoyaltyTransaction(
+                    customer_id=customer.id,
+                    store_id=payload.store_id,
+                    sale_id=sale.id,
+                    type=LoyaltyTransactionType.REDEEMED,
+                    points=-points_redeemed,
+                    rupee_value=rupee_discount
+                )
+                db.add(txn)
+                
+                customer.current_points -= points_redeemed
+                customer.loyalty_points_redeemed += points_redeemed
+                sale.loyalty_points_redeemed = points_redeemed
+
+                # Adjust sale totals for redemption discount
+                sale.total_amount -= rupee_discount
+                sale.due_amount = max(Decimal("0"), sale.total_amount - sale.paid_amount)
+                if sale.due_amount <= 0:
+                    sale.status = SaleStatus.COMPLETED
+
+            # Step 2: Earning
+            sale_items_dict = [{"category_id": item.product_id, "quantity": item.quantity} for item in sale_items]
+            # We need to get product categories for earning computation
+            for item_dict in sale_items_dict:
+                prod = await db.scalar(select(Product).where(Product.id == item_dict["category_id"]))
+                item_dict["category_id"] = prod.category_id
+
+            # Use updated total_amount for price points calculation
+            earn_res = await loyalty_service.calculate_points_for_sale(
+                sale_total=sale.total_amount,
+                sale_items=sale_items_dict,
+                config=config,
+                category_loyalties=category_loyalties,
+                custom_points=payload.custom_points,
+                category_points_override=payload.category_points_enabled_override,
+                price_points_override=payload.price_points_enabled_override,
+                enabled_category_ids=payload.enabled_category_points_ids
+            )
+
+            if earn_res["category_points"] > 0:
+                db.add(LoyaltyTransaction(
+                    customer_id=customer.id,
+                    store_id=payload.store_id,
+                    sale_id=sale.id,
+                    type=LoyaltyTransactionType.EARNED_CATEGORY,
+                    points=earn_res["category_points"]
+                ))
+            if earn_res["price_points"] > 0:
+                db.add(LoyaltyTransaction(
+                    customer_id=customer.id,
+                    store_id=payload.store_id,
+                    sale_id=sale.id,
+                    type=LoyaltyTransactionType.EARNED_PRICE,
+                    points=earn_res["price_points"]
+                ))
+            if earn_res["custom_points"] > 0:
+                db.add(LoyaltyTransaction(
+                    customer_id=customer.id,
+                    store_id=payload.store_id,
+                    sale_id=sale.id,
+                    type=LoyaltyTransactionType.EARNED_CUSTOM,
+                    points=earn_res["custom_points"],
+                    given_by_type=payload.sold_by_type.value,
+                    given_by_id=payload.sold_by_id
+                ))
+
+            total_earned = earn_res["total_points"]
+            customer.current_points += total_earned
+            customer.loyalty_points_earned += total_earned
+            sale.loyalty_points_earned = total_earned
+            
+            customer.membership_tier = loyalty_service.get_tier(customer.current_points, config)
+            db.add(customer)
 
     # Decrement inventory for each item
     for sale_item in sale_items:

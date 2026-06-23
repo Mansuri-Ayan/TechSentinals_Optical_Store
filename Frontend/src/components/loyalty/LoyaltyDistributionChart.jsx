@@ -1,25 +1,17 @@
 import { useMemo } from 'react';
-import { getLoyaltyTier } from '../../data/loyaltyData';
 
-const LoyaltyDistributionChart = ({ customers }) => {
+const LoyaltyDistributionChart = ({ tierDistribution }) => {
   const chartData = useMemo(() => {
-    let silver = 0;
-    let gold = 0;
-    let platinum = 0;
-
-    customers.forEach(c => {
-      const tier = getLoyaltyTier(c.points);
-      if (tier === 'Silver') silver++;
-      else if (tier === 'Gold') gold++;
-      else if (tier === 'Platinum') platinum++;
-    });
+    if (!tierDistribution) return [];
 
     return [
-      { name: 'Silver Members', value: silver, color: '#64748B' },
-      { name: 'Gold Members', value: gold, color: '#D97706' },
-      { name: 'Platinum Members', value: platinum, color: '#7C3AED' },
+      { name: 'Silver Members', value: tierDistribution.silver, color: '#64748B' },
+      { name: 'Gold Members', value: tierDistribution.gold, color: '#D97706' },
+      { name: 'Platinum Members', value: tierDistribution.platinum, color: '#7C3AED' },
     ];
-  }, [customers]);
+  }, [tierDistribution]);
+
+  if (!tierDistribution) return null;
 
   const total = chartData.reduce((sum, item) => sum + item.value, 0);
   let currentOffset = 0;
@@ -55,7 +47,7 @@ const LoyaltyDistributionChart = ({ customers }) => {
                   className="transition-all duration-200 cursor-pointer hover:stroke-[14px]"
                   style={{ transformOrigin: 'center' }}
                 >
-                  <title>{`${slice.name}: ${slice.value.toLocaleString()} (${Math.round(percentage)}%)`}</title>
+                  <title>{`${slice.name}: ${slice.value?.toLocaleString() || '0'} (${Math.round(percentage)}%)`}</title>
                 </circle>
               );
             })}

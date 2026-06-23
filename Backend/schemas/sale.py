@@ -5,7 +5,9 @@ Pydantic schemas for Sale, SaleItem, and SalePayment.
 from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum
-from pydantic import BaseModel, Field
+from typing import Optional, List # Added Optional for NewCustomerDetails
+from pydantic import BaseModel, Field # Removed EmailStr
+from models.customer import CustomerGender # Added CustomerGender
 
 
 # ── Enums ──────────────────────────────────────────────────────
@@ -92,13 +94,33 @@ class SalePaymentRead(BaseModel):
     model_config = {"from_attributes": True}
 
 
+# ── NewCustomerDetails (Nested Schema) ──────────────────────────
+
+class NewCustomerDetails(BaseModel):
+    first_name: str
+    last_name: Optional[str] = None
+    phone: str
+    email: Optional[str] = None
+    gender: Optional[CustomerGender] = None
+    date_of_birth: Optional[date] = None
+    address: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    pincode: Optional[str] = None
+    remark: Optional[str] = None
+
+
 # ── Sale ──────────────────────────────────────────────────────
 
 class SaleCreate(BaseModel):
     store_id: int = Field(..., description="FK → stores.id")
     customer_id: int | None = Field(
         default=None,
-        description="FK → customers.id — NULL for walk-in",
+        description="FK → customers.id — NULL if new customer or walk-in",
+    )
+    new_customer_details: Optional[NewCustomerDetails] = Field(
+        default=None,
+        description="Details for creating a new customer during the sale if customer_id is NULL"
     )
     sold_by_type: StaffTypeEnum = Field(
         ..., description="MANAGER / WORKER / OPTICIAN",
@@ -113,6 +135,21 @@ class SaleCreate(BaseModel):
     )
     payments: list[SalePaymentCreate] = Field(
         default=[], description="Payment splits (can be empty for credit sales)",
+    )
+    points_to_redeem: int = Field(
+        default=0, ge=0, description="Loyalty points to redeem for discount",
+    )
+    custom_points: int = Field(
+        default=0, ge=0, description="Custom bonus loyalty points to award",
+    )
+    category_points_enabled_override: bool = Field(
+        default=True, description="Override: Enable category-based points for this sale",
+    )
+    price_points_enabled_override: bool = Field(
+        default=True, description="Override: Enable price-based points for this sale",
+    )
+    enabled_category_points_ids: list[int] | None = Field(
+        default=None, description="Category IDs for which category-based points are enabled",
     )
 
 

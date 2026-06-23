@@ -79,6 +79,12 @@ class CustomerRead(BaseModel):
     store_name: str | None = None
     first_visit_store_name: str | None = None
 
+    # Loyalty
+    loyalty_points_earned: int = 0
+    loyalty_points_redeemed: int = 0
+    current_points: int = 0
+    membership_tier: str = "NONE"
+
     # Aggregates
     total_orders: int = 0
     total_amount: float = 0.0
@@ -105,6 +111,10 @@ class CustomerListRead(BaseModel):
 
     # Denormalized
     store_name: str | None = None
+
+    # Loyalty
+    current_points: int = 0
+    membership_tier: str = "NONE"
 
     # Aggregates
     total_orders: int = 0

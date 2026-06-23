@@ -12,6 +12,8 @@ from models.product import Product
 from models.category import Category
 from models.expense import Expense, ExpenseOwnerType
 from models.customer import Customer
+from models.loyalty_config import LoyaltyConfig # New Import
+from models.store_category_loyalty import StoreCategoryLoyalty # New Import
 from schemas.store import StoreCreate, StoreUpdate
 
 
@@ -43,8 +45,28 @@ async def create_store(
         is_active=payload.is_active,
     )
     db.add(new_store)
+    await db.flush() # Flush to get new_store.id before creating related loyalty entries
+
+    # Auto-create default LoyaltyConfig for the new store
+    default_loyalty_config = LoyaltyConfig(store_id=new_store.id)
+    db.add(default_loyalty_config)
+
+    # Auto-create default StoreCategoryLoyalty for existing categories of this admin
+    categories_stmt = select(Category).where(Category.admin_id == admin_id)
+    categories_result = await db.execute(categories_stmt)
+    categories = categories_result.scalars().all()
+
+    for category in categories:
+        default_scl = StoreCategoryLoyalty(
+            store_id=new_store.id,
+            category_id=category.id,
+            points_per_unit=50, # Default value
+            is_enabled=True,    # Default enabled
+        )
+        db.add(default_scl)
+
     await db.commit()
-    await db.refresh(new_store)
+    await db.refresh(new_store) # Refresh to load relationships
     return new_store
 
 

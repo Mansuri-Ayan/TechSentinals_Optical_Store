@@ -222,6 +222,17 @@ const SuppliersRouteRedirect = () => {
   return <Navigate to={`/admin/store/${targetStore.id}/suppliers`} replace />;
 };
 
+const LoyaltyRouteRedirect = () => {
+  const { selectedStore, stores } = useStoreStore();
+  const targetStore = selectedStore || stores[0];
+
+  if (!targetStore) {
+    return <Navigate to="/admin/dashboard" replace />;
+  }
+
+  return <Navigate to={`/admin/store/${targetStore.id}/loyalty`} replace />;
+};
+
 function AppRouter() {
   return (
     <Routes>
@@ -300,7 +311,8 @@ function AppRouter() {
         <Route path="store/:storeId/repairs" element={<AdminRepair />} />
 
         {/* Loyalty Program */}
-        <Route path="loyalty" element={<AdminLoyalty />} />
+        <Route path="loyalty" element={<LoyaltyRouteRedirect />} />
+        <Route path="store/:storeId/loyalty" element={<AdminLoyalty />} />
         <Route path="loyalty/customer/:id" element={<AdminLoyaltyCustomerDetail />} />
 
         {/* Customers */}

@@ -184,6 +184,18 @@ class Store(Base):
         back_populates="store",
         lazy="noload",
     )
+    
+    loyalty_config = relationship(
+        "LoyaltyConfig",
+        back_populates="store",
+        uselist=False,
+        lazy="selectin",
+    )
+    category_loyalties = relationship(
+        "StoreCategoryLoyalty",
+        back_populates="store",
+        lazy="noload",
+    )
 
     def __repr__(self) -> str:
         return (

@@ -25,11 +25,16 @@ from models.purchase_order_item import PurchaseOrderItem
 from models.supplier_payment import SupplierPayment, SupplierPaymentMethod
 
 # ── Sales ─────────────────────────────────────────────────────
-from models.customer import Customer, CustomerGender
+from models.customer import Customer, CustomerGender, CustomerMembershipTier
 from models.prescription import Prescription
 from models.sale import Sale, SaleStatus, StaffType
 from models.sale_item import SaleItem
 from models.sale_payment import SalePayment, SalePaymentMethod
+
+# ── Loyalty ───────────────────────────────────────────────────
+from models.loyalty_config import LoyaltyConfig
+from models.store_category_loyalty import StoreCategoryLoyalty
+from models.loyalty_transaction import LoyaltyTransaction, LoyaltyTransactionType
 
 # ── Expense ───────────────────────────────────────────────────
 from models.expense import Expense, ExpenseOwnerType, ExpensePaymentMethod, ExpenseRecordedByType

@@ -82,6 +82,8 @@ const CustomerDetailsStep = ({ formState, onSaveState, onBack, onNext }) => {
         prescription: fullCust.prescription || null,
         prescriptionHistory: fullCust.prescription_history || [],
         orders: fullCust.orders || [],
+        current_points: fullCust.current_points || 0,
+        membership_tier: fullCust.membership_tier || 'NONE',
       };
       setSelectedResult(mapped);
       setSearchResults([]);
@@ -108,6 +110,8 @@ const CustomerDetailsStep = ({ formState, onSaveState, onBack, onNext }) => {
       remark: selectedResult.remark || '',
       prescription: selectedResult.prescription || null,
       prescriptionHistory: selectedResult.prescriptionHistory || [],
+      current_points: selectedResult.current_points || 0,
+      membership_tier: selectedResult.membership_tier || 'NONE',
     };
 
     setForm(populatedForm);
@@ -138,6 +142,8 @@ const CustomerDetailsStep = ({ formState, onSaveState, onBack, onNext }) => {
       remark: '',
       prescription: null,
       prescriptionHistory: [],
+      current_points: 0,
+      membership_tier: 'NONE',
     });
     setErrors({});
     setIsLocked(false);

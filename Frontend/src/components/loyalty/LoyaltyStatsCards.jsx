@@ -1,42 +1,17 @@
 import { useMemo } from 'react';
 import { Users, Award, Shield, ShieldCheck, Gift, Coins } from 'lucide-react';
-import { getLoyaltyTier } from '../../data/loyaltyData';
 
-const LoyaltyStatsCards = ({ customers }) => {
-  const stats = useMemo(() => {
-    const totalCustomers = customers.length;
+const LoyaltyStatsCards = ({ stats, tierDistribution, config }) => {
+  const cardsData = useMemo(() => {
+    if (!stats || !tierDistribution) return [];
+
+    const silverMax = config?.silver_max ?? 5000;
+    const goldMax = config?.gold_max ?? 15000;
     
-    // Total Points Issued = Sum of all earned points in history
-    const totalPointsIssued = customers.reduce((sum, c) => {
-      const earned = c.history
-        .filter(h => h.type === 'earned')
-        .reduce((s, h) => s + h.points, 0);
-      return sum + earned;
-    }, 0);
-
-    // Total Points Redeemed = Sum of all redeemed points in history
-    const totalPointsRedeemed = customers.reduce((sum, c) => {
-      const redeemed = c.history
-        .filter(h => h.type === 'redeemed')
-        .reduce((s, h) => s + h.points, 0);
-      return sum + redeemed;
-    }, 0);
-
-    let silverCount = 0;
-    let goldCount = 0;
-    let platinumCount = 0;
-
-    customers.forEach(c => {
-      const tier = getLoyaltyTier(c.points);
-      if (tier === 'Silver') silverCount++;
-      else if (tier === 'Gold') goldCount++;
-      else if (tier === 'Platinum') platinumCount++;
-    });
-
     return [
       {
         title: 'Loyalty Customers',
-        value: String(totalCustomers),
+        value: String(stats.total_customers_enrolled),
         icon: Users,
         badgeText: 'Total Members',
         badgeColor: 'text-blue-600 bg-blue-50 border-blue-100',
@@ -44,7 +19,7 @@ const LoyaltyStatsCards = ({ customers }) => {
       },
       {
         title: 'Total Points Issued',
-        value: totalPointsIssued.toLocaleString('en-IN'),
+        value: stats.lifetime_points_awarded?.toLocaleString('en-IN') || '0',
         icon: Award,
         badgeText: 'Lifetime Earned',
         badgeColor: 'text-indigo-600 bg-indigo-50 border-indigo-100',
@@ -52,42 +27,44 @@ const LoyaltyStatsCards = ({ customers }) => {
       },
       {
         title: 'Silver Members',
-        value: String(silverCount),
+        value: String(tierDistribution.silver),
         icon: Shield,
-        badgeText: '1 - 5,000 Points',
+        badgeText: `1 – ${silverMax.toLocaleString('en-IN')} pts`,
         badgeColor: 'text-slate-600 bg-slate-50 border-slate-100',
         bgIconColor: 'text-slate-200',
       },
       {
         title: 'Gold Members',
-        value: String(goldCount),
+        value: String(tierDistribution.gold),
         icon: ShieldCheck,
-        badgeText: '5k - 15k Points',
+        badgeText: `${(silverMax + 1).toLocaleString('en-IN')} – ${goldMax.toLocaleString('en-IN')} pts`,
         badgeColor: 'text-amber-600 bg-amber-50 border-amber-100',
         bgIconColor: 'text-amber-200',
       },
       {
         title: 'Platinum Members',
-        value: String(platinumCount),
+        value: String(tierDistribution.platinum),
         icon: ShieldCheck,
-        badgeText: '15,000+ Points',
-        badgeColor: 'text-purple-655 bg-purple-50 border-purple-100',
+        badgeText: `${(goldMax + 1).toLocaleString('en-IN')}+ pts`,
+        badgeColor: 'text-purple-600 bg-purple-50 border-purple-100',
         bgIconColor: 'text-purple-200',
       },
       {
         title: 'Points Redeemed',
-        value: totalPointsRedeemed.toLocaleString('en-IN'),
+        value: stats.lifetime_points_redeemed?.toLocaleString('en-IN') || '0',
         icon: Gift,
         badgeText: 'Total Redeemed',
         badgeColor: 'text-emerald-600 bg-emerald-50 border-emerald-100',
         bgIconColor: 'text-emerald-200',
       },
     ];
-  }, [customers]);
+  }, [stats, tierDistribution, config]);
+
+  if (!stats || !tierDistribution) return null;
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-5 mb-6 sm:mb-8">
-      {stats.map((stat, i) => (
+      {cardsData.map((stat, i) => (
         <div
           key={i}
           className="bg-white p-5 rounded-2xl border border-slate-200/60 shadow-sm hover:shadow-md transition-all duration-300 flex flex-col justify-between h-36 relative overflow-hidden group"

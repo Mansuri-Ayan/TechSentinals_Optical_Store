@@ -7,8 +7,10 @@ const PaymentForm = ({
   onDiscountChange,
   payment,
   onPaymentChange,
+  loyaltyDiscount = 0,
 }) => {
-  const finalAmount = Math.max(0, subtotal - discount);
+  const totalDiscount = (Number(discount) || 0) + (Number(loyaltyDiscount) || 0);
+  const finalAmount = Math.max(0, subtotal - totalDiscount);
 
   // Synchronize payment amounts when finalAmount changes
   useEffect(() => {
@@ -146,6 +148,17 @@ const PaymentForm = ({
           </div>
         </div>
       </div>
+
+      {/* Loyalty Discount Display */}
+      {loyaltyDiscount > 0 && (
+        <div className="flex items-center justify-between px-4 py-2.5 bg-emerald-50 border border-emerald-100 rounded-xl">
+          <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider flex items-center gap-1.5">
+            <Sparkles className="w-3.5 h-3.5 text-emerald-500" />
+            Loyalty Points Discount
+          </span>
+          <span className="text-xs font-black text-emerald-700">- ₹{loyaltyDiscount.toLocaleString('en-IN')}</span>
+        </div>
+      )}
 
       {/* Payment Method Selector */}
       <div className="space-y-2">

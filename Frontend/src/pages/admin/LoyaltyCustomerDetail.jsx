@@ -9,44 +9,54 @@ import LoyaltyHistoryTable from '../../components/loyalty/LoyaltyHistoryTable';
 import LoyaltyTimeline from '../../components/loyalty/LoyaltyTimeline';
 import RewardsCard from '../../components/loyalty/RewardsCard';
 
-import { getLoyaltyData, redeemCustomerReward } from '../../data/loyaltyData';
-
+import { useLoyaltyCustomerDetail } from '../../hooks/useLoyalty';
+import { useStoreStore } from '../../store/store';
 const LoyaltyCustomerDetail = () => {
   const { id } = useParams();
-  const [customer, setCustomer] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isRedeeming, setIsRedeeming] = useState(false);
+  const { selectedStore, stores } = useStoreStore();
+  const targetStore = selectedStore || stores[0];
+  const storeId = targetStore?.id || 'admin';
+  const { data: rawCustomer, isLoading, isError } = useLoyaltyCustomerDetail(id, storeId, 'admin');
 
-  const loadCustomer = () => {
-    setIsLoading(true);
-    try {
-      const { customers } = getLoyaltyData();
-      const found = customers.find((c) => c.id === Number(id));
-      setCustomer(found || null);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setIsLoading(false);
-    }
+  const mapCustomer = (raw) => {
+    if (!raw) return null;
+    return {
+      id: raw.customer_id,
+      name: raw.customer_name,
+      phone: raw.customer_phone,
+      email: raw.customer_email,
+      joinDate: raw.join_date,
+      points: raw.current_points,
+      tier: raw.membership_tier,
+      totalOrders: raw.lifetime_orders,
+      totalSpent: raw.lifetime_spend,
+      history: (raw.transactions || []).map((t) => ({
+        id: t.id,
+        date: t.created_at,
+        type: t.points > 0 ? 'earned' : 'redeemed',
+        points: Math.abs(t.points),
+        activity: t.note || t.category_name || t.type,
+        balance: null,
+        rupeeValue: t.rupee_value,
+      })),
+      timeline: (raw.transactions || []).slice(0, 5).map((t) => {
+        let eventName = 'Earned Points';
+        if (t.type === 'REDEEMED') eventName = 'Redeemed Reward';
+        else if (t.type === 'MANUAL_ADJUSTMENT') eventName = t.points > 0 ? 'Earned Points' : 'Redeemed Reward';
+        return {
+          id: t.id,
+          date: t.created_at,
+          event: eventName,
+          desc: t.note || (t.points > 0 ? `+${t.points} pts` : `${Math.abs(t.points)} pts`),
+        };
+      }),
+    };
   };
 
-  useEffect(() => {
-    loadCustomer();
-  }, [id]);
+  const customer = mapCustomer(rawCustomer);
 
   const handleRedeem = (rewardId) => {
-    setIsRedeeming(true);
-    setTimeout(() => {
-      try {
-        const updated = redeemCustomerReward(id, rewardId);
-        setCustomer(updated);
-        toast.success('Reward redeemed successfully!');
-      } catch (err) {
-        toast.error(err.message || 'Failed to redeem reward.');
-      } finally {
-        setIsRedeeming(false);
-      }
-    }, 400);
+    toast.info('Reward redemption coming soon.');
   };
 
   if (isLoading) {
@@ -57,7 +67,7 @@ const LoyaltyCustomerDetail = () => {
     );
   }
 
-  if (!customer) {
+  if (isError || (!isLoading && !customer)) {
     return (
       <div className="p-8 max-w-[1600px] mx-auto text-center font-sans">
         <div className="bg-white border border-dashed border-slate-200 rounded-2xl p-12 max-w-md mx-auto">
@@ -72,7 +82,7 @@ const LoyaltyCustomerDetail = () => {
     );
   }
 
-  const redeemedCount = customer.history.filter((h) => h.type === 'redeemed').length;
+  const redeemedCount = rawCustomer?.transactions?.filter((t) => t.type === 'REDEEMED').length ?? 0;
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto animate-fade-in font-sans">
@@ -159,7 +169,7 @@ const LoyaltyCustomerDetail = () => {
           <RewardsCard
             currentPoints={customer.points}
             onRedeem={handleRedeem}
-            isRedeeming={isRedeeming}
+            isRedeeming={false}
           />
           <LoyaltyHistoryTable history={customer.history} />
         </div>

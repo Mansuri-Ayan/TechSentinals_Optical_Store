@@ -13,7 +13,8 @@ from models import (
     Supplier, SupplierStoreLink, SupplierProduct,
     PurchaseOrder, PurchaseOrderItem, SupplierPayment,
     Customer, Sale, SaleItem, SalePayment,
-    Expense, ExpenseCategory, Notification, Repair
+    Expense, ExpenseCategory, Notification, Repair,
+    LoyaltyConfig, StoreCategoryLoyalty, LoyaltyTransaction
 )
 from db.seed_data import seed
 async def recreate_db():

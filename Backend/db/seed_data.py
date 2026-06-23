@@ -47,6 +47,10 @@ from models.sale_payment import SalePayment, SalePaymentMethod
 from models.refresh_token import RefreshToken
 from models.expense import Expense, ExpenseOwnerType, ExpensePaymentMethod, ExpenseRecordedByType
 from models.expense_category import ExpenseCategory
+from models.loyalty_config import LoyaltyConfig
+from models.store_category_loyalty import StoreCategoryLoyalty
+from models.loyalty_transaction import LoyaltyTransaction, LoyaltyTransactionType
+from models.customer import CustomerMembershipTier
 
 # ===============================================================
 #  SEED DATA DEFINITIONS
@@ -1203,7 +1207,62 @@ async def seed() -> None:
             admin_category_map[admin_id] = category_ids
             print(f"  [OK] seeded categories for Admin ID={admin_id}")
 
-        # ── 8. Seed subcategories ──────────────────────────────
+        # ── 8. Seed LoyaltyConfig ──────────────────────────────
+        print("\n" + "=" * 60)
+        print("  Seeding LoyaltyConfig for all Stores")
+        print("=" * 60)
+        for store_id in store_ids:
+            stmt = select(LoyaltyConfig).where(LoyaltyConfig.store_id == store_id)
+            result = await session.execute(stmt)
+            existing = result.scalar_one_or_none()
+            if existing:
+                print(f"  [SKIP] LoyaltyConfig for Store ID={store_id} (already exists)")
+                continue
+
+            loyalty_config = LoyaltyConfig(
+                store_id=store_id,
+                category_points_enabled=True,
+                price_points_enabled=True,
+                price_interval=200,
+                price_points=50,
+                points_per_rupee=50,
+                min_redemption_points=50,
+                silver_max=5000,
+                gold_max=15000,
+            )
+            session.add(loyalty_config)
+            print(f"  [OK]   LoyaltyConfig for Store ID={store_id}")
+        
+        # ── 9. Seed StoreCategoryLoyalty ───────────────────────
+        print("\n" + "=" * 60)
+        print("  Seeding StoreCategoryLoyalty for all Stores and Categories")
+        print("=" * 60)
+        for store_id in store_ids:
+            # Fetch the categories for the admin associated with this store
+            # Assuming a 1-to-1 mapping of store_ids to admin_ids for simplicity in seed data
+            admin_id = admin_ids[store_ids.index(store_id)]
+            category_ids = admin_category_map[admin_id]
+            for category_id in category_ids:
+                stmt = select(StoreCategoryLoyalty).where(
+                    StoreCategoryLoyalty.store_id == store_id,
+                    StoreCategoryLoyalty.category_id == category_id,
+                )
+                result = await session.execute(stmt)
+                existing = result.scalar_one_or_none()
+                if existing:
+                    # print(f"  [SKIP] StoreCategoryLoyalty for Store {store_id}, Category {category_id} (already exists)")
+                    continue
+
+                store_cat_loyalty = StoreCategoryLoyalty(
+                    store_id=store_id,
+                    category_id=category_id,
+                    points_per_unit=50,
+                    is_enabled=True,
+                )
+                session.add(store_cat_loyalty)
+            print(f"  [OK]   StoreCategoryLoyalty for Store ID={store_id}")
+
+        # ── 10. Seed subcategories ──────────────────────────────
         print("\n" + "=" * 60)
         print("  Seeding Subcategories for all Admins")
         print("=" * 60)
@@ -1638,20 +1697,51 @@ async def seed() -> None:
         print("  Seeding Customers")
         print("=" * 60)
         admin_customer_map = {}
+        all_seeded_customers = [] # To store Customer objects for later LoyaltyTransactions
         for idx, admin_id in enumerate(admin_ids):
             store_id = store_ids[idx]
             cust_ids = []
+            
+            # Fetch LoyaltyConfig for the current store
+            stmt = select(LoyaltyConfig).where(LoyaltyConfig.store_id == store_id)
+            result = await session.execute(stmt)
+            loyalty_config: LoyaltyConfig = result.scalar_one_or_none()
+            
+            # Use default values if config not found (should not happen if seeded correctly)
+            silver_max = loyalty_config.silver_max if loyalty_config else 5000
+            gold_max = loyalty_config.gold_max if loyalty_config else 15000
+
             for data in CUSTOMERS_DATA:
                 stmt = select(Customer).where(
                     Customer.phone == data["phone"],
                     Customer.admin_id == admin_id
                 )
                 res = await session.execute(stmt)
-                existing = res.scalar_one_or_none()
-                if existing:
-                    cust_ids.append(existing.id)
+                existing_customer = res.scalar_one_or_none()
+                if existing_customer:
+                    cust_ids.append(existing_customer.id)
+                    all_seeded_customers.append(existing_customer)
                     continue
                 
+                # Calculate realistic current_points and membership_tier
+                current_points = 0
+                if data["first_name"] == "Aarav": # Give Aarav some points for SILVER
+                    current_points = 3500
+                elif data["first_name"] == "Diya": # Give Diya more points for GOLD
+                    current_points = 7500
+                elif data["first_name"] == "Kabir": # Give Kabir points for PLATINUM
+                    current_points = 18000
+                else: # Other customers get random points or none
+                    current_points = (hash(data["phone"]) % 1000) * 10 # Random points between 0-9990
+                    
+                membership_tier = CustomerMembershipTier.NONE
+                if current_points > gold_max:
+                    membership_tier = CustomerMembershipTier.PLATINUM
+                elif current_points > silver_max:
+                    membership_tier = CustomerMembershipTier.GOLD
+                elif current_points > 0:
+                    membership_tier = CustomerMembershipTier.SILVER
+
                 customer = Customer(
                     admin_id=admin_id,
                     store_id=store_id,
@@ -1667,11 +1757,16 @@ async def seed() -> None:
                     state=data["state"],
                     pincode=data["pincode"],
                     remark=data["remark"],
-                    is_active=True
+                    is_active=True,
+                    current_points=current_points,
+                    membership_tier=membership_tier,
+                    loyalty_points_earned=current_points,
+                    loyalty_points_redeemed=0,
                 )
                 session.add(customer)
                 await session.flush()
                 cust_ids.append(customer.id)
+                all_seeded_customers.append(customer) # Store the object
             admin_customer_map[admin_id] = cust_ids
             print(f"  [OK] seeded 5 customers for Admin {admin_id}")
 
@@ -1679,11 +1774,21 @@ async def seed() -> None:
         print("\n" + "=" * 60)
         print("  Seeding Sales, Items, Payments")
         print("=" * 60)
+        all_seeded_sales = [] # Store Sale objects for later LoyaltyTransactions
         for idx, admin_id in enumerate(admin_ids):
             store_id = store_ids[idx]
             cust_ids = admin_customer_map[admin_id]
             p_ids = admin_product_map[admin_id]
             store_inv_ids = store_inv_map[store_id]
+            
+            # Fetch LoyaltyConfig for the current store
+            stmt = select(LoyaltyConfig).where(LoyaltyConfig.store_id == store_id)
+            result = await session.execute(stmt)
+            loyalty_config: LoyaltyConfig = result.scalar_one_or_none()
+            
+            # Use default values if config not found
+            price_interval = loyalty_config.price_interval if loyalty_config else 200
+            price_points = loyalty_config.price_points if loyalty_config else 50
             
             stmt = select(Manager).where(Manager.store_id == store_id).limit(1)
             res = await session.execute(stmt)
@@ -1695,14 +1800,20 @@ async def seed() -> None:
                 inv_num = f"INV-A{admin_id}-00{i+1}"
                 stmt = select(Sale).where(Sale.invoice_number == inv_num)
                 res = await session.execute(stmt)
-                existing = res.scalar_one_or_none()
-                if existing:
+                existing_sale = res.scalar_one_or_none()
+                if existing_sale:
+                    all_seeded_sales.append(existing_sale)
                     continue
                 
                 total_sale_amt = PRODUCTS[i]["selling_price"] * 1.18
                 sale_due = total_sale_amt / 2 if i == 0 else 0
                 sale_paid = total_sale_amt - sale_due
                 sale_status = SaleStatus.PARTIALLY_PAID if i == 0 else SaleStatus.COMPLETED
+
+                # Calculate loyalty points earned for this sale
+                loyalty_points_earned = 0
+                if loyalty_config and loyalty_config.price_points_enabled:
+                    loyalty_points_earned = int((PRODUCTS[i]["selling_price"] / price_interval) * price_points)
 
                 sale = Sale(
                     invoice_number=inv_num,
@@ -1718,10 +1829,13 @@ async def seed() -> None:
                     tax_amount=PRODUCTS[i]["selling_price"] * 0.18,
                     total_amount=total_sale_amt,
                     paid_amount=sale_paid,
-                    due_amount=sale_due
+                    due_amount=sale_due,
+                    loyalty_points_earned=loyalty_points_earned,
+                    loyalty_points_redeemed=0 # Assuming no redemption in initial seed sales
                 )
                 session.add(sale)
                 await session.flush()
+                all_seeded_sales.append(sale) # Store the Sale object
                 
                 sale_item = SaleItem(
                     sale_id=sale.id,
@@ -1799,7 +1913,57 @@ async def seed() -> None:
                 session.add(prescription)
             print(f"  [OK] seeded 5 prescriptions for Admin {admin_id}")
 
-        # ── 20. Seed Expense Categories & Expenses ────────────
+        # ── 20. Seed LoyaltyTransaction ──────────────────────
+        print("\n" + "=" * 60)
+        print("  Seeding Loyalty Transactions")
+        print("=" * 60)
+        for customer in all_seeded_customers:
+            if customer.current_points > 0:
+                # Create a few transactions to account for the current_points
+                remaining_points = customer.current_points
+                
+                # Transaction 1: Earned from category purchases
+                if remaining_points >= 500:
+                    points = 500
+                    transaction = LoyaltyTransaction(
+                        customer_id=customer.id,
+                        store_id=customer.store_id,
+                        sale_id=None, # Link to a sale if available, otherwise None
+                        type=LoyaltyTransactionType.EARNED_CATEGORY,
+                        points=points,
+                        note="Seeded: earned from category purchases"
+                    )
+                    session.add(transaction)
+                    remaining_points -= points
+                
+                # Transaction 2: Earned from price-based rule
+                if remaining_points >= 300:
+                    points = 300
+                    transaction = LoyaltyTransaction(
+                        customer_id=customer.id,
+                        store_id=customer.store_id,
+                        sale_id=None,
+                        type=LoyaltyTransactionType.EARNED_PRICE,
+                        points=points,
+                        note="Seeded: earned from price-based rule"
+                    )
+                    session.add(transaction)
+                    remaining_points -= points
+                
+                # Transaction 3: Remaining points (could be from various sources or sales)
+                if remaining_points > 0:
+                    transaction = LoyaltyTransaction(
+                        customer_id=customer.id,
+                        store_id=customer.store_id,
+                        sale_id=None,
+                        type=LoyaltyTransactionType.EARNED_PRICE,
+                        points=remaining_points,  # exact remainder so sum == current_points
+                        note="Seeded: price-based points balance"
+                    )
+                    session.add(transaction)
+                print(f"  [OK] seeded loyalty transactions for Customer ID={customer.id} (Total Points: {customer.current_points})")
+
+        # ── 21. Seed Expense Categories & Expenses ────────────
         print("\n" + "=" * 60)
         print("  Seeding Expense Categories & Expenses")
         print("=" * 60)
@@ -1924,7 +2088,10 @@ async def seed() -> None:
     print(f"  Subcategories: {len(SUBCATEGORIES)}")
     print(f"  Products:      {len(PRODUCTS)} (5 frames, 5 lenses, 5 accessories)")
     print(f"  Inventories:   {len(PRODUCTS) * 2} (admin warehouse + store)")
-    print(f"  Transactions:  5 (2 purchases, 2 transfers, 1 sale)")
+    print(f"  Inv. Transactions:  5 (2 purchases, 2 transfers, 1 sale)")
+    print(f"  Loyalty Configs:    {len(store_ids)}")
+    print(f"  Store Category Loyalties: {len(store_ids) * len(CATEGORIES)}")
+    print(f"  Loyalty Transactions: 30 (approx)")
     print(f"  Prescriptions: 5")
     print(f"  Expense Categories: 5")
     print(f"  Expenses:      5")

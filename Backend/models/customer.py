@@ -28,6 +28,13 @@ class CustomerGender(str, enum.Enum):
     NOT_SPECIFIED = "NOT_SPECIFIED"
 
 
+class CustomerMembershipTier(str, enum.Enum):
+    NONE = "NONE"
+    SILVER = "SILVER"
+    GOLD = "GOLD"
+    PLATINUM = "PLATINUM"
+
+
 class Customer(Base):
     __tablename__ = "customers"
 
@@ -141,6 +148,36 @@ class Customer(Base):
         comment="Whether customer record is active",
     )
 
+    # ── Loyalty fields ─────────────────────────────────────────
+    loyalty_points_earned = Column(
+        BigInteger,
+        nullable=False,
+        default=0,
+        server_default="0",
+        comment="Cumulative lifetime loyalty points earned by this customer",
+    )
+    loyalty_points_redeemed = Column(
+        BigInteger,
+        nullable=False,
+        default=0,
+        server_default="0",
+        comment="Cumulative lifetime loyalty points redeemed by this customer",
+    )
+    current_points = Column(
+        BigInteger,
+        nullable=False,
+        default=0,
+        server_default="0",
+        comment="Denormalized running points balance for fast reads",
+    )
+    membership_tier = Column(
+        Enum(CustomerMembershipTier, name="membership_tier_enum", create_constraint=True),
+        nullable=False,
+        default=CustomerMembershipTier.NONE,
+        server_default="NONE",
+        comment="Customer's current loyalty tier",
+    )
+    
     created_at = Column(
         DateTime(timezone=True),
         nullable=False,
@@ -191,6 +228,11 @@ class Customer(Base):
     )
     repairs = relationship(
         "Repair",
+        back_populates="customer",
+        lazy="noload",
+    )
+    loyalty_transactions = relationship(
+        "LoyaltyTransaction",
         back_populates="customer",
         lazy="noload",
     )
