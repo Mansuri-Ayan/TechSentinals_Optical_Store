@@ -1,6 +1,8 @@
 import { useMemo } from 'react';
+import { useChartAnimation } from '../../hooks/useChartAnimation';
 
 const LoyaltyGrowthChart = ({ trends }) => {
+  const [progress, elementRef] = useChartAnimation(trends);
   const monthlyData = useMemo(() => {
     if (!trends || trends.length === 0) return [];
     
@@ -18,13 +20,13 @@ const LoyaltyGrowthChart = ({ trends }) => {
   // Compute SVG points
   const awardedPoints = monthlyData.map((d, i) => {
     const x = 40 + i * (235 / Math.max(1, monthlyData.length - 1));
-    const y = 130 - (d.awarded / maxPoints) * 95;
+    const y = 130 - (d.awarded / maxPoints) * 95 * progress;
     return `${x},${y}`;
   }).join(' ');
 
   const redeemedPoints = monthlyData.map((d, i) => {
     const x = 40 + i * (235 / Math.max(1, monthlyData.length - 1));
-    const y = 130 - (d.redeemed / maxPoints) * 95;
+    const y = 130 - (d.redeemed / maxPoints) * 95 * progress;
     return `${x},${y}`;
   }).join(' ');
 
@@ -50,7 +52,7 @@ const LoyaltyGrowthChart = ({ trends }) => {
       </div>
 
       <div className="w-full h-48 px-2 pt-2 relative">
-        <svg viewBox="0 0 300 150" className="w-full h-full">
+        <svg ref={elementRef} viewBox="0 0 300 150" className="w-full h-full">
           <defs>
             <linearGradient id="pointsGrad" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#10B981" stopOpacity="0.08" />
@@ -66,16 +68,16 @@ const LoyaltyGrowthChart = ({ trends }) => {
           {areaDPoints && <path d={areaDPoints} fill="url(#pointsGrad)" />}
 
           {/* Awarded Line */}
-          {awardedPoints && <path d={`M 40,${130 - (monthlyData[0].awarded / maxPoints) * 95} L ${awardedPoints}`} fill="none" stroke="#10B981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />}
+          {awardedPoints && <path d={`M 40,${130 - (monthlyData[0].awarded / maxPoints) * 95 * progress} L ${awardedPoints}`} fill="none" stroke="#10B981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />}
           
           {/* Redeemed Line */}
-          {redeemedPoints && <path d={`M 40,${130 - (monthlyData[0].redeemed / maxPoints) * 95} L ${redeemedPoints}`} fill="none" stroke="#F43F5E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />}
+          {redeemedPoints && <path d={`M 40,${130 - (monthlyData[0].redeemed / maxPoints) * 95 * progress} L ${redeemedPoints}`} fill="none" stroke="#F43F5E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />}
 
           {/* Data Points */}
           {monthlyData.map((d, i) => {
             const x = 40 + i * (235 / Math.max(1, monthlyData.length - 1));
-            const yA = 130 - (d.awarded / maxPoints) * 95;
-            const yR = 130 - (d.redeemed / maxPoints) * 95;
+            const yA = 130 - (d.awarded / maxPoints) * 95 * progress;
+            const yR = 130 - (d.redeemed / maxPoints) * 95 * progress;
             
             return (
               <g key={i} className="group cursor-pointer">
