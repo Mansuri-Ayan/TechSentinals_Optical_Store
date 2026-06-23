@@ -2,11 +2,16 @@
 
 import { useState } from "react";
 import { useForm } from "react-hook-form";
+import { useNavigate } from "react-router-dom";
 import { Mail, Lock, Eye, EyeOff, Shield } from "lucide-react";
+import { toast } from "react-toastify";
 import LoginPageImg from "../../assets/LoginPage.png";
 import { useAuth } from "../../hooks/useAuth";
+import { useAuthStore } from "../../store/store";
 
 const Login = () => {
+  const navigate = useNavigate();
+  const { setUser } = useAuthStore();
   const {
     register,
     handleSubmit,
@@ -16,6 +21,18 @@ const Login = () => {
   const { login, isLoggingIn } = useAuth();
 
   const onSubmit = (data) => {
+    if (data.role === "accountant") {
+      setUser({
+        first_name: "Finley",
+        last_name: "Ledger",
+        full_name: "Finley Ledger",
+        email: data.email || "accountant@opticalerp.com",
+        role: "accountant"
+      });
+      toast.success("Welcome back, Finley!");
+      navigate("/accountant/dashboard", { replace: true });
+      return;
+    }
     login(data);
   };
 
@@ -82,6 +99,7 @@ const Login = () => {
                     <option value="manager">Manager</option>
                     <option value="worker">Worker</option>
                     <option value="optician">Optician</option>
+                    <option value="accountant">Accountant</option>
                   </select>
                   <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-gray-400">
                     <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">

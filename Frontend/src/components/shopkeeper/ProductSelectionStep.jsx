@@ -141,6 +141,7 @@ const ProductSelectionStep = ({
         product_name: item.product_name,
         brand: item.brand_name || 'Generic',
         category: item.category_name,
+        category_id: item.category_id || null,
         subcategory: item.subcategory_name || 'Standard',
         sku: item.product_sku,
         selling_price: Number(item.selling_price) || 0,

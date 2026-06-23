@@ -143,6 +143,21 @@ async def get_current_admin(
     return current_user
 
 
+async def get_current_manager(
+    current_user: Admin | Manager | Worker | Optician = Depends(get_current_user),
+) -> Manager:
+    """
+    Dependency to enforce that the authenticated user has the 'manager' role.
+    Raises 403 Forbidden if the authenticated user is not a Manager.
+    """
+    if not isinstance(current_user, Manager):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden — Manager role required",
+        )
+    return current_user
+
+
 def get_user_admin_id(user) -> int:
     if isinstance(user, Admin):
         return user.id

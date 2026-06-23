@@ -1,71 +1,61 @@
 import { useMemo } from 'react';
 import { Shield, ShieldCheck, Award, CheckCircle } from 'lucide-react';
-import { TIERS, getLoyaltyTier } from '../../data/loyaltyData';
+import { TIERS } from '../../data/loyaltyData';
 
-const LoyaltyTierCard = ({ customers }) => {
-  const tierStats = useMemo(() => {
-    let silverCount = 0;
-    let goldCount = 0;
-    let platinumCount = 0;
+const LoyaltyTierCard = ({ tierDistribution, config }) => {
+  const cardsData = useMemo(() => {
+    if (!tierDistribution) return [];
+    const silverMax = config?.silver_max ?? 5000;
+    const goldMax = config?.gold_max ?? 15000;
 
-    customers.forEach(c => {
-      const tier = getLoyaltyTier(c.points);
-      if (tier === 'Silver') silverCount++;
-      else if (tier === 'Gold') goldCount++;
-      else if (tier === 'Platinum') platinumCount++;
-    });
+    
+    return [
+      {
+        key: 'SILVER',
+        title: 'Silver Card',
+        tierName: TIERS.SILVER.name,
+        range: `1 – ${silverMax.toLocaleString('en-IN')} Points`,
+        count: tierDistribution.silver,
+        benefits: TIERS.SILVER.benefits,
+        icon: Shield,
+        gradient: 'from-slate-50 via-slate-100/50 to-slate-200/20',
+        iconBg: 'bg-slate-200/50',
+        iconColor: 'text-slate-600',
+        borderColor: 'border-slate-200',
+        badgeColor: 'bg-slate-100 text-slate-700',
+      },
+      {
+        key: 'GOLD',
+        title: 'Gold Card',
+        tierName: TIERS.GOLD.name,
+        range: `${(silverMax + 1).toLocaleString('en-IN')} – ${goldMax.toLocaleString('en-IN')} Points`,
+        count: tierDistribution.gold,
+        benefits: TIERS.GOLD.benefits,
+        icon: ShieldCheck,
+        gradient: 'from-amber-50/40 via-amber-100/20 to-amber-200/10',
+        iconBg: 'bg-amber-100',
+        iconColor: 'text-amber-600',
+        borderColor: 'border-amber-250',
+        badgeColor: 'bg-amber-100 text-amber-800',
+      },
+      {
+        key: 'PLATINUM',
+        title: 'Platinum Card',
+        tierName: TIERS.PLATINUM.name,
+        range: `${(goldMax + 1).toLocaleString('en-IN')}+ Points`,
+        count: tierDistribution.platinum,
+        benefits: TIERS.PLATINUM.benefits,
+        icon: Award,
+        gradient: 'from-purple-50/40 via-purple-100/20 to-purple-200/10',
+        iconBg: 'bg-purple-100',
+        iconColor: 'text-purple-600',
+        borderColor: 'border-purple-250',
+        badgeColor: 'bg-purple-100 text-purple-800',
+      },
+    ];
+  }, [tierDistribution, config]);
 
-    return {
-      Silver: silverCount,
-      Gold: goldCount,
-      Platinum: platinumCount,
-    };
-  }, [customers]);
-
-  const cardsData = [
-    {
-      key: 'SILVER',
-      title: 'Silver Card',
-      tierName: TIERS.SILVER.name,
-      range: '1 – 5,000 Points',
-      count: tierStats.Silver,
-      benefits: TIERS.SILVER.benefits,
-      icon: Shield,
-      gradient: 'from-slate-50 via-slate-100/50 to-slate-200/20',
-      iconBg: 'bg-slate-200/50',
-      iconColor: 'text-slate-600',
-      borderColor: 'border-slate-200',
-      badgeColor: 'bg-slate-100 text-slate-700',
-    },
-    {
-      key: 'GOLD',
-      title: 'Gold Card',
-      tierName: TIERS.GOLD.name,
-      range: '5,001 – 15,000 Points',
-      count: tierStats.Gold,
-      benefits: TIERS.GOLD.benefits,
-      icon: ShieldCheck,
-      gradient: 'from-amber-50/40 via-amber-100/20 to-amber-200/10',
-      iconBg: 'bg-amber-100',
-      iconColor: 'text-amber-600',
-      borderColor: 'border-amber-250',
-      badgeColor: 'bg-amber-100 text-amber-800',
-    },
-    {
-      key: 'PLATINUM',
-      title: 'Platinum Card',
-      tierName: TIERS.PLATINUM.name,
-      range: '15,001+ Points',
-      count: tierStats.Platinum,
-      benefits: TIERS.PLATINUM.benefits,
-      icon: Award,
-      gradient: 'from-purple-50/40 via-purple-100/20 to-purple-200/10',
-      iconBg: 'bg-purple-100',
-      iconColor: 'text-purple-600',
-      borderColor: 'border-purple-250',
-      badgeColor: 'bg-purple-100 text-purple-800',
-    },
-  ];
+  if (!tierDistribution) return null;
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6 sm:mb-8">

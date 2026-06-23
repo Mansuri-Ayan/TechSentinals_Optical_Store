@@ -9,7 +9,8 @@ const CompletedStep = ({ customer, cart, prescription, paymentInfo, savedCustome
 
   const totalAmount = cart.reduce((sum, item) => sum + item.product.selling_price * item.quantity, 0);
   const discount = paymentInfo?.discount || 0;
-  const finalAmount = totalAmount - discount;
+  const loyaltyDiscount = paymentInfo?.loyaltyDiscount || 0;
+  const finalAmount = Math.max(0, totalAmount - discount - loyaltyDiscount);
   const receivedAmount = Number(paymentInfo?.receivedAmount) || finalAmount;
   const remainingAmount = finalAmount - receivedAmount;
 
@@ -230,6 +231,12 @@ const CompletedStep = ({ customer, cart, prescription, paymentInfo, savedCustome
             <div className="flex justify-between items-center text-xs text-red-500 font-bold">
               <span>Discounts Applied</span>
               <span className="font-mono">- ₹{discount.toLocaleString('en-IN')}</span>
+            </div>
+          )}
+          {loyaltyDiscount > 0 && (
+            <div className="flex justify-between items-center text-xs text-emerald-600 font-bold">
+              <span>Loyalty Points Discount</span>
+              <span className="font-mono">- ₹{loyaltyDiscount.toLocaleString('en-IN')}</span>
             </div>
           )}
           <div className="flex justify-between items-center text-xs text-slate-800 font-extrabold border-t border-slate-200/60 pt-2">

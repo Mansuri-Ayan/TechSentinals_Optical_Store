@@ -42,6 +42,8 @@ const defaultCustomer = {
   state: '',
   pincode: '',
   remark: '',
+  current_points: 0,
+  membership_tier: 'NONE',
 };
 
 const defaultPrescription = {
@@ -140,14 +142,16 @@ const Shopkeeper = () => {
       };
 
       if (currentCustomer.id) {
-        await updateCustomerApi(currentCustomer.id, customerPayload);
+        const updatedCust = await updateCustomerApi(currentCustomer.id, customerPayload);
         toast.success('Customer updated!');
         setCustomer({
           ...currentCustomer,
-          firstName: currentCustomer.firstName,
-          lastName: currentCustomer.lastName,
-          email: currentCustomer.email,
-          phone: currentCustomer.phone,
+          firstName: updatedCust.first_name || currentCustomer.firstName,
+          lastName: updatedCust.last_name || currentCustomer.lastName,
+          email: updatedCust.email || currentCustomer.email,
+          phone: updatedCust.phone || currentCustomer.phone,
+          current_points: updatedCust.current_points ?? currentCustomer.current_points,
+          membership_tier: updatedCust.membership_tier ?? currentCustomer.membership_tier,
         });
       } else {
         const newCust = await createCustomerApi(customerPayload);
@@ -165,6 +169,8 @@ const Shopkeeper = () => {
           state: newCust.state || currentCustomer.state,
           pincode: newCust.pincode || currentCustomer.pincode,
           remark: newCust.remark || currentCustomer.remark,
+          current_points: newCust.current_points || 0,
+          membership_tier: newCust.membership_tier || 'NONE',
         });
         toast.success('Customer registered!');
       }
@@ -236,7 +242,7 @@ const Shopkeeper = () => {
   }, [prescription, customer]);
 
   /* ── Step 4: Final checkout – customer & prescription already saved ── */
-  const handleComplete = async (payment, discount) => {
+  const handleComplete = async (payment, discount, loyaltyData = {}) => {
     setIsSubmitting(true);
     try {
       const storeId = user?.store_id || useStoreStore.getState().selectedStore?.id;
@@ -285,7 +291,8 @@ const Shopkeeper = () => {
 
       const subtotal = cart.reduce((sum, item) => sum + item.product.selling_price * item.quantity, 0);
       const discountAmt = Number(discount) || 0;
-      const finalAmount = Math.max(0, subtotal - discountAmt);
+      const loyaltyDiscountAmt = Number(loyaltyData.loyaltyDiscount) || 0;
+      const finalAmount = Math.max(0, subtotal - discountAmt - loyaltyDiscountAmt);
 
       let paidAmount = 0;
       if (payment.status === 'Paid') {
@@ -313,6 +320,12 @@ const Shopkeeper = () => {
         notes: prescription.notes || null,
         items: saleItems,
         payments: payments,
+        // Loyalty fields
+        points_to_redeem: loyaltyData.pointsToRedeem || 0,
+        custom_points: loyaltyData.customPoints || 0,
+        category_points_enabled_override: loyaltyData.categoryPointsEnabled !== false,
+        price_points_enabled_override: loyaltyData.pricePointsEnabled !== false,
+        enabled_category_points_ids: loyaltyData.enabledCategoryIds || null,
       };
 
       const saleResult = await createSaleApi(salePayload);
@@ -332,6 +345,7 @@ const Shopkeeper = () => {
       const paymentInfoObj = {
         ...payment,
         discount,
+        loyaltyDiscount: loyaltyDiscountAmt,
       };
 
       setSavedCustomer(resultCustomer);

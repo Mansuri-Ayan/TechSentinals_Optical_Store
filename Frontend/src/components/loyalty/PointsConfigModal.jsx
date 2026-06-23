@@ -2,34 +2,26 @@ import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Save, Sliders } from 'lucide-react';
 
-const PointsConfigModal = ({ isOpen, onClose, config, onSave }) => {
-  const [formData, setFormData] = useState({
-    Frames: 50,
-    Lenses: 30,
-    Accessories: 20,
-    Sunglasses: 40,
-    'Contact Lens': 25,
-  });
+const PointsConfigModal = ({ isOpen, onClose, categories, onSave, isPending }) => {
+  const [formData, setFormData] = useState([]);
 
   useEffect(() => {
-    if (isOpen && config) {
-      setFormData({ ...config });
+    if (isOpen && categories) {
+      setFormData(JSON.parse(JSON.stringify(categories)));
     }
-  }, [isOpen, config]);
+  }, [isOpen, categories]);
 
   if (!isOpen) return null;
 
-  const handleChange = (productType, val) => {
-    setFormData((prev) => ({
-      ...prev,
-      [productType]: Number(val) || 0,
-    }));
+  const handleChange = (index, val) => {
+    const newFormData = [...formData];
+    newFormData[index].points_per_unit = Number(val) || 0;
+    setFormData(newFormData);
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
     onSave(formData);
-    onClose();
   };
 
   return createPortal(
@@ -58,17 +50,17 @@ const PointsConfigModal = ({ isOpen, onClose, config, onSave }) => {
               Define the number of points issued per item purchased in each product category.
             </p>
 
-            {Object.keys(formData).map((key) => (
-              <div key={key}>
+            {formData.map((cat, index) => (
+              <div key={cat.id}>
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  {key} Points
+                  {cat.category_name} Points
                 </label>
                 <input
                   type="number"
                   min="0"
-                  max="1000"
-                  value={formData[key]}
-                  onChange={(e) => handleChange(key, e.target.value)}
+                  max="10000"
+                  value={cat.points_per_unit}
+                  onChange={(e) => handleChange(index, e.target.value)}
                   className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 font-bold text-slate-900 text-sm transition-all"
                   required
                 />
@@ -82,10 +74,14 @@ const PointsConfigModal = ({ isOpen, onClose, config, onSave }) => {
               className="flex-1 py-2.5 text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl font-semibold transition-all text-sm cursor-pointer">
               Cancel
             </button>
-            <button type="submit"
-              className="flex-1 py-2.5 bg-[#0A0F1F] text-white rounded-xl font-semibold text-sm transition-all shadow-md hover:shadow-lg hover:bg-slate-800 flex items-center justify-center gap-2 cursor-pointer">
-              <Save className="w-4 h-4" />
-              Save Rules
+            <button type="submit" disabled={isPending}
+              className="flex-1 py-2.5 bg-[#0A0F1F] text-white rounded-xl font-semibold text-sm transition-all shadow-md hover:shadow-lg hover:bg-slate-800 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50">
+              {isPending ? 'Saving...' : (
+                <>
+                  <Save className="w-4 h-4" />
+                  Save Rules
+                </>
+              )}
             </button>
           </div>
         </form>

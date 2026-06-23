@@ -25,6 +25,8 @@ from routes.shopkeeper_category_router import shopkeeper_category_router
 from routes.api_transactions_router import router as api_transactions_router
 from routes.api_shopkeeper_transactions_router import router as api_shopkeeper_transactions_router
 from routes.notification_router import router as notification_router
+from routes.loyalty_router import router as loyalty_router
+from routes.shopkeeper_loyalty_router import router as shopkeeper_loyalty_router
 from db.session import engine
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -86,4 +88,5 @@ app.include_router(shopkeeper_category_router)
 app.include_router(api_transactions_router)
 app.include_router(api_shopkeeper_transactions_router)
 app.include_router(notification_router)
-
+app.include_router(loyalty_router)
+app.include_router(shopkeeper_loyalty_router)

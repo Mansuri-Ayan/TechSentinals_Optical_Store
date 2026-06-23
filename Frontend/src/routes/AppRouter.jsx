@@ -14,6 +14,7 @@ import Transactions from "../pages/admin/Transactions";
 import Suppliers from "../pages/admin/Suppliers";
 import SupplierDetail from "../pages/admin/SupplierDetail";
 import Sales from "../pages/admin/Sales";
+import LabOrders from "../pages/admin/LabOrders";
 import Expenses from "../pages/admin/Expenses";
 import Analyses from "../pages/admin/Analyses";
 import Stores from "../pages/admin/Stores";
@@ -44,6 +45,19 @@ import ShopkeeperLoyaltyCustomerDetail from "../pages/shopkeeper/LoyaltyCustomer
 import ShopkeeperTransactions from "../pages/shopkeeper/Transactions";
 import ShopkeeperWarehouse from "../pages/shopkeeper/Warehouse";
 
+// Accountant imports
+import AccountantLayout from "../layouts/AccountantLayout";
+import AccountantDashboard from "../pages/accountant/Dashboard";
+import AccountantSalesLedger from "../pages/accountant/SalesLedger";
+import AccountantExpenses from "../pages/accountant/Expenses";
+import AccountantCustomerDues from "../pages/accountant/CustomerDues";
+import AccountantSupplierPayments from "../pages/accountant/SupplierPayments";
+import AccountantPaymentCollection from "../pages/accountant/PaymentCollection";
+import AccountantRefunds from "../pages/accountant/Refunds";
+import AccountantProfitLoss from "../pages/accountant/ProfitLoss";
+import AccountantReports from "../pages/accountant/Reports";
+import AccountantStorePerformance from "../pages/accountant/StorePerformance";
+
 // Responsive loading spinner component
 const LoadingSpinner = () => (
   <div className="min-h-screen bg-navy flex items-center justify-center text-slate-300 px-4">
@@ -60,11 +74,13 @@ const GuestRoute = ({ children }) => {
   }
 
   if (isAuthenticated && user) {
-    return user.role === "admin" ? (
-      <Navigate to="/admin/dashboard" replace />
-    ) : (
-      <Navigate to="/shopkeeper" replace />
-    );
+    if (user.role === "admin") {
+      return <Navigate to="/admin/dashboard" replace />;
+    } else if (user.role === "accountant") {
+      return <Navigate to="/accountant/dashboard" replace />;
+    } else {
+      return <Navigate to="/shopkeeper" replace />;
+    }
   }
 
   return children;
@@ -115,6 +131,10 @@ const HomeRoute = () => {
 
   if (user && user.role === "admin") {
     return <Navigate to="/admin/dashboard" replace />;
+  }
+
+  if (user && user.role === "accountant") {
+    return <Navigate to="/accountant/dashboard" replace />;
   }
 
   return <Navigate to="/shopkeeper" replace />;
@@ -178,8 +198,7 @@ const TransactionsRouteRedirect = () => {
 };
 const StoreRouteRedirect = ({ path }) => {
   const { selectedStore, stores } = useStoreStore();
-  const targetStore = selectedStore || stores[0];
-  if (!targetStore) return <Navigate to="/admin/dashboard" replace />;
+  const targetStore = selectedStore || stores[0] || { id: '1' };
   return <Navigate to={`/admin/store/${targetStore.id}/${path}`} replace />;
 };
 
@@ -203,6 +222,17 @@ const SuppliersRouteRedirect = () => {
   }
 
   return <Navigate to={`/admin/store/${targetStore.id}/suppliers`} replace />;
+};
+
+const LoyaltyRouteRedirect = () => {
+  const { selectedStore, stores } = useStoreStore();
+  const targetStore = selectedStore || stores[0];
+
+  if (!targetStore) {
+    return <Navigate to="/admin/dashboard" replace />;
+  }
+
+  return <Navigate to={`/admin/store/${targetStore.id}/loyalty`} replace />;
 };
 
 function AppRouter() {
@@ -259,6 +289,11 @@ function AppRouter() {
           element={<SupplierDetail />}
         />
         <Route path="sales" element={<Sales />} />
+        <Route
+          path="lab-orders"
+          element={<StoreRouteRedirect path="lab-orders" />}
+        />
+        <Route path="store/:storeId/lab-orders" element={<LabOrders />} />
         <Route path="analyses" element={<Analyses />} />
         <Route path="warehouse" element={<Warehouse />} />
         <Route path="stores" element={<Stores />} />
@@ -279,7 +314,8 @@ function AppRouter() {
         <Route path="store/:storeId/repairs" element={<AdminRepair />} />
 
         {/* Loyalty Program */}
-        <Route path="loyalty" element={<AdminLoyalty />} />
+        <Route path="loyalty" element={<LoyaltyRouteRedirect />} />
+        <Route path="store/:storeId/loyalty" element={<AdminLoyalty />} />
         <Route path="loyalty/customer/:id" element={<AdminLoyaltyCustomerDetail />} />
 
         {/* Customers */}
@@ -301,6 +337,7 @@ function AppRouter() {
         <Route path="customers/:customerId" element={<CustomerDetail />} />
         <Route path="inventory" element={<ShopkeeperInventory />} />
         <Route path="sales" element={<ShopkeeperSales />} />
+        <Route path="lab-orders" element={<LabOrders />} />
         <Route path="staff" element={<ShopkeeperStaff />} />
         <Route path="expenses" element={<ShopkeeperExpenses />} />
         <Route path="repairs" element={<Repair />} />
@@ -310,6 +347,21 @@ function AppRouter() {
         <Route path="loyalty/customer/:id" element={<ShopkeeperLoyaltyCustomerDetail />} />
         <Route path="transactions" element={<ShopkeeperTransactions />} />
         <Route path="warehouse" element={<ShopkeeperWarehouse />} />
+      </Route>
+
+      {/* Accountant Routes */}
+      <Route path="/accountant" element={<AccountantLayout />}>
+        <Route index element={<Navigate to="dashboard" replace />} />
+        <Route path="dashboard" element={<AccountantDashboard />} />
+        <Route path="sales-ledger" element={<AccountantSalesLedger />} />
+        <Route path="expenses" element={<AccountantExpenses />} />
+        <Route path="customer-dues" element={<AccountantCustomerDues />} />
+        <Route path="supplier-payments" element={<AccountantSupplierPayments />} />
+        <Route path="payment-collection" element={<AccountantPaymentCollection />} />
+        <Route path="refunds" element={<AccountantRefunds />} />
+        <Route path="profit-loss" element={<AccountantProfitLoss />} />
+        <Route path="reports" element={<AccountantReports />} />
+        <Route path="store-performance" element={<AccountantStorePerformance />} />
       </Route>
 
       {/* Fallback root redirect */}

@@ -1,38 +1,72 @@
-import { useState, useEffect } from 'react';
-import { Award, RefreshCw, Download, Sliders } from 'lucide-react';
-import { toast } from 'react-toastify';
+import LoyaltyCustomerTable from '../../components/loyalty/LoyaltyCustomerTable';
+import AdjustPointsModal from '../../components/loyalty/AdjustPointsModal';
+import PointsConfigModal from '../../components/loyalty/PointsConfigModal';
+import GlobalLoyaltyConfigModal from '../../components/loyalty/GlobalLoyaltyConfigModal';
 
+import {
+  useLoyaltyConfig,
+  useUpdateLoyaltyConfig,
+  useLoyaltyStats,
+  useLoyaltyTrends,
+  useLoyaltyTierDistribution,
+  useLoyaltyCategories,
+  useLoyaltyCustomers,
+  useUpdateLoyaltyCategory,
+  useAdjustLoyaltyPoints
+} from '../../hooks/useLoyalty';
+import { useState } from 'react';
+import LoyaltyGrowthChart from '../../components/loyalty/LoyaltyGrowthChart';
+import LoyaltyDistributionChart from '../../components/loyalty/LoyaltyDistributionChart';
+import { Award, Download, Edit2, RefreshCw, Sliders } from 'lucide-react';
+import { toast } from 'react-toastify';
 import LoyaltyStatsCards from '../../components/loyalty/LoyaltyStatsCards';
 import LoyaltyTierCard from '../../components/loyalty/LoyaltyTierCard';
-import LoyaltyDistributionChart from '../../components/loyalty/LoyaltyDistributionChart';
-import LoyaltyGrowthChart from '../../components/loyalty/LoyaltyGrowthChart';
-import LoyaltyCustomerTable from '../../components/loyalty/LoyaltyCustomerTable';
-
-import { getLoyaltyData } from '../../data/loyaltyData';
 
 const Loyalty = () => {
-  const [customers, setCustomers] = useState([]);
-  const [pointsConfig, setPointsConfig] = useState({});
   const [isRefreshing, setIsRefreshing] = useState(false);
+  
+  // Table filters state
+  const [searchTerm, setSearchTerm] = useState('');
+  const [tierFilter, setTierFilter] = useState('ALL');
+  const [currentPage, setCurrentPage] = useState(1);
 
-  // Load data
-  const loadData = () => {
-    const { customers: cust, pointsConfig: cfg } = getLoyaltyData();
-    setCustomers(cust);
-    setPointsConfig(cfg);
-  };
+  // Modals state
+  const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
+  const [isGlobalConfigModalOpen, setIsGlobalConfigModalOpen] = useState(false);
+  const [adjustCustomer, setAdjustCustomer] = useState(null);
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  // Hooks
+  const { data: globalConfig, refetch: refetchGlobalConfig } = useLoyaltyConfig(null, 'shopkeeper');
+  const { mutate: updateGlobalConfig, isPending: isUpdatingGlobalConfig } = useUpdateLoyaltyConfig(null, 'shopkeeper');
+
+  const { data: stats, refetch: refetchStats } = useLoyaltyStats(null, 'shopkeeper');
+  const { data: trends, refetch: refetchTrends } = useLoyaltyTrends(null, 'shopkeeper');
+  const { data: tierDistribution, refetch: refetchTierDist } = useLoyaltyTierDistribution(null, 'shopkeeper');
+  const { data: categories, refetch: refetchCategories } = useLoyaltyCategories(null, 'shopkeeper');
+  
+  const { data: customersData, refetch: refetchCustomers } = useLoyaltyCustomers(null, 'shopkeeper', {
+    page: currentPage,
+    page_size: 10,
+    search: searchTerm || undefined,
+    tier: tierFilter !== 'ALL' ? tierFilter : undefined
+  });
+
+  const { mutate: updateCategory, isPending: isUpdatingCategory } = useUpdateLoyaltyCategory(null, 'shopkeeper');
+  const { mutate: adjustPoints, isPending: isAdjusting } = useAdjustLoyaltyPoints(null, 'shopkeeper');
 
   const handleRefresh = () => {
     setIsRefreshing(true);
-    setTimeout(() => {
-      loadData();
+    Promise.all([
+      refetchGlobalConfig(),
+      refetchStats(),
+      refetchTrends(),
+      refetchTierDist(),
+      refetchCategories(),
+      refetchCustomers()
+    ]).then(() => {
       setIsRefreshing(false);
       toast.success('Loyalty data refreshed.');
-    }, 500);
+    });
   };
 
   const handleExport = () => {
@@ -40,6 +74,50 @@ const Loyalty = () => {
     setTimeout(() => {
       toast.success('Export completed successfully.');
     }, 800);
+  };
+
+  const handleSaveConfig = (updatedCategories) => {
+    let promises = updatedCategories.map(cat => 
+      new Promise((resolve, reject) => {
+        updateCategory({ categoryId: cat.category_id, payload: { points_per_unit: cat.points_per_unit } }, {
+          onSuccess: resolve,
+          onError: reject
+        });
+      })
+    );
+    
+    Promise.all(promises).then(() => {
+      toast.success('Points configuration updated successfully.');
+      setIsConfigModalOpen(false);
+      refetchCategories();
+    }).catch(err => {
+      toast.error(err?.response?.data?.detail || 'Failed to update configuration.');
+    });
+  };
+
+  const handleSaveGlobalConfig = (payload) => {
+    updateGlobalConfig(payload, {
+      onSuccess: () => {
+        toast.success('Global loyalty rules updated successfully.');
+        setIsGlobalConfigModalOpen(false);
+        handleRefresh();
+      },
+      onError: (err) => {
+        toast.error(err?.response?.data?.detail || 'Failed to update global configuration.');
+      }
+    });
+  };
+
+  const handleSaveAdjustments = (payload) => {
+    adjustPoints(payload, {
+      onSuccess: () => {
+        toast.success('Points adjusted successfully.');
+        setAdjustCustomer(null);
+      },
+      onError: (err) => {
+        toast.error(err?.response?.data?.detail || 'Failed to adjust points.');
+      }
+    });
   };
 
   return (
@@ -57,6 +135,13 @@ const Loyalty = () => {
         </div>
 
         <div className="flex items-center gap-2 w-full sm:w-auto">
+          <button
+            onClick={() => setIsGlobalConfigModalOpen(true)}
+            className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all shadow-sm hover:shadow-md hover:-translate-y-0.5 whitespace-nowrap cursor-pointer"
+          >
+            <Sliders className="w-4 h-4 text-slate-500" />
+            Program Settings
+          </button>
           <button
             onClick={handleExport}
             className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all shadow-sm hover:shadow-md hover:-translate-y-0.5 whitespace-nowrap cursor-pointer"
@@ -76,25 +161,29 @@ const Loyalty = () => {
       </div>
 
       {/* KPI Stats Cards */}
-      <LoyaltyStatsCards customers={customers} />
+      <LoyaltyStatsCards stats={stats} tierDistribution={tierDistribution} config={globalConfig} />
 
       {/* Tiers summary & Points multiplier configurations */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6 sm:mb-8">
         <div className="lg:col-span-2">
-          <LoyaltyTierCard customers={customers} />
+          <LoyaltyTierCard tierDistribution={tierDistribution} config={globalConfig} />
         </div>
         
-        {/* Points Configuration Card (Read-only) */}
+        {/* Points Configuration Card */}
         <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-6 flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-3">
               <h3 className="text-sm font-bold text-slate-800 tracking-tight flex items-center gap-1.5">
                 <Sliders className="w-4 h-4 text-blue-500" />
-                Points Rules
+                Category Multipliers
               </h3>
-              <span className="text-[9px] font-extrabold text-slate-400 bg-slate-50 border border-slate-150 px-2 py-0.5 rounded-lg uppercase tracking-wider">
-                Read-Only
-              </span>
+              <button
+                onClick={() => setIsConfigModalOpen(true)}
+                className="flex items-center gap-1 text-[10px] font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-lg uppercase tracking-wider transition-colors cursor-pointer"
+              >
+                <Edit2 className="w-3 h-3" />
+                Edit Multipliers
+              </button>
             </div>
 
             <div className="overflow-hidden border border-slate-100 rounded-xl">
@@ -102,16 +191,21 @@ const Loyalty = () => {
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-100 text-[9px] font-bold text-slate-400 uppercase tracking-widest">
                     <th className="px-4 py-2.5 font-extrabold">Product Type</th>
-                    <th className="px-4 py-2.5 font-extrabold text-right">Points / Purchase</th>
+                    <th className="px-4 py-2.5 font-extrabold text-right">Points / Item</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 font-semibold text-slate-700">
-                  {Object.keys(pointsConfig).map((key) => (
-                    <tr key={key} className="hover:bg-slate-50/50">
-                      <td className="px-4 py-2.5 font-bold">{key}</td>
-                      <td className="px-4 py-2.5 text-right font-black text-slate-900">{pointsConfig[key]} pts</td>
+                  {categories?.map((cat) => (
+                    <tr key={cat.id} className="hover:bg-slate-50/50">
+                      <td className="px-4 py-2.5 font-bold">{cat.category_name}</td>
+                      <td className="px-4 py-2.5 text-right font-black text-slate-900">{cat.points_per_unit} pts</td>
                     </tr>
                   ))}
+                  {(!categories || categories.length === 0) && (
+                    <tr>
+                      <td colSpan="2" className="px-4 py-4 text-center text-slate-500 text-xs">No points rules configured.</td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -126,10 +220,10 @@ const Loyalty = () => {
       {/* Growth & Distribution Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6 sm:mb-8">
         <div className="lg:col-span-2">
-          <LoyaltyGrowthChart customers={customers} />
+          <LoyaltyGrowthChart trends={trends?.trends} />
         </div>
         <div>
-          <LoyaltyDistributionChart customers={customers} />
+          <LoyaltyDistributionChart tierDistribution={tierDistribution} />
         </div>
       </div>
 
@@ -138,8 +232,41 @@ const Loyalty = () => {
         <div className="flex items-center gap-2 mb-3">
           <h2 className="text-lg font-bold text-slate-800 tracking-tight">Customer Members Ledger</h2>
         </div>
-        <LoyaltyCustomerTable customers={customers} routePrefix="/shopkeeper/loyalty" />
+        <LoyaltyCustomerTable 
+          data={customersData} 
+          routePrefix="/shopkeeper/loyalty" 
+          searchTerm={searchTerm}
+          setSearchTerm={setSearchTerm}
+          tierFilter={tierFilter}
+          setTierFilter={setTierFilter}
+          currentPage={currentPage}
+          setCurrentPage={setCurrentPage}
+          onAdjustPoints={(c) => setAdjustCustomer(c)}
+        />
       </div>
+
+      {/* Modals */}
+      <GlobalLoyaltyConfigModal
+        isOpen={isGlobalConfigModalOpen}
+        onClose={() => setIsGlobalConfigModalOpen(false)}
+        config={globalConfig}
+        onSave={handleSaveGlobalConfig}
+        isPending={isUpdatingGlobalConfig}
+      />
+      <PointsConfigModal 
+        isOpen={isConfigModalOpen} 
+        onClose={() => setIsConfigModalOpen(false)} 
+        categories={categories} 
+        onSave={handleSaveConfig} 
+        isPending={isUpdatingCategory} 
+      />
+      <AdjustPointsModal 
+        isOpen={!!adjustCustomer} 
+        onClose={() => setAdjustCustomer(null)} 
+        customer={adjustCustomer} 
+        onSave={handleSaveAdjustments} 
+        isPending={isAdjusting} 
+      />
     </div>
   );
 };

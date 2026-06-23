@@ -70,7 +70,7 @@ const LoyaltyHistoryTable = ({ history }) => {
                   )}
                 </td>
                 <td className="px-5 py-3.5 text-right font-black text-slate-900 text-sm">
-                  {row.balance.toLocaleString()}
+                  {row.balance != null ? row.balance.toLocaleString() : '-'}
                 </td>
               </tr>
             ))}

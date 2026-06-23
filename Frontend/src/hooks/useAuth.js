@@ -61,9 +61,8 @@ export const useAuth = () => {
   // Me Query - runs automatically to verify session on page load/mount
   const useMeQuery = (options = {}) => {
     const { user, isLoading } = useAuthStore();
-
-    // Only run if we are loading initial state, or if we are already logged in
-    const shouldFetch = isLoading || !!user;
+    const isAccountantRoute = window.location.pathname.startsWith("/accountant");
+    const shouldFetch = (isLoading && !isAccountantRoute) || (!!user && user?.role !== 'accountant');
 
     return useQuery({
       queryKey: ["auth", "me"],

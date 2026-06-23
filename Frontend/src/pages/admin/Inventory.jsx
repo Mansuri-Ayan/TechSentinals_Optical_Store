@@ -713,40 +713,44 @@ const Inventory = () => {
     setActiveStatus((prev) => (prev === status ? "" : status));
   };
 
-  const handleAddItem = async (data) => {
-    // 1. Create the Product
-    const productPayload = {
-      category_id: data.category_id,
-      subcategory_id: data.subcategory_id,
-      brand_id: data.brand_id,
-      sku: data.sku,
-      name: data.product_name,
-      cost_price: Number(data.cost_price),
-      selling_price: Number(data.selling_price),
-      discount_percent: Number(data.discount_percent || 0),
-      warranty_months: Number(data.warranty_months || 0),
-      image_url: data.image || null,
-      description: data.description || null,
-      frame_details: data.frame_details || null,
-      lens_details: data.lens_details || null,
-      accessory_details: data.accessory_details || null,
-    };
+  const handleAddItem = async (itemsData) => {
+    const items = Array.isArray(itemsData) ? itemsData : [itemsData];
 
-    const product = await createProductApi(productPayload);
+    for (const data of items) {
+      // 1. Create the Product
+      const productPayload = {
+        category_id: data.category_id,
+        subcategory_id: data.subcategory_id,
+        brand_id: data.brand_id,
+        sku: data.sku,
+        name: data.product_name,
+        cost_price: Number(data.cost_price),
+        selling_price: Number(data.selling_price),
+        discount_percent: Number(data.discount_percent || 0),
+        warranty_months: Number(data.warranty_months || 0),
+        image_url: data.image || null,
+        description: data.description || null,
+        frame_details: data.frame_details || null,
+        lens_details: data.lens_details || null,
+        accessory_details: data.accessory_details || null,
+      };
 
-    const targetStoreId = data.store_id || inPageStoreId;
-    const isTargetAdmin = targetStoreId === "admin";
-    const resolvedOwnerType = isTargetAdmin ? "ADMIN" : "STORE";
-    const resolvedOwnerId = isTargetAdmin ? user?.id : Number(targetStoreId);
+      const product = await createProductApi(productPayload);
 
-    // 2. Create the Inventory record
-    await createInventoryAsync({
-      owner_type: resolvedOwnerType,
-      owner_id: resolvedOwnerId,
-      product_id: product.id,
-      quantity: Number(data.quantity),
-      reorder_level: Number(data.reorder_level),
-    });
+      const targetStoreId = data.store_id || inPageStoreId;
+      const isTargetAdmin = targetStoreId === "admin";
+      const resolvedOwnerType = isTargetAdmin ? "ADMIN" : "STORE";
+      const resolvedOwnerId = isTargetAdmin ? user?.id : Number(targetStoreId);
+
+      // 2. Create the Inventory record
+      await createInventoryAsync({
+        owner_type: resolvedOwnerType,
+        owner_id: resolvedOwnerId,
+        product_id: product.id,
+        quantity: Number(data.quantity),
+        reorder_level: Number(data.reorder_level),
+      });
+    }
   };
 
   const handleDelete = async (id) => {

@@ -1,82 +1,56 @@
 import { useMemo } from 'react';
-import { useChartAnimation } from '../../hooks/useChartAnimation';
 
-const LoyaltyGrowthChart = ({ customers }) => {
-  const [progress, elementRef] = useChartAnimation(customers);
-  // Generate last 6 months labels
+const LoyaltyGrowthChart = ({ trends }) => {
   const monthlyData = useMemo(() => {
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    const now = new Date();
-    const result = [];
+    if (!trends || trends.length === 0) return [];
+    
+    return trends.map(t => ({
+      label: t.month,
+      awarded: t.points_awarded,
+      redeemed: t.points_redeemed,
+    }));
+  }, [trends]);
 
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const label = months[d.getMonth()];
-      const yearMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      
-      // Calculate real members joined in this month
-      const membersCount = customers.filter(c => c.joinDate.startsWith(yearMonth)).length;
-      
-      // Calculate real points earned in this month
-      let pointsEarned = 0;
-      customers.forEach(c => {
-        c.history.forEach(h => {
-          if (h.type === 'earned' && h.date.startsWith(yearMonth)) {
-            pointsEarned += h.points;
-          }
-        });
-      });
+  if (!monthlyData.length) return null;
 
-      result.push({
-        label,
-        // Fallback to beautiful mock increments if real logs are empty for historical view
-        members: membersCount || Math.floor(Math.random() * 4) + 2 + (5 - i),
-        points: pointsEarned || Math.floor(Math.random() * 200) + 400 + (5 - i) * 150,
-      });
-    }
-
-    return result;
-  }, [customers]);
-
-  const maxMembers = Math.max(...monthlyData.map(d => d.members), 1);
-  const maxPoints = Math.max(...monthlyData.map(d => d.points), 1);
+  const maxPoints = Math.max(...monthlyData.map(d => Math.max(d.awarded, d.redeemed)), 1);
 
   // Compute SVG points
-  const memberPoints = monthlyData.map((d, i) => {
-    const x = 40 + i * (235 / 5);
-    const y = 130 - (d.members / maxMembers) * 95 * progress;
+  const awardedPoints = monthlyData.map((d, i) => {
+    const x = 40 + i * (235 / Math.max(1, monthlyData.length - 1));
+    const y = 130 - (d.awarded / maxPoints) * 95;
     return `${x},${y}`;
   }).join(' ');
 
-  const pointPoints = monthlyData.map((d, i) => {
-    const x = 40 + i * (235 / 5);
-    const y = 130 - (d.points / maxPoints) * 95 * progress;
+  const redeemedPoints = monthlyData.map((d, i) => {
+    const x = 40 + i * (235 / Math.max(1, monthlyData.length - 1));
+    const y = 130 - (d.redeemed / maxPoints) * 95;
     return `${x},${y}`;
   }).join(' ');
 
-  const areaDPoints = pointPoints ? `M 40,130 L ${pointPoints} L 275,130 Z` : '';
+  const areaDPoints = awardedPoints ? `M 40,130 L ${awardedPoints} L 275,130 Z` : '';
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-5 sm:p-6 flex flex-col h-full justify-between">
       <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-3">
         <div>
-          <h3 className="text-sm font-bold text-slate-800 tracking-tight">Loyalty Growth Trends</h3>
-          <p className="text-[10px] text-slate-400 font-semibold mt-0.5 font-sans">Monthly new members vs points earned</p>
+          <h3 className="text-sm font-bold text-slate-800 tracking-tight">Points Flow Trends</h3>
+          <p className="text-[10px] text-slate-400 font-semibold mt-0.5 font-sans">Monthly points awarded vs redeemed</p>
         </div>
         <div className="flex items-center gap-3 text-[9px] font-bold">
           <div className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-blue-500" />
-            <span className="text-slate-500">New Members</span>
+            <span className="w-2 h-2 rounded-full bg-emerald-500" />
+            <span className="text-slate-500">Awarded</span>
           </div>
           <div className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-emerald-500" />
-            <span className="text-slate-500">Points Issued</span>
+            <span className="w-2 h-2 rounded-full bg-rose-500" />
+            <span className="text-slate-500">Redeemed</span>
           </div>
         </div>
       </div>
 
       <div className="w-full h-48 px-2 pt-2 relative">
-        <svg ref={elementRef} viewBox="0 0 300 150" className="w-full h-full">
+        <svg viewBox="0 0 300 150" className="w-full h-full">
           <defs>
             <linearGradient id="pointsGrad" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#10B981" stopOpacity="0.08" />
@@ -88,34 +62,34 @@ const LoyaltyGrowthChart = ({ customers }) => {
           <line x1="40" y1="105" x2="275" y2="105" stroke="#F1F5F9" strokeWidth="1" strokeDasharray="3 3" />
           <line x1="40" y1="130" x2="275" y2="130" stroke="#E2E8F0" strokeWidth="1.25" />
 
-          {/* Points Area */}
+          {/* Area */}
           {areaDPoints && <path d={areaDPoints} fill="url(#pointsGrad)" />}
 
-          {/* Points Line */}
-          {pointPoints && <path d={`M 40,${130 - (monthlyData[0].points / maxPoints) * 95 * progress} L ${pointPoints}`} fill="none" stroke="#10B981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />}
+          {/* Awarded Line */}
+          {awardedPoints && <path d={`M 40,${130 - (monthlyData[0].awarded / maxPoints) * 95} L ${awardedPoints}`} fill="none" stroke="#10B981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />}
           
-          {/* Members Line */}
-          {memberPoints && <path d={`M 40,${130 - (monthlyData[0].members / maxMembers) * 95 * progress} L ${memberPoints}`} fill="none" stroke="#3B82F6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />}
+          {/* Redeemed Line */}
+          {redeemedPoints && <path d={`M 40,${130 - (monthlyData[0].redeemed / maxPoints) * 95} L ${redeemedPoints}`} fill="none" stroke="#F43F5E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />}
 
           {/* Data Points */}
           {monthlyData.map((d, i) => {
-            const x = 40 + i * (235 / 5);
-            const yM = 130 - (d.members / maxMembers) * 95 * progress;
-            const yP = 130 - (d.points / maxPoints) * 95 * progress;
+            const x = 40 + i * (235 / Math.max(1, monthlyData.length - 1));
+            const yA = 130 - (d.awarded / maxPoints) * 95;
+            const yR = 130 - (d.redeemed / maxPoints) * 95;
             
             return (
               <g key={i} className="group cursor-pointer">
-                {/* Points indicators */}
-                <circle cx={x} cy={yP} r="2.5" fill="#FFFFFF" stroke="#10B981" strokeWidth="1.5" className="transition-all duration-200 group-hover:r-3.5" />
+                {/* Awarded indicators */}
+                <circle cx={x} cy={yA} r="2.5" fill="#FFFFFF" stroke="#10B981" strokeWidth="1.5" className="transition-all duration-200 group-hover:r-3.5" />
                 
-                {/* Members indicators */}
-                <circle cx={x} cy={yM} r="2.5" fill="#FFFFFF" stroke="#3B82F6" strokeWidth="1.5" className="transition-all duration-200 group-hover:r-3.5" />
+                {/* Redeemed indicators */}
+                <circle cx={x} cy={yR} r="2.5" fill="#FFFFFF" stroke="#F43F5E" strokeWidth="1.5" className="transition-all duration-200 group-hover:r-3.5" />
 
                 {/* X Axis labels */}
                 <text x={x} y="142" textAnchor="middle" className="text-[8px] font-extrabold fill-slate-400 pointer-events-none">{d.label}</text>
                 
                 {/* Tooltip labels */}
-                <title>{`${d.label} - New Members: ${d.members}, Points: ${d.points}`}</title>
+                <title>{`${d.label} - Awarded: ${d.awarded}, Redeemed: ${d.redeemed}`}</title>
               </g>
             );
           })}
