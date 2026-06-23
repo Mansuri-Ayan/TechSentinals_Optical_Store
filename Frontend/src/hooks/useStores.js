@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-toastify';
 import { createStoreApi, getStoresApi, updateStoreApi, deleteStoreApi } from '../api/stores/store.api';
@@ -64,17 +65,19 @@ export const useStores = (params = {}) => {
     },
   });
 
-  let stores = emptyStores;
   const total = storesQuery.data?.total || 0;
   const pages = storesQuery.data?.pages || 0;
 
-  if (user?.role === 'admin' || user?.role === 'manager') {
-    if (storesQuery.data?.items) {
-      stores = storesQuery.data.items;
+  const stores = useMemo(() => {
+    if (user?.role === 'admin' || user?.role === 'manager') {
+      if (storesQuery.data?.items) {
+        return storesQuery.data.items;
+      }
+    } else if (isManagerOrStaff && user) {
+      return [{ id: user.store_id, store_name: user.store_name }];
     }
-  } else if (isManagerOrStaff && user) {
-    stores = [{ id: user.store_id, store_name: user.store_name }];
-  }
+    return emptyStores;
+  }, [isManagerOrStaff, user?.role, user?.store_id, user?.store_name, storesQuery.data?.items]);
 
   return {
     storesQuery,

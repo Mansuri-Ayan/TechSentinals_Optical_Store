@@ -3,7 +3,7 @@ import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Users, LogOut, Glasses, ChevronDown, Check, X,
   Archive, Tag, Layers, ArrowRightLeft, Truck, ShoppingCart, Receipt,
-  Store, ChevronLeft, ChevronRight, BarChart3, Wrench, UserCheck
+  Store, ChevronLeft, ChevronRight, BarChart3, Wrench, UserCheck, Clock
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useAuthStore, useStoreStore } from '../../store/store';
@@ -102,7 +102,7 @@ const Sidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) => {
     }
   }, [location.pathname, onClose]);
 
-  const currentStore = selectedStore || stores[0];
+  const currentStore = selectedStore || stores[0] || { id: '1', store_name: 'Main Branch' };
   const getStoreName = (store) => store?.store_name || store?.name || 'Select Store';
   const staffRoute = currentStore ? `/admin/store/${currentStore.id}/staff` : '/admin/dashboard';
   const inventoryRoute = currentStore ? `/admin/store/${currentStore.id}/inventory` : '/admin/dashboard';
@@ -113,6 +113,7 @@ const Sidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) => {
   const expensesRoute = currentStore ? `/admin/store/${currentStore.id}/expenses` : '/admin/dashboard';
   const repairsRoute = currentStore ? `/admin/store/${currentStore.id}/repairs` : '/admin/dashboard';
   const customersRoute = currentStore ? `/admin/store/${currentStore.id}/customers` : '/admin/dashboard';
+  const labOrdersRoute = currentStore ? `/admin/store/${currentStore.id}/lab-orders` : '/admin/dashboard';
 
   const handleStoreSelect = (store) => {
     setSelectedStore(store);
@@ -146,6 +147,8 @@ const Sidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) => {
       navigate(`/admin/store/${store.id}/repairs`);
     } else if (location.pathname.startsWith('/admin/store/') && location.pathname.includes('/customers')) {
       navigate(`/admin/store/${store.id}/customers`);
+    } else if (location.pathname.startsWith('/admin/store/') && location.pathname.includes('/lab-orders')) {
+      navigate(`/admin/store/${store.id}/lab-orders`);
     } else {
       // Default fallback
       if (store.id === 'admin') {
@@ -355,6 +358,21 @@ const Sidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) => {
           >
             <ShoppingCart className={`w-5 h-5 transition-transform group-hover:scale-110 flex-shrink-0 ${isCollapsed ? '' : 'mr-3'}`} />
             {!isCollapsed && <span className="font-medium text-sm">Sales</span>}
+          </NavLink>
+
+          <NavLink
+            to={labOrdersRoute}
+            title={isCollapsed ? "Orders" : undefined}
+            className={({ isActive }) =>
+              `flex items-center ${isCollapsed ? 'justify-center px-0' : 'px-4'} py-2.5 rounded-xl transition-all duration-200 group ${
+                isActive || location.pathname.includes('/lab-orders')
+                  ? 'bg-emerald-500/10 text-emerald-400 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_0_10px_rgba(16,185,129,0.1)] border border-emerald-500/20'
+                  : 'text-slate-400 hover:bg-white/5 hover:text-slate-202 border border-transparent'
+              }`
+            }
+          >
+            <Clock className={`w-5 h-5 transition-transform group-hover:scale-110 flex-shrink-0 ${isCollapsed ? '' : 'mr-3'}`} />
+            {!isCollapsed && <span className="font-medium text-sm">Orders</span>}
           </NavLink>
 
           <NavLink

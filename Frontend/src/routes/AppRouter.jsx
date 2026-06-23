@@ -42,6 +42,19 @@ import ShopkeeperLoyalty from "../pages/shopkeeper/Loyalty";
 import ShopkeeperLoyaltyCustomerDetail from "../pages/shopkeeper/LoyaltyCustomerDetail";
 import ShopkeeperTransactions from "../pages/shopkeeper/Transactions";
 
+// Accountant imports
+import AccountantLayout from "../layouts/AccountantLayout";
+import AccountantDashboard from "../pages/accountant/Dashboard";
+import AccountantSalesLedger from "../pages/accountant/SalesLedger";
+import AccountantExpenses from "../pages/accountant/Expenses";
+import AccountantCustomerDues from "../pages/accountant/CustomerDues";
+import AccountantSupplierPayments from "../pages/accountant/SupplierPayments";
+import AccountantPaymentCollection from "../pages/accountant/PaymentCollection";
+import AccountantRefunds from "../pages/accountant/Refunds";
+import AccountantProfitLoss from "../pages/accountant/ProfitLoss";
+import AccountantReports from "../pages/accountant/Reports";
+import AccountantStorePerformance from "../pages/accountant/StorePerformance";
+
 // Responsive loading spinner component
 const LoadingSpinner = () => (
   <div className="min-h-screen bg-navy flex items-center justify-center text-slate-300 px-4">
@@ -58,11 +71,13 @@ const GuestRoute = ({ children }) => {
   }
 
   if (isAuthenticated && user) {
-    return user.role === "admin" ? (
-      <Navigate to="/admin/dashboard" replace />
-    ) : (
-      <Navigate to="/shopkeeper" replace />
-    );
+    if (user.role === "admin") {
+      return <Navigate to="/admin/dashboard" replace />;
+    } else if (user.role === "accountant") {
+      return <Navigate to="/accountant/dashboard" replace />;
+    } else {
+      return <Navigate to="/shopkeeper" replace />;
+    }
   }
 
   return children;
@@ -113,6 +128,10 @@ const HomeRoute = () => {
 
   if (user && user.role === "admin") {
     return <Navigate to="/admin/dashboard" replace />;
+  }
+
+  if (user && user.role === "accountant") {
+    return <Navigate to="/accountant/dashboard" replace />;
   }
 
   return <Navigate to="/shopkeeper" replace />;
@@ -306,6 +325,21 @@ function AppRouter() {
         <Route path="loyalty" element={<ShopkeeperLoyalty />} />
         <Route path="loyalty/customer/:id" element={<ShopkeeperLoyaltyCustomerDetail />} />
         <Route path="transactions" element={<ShopkeeperTransactions />} />
+      </Route>
+
+      {/* Accountant Routes */}
+      <Route path="/accountant" element={<AccountantLayout />}>
+        <Route index element={<Navigate to="dashboard" replace />} />
+        <Route path="dashboard" element={<AccountantDashboard />} />
+        <Route path="sales-ledger" element={<AccountantSalesLedger />} />
+        <Route path="expenses" element={<AccountantExpenses />} />
+        <Route path="customer-dues" element={<AccountantCustomerDues />} />
+        <Route path="supplier-payments" element={<AccountantSupplierPayments />} />
+        <Route path="payment-collection" element={<AccountantPaymentCollection />} />
+        <Route path="refunds" element={<AccountantRefunds />} />
+        <Route path="profit-loss" element={<AccountantProfitLoss />} />
+        <Route path="reports" element={<AccountantReports />} />
+        <Route path="store-performance" element={<AccountantStorePerformance />} />
       </Route>
 
       {/* Fallback root redirect */}
