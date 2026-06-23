@@ -111,7 +111,7 @@ const RejectReasonPrompt = ({ onConfirm, onCancel }) => {
    MAIN DRAWER COMPONENT
    Props: item, onClose, onApprove, onReject, isApproving, isRejecting, isLoading
 ───────────────────────────────────────────────────────── */
-const InventoryDetailDrawer = ({ item, onClose, onApprove, onReject, isApproving, isRejecting, isLoading }) => {
+const InventoryDetailDrawer = ({ item, onClose, onApprove, onReject, isApproving, isRejecting, isLoading, onUpdateStatus }) => {
   const [showRejectPrompt, setShowRejectPrompt] = useState(false);
 
   if (!item) return null;
@@ -135,8 +135,8 @@ const InventoryDetailDrawer = ({ item, onClose, onApprove, onReject, isApproving
     };
     const fmtDateLocal = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 
-    return pojrtal(
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[999] flex justify-end animate-fade-in font-sans">
+    return portal(
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[2000] flex justify-end animate-fade-in font-sans">
         <div className="absolute inset-0" onClick={onClose} aria-hidden />
         
         <div className="relative w-full sm:max-w-md h-full bg-slate-50 shadow-2xl flex flex-col animate-slide-up">
@@ -228,10 +228,202 @@ const InventoryDetailDrawer = ({ item, onClose, onApprove, onReject, isApproving
     );
   }
 
+  /* ── LAB ORDER DRAWER ──────────────────────────────────── */
+  if (item.type === 'lab_order') {
+    const fmt = (n) => n != null ? `₹${Number(n).toLocaleString('en-IN')}` : '—';
+    const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+
+    // Timeline steps
+    const timelineSteps = [
+      { key: 'Confirmed', label: 'Order Created' },
+      { key: 'Advance Paid', label: 'Payment Received' },
+      { key: 'Sent To Lab', label: 'Sent To Lab' },
+      { key: 'In Production', label: 'In Production' },
+      { key: 'Quality Check', label: 'Quality Check' },
+      { key: 'Ready For Pickup', label: 'Ready For Pickup' },
+      { key: 'Delivered', label: 'Delivered' }
+    ];
+
+    const getStatusIndex = (status) => {
+      const idx = timelineSteps.findIndex(s => s.key === status);
+      if (idx !== -1) return idx;
+      if (status === 'Waiting For Lab' || status === 'Processing') return 1;
+      return 0;
+    };
+
+    const currentStepIndex = getStatusIndex(item.status);
+
+    const nextStatuses = {
+      'Confirmed': 'Advance Paid',
+      'Advance Paid': 'Waiting For Lab',
+      'Waiting For Lab': 'Processing',
+      'Processing': 'Sent To Lab',
+      'Sent To Lab': 'In Production',
+      'In Production': 'Quality Check',
+      'Quality Check': 'Ready For Pickup',
+      'Ready For Pickup': 'Delivered'
+    };
+
+    const nextStatus = nextStatuses[item.status];
+
+    return portal(
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[2000] flex justify-end animate-fade-in font-sans">
+        <div className="absolute inset-0" onClick={onClose} aria-hidden />
+        <div className="relative w-full sm:max-w-md h-full bg-slate-50 shadow-2xl flex flex-col animate-slide-up">
+          
+          {/* Header */}
+          <div className="flex items-center justify-between px-5 py-4 bg-white border-b border-slate-100 flex-shrink-0">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 rounded-xl bg-emerald-550 border border-emerald-500/20 flex items-center justify-center flex-shrink-0 bg-emerald-500/10">
+                <Clock className="w-5 h-5 text-emerald-500" />
+              </div>
+              <div className="min-w-0">
+                <h2 className="text-base font-bold text-slate-900 truncate">Order Details</h2>
+                <p className="text-xs text-slate-500 font-mono mt-0.5">{item.orderId}</p>
+              </div>
+            </div>
+            <button onClick={onClose}
+              className="p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 rounded-full transition-colors flex-shrink-0 ml-2">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Status strip */}
+          <div className="px-5 py-3 bg-white border-b border-slate-100 flex-shrink-0 flex items-center justify-between">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border border-emerald-250 text-emerald-700 bg-emerald-50">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+              {item.status}
+            </span>
+            <span className="text-xs text-slate-400 font-semibold">Order Date: {fmtDate(item.orderDate)}</span>
+          </div>
+
+          {/* Scrollable content */}
+          <div className="flex-1 overflow-y-auto hide-scrollbar px-4 py-4 space-y-3">
+            
+            {/* Customer Information */}
+            <Section icon={User} title="Customer Information" color="emerald">
+              <DetailRow label="Customer Name" value={item.customerName} />
+              <DetailRow label="Phone Number"  value={item.customerPhone} />
+              <DetailRow label="Address"       value={item.customerAddress} />
+            </Section>
+
+            {/* Order Information */}
+            <Section icon={Package} title="Order Information" color="blue">
+              <DetailRow label="Order ID"      value={item.orderId} mono />
+              <DetailRow label="Order Date"    value={fmtDate(item.orderDate)} />
+              <DetailRow label="Product Name"  value={item.productName} />
+              <DetailRow label="Category"      value={item.productCategory} />
+              <DetailRow label="Sub Category"  value={item.productSubcategory} />
+              <DetailRow label="Quantity"      value={item.productQuantity} />
+            </Section>
+
+            {/* Prescription Information */}
+            <Section icon={FileText} title="Prescription & Lens Specs" color="purple">
+              <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 mt-1">Prescription Details</div>
+              <div className="grid grid-cols-2 gap-x-4 border-b border-slate-50 pb-2">
+                <div>
+                  <div className="font-bold text-slate-800 text-xs">Right Eye (OD)</div>
+                  <DetailRow label="SPH" value={item.prescriptionDetails?.sphRight} />
+                  <DetailRow label="CYL" value={item.prescriptionDetails?.cylRight} />
+                  <DetailRow label="AXIS" value={item.prescriptionDetails?.axisRight} />
+                </div>
+                <div>
+                  <div className="font-bold text-slate-800 text-xs">Left Eye (OS)</div>
+                  <DetailRow label="SPH" value={item.prescriptionDetails?.sphLeft} />
+                  <DetailRow label="CYL" value={item.prescriptionDetails?.cylLeft} />
+                  <DetailRow label="AXIS" value={item.prescriptionDetails?.axisLeft} />
+                </div>
+              </div>
+              <DetailRow label="Addition" value={item.prescriptionDetails?.addition} />
+              <DetailRow label="PD" value={item.prescriptionDetails?.pd ? `${item.prescriptionDetails.pd} mm` : '—'} />
+              
+              <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 mt-3">Lens Details</div>
+              <DetailRow label="Lens Type" value={item.lensDetails?.type} />
+              <DetailRow label="Material"  value={item.lensDetails?.material} />
+              <DetailRow label="Coating"   value={item.lensDetails?.coating} />
+            </Section>
+
+            {/* Payment Information */}
+            <Section icon={CreditCard} title="Payment Information" color="rose">
+              <DetailRow label="Total Amount" value={fmt(item.totalAmount)} />
+              <DetailRow label="Paid Amount"  value={fmt(item.paidAmount)} />
+              <DetailRow label="Due Amount"   value={fmt(item.dueAmount)} />
+              <DetailRow label="Payment Status" value={
+                <span className={`inline-flex px-2 py-0.5 rounded text-[11px] font-bold ${
+                  item.paymentStatus === 'Paid' ? 'bg-emerald-50 text-emerald-700' :
+                  item.paymentStatus === 'Partially Paid' ? 'bg-amber-50 text-amber-700' :
+                  'bg-red-50 text-red-700'
+                }`}>
+                  {item.paymentStatus}
+                </span>
+              } />
+            </Section>
+
+            {/* Lab Information */}
+            <Section icon={Truck} title="Lab Information" color="amber">
+              <DetailRow label="Lab Name"               value={item.labName} />
+              <DetailRow label="Sent Date"              value={item.sentDate ? fmtDate(item.sentDate) : '—'} />
+              <DetailRow label="Expected Delivery Date" value={item.expectedDeliveryDate ? fmtDate(item.expectedDeliveryDate) : '—'} />
+              <DetailRow label="Current Status"         value={item.status} />
+            </Section>
+
+            {/* Order Timeline */}
+            <Section icon={Calendar} title="Order Timeline" color="violet">
+              <div className="relative pl-6 space-y-4 py-2">
+                {timelineSteps.map((step, idx) => {
+                  const isCompleted = idx <= currentStepIndex;
+                  const isCurrent = idx === currentStepIndex;
+                  return (
+                    <div key={step.key} className="relative flex items-center gap-3">
+                      {idx < timelineSteps.length - 1 && (
+                        <div className={`absolute top-5 left-[-17px] w-0.5 h-6 ${
+                          idx < currentStepIndex ? 'bg-emerald-500' : 'bg-slate-200'
+                        }`} />
+                      )}
+                      <div className={`absolute left-[-22px] w-3 h-3 rounded-full border-2 ${
+                        isCompleted ? 'bg-emerald-500 border-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]' : 'bg-white border-slate-300'
+                      } ${isCurrent ? 'ring-4 ring-emerald-500/20' : ''}`} />
+                      <div className="flex-1">
+                        <p className={`text-xs font-bold ${isCompleted ? 'text-slate-800' : 'text-slate-400'}`}>
+                          {step.label}
+                        </p>
+                        {isCurrent && (
+                          <p className="text-[10px] text-emerald-600 font-semibold uppercase mt-0.5">Current Stage</p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </Section>
+          </div>
+
+          {/* Footer Actions */}
+          <div className="px-5 py-4 bg-white border-t border-slate-100 flex-shrink-0 space-y-2">
+            {nextStatus && onUpdateStatus && (
+              <button
+                onClick={() => onUpdateStatus(item.id, nextStatus)}
+                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-semibold text-sm transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-1.5"
+              >
+                <RefreshCw className="w-4 h-4" />
+                Advance to "{nextStatus}"
+              </button>
+            )}
+            <button onClick={onClose}
+              className="w-full py-2.5 bg-slate-900 text-white rounded-xl font-semibold text-sm hover:bg-slate-700 transition-all">
+              Close
+            </button>
+          </div>
+        </div>
+      </div>,
+      document.body
+    );
+  }
+
   /* ── SALES DRAWER ──────────────────────────────────────── */
   if (item.type === 'sales') {
     return portal(
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[999] flex justify-end animate-fade-in font-sans">
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[2000] flex justify-end animate-fade-in font-sans">
         <div className="absolute inset-0" onClick={onClose} aria-hidden />
         <div className="relative w-full sm:max-w-md h-full bg-slate-50 shadow-2xl flex flex-col animate-slide-up">
 
@@ -354,7 +546,7 @@ const InventoryDetailDrawer = ({ item, onClose, onApprove, onReject, isApproving
     };
 
     return portal(
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[999] flex justify-end animate-fade-in font-sans">
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[2000] flex justify-end animate-fade-in font-sans">
         <div className="absolute inset-0" onClick={() => { setShowRejectPrompt(false); onClose(); }} aria-hidden />
 
         <div className="relative w-full sm:max-w-md h-full bg-slate-50 shadow-2xl flex flex-col animate-slide-up">
@@ -527,7 +719,7 @@ const InventoryDetailDrawer = ({ item, onClose, onApprove, onReject, isApproving
     : null;
 
   return portal(
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[999] flex justify-end animate-fade-in">
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[2000] flex justify-end animate-fade-in">
       <div className="absolute inset-0" onClick={onClose} aria-hidden />
       <div className="relative w-full sm:max-w-md h-full bg-slate-50 shadow-2xl flex flex-col animate-slide-up">
 

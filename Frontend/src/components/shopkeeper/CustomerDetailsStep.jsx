@@ -150,7 +150,7 @@ const CustomerDetailsStep = ({ formState, onSaveState, onBack, onNext }) => {
     if (!form.firstName?.trim()) e.firstName = 'First name is required';
     if (!form.lastName?.trim()) e.lastName = 'Last name is required';
     if (!form.phone?.trim()) e.phone = 'Mobile number is required';
-    else if (!/^[+]?[\d\s\-()]{8,15}$/.test(form.phone)) e.phone = 'Enter a valid mobile number';
+    else if (!/^\d{10}$/.test(form.phone)) e.phone = 'Mobile number must be exactly 10 digits';
     if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) e.email = 'Enter a valid email';
     if (form.pincode && !/^\d{6}$/.test(form.pincode)) e.pincode = 'Enter a valid 6-digit pincode';
     setErrors(e);
@@ -170,7 +170,7 @@ const CustomerDetailsStep = ({ formState, onSaveState, onBack, onNext }) => {
         : 'border-slate-200 focus:ring-blue-500/10 focus:border-blue-500 placeholder:text-slate-400'
     }`;
 
-  const renderField = (label, field, icon, placeholder, type = 'text', required = false) => {
+  const renderField = (label, field, icon, placeholder, type = 'text', required = false, maxLength) => {
     const Icon = icon;
     return (
       <div>
@@ -182,8 +182,13 @@ const CustomerDetailsStep = ({ formState, onSaveState, onBack, onNext }) => {
           type={type}
           disabled={isLocked}
           value={form[field] || ''}
-          onChange={(e) => set(field, e.target.value)}
+          onChange={(e) => {
+            const val = e.target.value;
+            if (maxLength && val.length > maxLength) return;
+            set(field, val);
+          }}
           placeholder={placeholder}
+          maxLength={maxLength}
           className={inputCls(field)}
         />
         {errors[field] && <p className="text-[10px] text-red-500 mt-1 font-semibold">{errors[field]}</p>}
@@ -221,7 +226,7 @@ const CustomerDetailsStep = ({ formState, onSaveState, onBack, onNext }) => {
               >
                 <div>
                   <p className="font-bold text-slate-800">{c.firstName} {c.lastName}</p>
-                  <p className="text-[10px] text-slate-400 font-semibold">{c.phone}</p>
+                  <p className="text-[10px] text-slate-450 font-semibold">{c.phone}</p>
                 </div>
                 <span className="text-[10px] bg-slate-100 text-slate-500 font-mono px-2 py-0.5 rounded">
                   CUST-{String(c.id).slice(-4)}
@@ -276,7 +281,7 @@ const CustomerDetailsStep = ({ formState, onSaveState, onBack, onNext }) => {
                     Dr. {selectedResult.prescription.doctorName || 'Anil Sharma'} ({selectedResult.prescription.prescriptionDate && !isNaN(new Date(selectedResult.prescription.prescriptionDate).getTime()) ? new Date(selectedResult.prescription.prescriptionDate).toLocaleDateString('en-IN') : '—'})
                   </p>
                 ) : (
-                  <p className="text-slate-450 italic">No prescription logged</p>
+                  <p className="text-slate-455 italic">No prescription logged</p>
                 )}
               </div>
               <div>
@@ -289,7 +294,7 @@ const CustomerDetailsStep = ({ formState, onSaveState, onBack, onNext }) => {
                     ₹{selectedResult.orders[0].amount.toLocaleString('en-IN')} ({selectedResult.orders[0].status})
                   </p>
                 ) : (
-                  <p className="text-slate-450 italic">No previous orders</p>
+                  <p className="text-slate-455 italic">No previous orders</p>
                 )}
               </div>
             </div>
@@ -339,7 +344,7 @@ const CustomerDetailsStep = ({ formState, onSaveState, onBack, onNext }) => {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {renderField('Mobile Number', 'phone', Phone, 'e.g. +91 98765 43210', 'text', true)}
+            {renderField('Mobile Number', 'phone', Phone, 'e.g. 9876543210', 'text', true, 10)}
             {renderField('Email Address', 'email', Mail, 'example@gmail.com', 'email')}
           </div>
 

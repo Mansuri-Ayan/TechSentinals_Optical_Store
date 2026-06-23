@@ -22,7 +22,7 @@ const EMPTY = {
   state: '', pincode: '', remark: '',
 };
 
-const Field = ({ label, field, icon: Icon, placeholder, type = 'text', required, form, errors, set, inputCls, children }) => (
+const Field = ({ label, field, icon: Icon, placeholder, type = 'text', required, form, errors, set, inputCls, children, maxLength }) => (
   <div>
     <label className="text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
       {Icon && <Icon className="w-3.5 h-3.5 text-slate-400" />}
@@ -32,8 +32,13 @@ const Field = ({ label, field, icon: Icon, placeholder, type = 'text', required,
       <input
         type={type}
         value={form[field]}
-        onChange={e => set(field, e.target.value)}
+        onChange={e => {
+          const val = e.target.value;
+          if (maxLength && val.length > maxLength) return;
+          set(field, val);
+        }}
         placeholder={placeholder}
+        maxLength={maxLength}
         className={inputCls(field)}
       />
     )}
@@ -107,7 +112,7 @@ const AddCustomerModal = ({ isOpen, onClose, onSubmit }) => {
     if (!form.firstName.trim()) e.firstName = 'First name is required';
     if (!form.lastName.trim()) e.lastName = 'Last name is required';
     if (!form.phone.trim()) e.phone = 'Phone number is required';
-    else if (!/^[+]?[\d\s\-()]{8,15}$/.test(form.phone)) e.phone = 'Enter a valid phone number';
+    else if (!/^\d{10}$/.test(form.phone)) e.phone = 'Phone number must be exactly 10 digits';
     if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) e.email = 'Enter a valid email';
     if (form.pincode && !/^\d{6}$/.test(form.pincode)) e.pincode = 'Enter a valid 6-digit pincode';
     setErrors(e);
@@ -188,7 +193,7 @@ const AddCustomerModal = ({ isOpen, onClose, onSubmit }) => {
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <Field field="email" label="Email Address" icon={Mail} placeholder="example@gmail.com" type="email" {...fieldProps} />
-                  <Field field="phone" label="Phone Number" icon={Phone} placeholder="+91 98765 43210" required {...fieldProps} />
+                  <Field field="phone" label="Phone Number" icon={Phone} placeholder="e.g. 9876543210" required maxLength={10} {...fieldProps} />
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <Field field="dateOfBirth" label="Date of Birth" icon={Calendar} {...fieldProps}>

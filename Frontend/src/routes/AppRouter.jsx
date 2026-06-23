@@ -14,6 +14,7 @@ import Transactions from "../pages/admin/Transactions";
 import Suppliers from "../pages/admin/Suppliers";
 import SupplierDetail from "../pages/admin/SupplierDetail";
 import Sales from "../pages/admin/Sales";
+import LabOrders from "../pages/admin/LabOrders";
 import Expenses from "../pages/admin/Expenses";
 import Analyses from "../pages/admin/Analyses";
 import Stores from "../pages/admin/Stores";
@@ -195,8 +196,7 @@ const TransactionsRouteRedirect = () => {
 };
 const StoreRouteRedirect = ({ path }) => {
   const { selectedStore, stores } = useStoreStore();
-  const targetStore = selectedStore || stores[0];
-  if (!targetStore) return <Navigate to="/admin/dashboard" replace />;
+  const targetStore = selectedStore || stores[0] || { id: '1' };
   return <Navigate to={`/admin/store/${targetStore.id}/${path}`} replace />;
 };
 
@@ -276,6 +276,11 @@ function AppRouter() {
           element={<SupplierDetail />}
         />
         <Route path="sales" element={<Sales />} />
+        <Route
+          path="lab-orders"
+          element={<StoreRouteRedirect path="lab-orders" />}
+        />
+        <Route path="store/:storeId/lab-orders" element={<LabOrders />} />
         <Route path="analyses" element={<Analyses />} />
         <Route path="stores" element={<Stores />} />
         <Route path="stores/:storeId" element={<StoreDetail />} />
@@ -317,6 +322,7 @@ function AppRouter() {
         <Route path="customers/:customerId" element={<CustomerDetail />} />
         <Route path="inventory" element={<ShopkeeperInventory />} />
         <Route path="sales" element={<ShopkeeperSales />} />
+        <Route path="lab-orders" element={<LabOrders />} />
         <Route path="staff" element={<ShopkeeperStaff />} />
         <Route path="expenses" element={<ShopkeeperExpenses />} />
         <Route path="repairs" element={<Repair />} />

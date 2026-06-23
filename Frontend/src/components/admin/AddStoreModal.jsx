@@ -314,15 +314,16 @@ const AddStoreModal = ({ isOpen, onClose, storeToEdit = null }) => {
                   <input
                     {...register('phone', {
                       required: 'Phone number is required',
-                      minLength: { value: 7, message: 'At least 7 digits required' },
-                      maxLength: { value: 15, message: 'Maximum 15 digits allowed' },
+                      minLength: { value: 10, message: 'Phone number must be exactly 10 digits' },
+                      maxLength: { value: 10, message: 'Phone number must be exactly 10 digits' },
                       pattern: {
-                        value: /^[0-9+\-\s()]+$/,
-                        message: 'Invalid phone number format',
+                        value: /^[0-9]+$/,
+                        message: 'Invalid phone number format (digits only)',
                       },
                     })}
                     type="tel"
-                    placeholder="e.g. +91 98765 43210"
+                    placeholder="e.g. 9876543210"
+                    maxLength={10}
                     className={inputCls(!!errors.phone)}
                   />
                   <FieldError message={errors.phone?.message} />

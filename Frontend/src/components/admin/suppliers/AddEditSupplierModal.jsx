@@ -184,10 +184,11 @@ const AddEditSupplierModal = ({ isOpen, supplier, onClose, onSubmit }) => {
                   </label>
                   <input
                     {...register('phone', {
-                      validate: (v) => !v || /^[+]?[\d\s\-()]{8,15}$/.test(v) || 'Enter a valid phone number'
+                      validate: (v) => !v || /^\d{10}$/.test(v) || 'Phone number must be exactly 10 digits'
                     })}
                     type="text"
                     placeholder="e.g. 9876543210"
+                    maxLength={10}
                     className={inputCls('phone')}
                   />
                   {errors.phone && <p className="text-xs text-red-500 mt-1">{errors.phone.message}</p>}
@@ -200,10 +201,11 @@ const AddEditSupplierModal = ({ isOpen, supplier, onClose, onSubmit }) => {
                   </label>
                   <input
                     {...register('alternate_phone', {
-                      validate: (v) => !v || /^[+]?[\d\s\-()]{8,15}$/.test(v) || 'Enter a valid phone number'
+                      validate: (v) => !v || /^\d{10}$/.test(v) || 'Alternate phone must be exactly 10 digits'
                     })}
                     type="text"
                     placeholder="e.g. 9876543211"
+                    maxLength={10}
                     className={inputCls('alternate_phone')}
                   />
                   {errors.alternate_phone && <p className="text-xs text-red-500 mt-1">{errors.alternate_phone.message}</p>}

@@ -91,6 +91,7 @@ class Optician(Base):
         comment="Professional qualification (e.g., B.Optom, M.Optom)",
     )
 
+
     joining_date = Column(
         Date,
         nullable=False,

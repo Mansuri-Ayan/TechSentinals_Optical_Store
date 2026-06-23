@@ -49,7 +49,7 @@ const WizardCustomerStep = ({ customer, onChange, onBack, onNext }) => {
     if (!form.firstName.trim()) e.firstName = 'First name is required';
     if (!form.lastName.trim()) e.lastName = 'Last name is required';
     if (!form.phone.trim()) e.phone = 'Phone number is required';
-    else if (!/^[+]?[\d\s\-()]{8,15}$/.test(form.phone)) e.phone = 'Enter a valid phone number';
+    else if (!/^\d{10}$/.test(form.phone)) e.phone = 'Phone number must be exactly 10 digits';
     if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) e.email = 'Enter a valid email';
     if (form.pincode && !/^\d{6}$/.test(form.pincode)) e.pincode = 'Enter a valid 6-digit pincode';
     setErrors(e);
@@ -133,8 +133,13 @@ const WizardCustomerStep = ({ customer, onChange, onBack, onNext }) => {
               <input
                 type="text"
                 value={form.phone}
-                onChange={(e) => set('phone', e.target.value)}
-                placeholder="+91 98765 43210"
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val.length > 10) return;
+                  set('phone', val);
+                }}
+                placeholder="e.g. 9876543210"
+                maxLength={10}
                 className={inputCls('phone')}
               />
               {errors.phone && <p className="text-xs text-red-500 mt-1">{errors.phone}</p>}

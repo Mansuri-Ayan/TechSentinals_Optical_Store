@@ -8,7 +8,7 @@ const EMPTY = {
   assignedWork: '', joinDate: '', status: 'Active',
 };
 
-const Field = ({ label, field, icon: Icon, placeholder, type = 'text', form, errors, set, inputCls, children }) => (
+const Field = ({ label, field, icon: Icon, placeholder, type = 'text', form, errors, set, inputCls, children, maxLength }) => (
   <div>
     <label className="text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
       {Icon && <Icon className="w-3.5 h-3.5 text-slate-400" />}
@@ -18,8 +18,13 @@ const Field = ({ label, field, icon: Icon, placeholder, type = 'text', form, err
       <input
         type={type}
         value={form[field]}
-        onChange={e => set(field, e.target.value)}
+        onChange={e => {
+          const val = e.target.value;
+          if (maxLength && val.length > maxLength) return;
+          set(field, val);
+        }}
         placeholder={placeholder}
+        maxLength={maxLength}
         className={inputCls(field)}
       />
     )}
@@ -62,7 +67,7 @@ const AddEditWorkerModal = ({ isOpen, worker, onClose, onSubmit }) => {
     const e = {};
     if (!form.name.trim())          e.name          = 'Worker name is required';
     if (!form.phone.trim())         e.phone         = 'Phone number is required';
-    else if (!/^[+]?[\d\s\-()]{8,15}$/.test(form.phone)) e.phone = 'Enter a valid phone number';
+    else if (!/^\d{10}$/.test(form.phone)) e.phone = 'Phone number must be exactly 10 digits';
     if (!form.email.trim())         e.email         = 'Email is required';
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) e.email = 'Enter a valid email address';
     if (!form.address.trim())       e.address       = 'Address is required';
@@ -127,7 +132,7 @@ const AddEditWorkerModal = ({ isOpen, worker, onClose, onSubmit }) => {
                 <Phone className="w-3.5 h-3.5" /> Contact Details
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Field field="phone" label="Phone Number" icon={Phone} placeholder="+91 98765 43210" {...fieldProps} />
+                <Field field="phone" label="Phone Number" icon={Phone} placeholder="e.g. 9876543210" maxLength={10} {...fieldProps} />
                 <Field field="email" label="Email Address" icon={Mail} placeholder="example@company.com" type="email" {...fieldProps} />
               </div>
             </div>
