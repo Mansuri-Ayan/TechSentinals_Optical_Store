@@ -41,7 +41,19 @@ class PurchaseOrderItem(Base):
         ForeignKey("products.id", ondelete="RESTRICT"),
         nullable=False,
         index=True,
-        comment="FK → products.id — product being ordered",
+        comment="FK → products.id — product being ordered (live catalogue reference)",
+    )
+
+    product_snapshot_id = Column(
+        BigInteger,
+        ForeignKey("product_snapshots.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+        comment=(
+            "FK → product_snapshots.id — frozen copy of the product as it was "
+            "at the time this purchase order was created.  Use this for PO "
+            "reports and cost tracking; never join products directly for price/name."
+        ),
     )
 
     # Links to inventory record that will be updated on receipt
@@ -120,9 +132,14 @@ class PurchaseOrderItem(Base):
         "PurchaseOrder",
         back_populates="items",
     )
-    product = relationship(
+    product = relationship(  # Live product fallback — prefer product_snapshot for historical accuracy
         "Product",
         lazy="selectin",
+    )
+    product_snapshot = relationship(
+        "ProductSnapshot",
+        lazy="selectin",
+        foreign_keys="[PurchaseOrderItem.product_snapshot_id]",
     )
     inventory = relationship(
         "Inventory",

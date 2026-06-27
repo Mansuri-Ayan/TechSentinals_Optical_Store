@@ -8,6 +8,7 @@ from sqlalchemy import (
     Enum,
     ForeignKey,
     Integer,
+    Numeric,
     Text,
 )
 from sqlalchemy.orm import relationship
@@ -65,6 +66,32 @@ class InventoryTransaction(Base):
         nullable=False,
         index=True,
         comment="FK → products.id — denormalised for faster queries",
+    )
+
+    product_snapshot_id = Column(
+        BigInteger,
+        ForeignKey("product_snapshots.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+        comment=(
+            "FK → product_snapshots.id — frozen copy of the product at time of "
+            "this movement.  Use for damage/loss/return value reporting."
+        ),
+    )
+
+    unit_price = Column(
+        Numeric(10, 2),
+        nullable=True,
+        comment=(
+            "Per-unit value at time of this movement — snapshotted so that "
+            "later price changes do not alter historical valuations."
+        ),
+    )
+
+    total_value = Column(
+        Numeric(12, 2),
+        nullable=True,
+        comment="unit_price × quantity — total monetary value of this movement",
     )
 
     transaction_type = Column(
@@ -181,9 +208,14 @@ class InventoryTransaction(Base):
         "Inventory",
         back_populates="transactions",
     )
-    product = relationship(
+    product = relationship(  # Live product fallback — prefer product_snapshot for historical accuracy
         "Product",
         lazy="selectin",
+    )
+    product_snapshot = relationship(
+        "ProductSnapshot",
+        lazy="selectin",
+        foreign_keys="[InventoryTransaction.product_snapshot_id]",
     )
     send_store = relationship(
         "Store",

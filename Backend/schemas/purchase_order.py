@@ -6,7 +6,8 @@ and SupplierPayment.
 from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+from schemas.product_snapshot import ProductSnapshotRead
 
 
 # ── Enums ──────────────────────────────────────────────────────
@@ -46,6 +47,7 @@ class PurchaseOrderItemRead(BaseModel):
     id: int
     purchase_order_id: int
     product_id: int
+    product_snapshot_id: int | None = None
     inventory_id: int | None = None
     quantity_ordered: int
     quantity_received: int
@@ -57,11 +59,29 @@ class PurchaseOrderItemRead(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    # Denormalized
+    # Embedded snapshot — all frozen product data at time of PO creation
+    product_snapshot: ProductSnapshotRead | None = None
+
+    # Backward-compatible denormalized fields
+    # Auto-populated from product_snapshot via model_validator
     product_name: str | None = None
     product_sku: str | None = None
     category_name: str | None = None
     brand_name: str | None = None
+
+    @model_validator(mode="after")
+    def _fill_from_snapshot(self) -> "PurchaseOrderItemRead":
+        """Populate denormalized fields from snapshot when not set explicitly."""
+        if self.product_snapshot:
+            if self.product_name is None:
+                self.product_name = self.product_snapshot.name
+            if self.product_sku is None:
+                self.product_sku = self.product_snapshot.sku
+            if self.category_name is None:
+                self.category_name = self.product_snapshot.category_name
+            if self.brand_name is None:
+                self.brand_name = self.product_snapshot.brand_name
+        return self
 
     model_config = {"from_attributes": True}
 

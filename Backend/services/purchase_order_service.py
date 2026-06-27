@@ -16,7 +16,9 @@ from models.supplier import Supplier
 from models.supplier_payment import SupplierPayment
 from models.inventory import Inventory
 from models.inventory_transaction import InventoryTransaction, TransactionType
+from models.product import Product
 from services.inventory_service import get_or_create_inventory
+from services.snapshot_service import capture_product_snapshot
 from schemas.purchase_order import (
     PurchaseOrderCreate,
     PurchaseOrderUpdate,
@@ -107,8 +109,22 @@ async def create_purchase_order(
         total_discount += discount_amt
         total_tax += tax_amt
 
+        # Fetch product for snapshot
+        prod_stmt = select(Product).where(Product.id == item_data.product_id)
+        prod_result = await db.execute(prod_stmt)
+        product = prod_result.scalar_one_or_none()
+        if not product:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Product {item_data.product_id} not found",
+            )
+
+        # Capture an immutable snapshot of the product at PO creation time
+        snapshot = await capture_product_snapshot(db, product)
+
         po_item = PurchaseOrderItem(
             product_id=item_data.product_id,
+            product_snapshot_id=snapshot.id,
             inventory_id=item_data.inventory_id,
             quantity_ordered=item_data.quantity_ordered,
             unit_price=item_data.unit_price,
@@ -318,10 +334,13 @@ async def receive_goods(
         inventory.last_purchase_price = po_item.unit_price
         inventory.last_stock_in_at = _now()
 
-        # Create inventory transaction
+        # Create inventory transaction with snapshot from PO item
         txn = InventoryTransaction(
             inventory_id=inventory.id,
             product_id=po_item.product_id,
+            product_snapshot_id=po_item.product_snapshot_id,
+            unit_price=po_item.unit_price,
+            total_value=po_item.unit_price * grn_item.quantity_received,
             transaction_type=TransactionType.PURCHASE,
             quantity=grn_item.quantity_received,
             reference_id=po.id,

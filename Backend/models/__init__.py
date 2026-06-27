@@ -13,6 +13,7 @@ from models.product import Product
 from models.frame_product import FrameProduct
 from models.lens_product import LensProduct
 from models.accessory_product import AccessoryProduct
+from models.product_snapshot import ProductSnapshot, ProductType
 from models.inventory import Inventory, OwnerType
 from models.inventory_transaction import InventoryTransaction, TransactionType
 

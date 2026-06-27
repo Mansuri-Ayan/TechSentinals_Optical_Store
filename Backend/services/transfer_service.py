@@ -25,6 +25,7 @@ from models.manager import Manager
 from models.store import Store
 from models.product import Product
 from services.inventory_service import get_or_create_inventory
+from services.snapshot_service import capture_product_snapshot
 
 
 # ── Helpers ────────────────────────────────────────────────────
@@ -162,9 +163,16 @@ async def purchase_stock(
         # If purchasing into a store, set receive_store_id for display
         receive_store = oid if ot == OwnerType.STORE else None
 
+        # Capture snapshot of product at purchase time
+        prod = await db.scalar(select(Product).where(Product.id == product_id))
+        snapshot = await capture_product_snapshot(db, prod) if prod else None
+
         txn = InventoryTransaction(
             inventory_id=inventory.id,
             product_id=product_id,
+            product_snapshot_id=snapshot.id if snapshot else None,
+            unit_price=purchase_price,
+            total_value=purchase_price * quantity if purchase_price else None,
             transaction_type=TransactionType.PURCHASE,
             quantity=quantity,
             receive_store_id=receive_store,
@@ -784,7 +792,8 @@ async def approve_transaction_service(
             raise HTTPException(status_code=403, detail="Role not authorized to approve transactions")
 
         # Load names for notifications
-        product_name = txn.product.name if txn.product else "Product"
+        snap = txn.product_snapshot
+        product_name = snap.name if snap else (txn.product.name if txn.product else "Product")
         send_store_name = txn.send_store.store_name if txn.send_store else "Admin Warehouse"
         receive_store_name = txn.receive_store.store_name if txn.receive_store else "Admin Warehouse"
         admin_id = txn.product.admin_id if txn.product else user.id
@@ -983,7 +992,8 @@ async def reject_transaction_service(
         else:
             raise HTTPException(status_code=403, detail="Role not authorized to reject transactions")
 
-        product_name = txn.product.name if txn.product else "Product"
+        snap = txn.product_snapshot
+        product_name = snap.name if snap else (txn.product.name if txn.product else "Product")
         send_store_name = txn.send_store.store_name if txn.send_store else "Admin Warehouse"
         receive_store_name = txn.receive_store.store_name if txn.receive_store else "Admin Warehouse"
         admin_id = txn.product.admin_id if txn.product else user.id
@@ -1136,9 +1146,17 @@ async def record_stock_action(
 
         store_id = owner_id if owner_type == OwnerType.STORE else None
 
+        # Capture snapshot and price for value reporting
+        prod = await db.scalar(select(Product).where(Product.id == product_id))
+        snapshot = await capture_product_snapshot(db, prod) if prod else None
+        unit_price_val = float(prod.selling_price) if prod else None
+
         txn = InventoryTransaction(
             inventory_id=inventory.id,
             product_id=product_id,
+            product_snapshot_id=snapshot.id if snapshot else None,
+            unit_price=unit_price_val,
+            total_value=unit_price_val * quantity if unit_price_val else None,
             transaction_type=action,
             quantity=quantity,
             send_store_id=store_id if action != TransactionType.RETURN else None,

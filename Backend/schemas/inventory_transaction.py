@@ -1,7 +1,9 @@
 # Schema: inventory_transaction.py
 from datetime import datetime
+from decimal import Decimal
 from enum import Enum
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+from schemas.product_snapshot import ProductSnapshotRead
 
 
 class TransactionTypeEnum(str, Enum):
@@ -51,8 +53,12 @@ class TransactionRead(BaseModel):
     id: int
     inventory_id: int
     product_id: int
+    product_snapshot_id: int | None = None
     transaction_type: TransactionTypeEnum
     quantity: int
+    # Monetary value at time of transaction
+    unit_price: Decimal | None = None
+    total_value: Decimal | None = None
     send_store_id: int | None = None
     receive_store_id: int | None = None
     reference_id: int | None = None
@@ -60,7 +66,7 @@ class TransactionRead(BaseModel):
     created_by: int
     created_at: datetime
 
-    # Approval workflows fields
+    # Approval workflow fields
     status: str
     transfer_direction: str | None = None
     requested_by_store_id: int | None = None
@@ -70,12 +76,26 @@ class TransactionRead(BaseModel):
     rejection_reason: str | None = None
     is_request: bool = False
 
-    # Denormalized info
+    # Embedded snapshot — all frozen product data at time of transaction
+    product_snapshot: ProductSnapshotRead | None = None
+
+    # Backward-compatible denormalized fields
+    # Auto-populated from product_snapshot via model_validator
     product_name: str | None = None
     product_sku: str | None = None
     send_store_name: str | None = None
     receive_store_name: str | None = None
     requested_by_store_name: str | None = None
     approved_by_store_name: str | None = None
+
+    @model_validator(mode="after")
+    def _fill_from_snapshot(self) -> "TransactionRead":
+        """Populate denormalized fields from snapshot when not set explicitly."""
+        if self.product_snapshot:
+            if self.product_name is None:
+                self.product_name = self.product_snapshot.name
+            if self.product_sku is None:
+                self.product_sku = self.product_snapshot.sku
+        return self
 
     model_config = {"from_attributes": True}

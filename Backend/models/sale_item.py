@@ -41,7 +41,19 @@ class SaleItem(Base):
         ForeignKey("products.id", ondelete="RESTRICT"),
         nullable=False,
         index=True,
-        comment="FK → products.id — product sold",
+        comment="FK → products.id — product sold (live catalogue reference)",
+    )
+
+    product_snapshot_id = Column(
+        BigInteger,
+        ForeignKey("product_snapshots.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+        comment=(
+            "FK → product_snapshots.id — frozen copy of the product as it was "
+            "at the moment of this sale.  Use this for invoices and reports; "
+            "never join products directly for price/name data."
+        ),
     )
 
     inventory_id = Column(
@@ -117,9 +129,14 @@ class SaleItem(Base):
         "Sale",
         back_populates="items",
     )
-    product = relationship(
+    product = relationship(  # Live product fallback — prefer product_snapshot for historical accuracy
         "Product",
         lazy="selectin",
+    )
+    product_snapshot = relationship(
+        "ProductSnapshot",
+        lazy="selectin",
+        foreign_keys="[SaleItem.product_snapshot_id]",
     )
     inventory = relationship(
         "Inventory",

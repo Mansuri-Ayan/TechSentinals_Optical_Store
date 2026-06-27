@@ -83,12 +83,13 @@ def prescription_to_frontend_dict(p) -> dict:
 def sale_to_frontend_order(s) -> dict:
     items = []
     for item in (s.items or []):
+        snap = item.product_snapshot
         items.append({
             "productId": item.product_id,
-            "productName": item.product.name if item.product else "Optical Product",
-            "frameName": item.product.name if item.product else "Optical Product",
-            "brand": item.product.brand.name if item.product and item.product.brand else "Vision Brand",
-            "category": item.product.category.name if item.product and item.product.category else "Optical",
+            "productName": snap.name if snap else (item.product.name if item.product else "Optical Product"),
+            "frameName": snap.name if snap else (item.product.name if item.product else "Optical Product"),
+            "brand": snap.brand_name if snap else (item.product.brand.name if item.product and item.product.brand else "Vision Brand"),
+            "category": snap.category_name if snap else (item.product.category.name if item.product and item.product.category else "Optical"),
             "quantity": item.quantity,
             "price": float(item.unit_price),
             "amount": float(item.line_total),

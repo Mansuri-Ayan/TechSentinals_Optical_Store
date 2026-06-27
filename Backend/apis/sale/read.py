@@ -18,10 +18,12 @@ router = APIRouter()
 
 
 def _item_to_read(item) -> SaleItemRead:
+    snap = item.product_snapshot
     return SaleItemRead(
         **{c.key: getattr(item, c.key) for c in item.__table__.columns},
-        product_name=item.product.name if item.product else None,
-        product_sku=item.product.sku if item.product else None,
+        product_snapshot=snap,
+        product_name=snap.name if snap else (item.product.name if item.product else None),
+        product_sku=snap.sku if snap else (item.product.sku if item.product else None),
     )
 
 
@@ -71,15 +73,19 @@ def _sale_to_read(sale, include_nested: bool = True, staff_map: dict = None) -> 
 
     if sale.items:
         first_item = sale.items[0]
-        product_name = first_item.product.name if first_item.product else None
-        if len(sale.items) > 1:
-            product_name = f"{product_name} (+{len(sale.items) - 1} more)"
-        
-        if first_item.product:
+        snap = first_item.product_snapshot
+        if snap:
+            product_name = snap.name
+            product_category = snap.category_name
+            product_subcategory = snap.subcategory_name
+        elif first_item.product:
+            product_name = first_item.product.name
             if first_item.product.category:
                 product_category = first_item.product.category.name
             if first_item.product.subcategory:
                 product_subcategory = first_item.product.subcategory.name
+        if len(sale.items) > 1:
+            product_name = f"{product_name} (+{len(sale.items) - 1} more)" if product_name else None
         
         product_quantity = sum(item.quantity for item in sale.items)
         product_price = first_item.unit_price

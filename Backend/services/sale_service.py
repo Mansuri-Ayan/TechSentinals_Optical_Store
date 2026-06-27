@@ -22,6 +22,7 @@ from models.store_category_loyalty import StoreCategoryLoyalty # Import StoreCat
 from models.loyalty_transaction import LoyaltyTransaction, LoyaltyTransactionType # Import LoyaltyTransaction and Type
 from services.inventory_service import get_or_create_inventory
 from services import loyalty_service # Import loyalty_service
+from services.snapshot_service import capture_product_snapshot
 
 from schemas.sale import (
     SaleCreate,
@@ -114,8 +115,12 @@ async def create_sale(
         total_discount += discount_amt
         total_tax += tax_amt
 
+        # Capture an immutable snapshot of the product at sale time
+        snapshot = await capture_product_snapshot(db, product)
+
         sale_item = SaleItem(
             product_id=item_data.product_id,
+            product_snapshot_id=snapshot.id,
             inventory_id=item_data.inventory_id,
             quantity=item_data.quantity,
             unit_price=item_data.unit_price,
@@ -125,9 +130,12 @@ async def create_sale(
             line_total=line_total,
             notes=item_data.notes,
         )
-        sale_items.append(sale_item)
+        sale_items.append((sale_item, product, snapshot))
 
     total_amount = (subtotal - total_discount + total_tax).quantize(Decimal("0.01"))
+
+    # Unpack items tuple — service builds (SaleItem, Product, ProductSnapshot) triples
+    sale_items_unpacked = [si for si, _p, _s in sale_items]
 
     # Build payments
     sale_payments: list[SalePayment] = []
@@ -224,7 +232,7 @@ async def create_sale(
         loyalty_points_earned=0,
         loyalty_points_redeemed=0,
         notes=payload.notes,
-        items=sale_items,
+        items=sale_items_unpacked,
         payments=sale_payments,
     )
     db.add(sale)
@@ -277,11 +285,12 @@ async def create_sale(
                     sale.status = SaleStatus.COMPLETED
 
             # Step 2: Earning
-            sale_items_dict = [{"category_id": item.product_id, "quantity": item.quantity} for item in sale_items]
-            # We need to get product categories for earning computation
+            sale_items_dict = [{"category_id": item.product_id, "quantity": item.quantity} for item, _p, _s in sale_items]
+            # Reuse already-fetched products instead of re-querying
+            product_map = {p.id: p for _si, p, _s in sale_items}
             for item_dict in sale_items_dict:
-                prod = await db.scalar(select(Product).where(Product.id == item_dict["category_id"]))
-                item_dict["category_id"] = prod.category_id
+                prod = product_map.get(item_dict["category_id"])
+                item_dict["category_id"] = prod.category_id if prod else item_dict["category_id"]
 
             # Use updated total_amount for price points calculation
             earn_res = await loyalty_service.calculate_points_for_sale(
@@ -331,7 +340,7 @@ async def create_sale(
             db.add(customer)
 
     # Decrement inventory for each item
-    for sale_item in sale_items:
+    for sale_item, product, snapshot in sale_items:
         if sale_item.inventory_id:
             inv_stmt = select(Inventory).where(Inventory.id == sale_item.inventory_id)
             inv_result = await db.execute(inv_stmt)
@@ -366,6 +375,9 @@ async def create_sale(
         txn = InventoryTransaction(
             inventory_id=inventory.id,
             product_id=sale_item.product_id,
+            product_snapshot_id=snapshot.id,
+            unit_price=sale_item.unit_price,
+            total_value=sale_item.line_total,
             transaction_type=TransactionType.SALE,
             quantity=sale_item.quantity,
             reference_id=sale.id,
@@ -552,6 +564,9 @@ async def cancel_sale(
                 txn = InventoryTransaction(
                     inventory_id=inventory.id,
                     product_id=item.product_id,
+                    product_snapshot_id=item.product_snapshot_id,
+                    unit_price=item.unit_price,
+                    total_value=item.line_total,
                     transaction_type=TransactionType.RETURN,
                     quantity=item.quantity,
                     reference_id=sale.id,

@@ -13,10 +13,12 @@ router = APIRouter()
 
 
 def _txn_to_read(txn) -> TransactionRead:
+    snap = txn.product_snapshot
     return TransactionRead(
         **{c.key: getattr(txn, c.key) for c in txn.__table__.columns},
-        product_name=txn.product.name if txn.product else None,
-        product_sku=txn.product.sku if txn.product else None,
+        product_snapshot=snap,
+        product_name=snap.name if snap else (txn.product.name if txn.product else None),
+        product_sku=snap.sku if snap else (txn.product.sku if txn.product else None),
         send_store_name=txn.send_store.store_name if txn.send_store else None,
         receive_store_name=txn.receive_store.store_name if txn.receive_store else None,
     )

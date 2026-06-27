@@ -15,10 +15,12 @@ router = APIRouter()
 
 
 def _po_item_to_read(item) -> PurchaseOrderItemRead:
+    snap = item.product_snapshot
     return PurchaseOrderItemRead(
         **{c.key: getattr(item, c.key) for c in item.__table__.columns},
-        product_name=item.product.name if item.product else None,
-        product_sku=item.product.sku if item.product else None,
+        product_snapshot=snap,
+        product_name=snap.name if snap else (item.product.name if item.product else None),
+        product_sku=snap.sku if snap else (item.product.sku if item.product else None),
     )
 
 

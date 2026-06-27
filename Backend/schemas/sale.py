@@ -5,9 +5,10 @@ Pydantic schemas for Sale, SaleItem, and SalePayment.
 from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum
-from typing import Optional, List # Added Optional for NewCustomerDetails
-from pydantic import BaseModel, Field # Removed EmailStr
-from models.customer import CustomerGender # Added CustomerGender
+from typing import Optional, List
+from pydantic import BaseModel, Field, model_validator
+from models.customer import CustomerGender
+from schemas.product_snapshot import ProductSnapshotRead
 
 
 # ── Enums ──────────────────────────────────────────────────────
@@ -55,6 +56,7 @@ class SaleItemRead(BaseModel):
     id: int
     sale_id: int
     product_id: int
+    product_snapshot_id: int | None = None
     inventory_id: int | None = None
     quantity: int
     unit_price: Decimal
@@ -66,9 +68,23 @@ class SaleItemRead(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    # Denormalized
+    # Embedded snapshot — all frozen product data at time of sale
+    product_snapshot: ProductSnapshotRead | None = None
+
+    # Backward-compatible denormalized fields
+    # Auto-populated from product_snapshot via model_validator
     product_name: str | None = None
     product_sku: str | None = None
+
+    @model_validator(mode="after")
+    def _fill_from_snapshot(self) -> "SaleItemRead":
+        """Populate denormalized fields from snapshot when not set explicitly."""
+        if self.product_snapshot:
+            if self.product_name is None:
+                self.product_name = self.product_snapshot.name
+            if self.product_sku is None:
+                self.product_sku = self.product_snapshot.sku
+        return self
 
     model_config = {"from_attributes": True}
 
