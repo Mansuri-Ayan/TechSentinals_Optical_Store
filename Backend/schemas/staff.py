@@ -13,6 +13,7 @@ class StaffRead(BaseModel):
     phone: str
     profile_image: str | None = None
     employee_code: str
+    pf_number: str | None = None
     joining_date: date
     is_active: bool
     qualification: str | None = None  # Only for optician

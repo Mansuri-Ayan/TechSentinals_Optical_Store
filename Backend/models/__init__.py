@@ -47,3 +47,6 @@ from models.repair import Repair, RepairType, RepairStatus, RepairStaffType
 # ── Notifications ─────────────────────────────────────────────
 from models.notification import Notification, NotificationType
 
+# ── Lab Partners ──────────────────────────────────────────────
+from models.lab import Lab
+

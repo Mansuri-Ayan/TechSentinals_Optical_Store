@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   Search, Store, ShoppingCart, UserCheck, ChevronRight,
-  X, Package, Clock, Users, DollarSign, Printer
+  X, Package, Clock, Users, DollarSign, Printer, Calendar
 } from 'lucide-react';
 import { useSales } from '../../hooks/useSales';
 import { useStores } from '../../hooks/useStores';
@@ -15,6 +15,8 @@ const STATUS_CFG = {
   Cancelled: { color: 'text-slate-600 bg-slate-100 border-slate-200', dot: 'bg-slate-400' },
   Returned:  { color: 'text-red-700 bg-red-50 border-red-200', dot: 'bg-red-500' },
   'Lab Pending': { color: 'text-amber-700 bg-amber-50 border-amber-200', dot: 'bg-amber-500' },
+  'Partially Paid': { color: 'text-blue-700 bg-blue-50 border-blue-200', dot: 'bg-blue-500' },
+  'Unpaid': { color: 'text-rose-700 bg-rose-50 border-rose-200', dot: 'bg-rose-500' },
 };
 
 const STATUS_FILTERS = [
@@ -23,6 +25,8 @@ const STATUS_FILTERS = [
   { key: 'Cancelled', label: 'Cancelled Orders' },
   { key: 'Returned', label: 'Returned Orders' },
   { key: 'Lab Pending', label: 'Lab Pending' },
+  { key: 'Partially Paid', label: 'Partially Paid' },
+  { key: 'Unpaid', label: 'Unpaid' },
 ];
 
 const StatusBadge = ({ status }) => {
@@ -47,6 +51,8 @@ const Sales = () => {
   const [selectedPayment, setSelectedPayment] = useState('All');
   const [searchInput, setSearchInput] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedSale, setSelectedSale] = useState(null);
 
@@ -74,7 +80,7 @@ const Sales = () => {
   // Reset page when filtering
   useEffect(() => {
     setCurrentPage(1);
-  }, [selectedBranch, selectedStatus, selectedPayment, searchTerm]);
+  }, [selectedBranch, selectedStatus, selectedPayment, searchTerm, dateFrom, dateTo]);
 
   // Fetch sales from backend
   const { sales, total, pages, kpis, isLoading } = useSales({
@@ -83,6 +89,8 @@ const Sales = () => {
     storeId: selectedBranch,
     status: selectedStatus,
     search: searchTerm,
+    dateFrom,
+    dateTo,
     hasDue: selectedPayment === 'Remaining' ? true : selectedPayment === 'Paid' ? false : undefined,
   });
 
@@ -173,6 +181,37 @@ const Sales = () => {
             </select>
             <ChevronRight className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none rotate-90" />
           </div>
+
+          {/* Date Filters */}
+          <div className="flex items-center justify-between sm:justify-start gap-2 border border-slate-100 sm:border-0 p-2 sm:p-0 rounded-xl flex-wrap sm:ml-4">
+            <label className="text-sm font-semibold text-slate-600 flex items-center gap-1.5 whitespace-nowrap">
+              <Calendar className="w-4 h-4 text-slate-400" /> Dates:
+            </label>
+            <div className="flex items-center gap-1.5">
+              <input
+                type="date"
+                value={dateFrom}
+                onChange={e => setDateFrom(e.target.value)}
+                className="px-2 py-1 text-xs font-semibold border border-slate-200 rounded-xl bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/10 focus:border-emerald-500"
+              />
+              <span className="text-slate-400 text-xs font-semibold">to</span>
+              <input
+                type="date"
+                value={dateTo}
+                onChange={e => setDateTo(e.target.value)}
+                className="px-2 py-1 text-xs font-semibold border border-slate-200 rounded-xl bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/10 focus:border-emerald-500"
+              />
+              {(dateFrom || dateTo) && (
+                <button 
+                  onClick={() => { setDateFrom(''); setDateTo(''); }}
+                  className="p-1.5 text-slate-400 hover:text-red-500 transition-colors bg-slate-50 rounded-lg hover:bg-red-50"
+                  title="Clear date filter"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Search Bar */}
@@ -234,6 +273,8 @@ const Sales = () => {
               setSelectedBranch('All');
               setSelectedStatus('All');
               setSelectedPayment('All');
+              setDateFrom('');
+              setDateTo('');
               setSearchInput('');
               setSearchTerm('');
             }}

@@ -194,6 +194,12 @@ class Admin(Base):
         cascade="all, delete-orphan",
         lazy="noload",
     )
+    labs = relationship(
+        "Lab",
+        back_populates="admin",
+        cascade="all, delete-orphan",
+        lazy="noload",
+    )
     products = relationship(
         "Product",
         back_populates="admin",

@@ -1,4 +1,7 @@
 # Main module: main.py
+import logging
+logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
+
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -27,13 +30,29 @@ from routes.api_shopkeeper_transactions_router import router as api_shopkeeper_t
 from routes.notification_router import router as notification_router
 from routes.loyalty_router import router as loyalty_router
 from routes.shopkeeper_loyalty_router import router as shopkeeper_loyalty_router
+from routes.lab_router import lab_router
 from db.session import engine
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    try:
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        alembic_cfg = Config(os.path.join(current_dir, "alembic.ini"))
+        alembic_cfg.set_main_option("script_location", os.path.join(current_dir, "migrations"))
+        try:
+            command.upgrade(alembic_cfg, "head")
+            print("Alembic migrations completed successfully.")
+        except Exception as upgrade_err:
+            print(f"Alembic upgrade failed, attempting to stamp head: {upgrade_err}")
+            command.stamp(alembic_cfg, "head")
+            print("Alembic database stamped to head successfully.")
+    except Exception as e:
+        print(f"Error running Alembic migrations: {e}")
+            
     yield
     await engine.dispose()
 app = FastAPI(
     title="TechSentinals Optical Store API",
+    # Trigger uvicorn reload to rerun safe database migrations
     description=(
         "Backend REST API for the TechSentinals Optical Store "
         "management system.  Handles admin authentication, "
@@ -90,3 +109,4 @@ app.include_router(api_shopkeeper_transactions_router)
 app.include_router(notification_router)
 app.include_router(loyalty_router)
 app.include_router(shopkeeper_loyalty_router)
+app.include_router(lab_router)

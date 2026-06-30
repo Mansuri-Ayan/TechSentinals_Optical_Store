@@ -5,15 +5,17 @@ import {
   Store, CheckCircle, AlertTriangle, XCircle, Image as ImageIcon, Sliders,
   User, Users, CreditCard, UserCheck, Calendar, IndianRupee, ShoppingCart,
   Receipt, FileText, RefreshCw, Shield, ThumbsUp, ThumbsDown,
-  Briefcase, Clock, Phone, Mail, Pencil, Printer, Share2, Eye, Sparkles
+  Briefcase, Clock, Phone, Mail, Pencil, Printer, Share2, Eye, Sparkles, Beaker, Search, ChevronRight
 } from 'lucide-react';
 import { useCustomer } from '../../hooks/useCustomers';
 import { getBillTemplateSettings } from '../../utils/billSettings';
+import { addSalePaymentApi } from '../../api/customer/customer.api';
+import { toast } from 'react-toastify';
 
 const statusConfig = {
-  'in_stock':    { label: 'In Stock',     color: 'text-emerald-700 bg-emerald-50 border-emerald-200', dot: 'bg-emerald-500', icon: CheckCircle },
-  'low_stock':   { label: 'Low Stock',    color: 'text-amber-700 bg-amber-50 border-amber-200',       dot: 'bg-amber-500',   icon: AlertTriangle },
-  'out_of_stock':{ label: 'Out of Stock', color: 'text-red-700 bg-red-50 border-red-200',             dot: 'bg-red-500',     icon: XCircle },
+  'in_stock': { label: 'In Stock', color: 'text-emerald-700 bg-emerald-50 border-emerald-200', dot: 'bg-emerald-500', icon: CheckCircle },
+  'low_stock': { label: 'Low Stock', color: 'text-amber-700 bg-amber-50 border-amber-200', dot: 'bg-amber-500', icon: AlertTriangle },
+  'out_of_stock': { label: 'Out of Stock', color: 'text-red-700 bg-red-50 border-red-200', dot: 'bg-red-500', icon: XCircle },
 };
 
 const getStockStatus = (item) => {
@@ -28,6 +30,17 @@ const getStockStatus = (item) => {
 
 const categoryLabel = { frames: 'Frames', lenses: 'Lenses', other: 'Other Products' };
 
+const formatDate = (d) => {
+  if (!d) return '—';
+  const date = new Date(d);
+  if (isNaN(date.getTime())) return '—';
+  return date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+};
+
+const fmtPrice = (n) => {
+  return `₹${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+};
+
 const DetailRow = ({ label, value, mono }) => (
   <div className="flex items-start justify-between py-2.5 border-b border-slate-50 last:border-0 gap-3">
     <span className="text-sm text-slate-500 font-medium shrink-0">{label}</span>
@@ -40,12 +53,12 @@ const DetailRow = ({ label, value, mono }) => (
 const Section = ({ icon: Icon, title, children, color = 'emerald' }) => {
   const colours = {
     emerald: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600',
-    blue:    'bg-blue-500/10 border-blue-500/20 text-blue-600',
-    purple:  'bg-purple-500/10 border-purple-500/20 text-purple-600',
-    amber:   'bg-amber-500/10 border-amber-500/20 text-amber-600',
-    rose:    'bg-rose-500/10 border-rose-500/20 text-rose-600',
-    slate:   'bg-slate-500/10 border-slate-500/20 text-slate-600',
-    violet:  'bg-violet-500/10 border-violet-500/20 text-violet-600',
+    blue: 'bg-blue-500/10 border-blue-500/20 text-blue-600',
+    purple: 'bg-purple-500/10 border-purple-500/20 text-purple-600',
+    amber: 'bg-amber-500/10 border-amber-500/20 text-amber-600',
+    rose: 'bg-rose-500/10 border-rose-500/20 text-rose-600',
+    slate: 'bg-slate-500/10 border-slate-500/20 text-slate-600',
+    violet: 'bg-violet-500/10 border-violet-500/20 text-violet-600',
   };
   return (
     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
@@ -83,11 +96,10 @@ const RejectReasonPrompt = ({ onConfirm, onCancel }) => {
           value={reason}
           onChange={e => { setReason(e.target.value); setError(''); }}
           placeholder="Provide a reason for rejecting this expense..."
-          className={`w-full px-3 py-2.5 text-sm font-medium border rounded-xl focus:outline-none focus:ring-4 resize-none transition-all bg-white ${
-            error
+          className={`w-full px-3 py-2.5 text-sm font-medium border rounded-xl focus:outline-none focus:ring-4 resize-none transition-all bg-white ${error
               ? 'border-red-400 focus:ring-red-100 focus:border-red-500'
               : 'border-slate-200 focus:ring-red-500/10 focus:border-red-500'
-          }`}
+            }`}
         />
         {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
       </div>
@@ -113,13 +125,31 @@ const RejectReasonPrompt = ({ onConfirm, onCancel }) => {
    MAIN DRAWER COMPONENT
    Props: item, onClose, onApprove, onReject, isApproving, isRejecting, isLoading
 ───────────────────────────────────────────────────────── */
-const InventoryDetailDrawer = ({ item, onClose, onEdit, onApprove, onReject, isApproving, isRejecting, isLoading, onUpdateStatus }) => {
+const InventoryDetailDrawer = ({ item, onClose, onEdit, onApprove, onReject, isApproving, isRejecting, isLoading, onUpdateStatus, labs = [] }) => {
   const [showRejectPrompt, setShowRejectPrompt] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState('CASH');
+  const [referenceNumber, setReferenceNumber] = useState('');
+  const [paymentRemarks, setPaymentRemarks] = useState('Final payment collected at delivery');
+  const [isSubmittingPayment, setIsSubmittingPayment] = useState(false);
+  const [selectedLabId, setSelectedLabId] = useState('');
+  const [selectedLabName, setSelectedLabName] = useState('');
+  const [isLabModalOpen, setIsLabModalOpen] = useState(false);
+  const [labSearchTerm, setLabSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState('details');
 
   useEffect(() => {
     if (item) {
       setActiveTab(item.initialTab || 'details');
+      setSelectedLabId(item.labId ? String(item.labId) : '');
+      setSelectedLabName(item.labName || '');
+      setIsLabModalOpen(false);
+      setLabSearchTerm('');
+    } else {
+      setSelectedLabId('');
+      setSelectedLabName('');
+      setIsLabModalOpen(false);
+      setLabSearchTerm('');
     }
   }, [item]);
 
@@ -151,9 +181,9 @@ const InventoryDetailDrawer = ({ item, onClose, onEdit, onApprove, onReject, isA
     return portal(
       <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[2000] flex justify-end animate-fade-in font-sans">
         <div className="absolute inset-0" onClick={onClose} aria-hidden />
-        
+
         <div className="relative w-full sm:max-w-md h-full bg-slate-50 shadow-2xl flex flex-col animate-slide-up">
-          
+
           {/* Header */}
           <div className="flex items-center justify-between px-5 py-4 bg-white border-b border-slate-100 flex-shrink-0">
             <div className="flex items-center gap-3 min-w-0">
@@ -202,9 +232,9 @@ const InventoryDetailDrawer = ({ item, onClose, onEdit, onApprove, onReject, isA
               <>
                 <Section icon={User} title="Personal Info" color="emerald">
                   <DetailRow label="Full Name" value={item.first_name ? `${item.first_name} ${item.last_name}` : item.name} />
-                  <DetailRow label="Email"     value={item.email} />
-                  <DetailRow label="Phone"     value={item.phone || item.phone_number} />
-                  <DetailRow label="Role"      value={formatRole(item.role)} />
+                  <DetailRow label="Email" value={item.email} />
+                  <DetailRow label="Phone" value={item.phone || item.phone_number} />
+                  <DetailRow label="Role" value={formatRole(item.role)} />
                   {item.qualification && <DetailRow label="Qualification" value={item.qualification} />}
                 </Section>
 
@@ -215,13 +245,13 @@ const InventoryDetailDrawer = ({ item, onClose, onEdit, onApprove, onReject, isA
                       {item.is_active ? 'Active' : 'Inactive'}
                     </span>
                   } />
-                  <DetailRow label="Joined"     value={fmtDateLocal(item.created_at || item.joining_date)} />
-                  <DetailRow label="Last Login"  value={item.last_login_at ? formatLastActive(item.last_login_at) : "Never"} />
+                  <DetailRow label="Joined" value={fmtDateLocal(item.created_at || item.joining_date)} />
+                  <DetailRow label="Last Login" value={item.last_login_at ? formatLastActive(item.last_login_at) : "Never"} />
                 </Section>
 
                 <Section icon={Shield} title="Account" color="purple">
-                  <DetailRow label="Username"    value={item.username || item.email} mono />
-                  <DetailRow label="Role ID"     value={item.role_id || item.id} mono />
+                  <DetailRow label="Username" value={item.username || item.email} mono />
+                  <DetailRow label="Role ID" value={item.role_id || item.id} mono />
                   {item.permissions && <DetailRow label="Permissions" value={item.permissions.join(', ')} />}
                 </Section>
               </>
@@ -241,58 +271,30 @@ const InventoryDetailDrawer = ({ item, onClose, onEdit, onApprove, onReject, isA
     );
   }
 
-  /* ── LAB ORDER DRAWER ──────────────────────────────────── */
-  if (item.type === 'lab_order') {
-    const fmt = (n) => n != null ? `₹${Number(n).toLocaleString('en-IN')}` : '—';
-    const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
-
-    // Timeline steps
-    const timelineSteps = [
-      { key: 'Confirmed', label: 'Order Created' },
-      { key: 'Advance Paid', label: 'Payment Received' },
-      { key: 'Sent To Lab', label: 'Sent To Lab' },
-      { key: 'In Production', label: 'In Production' },
-      { key: 'Quality Check', label: 'Quality Check' },
-      { key: 'Ready For Pickup', label: 'Ready For Pickup' },
-      { key: 'Delivered', label: 'Delivered' }
-    ];
-
-    const getStatusIndex = (status) => {
-      const idx = timelineSteps.findIndex(s => s.key === status);
-      if (idx !== -1) return idx;
-      if (status === 'Waiting For Lab' || status === 'Processing') return 1;
-      return 0;
-    };
-
-    const currentStepIndex = getStatusIndex(item.status);
-
-    const nextStatuses = {
-      'Confirmed': 'Advance Paid',
-      'Advance Paid': 'Waiting For Lab',
-      'Waiting For Lab': 'Processing',
-      'Processing': 'Sent To Lab',
-      'Sent To Lab': 'In Production',
-      'In Production': 'Quality Check',
-      'Quality Check': 'Ready For Pickup',
-      'Ready For Pickup': 'Delivered'
-    };
-
-    const nextStatus = nextStatuses[item.status];
+  /* ── LAB DRAWER ────────────────────────────────────────── */
+  if (item.type === 'lab') {
+    const initials = item.name ? item.name.charAt(0) : '?';
+    const fmtDateLocal = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 
     return portal(
       <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[2000] flex justify-end animate-fade-in font-sans">
         <div className="absolute inset-0" onClick={onClose} aria-hidden />
+
         <div className="relative w-full sm:max-w-md h-full bg-slate-50 shadow-2xl flex flex-col animate-slide-up">
-          
+
           {/* Header */}
           <div className="flex items-center justify-between px-5 py-4 bg-white border-b border-slate-100 flex-shrink-0">
             <div className="flex items-center gap-3 min-w-0">
-              <div className="w-10 h-10 rounded-xl bg-emerald-550 border border-emerald-500/20 flex items-center justify-center flex-shrink-0 bg-emerald-500/10">
-                <Clock className="w-5 h-5 text-emerald-500" />
+              <div className="h-10 w-10 rounded-full bg-gradient-to-tr from-slate-800 to-slate-600 flex items-center justify-center text-white font-bold text-lg shadow-inner flex-shrink-0">
+                {initials}
               </div>
               <div className="min-w-0">
-                <h2 className="text-base font-bold text-slate-900 truncate">Order Details</h2>
-                <p className="text-xs text-slate-500 font-mono mt-0.5">{item.orderId}</p>
+                <h2 className="text-base font-bold text-slate-900 truncate">{item.name}</h2>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200 uppercase">
+                    Lab Partner
+                  </span>
+                </div>
               </div>
             </div>
             <button onClick={onClose}
@@ -302,133 +304,593 @@ const InventoryDetailDrawer = ({ item, onClose, onEdit, onApprove, onReject, isA
           </div>
 
           {/* Status strip */}
-          <div className="px-5 py-3 bg-white border-b border-slate-100 flex-shrink-0 flex items-center justify-between">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border border-emerald-250 text-emerald-700 bg-emerald-50">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-              {item.status}
+          <div className="px-5 py-3 bg-white border-b border-slate-100 flex-shrink-0 flex items-center justify-between gap-3 flex-wrap">
+            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${item.is_active ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-red-700 bg-red-50 border-red-200'}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${item.is_active ? 'bg-emerald-500' : 'bg-red-500'}`} />
+              {item.is_active ? 'Active' : 'Inactive'}
             </span>
-            <span className="text-xs text-slate-400 font-semibold">Order Date: {fmtDate(item.orderDate)}</span>
+            <span className="text-xs text-slate-400 font-semibold">Created: {fmtDateLocal(item.created_at)}</span>
           </div>
 
           {/* Scrollable content */}
           <div className="flex-1 overflow-y-auto hide-scrollbar px-4 py-4 space-y-3">
-            
-            {/* Customer Information */}
-            <Section icon={User} title="Customer Information" color="emerald">
-              <DetailRow label="Customer Name" value={item.customerName} />
-              <DetailRow label="Phone Number"  value={item.customerPhone} />
-              <DetailRow label="Address"       value={item.customerAddress} />
-            </Section>
-
-            {/* Order Information */}
-            <Section icon={Package} title="Order Information" color="blue">
-              <DetailRow label="Order ID"      value={item.orderId} mono />
-              <DetailRow label="Order Date"    value={fmtDate(item.orderDate)} />
-              <DetailRow label="Product Name"  value={item.productName} />
-              <DetailRow label="Category"      value={item.productCategory} />
-              <DetailRow label="Sub Category"  value={item.productSubcategory} />
-              <DetailRow label="Quantity"      value={item.productQuantity} />
-            </Section>
-
-            {/* Prescription Information */}
-            <Section icon={FileText} title="Prescription & Lens Specs" color="purple">
-              <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 mt-1">Prescription Details</div>
-              <div className="grid grid-cols-2 gap-x-4 border-b border-slate-50 pb-2">
-                <div>
-                  <div className="font-bold text-slate-800 text-xs">Right Eye (OD)</div>
-                  <DetailRow label="SPH" value={item.prescriptionDetails?.sphRight} />
-                  <DetailRow label="CYL" value={item.prescriptionDetails?.cylRight} />
-                  <DetailRow label="AXIS" value={item.prescriptionDetails?.axisRight} />
-                </div>
-                <div>
-                  <div className="font-bold text-slate-800 text-xs">Left Eye (OS)</div>
-                  <DetailRow label="SPH" value={item.prescriptionDetails?.sphLeft} />
-                  <DetailRow label="CYL" value={item.prescriptionDetails?.cylLeft} />
-                  <DetailRow label="AXIS" value={item.prescriptionDetails?.axisLeft} />
-                </div>
-              </div>
-              <DetailRow label="Addition" value={item.prescriptionDetails?.addition} />
-              <DetailRow label="PD" value={item.prescriptionDetails?.pd ? `${item.prescriptionDetails.pd} mm` : '—'} />
-              
-              <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 mt-3">Lens Details</div>
-              <DetailRow label="Lens Type" value={item.lensDetails?.type} />
-              <DetailRow label="Material"  value={item.lensDetails?.material} />
-              <DetailRow label="Coating"   value={item.lensDetails?.coating} />
-            </Section>
-
-            {/* Payment Information */}
-            <Section icon={CreditCard} title="Payment Information" color="rose">
-              <DetailRow label="Total Amount" value={fmt(item.totalAmount)} />
-              <DetailRow label="Paid Amount"  value={fmt(item.paidAmount)} />
-              <DetailRow label="Due Amount"   value={fmt(item.dueAmount)} />
-              <DetailRow label="Payment Status" value={
-                <span className={`inline-flex px-2 py-0.5 rounded text-[11px] font-bold ${
-                  item.paymentStatus === 'Paid' ? 'bg-emerald-50 text-emerald-700' :
-                  item.paymentStatus === 'Partially Paid' ? 'bg-amber-50 text-amber-700' :
-                  'bg-red-50 text-red-700'
-                }`}>
-                  {item.paymentStatus}
-                </span>
-              } />
-            </Section>
-
-            {/* Lab Information */}
-            <Section icon={Truck} title="Lab Information" color="amber">
-              <DetailRow label="Lab Name"               value={item.labName} />
-              <DetailRow label="Sent Date"              value={item.sentDate ? fmtDate(item.sentDate) : '—'} />
-              <DetailRow label="Expected Delivery Date" value={item.expectedDeliveryDate ? fmtDate(item.expectedDeliveryDate) : '—'} />
-              <DetailRow label="Current Status"         value={item.status} />
-            </Section>
-
-            {/* Order Timeline */}
-            <Section icon={Calendar} title="Order Timeline" color="violet">
-              <div className="relative pl-6 space-y-4 py-2">
-                {timelineSteps.map((step, idx) => {
-                  const isCompleted = idx <= currentStepIndex;
-                  const isCurrent = idx === currentStepIndex;
-                  return (
-                    <div key={step.key} className="relative flex items-center gap-3">
-                      {idx < timelineSteps.length - 1 && (
-                        <div className={`absolute top-5 left-[-17px] w-0.5 h-6 ${
-                          idx < currentStepIndex ? 'bg-emerald-500' : 'bg-slate-200'
-                        }`} />
-                      )}
-                      <div className={`absolute left-[-22px] w-3 h-3 rounded-full border-2 ${
-                        isCompleted ? 'bg-emerald-500 border-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]' : 'bg-white border-slate-300'
-                      } ${isCurrent ? 'ring-4 ring-emerald-500/20' : ''}`} />
-                      <div className="flex-1">
-                        <p className={`text-xs font-bold ${isCompleted ? 'text-slate-800' : 'text-slate-400'}`}>
-                          {step.label}
-                        </p>
-                        {isCurrent && (
-                          <p className="text-[10px] text-emerald-600 font-semibold uppercase mt-0.5">Current Stage</p>
-                        )}
-                      </div>
+            {isLoading ? (
+              <div className="space-y-4">
+                {[1, 2].map(i => (
+                  <div key={i} className="bg-white rounded-2xl border border-slate-100 p-5 space-y-4 animate-pulse">
+                    <div className="h-4 bg-slate-100 rounded-full w-1/3" />
+                    <div className="space-y-3">
+                      <div className="h-3 bg-slate-50 rounded-full w-full" />
+                      <div className="h-3 bg-slate-50 rounded-full w-2/3" />
                     </div>
-                  );
-                })}
+                  </div>
+                ))}
               </div>
-            </Section>
+            ) : (
+              <Section icon={Beaker} title="Lab Specifications" color="emerald">
+                <DetailRow label="Lab Name" value={item.name} />
+                <DetailRow label="Contact Number" value={item.contact_number} />
+                <DetailRow label="Email Address" value={item.email} />
+              </Section>
+            )}
           </div>
 
-          {/* Footer Actions */}
-          <div className="px-5 py-4 bg-white border-t border-slate-100 flex-shrink-0 space-y-2">
-            {nextStatus && onUpdateStatus && (
-              <button
-                onClick={() => onUpdateStatus(item.id, nextStatus)}
-                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-semibold text-sm transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-1.5"
-              >
-                <RefreshCw className="w-4 h-4" />
-                Advance to "{nextStatus}"
-              </button>
-            )}
+          {/* Footer */}
+          <div className="px-5 py-4 bg-white border-t border-slate-100 flex-shrink-0">
             <button onClick={onClose}
-              className="w-full py-2.5 bg-slate-900 text-white rounded-xl font-semibold text-sm hover:bg-slate-700 transition-all">
+              className="w-full py-2.5 bg-slate-900 text-white rounded-xl font-semibold text-sm hover:bg-slate-700 transition-all shadow-md hover:shadow-lg">
               Close
             </button>
           </div>
         </div>
       </div>,
+      document.body
+    );
+  }
+
+  /* ── LAB ORDER DRAWER ──────────────────────────────────── */
+  if (item.type === 'lab_order') {
+    const fmt = (n) => n != null ? `₹${Number(n).toLocaleString('en-IN')}` : '—';
+    const fmtDate = formatDate;
+
+    // Timeline steps
+    const timelineSteps = [
+      { key: 'Confirmed', label: 'Order Created' },
+      { key: 'Sent To Lab', label: 'Sent To Lab' },
+      { key: 'Ready For Pickup', label: 'Ready For Pickup' },
+      { key: 'Delivered', label: 'Delivered' }
+    ];
+
+    const getStatusIndex = (status) => {
+      const idx = timelineSteps.findIndex(s => s.key === status);
+      return idx !== -1 ? idx : 0;
+    };
+
+    const currentStepIndex = getStatusIndex(item.status);
+
+
+
+    const handleCollectPaymentAndDeliver = async () => {
+      setIsSubmittingPayment(true);
+      try {
+        await addSalePaymentApi(item.id, {
+          amount: Number(item.dueAmount),
+          payment_method: paymentMethod,
+          reference_number: referenceNumber || null,
+          remarks: paymentRemarks,
+        });
+        toast.success(`Collected payment of ₹${item.dueAmount} successfully!`);
+        setShowPaymentModal(false);
+        setReferenceNumber('');
+        setPaymentMethod('CASH');
+        onUpdateStatus(item.id, 'Delivered');
+      } catch (err) {
+        console.error(err);
+        toast.error(err.response?.data?.detail || 'Failed to record final payment.');
+      } finally {
+        setIsSubmittingPayment(false);
+      }
+    };
+
+    const handleAdvanceClick = () => {
+      if (nextStatus === 'Sent To Lab') {
+        if (!selectedLabId) {
+          toast.warning('Please select a spectacles processing lab partner.');
+          return;
+        }
+        onUpdateStatus(item.id, nextStatus, {
+          lab_id: Number(selectedLabId),
+          lab_name: selectedLabName
+        });
+      } else if (nextStatus === 'Delivered' && Number(item.dueAmount || 0) > 0) {
+        setShowPaymentModal(true);
+      } else {
+        onUpdateStatus(item.id, nextStatus);
+      }
+    };
+
+    return portal(
+      <>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[2000] flex justify-end animate-fade-in font-sans">
+          <div className="absolute inset-0" onClick={onClose} aria-hidden />
+          <div className="relative w-full sm:max-w-md h-full bg-slate-50 shadow-2xl flex flex-col animate-slide-up">
+
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-4 bg-white border-b border-slate-100 flex-shrink-0">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-xl bg-emerald-550 border border-emerald-500/20 flex items-center justify-center flex-shrink-0 bg-emerald-500/10">
+                  <Clock className="w-5 h-5 text-emerald-500" />
+                </div>
+                <div className="min-w-0">
+                  <h2 className="text-base font-bold text-slate-900 truncate">Order Details</h2>
+                  <p className="text-xs text-slate-500 font-mono mt-0.5">{item.orderId}</p>
+                </div>
+              </div>
+              <button onClick={onClose}
+                className="p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 rounded-full transition-colors flex-shrink-0 ml-2">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Status strip */}
+            <div className="px-5 py-3 bg-white border-b border-slate-100 flex-shrink-0 flex items-center justify-between">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border border-emerald-250 text-emerald-700 bg-emerald-50">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                {item.status}
+              </span>
+              <span className="text-xs text-slate-400 font-semibold">Order Date: {fmtDate(item.orderDate)}</span>
+            </div>
+
+            {/* Scrollable content */}
+            <div className="flex-1 overflow-y-auto hide-scrollbar px-4 py-4 space-y-3">
+
+              {/* Customer Information */}
+              <Section icon={User} title="Customer Information" color="emerald">
+                <DetailRow label="Customer Name" value={item.customerName} />
+                <DetailRow label="Phone Number" value={item.customerPhone} />
+                <DetailRow label="Address" value={item.customerAddress} />
+              </Section>
+
+              {/* Order Information */}
+              <Section icon={Package} title="Order Information" color="blue">
+                <DetailRow label="Order ID" value={item.orderId} mono />
+                <DetailRow label="Order Date" value={fmtDate(item.orderDate)} />
+              </Section>
+
+              {/* Purchased Items Section */}
+              <Section icon={ShoppingCart} title="Purchased Items" color="blue">
+                <div className="max-h-60 overflow-y-auto overflow-x-auto pr-1">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-100 text-slate-400 font-bold uppercase tracking-wider text-[10px]">
+                        <th className="py-2 pr-4 font-semibold">Product Name</th>
+                        <th className="py-2 px-2 font-semibold">Category</th>
+                        <th className="py-2 px-2 font-semibold text-center">Qty</th>
+                        <th className="py-2 px-2 font-semibold text-right">Cost</th>
+                        <th className="py-2 px-2 font-semibold text-right">Price</th>
+                        <th className="py-2 px-2 font-semibold text-right">Discount</th>
+                        <th className="py-2 px-2 font-semibold text-right">Final</th>
+                        <th className="py-2 pl-4 font-semibold text-right">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50 font-medium text-slate-700">
+                      {item.items && item.items.map((subItem, idx) => {
+                        const discountStr = subItem.discount_percent > 0 
+                          ? `${Number(subItem.discount_percent).toLocaleString('en-IN')}%`
+                          : '₹0.00';
+                        const unitDiscount = (Number(subItem.unit_price) * Number(subItem.discount_percent || 0)) / 100;
+                        const finalUnitPrice = Number(subItem.unit_price) - unitDiscount;
+                        
+                        return (
+                          <tr key={subItem.id || idx} className="hover:bg-slate-50/50 transition-colors">
+                            <td className="py-2.5 pr-4 font-semibold text-slate-900">
+                              <div>{subItem.product_name || 'Optical Item'}</div>
+                              <div className="text-[10px] text-slate-450 mt-0.5">
+                                Brand: {subItem.product_brand || '—'} &middot; SKU: {subItem.product_sku || '—'}
+                              </div>
+                            </td>
+                            <td className="py-2.5 px-2 text-slate-550">
+                              <div>{subItem.product_category || '—'}</div>
+                              <div className="text-[10px] text-slate-450 mt-0.5">{subItem.product_subcategory || '—'}</div>
+                            </td>
+                            <td className="py-2.5 px-2 text-center text-slate-900 font-bold">{subItem.quantity}</td>
+                            <td className="py-2.5 px-2 text-right">{fmtPrice(subItem.unit_cost)}</td>
+                            <td className="py-2.5 px-2 text-right">{fmtPrice(subItem.unit_price)}</td>
+                            <td className="py-2.5 px-2 text-right text-red-500 font-bold">{discountStr}</td>
+                            <td className="py-2.5 px-2 text-right font-bold text-slate-900">{fmtPrice(finalUnitPrice)}</td>
+                            <td className="py-2.5 pl-4 text-right font-black text-slate-950">{fmtPrice(subItem.line_total)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </Section>
+
+              {/* Prescription Information */}
+              <Section icon={FileText} title="Prescription & Lens Specs" color="purple">
+                <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 mt-1">Prescription Details</div>
+                <div className="grid grid-cols-2 gap-x-4 border-b border-slate-50 pb-2">
+                  <div>
+                    <div className="font-bold text-slate-800 text-xs">Right Eye (OD)</div>
+                    <DetailRow label="SPH" value={item.prescriptionDetails?.sphRight} />
+                    <DetailRow label="CYL" value={item.prescriptionDetails?.cylRight} />
+                    <DetailRow label="AXIS" value={item.prescriptionDetails?.axisRight} />
+                  </div>
+                  <div>
+                    <div className="font-bold text-slate-800 text-xs">Left Eye (OS)</div>
+                    <DetailRow label="SPH" value={item.prescriptionDetails?.sphLeft} />
+                    <DetailRow label="CYL" value={item.prescriptionDetails?.cylLeft} />
+                    <DetailRow label="AXIS" value={item.prescriptionDetails?.axisLeft} />
+                  </div>
+                </div>
+                <DetailRow label="Addition" value={item.prescriptionDetails?.addition} />
+                <DetailRow label="PD" value={item.prescriptionDetails?.pd ? `${item.prescriptionDetails.pd} mm` : '—'} />
+
+                <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 mt-3">Lens Details</div>
+                <DetailRow label="Lens Type" value={item.lensDetails?.type} />
+                <DetailRow label="Material" value={item.lensDetails?.material} />
+                <DetailRow label="Coating" value={item.lensDetails?.coating} />
+              </Section>
+
+              {/* Payment Information */}
+              <Section icon={CreditCard} title="Payment Information" color="rose">
+                <DetailRow label="Subtotal" value={fmtPrice(item.subtotal)} />
+                <DetailRow label="Discount" value={fmtPrice(item.discountAmount)} />
+                <DetailRow label="Final Amount" value={fmtPrice(item.totalAmount)} />
+                <DetailRow label="Paid Amount" value={fmtPrice(item.paidAmount)} />
+                <DetailRow label="Due Amount" value={fmtPrice(item.dueAmount)} />
+                <DetailRow label="Payment Status" value={
+                  <span className={`inline-flex px-2 py-0.5 rounded text-[11px] font-bold ${item.paymentStatus === 'Paid' ? 'bg-emerald-50 text-emerald-700' :
+                      item.paymentStatus === 'Partially Paid' ? 'bg-amber-50 text-amber-700' :
+                        'bg-red-50 text-red-700'
+                    }`}>
+                    {item.paymentStatus}
+                  </span>
+                } />
+                {item.payments && item.payments.length > 0 && (
+                  <div className="mt-3 border-t border-slate-100 pt-3">
+                    <div className="text-xs font-bold text-slate-450 uppercase tracking-wider mb-2">Payment History</div>
+                    <div className="space-y-2">
+                      {item.payments.map((p, idx) => (
+                        <div key={p.id || idx} className="flex justify-between items-center text-xs py-1.5 px-2.5 bg-slate-50 border border-slate-100 rounded-xl">
+                          <div className="font-semibold text-slate-700">
+                            {p.payment_method}
+                            {p.reference_number && <span className="text-[10px] text-slate-400 block font-mono">Ref: {p.reference_number}</span>}
+                          </div>
+                          <div className="text-right">
+                            <span className="font-black text-slate-900">₹{Number(p.amount).toLocaleString('en-IN')}</span>
+                            <span className="text-[10px] text-slate-450 block font-medium">{fmtDate(p.created_at)}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </Section>
+
+              {/* Lab Information */}
+              <Section icon={Truck} title="Lab Information" color="amber">
+                <DetailRow label="Lab Name" value={item.labName} />
+                <DetailRow label="Sent Date" value={item.sentDate ? fmtDate(item.sentDate) : '—'} />
+                <DetailRow label="Expected Delivery Date" value={item.expectedDeliveryDate ? fmtDate(item.expectedDeliveryDate) : '—'} />
+                {item.status === 'Delivered' && (
+                  <DetailRow label="Delivery Date" value={item.deliveryDate ? fmtDate(item.deliveryDate) : '—'} />
+                )}
+                <DetailRow label="Current Status" value={item.status} />
+              </Section>
+
+              {/* Order Timeline */}
+              <Section icon={Calendar} title="Order Timeline" color="violet">
+                <div className="relative pl-6 space-y-4 py-2">
+                  {timelineSteps.map((step, idx) => {
+                    const isCompleted = idx <= currentStepIndex;
+                    const isCurrent = idx === currentStepIndex;
+                    return (
+                      <div key={step.key} className="relative flex items-center gap-3">
+                        {idx < timelineSteps.length - 1 && (
+                          <div className={`absolute top-5 left-[-17px] w-0.5 h-6 ${idx < currentStepIndex ? 'bg-emerald-500' : 'bg-slate-200'
+                            }`} />
+                        )}
+                        <div className={`absolute left-[-22px] w-3 h-3 rounded-full border-2 ${isCompleted ? 'bg-emerald-500 border-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]' : 'bg-white border-slate-300'
+                          } ${isCurrent ? 'ring-4 ring-emerald-500/20' : ''}`} />
+                        <div className="flex-1">
+                          <p className={`text-xs font-bold ${isCompleted ? 'text-slate-800' : 'text-slate-400'}`}>
+                            {step.label}
+                          </p>
+                          {isCurrent && (
+                            <p className="text-[10px] text-emerald-600 font-semibold uppercase mt-0.5">Current Stage</p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </Section>
+            </div>
+
+            {/* Footer Actions */}
+            <div className="px-5 py-4 bg-white border-t border-slate-100 flex-shrink-0 space-y-4">
+              {onUpdateStatus && (
+                <div className="space-y-3">
+                  
+                  {/* Confirmed -> Sent To Lab: must show Lab Partner Selection */}
+                  {item.status === 'Confirmed' && (
+                    <div className="bg-slate-50 border border-slate-100 rounded-2xl p-3 mb-2 animate-fade-in">
+                      <label className="block text-[10px] font-extrabold text-slate-450 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                        <Beaker className="w-3.5 h-3.5 text-blue-600 font-bold" />
+                        Select Processing Lab Partner <span className="text-red-500 font-bold">*</span>
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setIsLabModalOpen(true)}
+                        className="w-full flex items-center justify-between pl-4 pr-3 py-2 bg-white border border-slate-200 hover:border-slate-350 text-slate-850 rounded-xl text-xs font-semibold shadow-sm transition-all focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 text-left"
+                      >
+                        <span className="truncate">{selectedLabName || '-- Choose Lab Partner --'}</span>
+                        <ChevronRight className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Render the next single transition button */}
+                  {(() => {
+                    const nextStatuses = {
+                      'Confirmed': { key: 'Sent To Lab', label: 'Send to Processing Lab', color: 'bg-amber-600 hover:bg-amber-700 text-white shadow-md' },
+                      'Sent To Lab': { key: 'Ready For Pickup', label: 'Mark Ready For Pickup', color: 'bg-blue-600 hover:bg-blue-700 text-white shadow-md' },
+                      'Ready For Pickup': { key: 'Delivered', label: 'Deliver & Complete Order', color: 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-md' }
+                    };
+                    
+                    const next = nextStatuses[item.status];
+                    if (!next) return null; // No status updates if already Delivered or others
+
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (next.key === 'Sent To Lab') {
+                            if (!selectedLabId) {
+                              toast.warning('Please select a spectacles processing lab partner.');
+                              return;
+                            }
+                            onUpdateStatus(item.id, 'Sent To Lab', {
+                              lab_id: Number(selectedLabId),
+                              lab_name: selectedLabName,
+                              sent_to_lab_date: new Date().toISOString().split('T')[0],
+                              expected_delivery_date: new Date(Date.now() + 4 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+                            });
+                          } else if (next.key === 'Delivered') {
+                            if (Number(item.dueAmount || 0) > 0) {
+                              setShowPaymentModal(true);
+                            } else {
+                              onUpdateStatus(item.id, 'Delivered');
+                            }
+                          } else {
+                            onUpdateStatus(item.id, next.key);
+                          }
+                        }}
+                        className={`w-full py-2.5 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5 ${next.color}`}
+                      >
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin-hover" />
+                        {next.label}
+                      </button>
+                    );
+                  })()}
+                </div>
+              )}
+              <button onClick={onClose}
+                className="w-full py-2.5 bg-slate-100 text-slate-700 rounded-xl font-semibold text-xs hover:bg-slate-200 transition-all border border-slate-200">
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Lab Selection Modal */}
+        {isLabModalOpen && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 animate-fade-in font-sans">
+            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-100 animate-scale-in relative">
+              
+              {/* Header */}
+              <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
+                    <Beaker className="w-5 h-5 text-blue-600 animate-pulse" /> Select Lab Partner
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-1">Assign spectacles order to a processing laboratory</p>
+                </div>
+                <button
+                  onClick={() => setIsLabModalOpen(false)}
+                  className="p-2 hover:bg-slate-100 text-slate-400 hover:text-slate-700 rounded-xl transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Search input */}
+              <div className="p-6 pb-2">
+                <div className="relative">
+                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Search laboratory name or contact..."
+                    value={labSearchTerm}
+                    onChange={(e) => setLabSearchTerm(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2.5 text-sm font-semibold border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 bg-white placeholder:text-slate-400 transition-all"
+                  />
+                  {labSearchTerm && (
+                    <button
+                      onClick={() => setLabSearchTerm('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Lab List Content */}
+              <div className="p-6 pt-2 max-h-80 overflow-y-auto space-y-2.5">
+                {(() => {
+                  const filteredLabs = labs.filter(lab => 
+                    lab.name.toLowerCase().includes(labSearchTerm.toLowerCase()) ||
+                    (lab.contact_number && lab.contact_number.includes(labSearchTerm))
+                  );
+
+                  if (filteredLabs.length === 0) {
+                    return (
+                      <div className="py-10 text-center flex flex-col items-center justify-center">
+                        <Truck className="w-8 h-8 text-slate-300 mb-2.5" />
+                        <p className="text-sm font-bold text-slate-500">No matching labs found</p>
+                        <p className="text-xs text-slate-400 mt-0.5">Check spelling or add a new lab partner.</p>
+                      </div>
+                    );
+                  }
+
+                  return filteredLabs.map(lab => {
+                    const isSelected = String(lab.id) === String(selectedLabId);
+                    return (
+                      <div
+                        key={lab.id}
+                        onClick={() => {
+                          setSelectedLabId(String(lab.id));
+                          setSelectedLabName(lab.name);
+                          setIsLabModalOpen(false);
+                        }}
+                        className={`p-4 rounded-2xl border text-left transition-all duration-200 cursor-pointer flex items-center justify-between gap-4 group ${
+                          isSelected
+                            ? 'bg-blue-50/50 border-blue-200 text-blue-900 shadow-sm'
+                            : 'bg-white border-slate-100 hover:bg-slate-50/80 hover:border-slate-200 text-slate-800'
+                        }`}
+                      >
+                        <div className="flex items-start gap-3 min-w-0">
+                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors ${
+                            isSelected ? 'bg-blue-100 text-blue-600' : 'bg-slate-100 text-slate-500 group-hover:bg-slate-200'
+                          }`}>
+                            <Store className="w-4.5 h-4.5" />
+                          </div>
+                          <div className="min-w-0">
+                            <h4 className="font-bold text-sm truncate">{lab.name}</h4>
+                            <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-1.5">
+                              <span className="truncate max-w-[150px]">{lab.email || 'No email'}</span>
+                              <span className="text-slate-300 shrink-0">•</span>
+                              <span className="shrink-0">{lab.contact_number || 'No contact'}</span>
+                            </p>
+                          </div>
+                        </div>
+                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all shrink-0 ${
+                          isSelected ? 'border-blue-500 bg-blue-500 text-white' : 'border-slate-200 group-hover:border-slate-300 bg-white'
+                        }`}>
+                          {isSelected && <svg className="w-3 h-3 fill-current stroke-[3px]" viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>}
+                        </div>
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
+
+              {/* Footer */}
+              <div className="px-6 py-4 bg-slate-50/80 border-t border-slate-100 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsLabModalOpen(false)}
+                  className="px-4 py-2 text-xs font-bold text-slate-500 hover:text-slate-800 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsLabModalOpen(false)}
+                  className="px-5 py-2 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-all shadow-md"
+                >
+                  Done
+                </button>
+              </div>
+
+            </div>
+          </div>
+        )}
+
+        {showPaymentModal && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[3000] flex items-center justify-center p-4 animate-fade-in font-sans">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden border border-slate-100">
+              {/* Header */}
+              <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+                <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
+                  <CreditCard className="w-4 h-4 text-emerald-500" /> Collect Balance Payment
+                </h3>
+                <button
+                  onClick={() => setShowPaymentModal(false)}
+                  className="p-1.5 hover:bg-slate-50 text-slate-400 hover:text-slate-700 rounded-lg transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              {/* Content */}
+              <div className="p-5 space-y-4">
+                <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4 text-center">
+                  <p className="text-xs text-emerald-700 font-semibold mb-1">Remaining Due Amount</p>
+                  <h4 className="text-2xl font-black text-emerald-600">₹{Number(item.dueAmount).toLocaleString('en-IN')}</h4>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-500 mb-1.5 block">Payment Method</label>
+                  <select
+                    value={paymentMethod}
+                    onChange={e => setPaymentMethod(e.target.value)}
+                    className="w-full px-3 py-2 text-sm font-medium border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 bg-white"
+                  >
+                    <option value="CASH">Cash</option>
+                    <option value="CARD">Card</option>
+                    <option value="UPI">UPI</option>
+                    <option value="BANK_TRANSFER">Bank Transfer</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-500 mb-1.5 block">Reference Number (Optional)</label>
+                  <input
+                    type="text"
+                    value={referenceNumber}
+                    onChange={e => setReferenceNumber(e.target.value)}
+                    placeholder="e.g. UPI Transaction ID, Card Receipt"
+                    className="w-full px-3 py-2 text-sm font-medium border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 bg-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-500 mb-1.5 block">Remarks</label>
+                  <input
+                    type="text"
+                    value={paymentRemarks}
+                    onChange={e => setPaymentRemarks(e.target.value)}
+                    className="w-full px-3 py-2 text-sm font-medium border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 bg-white"
+                  />
+                </div>
+              </div>
+              {/* Actions */}
+              <div className="px-5 py-4 bg-slate-50 border-t border-slate-100 flex gap-3">
+                <button
+                  onClick={() => setShowPaymentModal(false)}
+                  className="flex-1 py-2 text-sm font-semibold text-slate-650 bg-white border border-slate-200 rounded-xl hover:bg-slate-100 transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  disabled={isSubmittingPayment}
+                  onClick={handleCollectPaymentAndDeliver}
+                  className="flex-1 py-2 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 disabled:opacity-50"
+                >
+                  {isSubmittingPayment ? (
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <>Collect & Deliver</>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </>,
       document.body
     );
   }
@@ -565,41 +1027,111 @@ const InventoryDetailDrawer = ({ item, onClose, onEdit, onApprove, onReject, isA
               <div className="space-y-3 animate-fade-in no-print">
                 <Section icon={User} title="Customer Information" color="emerald">
                   <DetailRow label="Customer Name" value={item.customerName} />
-                  <DetailRow label="Phone Number"  value={item.customerPhone} />
-                  <DetailRow label="Address"       value={item.customerAddress} />
+                  <DetailRow label="Phone Number" value={item.customerPhone} />
+                  <DetailRow label="Address" value={item.customerAddress} />
                 </Section>
                 <Section icon={CreditCard} title="Payment Information" color="rose">
-                  <DetailRow label="Total Amount"   value={`₹${Number(item.totalAmount).toLocaleString('en-IN')}`} />
-                  <DetailRow label="Paid Amount"    value={`₹${Number(item.paidAmount).toLocaleString('en-IN')}`} />
-                  <DetailRow label="Due Amount"     value={`₹${Number(item.dueAmount).toLocaleString('en-IN')}`} />
+                  <DetailRow label="Subtotal" value={fmtPrice(item.subtotal)} />
+                  <DetailRow label="Discount" value={fmtPrice(item.discountAmount)} />
+                  <DetailRow label="Final Amount" value={fmtPrice(item.totalAmount)} />
+                  <DetailRow label="Paid Amount" value={fmtPrice(item.paidAmount)} />
+                  <DetailRow label="Due Amount" value={fmtPrice(item.dueAmount)} />
                   <DetailRow label="Payment Status" value={
-                    <span className={`inline-flex px-2 py-0.5 rounded text-[11px] font-bold ${
-                      item.paymentStatus === 'Paid' ? 'bg-emerald-50 text-emerald-700' :
-                      item.paymentStatus === 'Partially Paid' ? 'bg-amber-50 text-amber-700' :
-                      'bg-red-50 text-red-700'
-                    }`}>
+                    <span className={`inline-flex px-2 py-0.5 rounded text-[11px] font-bold ${item.paymentStatus === 'Paid' ? 'bg-emerald-50 text-emerald-700' :
+                        item.paymentStatus === 'Partially Paid' ? 'bg-amber-50 text-amber-700' :
+                          'bg-red-50 text-red-700'
+                      }`}>
                       {item.paymentStatus}
                     </span>
                   } />
                   <DetailRow label="Payment Method" value={item.paymentMethod} />
+                  {item.payments && item.payments.length > 0 && (
+                    <div className="mt-3 border-t border-slate-100 pt-3">
+                      <div className="text-xs font-bold text-slate-455 uppercase tracking-wider mb-2">Payment History</div>
+                      <div className="space-y-2">
+                        {item.payments.map((p, idx) => (
+                          <div key={p.id || idx} className="flex justify-between items-center text-xs py-1.5 px-2.5 bg-slate-50 border border-slate-100 rounded-xl">
+                            <div className="font-semibold text-slate-700">
+                              {p.payment_method}
+                              {p.reference_number && <span className="text-[10px] text-slate-400 block font-mono">Ref: {p.reference_number}</span>}
+                            </div>
+                            <div className="text-right">
+                              <span className="font-black text-slate-900">₹{Number(p.amount).toLocaleString('en-IN')}</span>
+                              <span className="text-[10px] text-slate-455 block font-medium">{formatDate(p.created_at)}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </Section>
-                <Section icon={Package} title="Product Information" color="blue">
-                  <DetailRow label="Product Name" value={item.productName} />
-                  <DetailRow label="Category"     value={item.productCategory} />
-                  <DetailRow label="Sub Category" value={item.productSubcategory} />
-                  <DetailRow label="Quantity"     value={item.productQuantity} />
-                  <DetailRow label="Price"        value={`₹${Number(item.productPrice).toLocaleString('en-IN')}`} />
+                {/* Purchased Items Section */}
+                <Section icon={ShoppingCart} title="Purchased Items" color="blue">
+                  <div className="max-h-60 overflow-y-auto overflow-x-auto pr-1">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="border-b border-slate-100 text-slate-400 font-bold uppercase tracking-wider text-[10px]">
+                          <th className="py-2 pr-4 font-semibold">Product Name</th>
+                          <th className="py-2 px-2 font-semibold">Category</th>
+                          <th className="py-2 px-2 font-semibold text-center">Qty</th>
+                          <th className="py-2 px-2 font-semibold text-right">Cost</th>
+                          <th className="py-2 px-2 font-semibold text-right">Price</th>
+                          <th className="py-2 px-2 font-semibold text-right">Discount</th>
+                          <th className="py-2 px-2 font-semibold text-right">Final</th>
+                          <th className="py-2 pl-4 font-semibold text-right">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-50 font-medium text-slate-700">
+                        {item.items && item.items.map((subItem, idx) => {
+                          const discountStr = subItem.discount_percent > 0 
+                            ? `${Number(subItem.discount_percent).toLocaleString('en-IN')}%`
+                            : '₹0.00';
+                          const unitDiscount = (Number(subItem.unit_price) * Number(subItem.discount_percent || 0)) / 100;
+                          const finalUnitPrice = Number(subItem.unit_price) - unitDiscount;
+                          
+                          return (
+                            <tr key={subItem.id || idx} className="hover:bg-slate-50/50 transition-colors">
+                              <td className="py-2.5 pr-4 font-semibold text-slate-900">
+                                <div>{subItem.product_name || 'Optical Item'}</div>
+                                <div className="text-[10px] text-slate-450 mt-0.5">
+                                  Brand: {subItem.product_brand || '—'} &middot; SKU: {subItem.product_sku || '—'}
+                                </div>
+                              </td>
+                              <td className="py-2.5 px-2 text-slate-550">
+                                <div>{subItem.product_category || '—'}</div>
+                                <div className="text-[10px] text-slate-455 mt-0.5">{subItem.product_subcategory || '—'}</div>
+                              </td>
+                              <td className="py-2.5 px-2 text-center text-slate-900 font-bold">{subItem.quantity}</td>
+                              <td className="py-2.5 px-2 text-right">{fmtPrice(subItem.unit_cost)}</td>
+                              <td className="py-2.5 px-2 text-right">{fmtPrice(subItem.unit_price)}</td>
+                              <td className="py-2.5 px-2 text-right text-red-500 font-bold">{discountStr}</td>
+                              <td className="py-2.5 px-2 text-right font-bold text-slate-900">{fmtPrice(finalUnitPrice)}</td>
+                              <td className="py-2.5 pl-4 text-right font-black text-slate-950">{fmtPrice(subItem.line_total)}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 </Section>
                 <Section icon={UserCheck} title="Staff Information" color="purple">
-                  <DetailRow label="Staff Name"    value={item.staffName} />
+                  <DetailRow label="Staff Name" value={item.staffName} />
                   <DetailRow label="Employee Code" value={item.staffCode} mono />
-                  <DetailRow label="Role"          value={item.staffRole} />
+                  <DetailRow label="Role" value={item.staffRole} />
                 </Section>
                 <Section icon={Truck} title="Delivery Information" color="amber">
                   <DetailRow label="Store/Branch Name" value={item.branchName} />
-                  <DetailRow label="Delivery Date"     value={item.deliveryDate ? new Date(item.deliveryDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'} />
-                  <DetailRow label="Order Status"      value={item.status} />
+                  <DetailRow label="Delivery Date" value={item.deliveryDate ? new Date(item.deliveryDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'} />
+                  <DetailRow label="Order Status" value={item.status} />
                 </Section>
+                {item.lab_status && (
+                  <Section icon={Beaker} title="Lab Routing Information" color="blue">
+                    <DetailRow label="Processing Lab" value={item.labName || '—'} />
+                    <DetailRow label="Sent Date" value={item.sentDate ? formatDate(item.sentDate) : '—'} />
+                    <DetailRow label="Expected Delivery Date" value={item.expectedDeliveryDate ? formatDate(item.expectedDeliveryDate) : '—'} />
+                    <DetailRow label="Lab workflow Status" value={item.lab_status} />
+                  </Section>
+                )}
               </div>
             )}
 
@@ -714,7 +1246,7 @@ const InventoryDetailDrawer = ({ item, onClose, onEdit, onApprove, onReject, isA
 
                 {/* Particulars Items Table */}
                 <div className="space-y-2">
-                  <h3 className="text-[9px] font-extrabold text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                  <h3 className="text-[9px] font-extrabold text-slate-455 uppercase tracking-widest flex items-center gap-1">
                     <ShoppingCart className="w-3.5 h-3.5" /> Particulars Items
                   </h3>
                   <div className="border border-slate-100 rounded-xl overflow-hidden text-xs">
@@ -761,7 +1293,7 @@ const InventoryDetailDrawer = ({ item, onClose, onEdit, onApprove, onReject, isA
                   {billSettings.qrCode ? (
                     <div className="text-left bg-white border border-slate-150 p-2 text-slate-400 rounded-xl flex flex-col items-center shadow-sm w-20 shrink-0">
                       <img src={billSettings.qrCode} alt="Scan to pay" className="w-16 h-16 object-contain" />
-                      <span className="text-[6px] font-black text-slate-400 uppercase tracking-widest block text-center mt-0.5">Scan to Pay</span>
+                      <span className="text-[6px] font-black text-slate-405 uppercase tracking-widest block text-center mt-0.5">Scan to Pay</span>
                     </div>
                   ) : (
                     <div />
@@ -808,9 +1340,7 @@ const InventoryDetailDrawer = ({ item, onClose, onEdit, onApprove, onReject, isA
                 </div>
 
               </div>
-            )}
-
-          </div>
+            )}          </div>
 
           {/* Footer Actions */}
           <div className="px-5 py-4 bg-white border-t border-slate-100 flex-shrink-0 no-print">
@@ -856,20 +1386,20 @@ const InventoryDetailDrawer = ({ item, onClose, onEdit, onApprove, onReject, isA
   if (item.type === 'expense') {
     const APPROVAL_CFG = {
       Approved: { color: 'text-emerald-700 bg-emerald-50 border-emerald-200', dot: 'bg-emerald-500' },
-      Pending:  { color: 'text-amber-700 bg-amber-50 border-amber-200',       dot: 'bg-amber-500'   },
-      Rejected: { color: 'text-red-700 bg-red-50 border-red-200',             dot: 'bg-red-500'     },
+      Pending: { color: 'text-amber-700 bg-amber-50 border-amber-200', dot: 'bg-amber-500' },
+      Rejected: { color: 'text-red-700 bg-red-50 border-red-200', dot: 'bg-red-500' },
     };
     const PAY_CFG = {
-      Paid:    { color: 'text-emerald-700 bg-emerald-50 border-emerald-200', dot: 'bg-emerald-500' },
-      Pending: { color: 'text-amber-700 bg-amber-50 border-amber-200',       dot: 'bg-amber-500'   },
-      Failed:  { color: 'text-red-700 bg-red-50 border-red-200',             dot: 'bg-red-500'     },
+      Paid: { color: 'text-emerald-700 bg-emerald-50 border-emerald-200', dot: 'bg-emerald-500' },
+      Pending: { color: 'text-amber-700 bg-amber-50 border-amber-200', dot: 'bg-amber-500' },
+      Failed: { color: 'text-red-700 bg-red-50 border-red-200', dot: 'bg-red-500' },
     };
     const approvalCfg = APPROVAL_CFG[item.approvalStatus] || APPROVAL_CFG.Pending;
-    const payCfg      = PAY_CFG[item.paymentStatus]       || PAY_CFG.Pending;
+    const payCfg = PAY_CFG[item.paymentStatus] || PAY_CFG.Pending;
     const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
-    const fmt     = (n) => n != null ? `₹${Number(n).toLocaleString('en-IN')}` : '—';
+    const fmt = (n) => n != null ? `₹${Number(n).toLocaleString('en-IN')}` : '—';
 
-    const isPending  = item.approvalStatus === 'Pending';
+    const isPending = item.approvalStatus === 'Pending';
     const isApproved = item.approvalStatus === 'Approved';
     const isRejected = item.approvalStatus === 'Rejected';
 
@@ -920,10 +1450,10 @@ const InventoryDetailDrawer = ({ item, onClose, onEdit, onApprove, onReject, isA
             {/* Info */}
             <Section icon={FileText} title="Info" color="violet">
               <DetailRow label="Expense Title" value={item.title} />
-              <DetailRow label="Category"      value={item.category} />
+              <DetailRow label="Category" value={item.category} />
               {item.description && <DetailRow label="Description" value={item.description} />}
-              <DetailRow label="Amount"        value={fmt(item.amount)} />
-              <DetailRow label="Expense Date"  value={fmtDate(item.expenseDate)} />
+              <DetailRow label="Amount" value={fmt(item.amount)} />
+              <DetailRow label="Expense Date" value={fmtDate(item.expenseDate)} />
               <DetailRow label="Store / Branch" value={item.store} />
               {item.isRecurring && (
                 <DetailRow label="Recurring" value={
@@ -937,7 +1467,7 @@ const InventoryDetailDrawer = ({ item, onClose, onEdit, onApprove, onReject, isA
             {/* Payment */}
             <Section icon={CreditCard} title="Payment" color="blue">
               <DetailRow label="Payment Method" value={item.paymentMethod} />
-              <DetailRow label="Reference No."  value={item.referenceNumber || '—'} mono />
+              <DetailRow label="Reference No." value={item.referenceNumber || '—'} mono />
               <DetailRow label="Payment Status" value={
                 <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border ${payCfg.color}`}>
                   <span className={`w-1.5 h-1.5 rounded-full ${payCfg.dot}`} />
@@ -1009,7 +1539,7 @@ const InventoryDetailDrawer = ({ item, onClose, onEdit, onApprove, onReject, isA
               {/* Approved details */}
               {isApproved && (
                 <>
-                  <DetailRow label="Approved By"   value={item.approvedBy   || '—'} />
+                  <DetailRow label="Approved By" value={item.approvedBy || '—'} />
                   <DetailRow label="Approved Date" value={fmtDate(item.approvedDate)} />
                 </>
               )}
@@ -1017,8 +1547,8 @@ const InventoryDetailDrawer = ({ item, onClose, onEdit, onApprove, onReject, isA
               {/* Rejected details */}
               {isRejected && (
                 <>
-                  <DetailRow label="Rejected By"     value={item.rejectedBy   || '—'} />
-                  <DetailRow label="Rejected Date"   value={fmtDate(item.rejectedDate)} />
+                  <DetailRow label="Rejected By" value={item.rejectedBy || '—'} />
+                  <DetailRow label="Rejected Date" value={fmtDate(item.rejectedDate)} />
                   <DetailRow label="Rejection Reason" value={item.rejectionReason || '—'} />
                 </>
               )}
@@ -1091,46 +1621,46 @@ const InventoryDetailDrawer = ({ item, onClose, onEdit, onApprove, onReject, isA
         <div className="flex-1 overflow-y-auto hide-scrollbar px-4 py-4 space-y-3">
           <Section icon={Package} title="Product Information" color="emerald">
             <DetailRow label="Product Name" value={item.product_name} />
-            <DetailRow label="SKU"          value={item.sku}          mono />
-            <DetailRow label="Category"     value={categoryLabel[item.category] || item.category} />
-            {item.subcategory  && <DetailRow label="Subcategory" value={item.subcategory} />}
-            {item.description  && <DetailRow label="Description" value={item.description} />}
+            <DetailRow label="SKU" value={item.sku} mono />
+            <DetailRow label="Category" value={categoryLabel[item.category] || item.category} />
+            {item.subcategory && <DetailRow label="Subcategory" value={item.subcategory} />}
+            {item.description && <DetailRow label="Description" value={item.description} />}
           </Section>
 
           {item.frame_product && (
             <Section icon={Sliders} title="Frame Specifications" color="blue">
-              <DetailRow label="Frame Type"    value={item.frame_product.frame_type} />
-              <DetailRow label="Shape"         value={item.frame_product.shape} />
-              <DetailRow label="Material"      value={item.frame_product.material} />
-              <DetailRow label="Color"         value={item.frame_product.color} />
-              <DetailRow label="Lens Width"    value={item.frame_product.lens_width    ? `${item.frame_product.lens_width} mm`    : null} />
-              <DetailRow label="Bridge Width"  value={item.frame_product.bridge_width  ? `${item.frame_product.bridge_width} mm`  : null} />
+              <DetailRow label="Frame Type" value={item.frame_product.frame_type} />
+              <DetailRow label="Shape" value={item.frame_product.shape} />
+              <DetailRow label="Material" value={item.frame_product.material} />
+              <DetailRow label="Color" value={item.frame_product.color} />
+              <DetailRow label="Lens Width" value={item.frame_product.lens_width ? `${item.frame_product.lens_width} mm` : null} />
+              <DetailRow label="Bridge Width" value={item.frame_product.bridge_width ? `${item.frame_product.bridge_width} mm` : null} />
               <DetailRow label="Temple Length" value={item.frame_product.temple_length ? `${item.frame_product.temple_length} mm` : null} />
-              <DetailRow label="Gender"        value={item.frame_product.gender} />
-              <DetailRow label="Age Group"     value={item.frame_product.age_group} />
+              <DetailRow label="Gender" value={item.frame_product.gender} />
+              <DetailRow label="Age Group" value={item.frame_product.age_group} />
             </Section>
           )}
 
           {item.lens_product && (
             <Section icon={Sliders} title="Lens Specifications" color="blue">
-              <DetailRow label="Lens Type"     value={item.lens_product.lens_type} />
-              <DetailRow label="Material"      value={item.lens_product.material} />
-              <DetailRow label="Index Value"   value={item.lens_product.index_value} />
-              <DetailRow label="Coating"       value={item.lens_product.coating} />
-              <DetailRow label="Tint Color"    value={item.lens_product.tint_color} />
+              <DetailRow label="Lens Type" value={item.lens_product.lens_type} />
+              <DetailRow label="Material" value={item.lens_product.material} />
+              <DetailRow label="Index Value" value={item.lens_product.index_value} />
+              <DetailRow label="Coating" value={item.lens_product.coating} />
+              <DetailRow label="Tint Color" value={item.lens_product.tint_color} />
               <DetailRow label="UV Protection" value={item.lens_product.uv_protection} />
-              <DetailRow label="Blue Cut"      value={item.lens_product.blue_cut} />
-              <DetailRow label="Photochromic"  value={item.lens_product.photochromic} />
-              <DetailRow label="Polarized"     value={item.lens_product.polarized} />
+              <DetailRow label="Blue Cut" value={item.lens_product.blue_cut} />
+              <DetailRow label="Photochromic" value={item.lens_product.photochromic} />
+              <DetailRow label="Polarized" value={item.lens_product.polarized} />
             </Section>
           )}
 
           {item.accessory_product && (
             <Section icon={Sliders} title="Accessory Specifications" color="blue">
               <DetailRow label="Accessory Type" value={item.accessory_product.accessory_type} />
-              <DetailRow label="Material"        value={item.accessory_product.material} />
-              <DetailRow label="Color"           value={item.accessory_product.color} />
-              <DetailRow label="Size"            value={item.accessory_product.size} />
+              <DetailRow label="Material" value={item.accessory_product.material} />
+              <DetailRow label="Color" value={item.accessory_product.color} />
+              <DetailRow label="Size" value={item.accessory_product.size} />
             </Section>
           )}
 
@@ -1143,13 +1673,13 @@ const InventoryDetailDrawer = ({ item, onClose, onEdit, onApprove, onReject, isA
           </Section>
 
           <Section icon={BarChart3} title="Stock Details" color="amber">
-            <DetailRow label="Quantity"      value={item.quantity} />
+            <DetailRow label="Quantity" value={item.quantity} />
             <DetailRow label="Reorder Level" value={item.reorder_level} />
-            <DetailRow label="Status"        value={sc.label} />
+            <DetailRow label="Status" value={sc.label} />
           </Section>
 
           <Section icon={DollarSign} title="Pricing & Warranty Details" color="rose">
-            <DetailRow label="Cost Price"    value={item.cost_price    ? `₹${Number(item.cost_price).toLocaleString()}`    : null} />
+            <DetailRow label="Cost Price" value={item.cost_price ? `₹${Number(item.cost_price).toLocaleString()}` : null} />
             <DetailRow label="Selling Price" value={item.selling_price ? `₹${Number(item.selling_price).toLocaleString()}` : null} />
             {item.discount_percent !== undefined && Number(item.discount_percent) > 0 && (
               <DetailRow label="Default Discount" value={`${item.discount_percent}%`} />
@@ -1158,7 +1688,7 @@ const InventoryDetailDrawer = ({ item, onClose, onEdit, onApprove, onReject, isA
               <DetailRow label="Warranty Duration" value={`${item.warranty_months} Months`} />
             )}
             {profit !== null && <DetailRow label="Gross Profit" value={`₹${Number(profit).toLocaleString()}`} />}
-            {margin !== null && <DetailRow label="Margin"       value={`${margin}%`} />}
+            {margin !== null && <DetailRow label="Margin" value={`${margin}%`} />}
           </Section>
 
           {item.store && (

@@ -85,6 +85,12 @@ class Optician(Base):
         comment="Unique employee identifier code",
     )
 
+    pf_number = Column(
+        String(50),
+        nullable=True,
+        comment="Provident Fund number (optional)",
+    )
+
     qualification = Column(
         String(255),
         nullable=True,

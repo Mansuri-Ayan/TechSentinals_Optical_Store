@@ -231,7 +231,8 @@ const Shopkeeper = () => {
           recommended_usage: currentPres.recommendedUsage || null,
           doctor_name: currentPres.doctorName || null,
         };
-        await createPrescriptionApi(prescriptionPayload);
+        const savedPres = await createPrescriptionApi(prescriptionPayload);
+        setPrescription(prev => ({ ...prev, id: savedPres.id }));
         toast.success('Prescription saved!');
       } catch (err) {
         console.error('Prescription save failed:', err);
@@ -317,9 +318,11 @@ const Shopkeeper = () => {
         sold_by_type: soldByType,
         sold_by_id: soldById,
         sale_date: new Date().toISOString().split('T')[0],
+        prescription_id: prescription?.id || null,
         notes: prescription.notes || null,
         items: saleItems,
         payments: payments,
+        discount_amount: discountAmt,
         // Loyalty fields
         points_to_redeem: loyaltyData.pointsToRedeem || 0,
         custom_points: loyaltyData.customPoints || 0,

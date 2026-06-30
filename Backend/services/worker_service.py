@@ -36,6 +36,7 @@ async def create_worker(
         phone=payload.phone,
         password_hash=hash_password(payload.password),
         employee_code=employee_code,
+        pf_number=payload.pf_number,
         joining_date=payload.joining_date,
     )
     db.add(new_worker)

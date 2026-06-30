@@ -1,10 +1,15 @@
 import asyncio
 import sys
+import os
 from pathlib import Path
 from sqlalchemy import text
+from alembic.config import Config
+from alembic import command
+
 _backend_dir = Path(__file__).resolve().parent.parent
 if str(_backend_dir) not in sys.path:
     sys.path.insert(0, str(_backend_dir))
+
 from db.session import engine, Base
 # Import all models to ensure they register on Base.metadata
 from models import (
@@ -15,9 +20,10 @@ from models import (
     PurchaseOrder, PurchaseOrderItem, SupplierPayment,
     Customer, Sale, SaleItem, SalePayment,
     Expense, ExpenseCategory, Notification, Repair,
-    LoyaltyConfig, StoreCategoryLoyalty, LoyaltyTransaction
+    LoyaltyConfig, StoreCategoryLoyalty, LoyaltyTransaction, Lab
 )
 from db.seed_data import seed
+
 async def recreate_db():
     print("=" * 60)
     print("  Re-creating Database Tables")
@@ -41,7 +47,14 @@ async def recreate_db():
         print("  Creating all tables...")
         await conn.run_sync(Base.metadata.create_all)
         
-    print("  [OK] Re-creation complete. Running seeds...")
+    print("  [OK] Re-creation complete. Stamping database head...")
+    current_dir = Path(__file__).resolve().parent.parent
+    alembic_cfg = Config(os.path.join(current_dir, "alembic.ini"))
+    alembic_cfg.set_main_option("script_location", os.path.join(current_dir, "migrations"))
+    command.stamp(alembic_cfg, "head")
+
+    print("  [OK] Database stamped successfully. Running seeds...")
     await seed()
+
 if __name__ == "__main__":
-    asyncio.run(recreate_db())
+    asyncio.run(recreate_db())

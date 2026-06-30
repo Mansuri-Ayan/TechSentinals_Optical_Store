@@ -1,31 +1,33 @@
 import { useQuery } from '@tanstack/react-query';
 import { getSalesApi } from '../api/sales/sales.api';
 
-export const salesQueryKey = 'sales';
+export const labOrdersQueryKey = 'labOrders';
 
 /**
- * React Query hook for paginated, filtered sales.
+ * React Query hook for paginated, filtered lab orders.
  *
- * @param {Object} filters - { page, limit, storeId, status, search, dateFrom, dateTo }
+ * @param {Object} filters - { page, limit, storeId, tab, status, search, dateFrom, dateTo }
  */
-export const useSales = (filters = {}) => {
+export const useLabOrders = (filters = {}) => {
   const params = {
     page: filters.page || 1,
-    limit: filters.limit || 8,
+    limit: filters.limit || 6,
     paginate: true,
+    is_lab_order: true,
+    tab: filters.tab || 'queue',
     ...(filters.storeId && filters.storeId !== 'All' ? { store_id: filters.storeId } : {}),
-    ...(filters.status && filters.status !== 'All' ? { status: filters.status } : {}),
+    ...(filters.status && filters.status !== 'All' ? { lab_status: filters.status } : {}),
     ...(filters.search ? { search: filters.search } : {}),
     ...(filters.dateFrom ? { date_from: filters.dateFrom } : {}),
     ...(filters.dateTo ? { date_to: filters.dateTo } : {}),
-    ...(filters.hasDue !== undefined ? { has_due: filters.hasDue } : {}),
   };
 
   const query = useQuery({
-    queryKey: [salesQueryKey, params],
+    queryKey: [labOrdersQueryKey, params],
     queryFn: async () => {
       const data = await getSalesApi(params);
-      // Map backend fields to frontend structure
+
+      // Map backend fields to frontend structure expected by LabOrders/InventoryDetailDrawer
       if (data && data.items) {
         data.items = data.items.map(item => {
           let paymentStatus = 'Unpaid';
@@ -64,8 +66,11 @@ export const useSales = (filters = {}) => {
             discountAmount: item.discount_amount,
             paidAmount: item.paid_amount,
             dueAmount: item.due_amount,
-            type: 'sales',
-            deliveryDate: item.lab_status ? (item.lab_status === 'Delivered' ? item.updated_at : null) : item.sale_date,
+            type: 'lab_order', // Ensures the details drawer shows lab order details
+            status: item.lab_status, // Use backend lab_status for workflow tracking
+            sentDate: item.sent_to_lab_date,
+            expectedDeliveryDate: item.expected_delivery_date,
+            deliveryDate: item.lab_status === 'Delivered' ? item.updated_at : null,
             labName: item.lab_name,
             labId: item.lab_id,
           };
@@ -79,12 +84,12 @@ export const useSales = (filters = {}) => {
   });
 
   return {
-    salesQuery: query,
-    sales: query.data?.items || [],
+    labOrdersQuery: query,
+    orders: query.data?.items || [],
     total: query.data?.total || 0,
     pages: query.data?.pages || 1,
     currentPage: query.data?.page || 1,
-    kpis: query.data?.kpis || { revenue: 0, totalOrders: 0, completed: 0, active: 0 },
+    kpis: query.data?.kpis || { totalCount: 0, inProduction: 0, readyForPickup: 0, totalValuation: 0 },
     isLoading: query.isLoading,
     isFetching: query.isFetching,
     isError: query.isError,

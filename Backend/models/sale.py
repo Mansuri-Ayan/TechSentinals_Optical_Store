@@ -174,6 +174,46 @@ class Sale(Base):
         comment="Optional notes / special instructions for this sale",
     )
 
+    prescription_id = Column(
+        BigInteger,
+        ForeignKey("prescriptions.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+        comment="FK → prescriptions.id — associated prescription for custom lens",
+    )
+
+    lab_id = Column(
+        BigInteger,
+        ForeignKey("labs.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+        comment="FK → labs.id — associated processing lab",
+    )
+
+    lab_status = Column(
+        String(50),
+        nullable=True,
+        comment="Current stage in custom spectacles lab workflow",
+    )
+
+    lab_name = Column(
+        String(100),
+        nullable=True,
+        comment="Name of the processing lab",
+    )
+
+    sent_to_lab_date = Column(
+        Date,
+        nullable=True,
+        comment="Date sent to lab",
+    )
+
+    expected_delivery_date = Column(
+        Date,
+        nullable=True,
+        comment="Expected delivery date from lab",
+    )
+
     created_at = Column(
         DateTime(timezone=True),
         nullable=False,
@@ -220,6 +260,15 @@ class Sale(Base):
         "Repair",
         back_populates="sale",
         lazy="noload",
+    )
+    prescription = relationship(
+        "Prescription",
+        lazy="selectin",
+    )
+    lab = relationship(
+        "Lab",
+        back_populates="lab_orders",
+        lazy="selectin",
     )
     # NOTE: loyalty_transactions relationship will be added
     # when the LoyaltyTransaction model is created in a future phase.

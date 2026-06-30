@@ -19,11 +19,19 @@ router = APIRouter()
 
 def _item_to_read(item) -> SaleItemRead:
     snap = item.product_snapshot
+    p = item.product
+    brand_name = snap.brand_name if snap else (p.brand.name if (p and p.brand) else "—")
+    cat_name = snap.category_name if snap else (p.category.name if (p and p.category) else "—")
+    subcat_name = snap.subcategory_name if snap else (p.subcategory.name if (p and p.subcategory) else "—")
+    
     return SaleItemRead(
         **{c.key: getattr(item, c.key) for c in item.__table__.columns},
         product_snapshot=snap,
-        product_name=snap.name if snap else (item.product.name if item.product else None),
-        product_sku=snap.sku if snap else (item.product.sku if item.product else None),
+        product_name=snap.name if snap else (p.name if p else None),
+        product_sku=snap.sku if snap else (p.sku if p else None),
+        product_brand=brand_name,
+        product_category=cat_name,
+        product_subcategory=subcat_name,
     )
 
 
@@ -55,14 +63,22 @@ def _sale_to_read(sale, include_nested: bool = True, staff_map: dict = None) -> 
             staff_role = role_str.title()
 
     # Map status to user-friendly strings for frontend
-    status_map = {
-        SaleStatus.COMPLETED: "Completed",
-        SaleStatus.CANCELLED: "Cancelled",
-        SaleStatus.REFUNDED: "Returned",
-        SaleStatus.PENDING: "Lab Pending",
-        SaleStatus.PARTIALLY_PAID: "Lab Pending",
-    }
-    status_display = status_map.get(sale.status, "Completed")
+    if sale.lab_status and sale.lab_status != "Delivered":
+        if sale.status == SaleStatus.CANCELLED:
+            status_display = "Cancelled"
+        elif sale.status == SaleStatus.REFUNDED:
+            status_display = "Returned"
+        else:
+            status_display = "Lab Pending"
+    else:
+        status_map = {
+            SaleStatus.COMPLETED: "Completed",
+            SaleStatus.CANCELLED: "Cancelled",
+            SaleStatus.REFUNDED: "Returned",
+            SaleStatus.PENDING: "Unpaid",
+            SaleStatus.PARTIALLY_PAID: "Partially Paid",
+        }
+        status_display = status_map.get(sale.status, "Completed")
 
     # Product summary fields based on the first item
     product_name = None
@@ -93,6 +109,26 @@ def _sale_to_read(sale, include_nested: bool = True, staff_map: dict = None) -> 
     items = [_item_to_read(i) for i in (sale.items or [])] if include_nested else []
     payments = [_payment_to_read(p) for p in (sale.payments or [])] if include_nested else []
 
+    prescription_details = None
+    lens_details = None
+    if getattr(sale, "prescription", None):
+        p = sale.prescription
+        prescription_details = {
+            "sphRight": p.sph_right or "",
+            "cylRight": p.cyl_right or "",
+            "axisRight": p.axis_right or "",
+            "sphLeft": p.sph_left or "",
+            "cylLeft": p.cyl_left or "",
+            "axisLeft": p.axis_left or "",
+            "addition": p.addition or "",
+            "pd": p.pupillary_distance or ""
+        }
+        lens_details = {
+            "type": p.lens_type or "",
+            "material": p.lens_material or "",
+            "coating": p.lens_coating or ""
+        }
+
     sale_data = {c.key: getattr(sale, c.key) for c in sale.__table__.columns}
     sale_data["status"] = status_display
 
@@ -112,6 +148,8 @@ def _sale_to_read(sale, include_nested: bool = True, staff_map: dict = None) -> 
         product_subcategory=product_subcategory,
         product_quantity=product_quantity,
         product_price=product_price,
+        prescriptionDetails=prescription_details,
+        lensDetails=lens_details,
     )
 
 
@@ -131,6 +169,9 @@ async def list_sales_endpoint(
     limit: int = Query(20, ge=1, le=10000),
     paginate: bool = Query(True),
     has_due: bool | None = Query(default=None),
+    is_lab_order: bool | None = Query(default=None),
+    tab: str | None = Query(default=None),
+    lab_status: str | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
     current_user = Depends(get_current_user),
 ):
@@ -159,7 +200,11 @@ async def list_sales_endpoint(
         limit=limit,
         paginate=paginate,
         has_due=has_due,
+        is_lab_order=is_lab_order,
+        tab=tab,
+        lab_status_filter=lab_status,
     )
+
 
     # Batch resolve staff info to avoid N+1 queries
     manager_ids = {s.sold_by_id for s in sales if s.sold_by_type == StaffType.MANAGER}
@@ -179,48 +224,92 @@ async def list_sales_endpoint(
         o_res = await db.execute(select(Optician).where(Optician.id.in_(optician_ids)))
         for o in o_res.scalars().all():
             staff_map[(StaffType.OPTICIAN, o.id)] = o
-
     validated = [_sale_to_read(s, include_nested=True, staff_map=staff_map) for s in sales]
 
     # Calculate KPIs dynamically under the same store / date filters
     from sqlalchemy import func as sa_func
-    kpi_conditions = [Sale.admin_id == admin_id]
-    if numeric_store_id:
-        kpi_conditions.append(Sale.store_id == numeric_store_id)
-    if date_from:
-        kpi_conditions.append(Sale.sale_date >= date_from)
-    if date_to:
-        kpi_conditions.append(Sale.sale_date <= date_to)
+    
+    if is_lab_order:
+        lab_kpi_conds = [Sale.admin_id == admin_id, Sale.lab_status.is_not(None), Sale.lab_status != "Delivered"]
+        if numeric_store_id:
+            lab_kpi_conds.append(Sale.store_id == numeric_store_id)
+        if date_from:
+            lab_kpi_conds.append(Sale.sale_date >= date_from)
+        if date_to:
+            lab_kpi_conds.append(Sale.sale_date <= date_to)
 
-    # 1. Total revenue
-    rev_stmt = select(sa_func.coalesce(sa_func.sum(Sale.total_amount), 0)).where(
-        *kpi_conditions, Sale.status != SaleStatus.CANCELLED
-    )
-    revenue = (await db.execute(rev_stmt)).scalar() or 0
+        # Tab conditions
+        sales_tab_conds = []
+        if tab == "queue":
+            sales_tab_conds.append(Sale.lab_status.in_(["Confirmed", "Advance Paid", "Waiting For Lab", "Processing"]))
+        elif tab == "pending":
+            sales_tab_conds.append(Sale.lab_status.in_(["In Lab", "Sent To Lab", "In Production", "Quality Check"]))
+        elif tab == "ready":
+            sales_tab_conds.append(Sale.lab_status.in_(["Ready For Pickup", "Customer Notified"]))
 
-    # 2. Total orders
-    orders_stmt = select(sa_func.count(Sale.id)).where(*kpi_conditions)
-    total_orders = (await db.execute(orders_stmt)).scalar() or 0
+        # Counts
+        cnt_sales_stmt = select(sa_func.count(Sale.id)).where(*lab_kpi_conds, *sales_tab_conds)
+        total_count = (await db.execute(cnt_sales_stmt)).scalar() or 0
 
-    # 3. Completed orders
-    completed_stmt = select(sa_func.count(Sale.id)).where(
-        *kpi_conditions, Sale.status == SaleStatus.COMPLETED
-    )
-    completed = (await db.execute(completed_stmt)).scalar() or 0
+        in_production = (await db.execute(select(sa_func.count(Sale.id)).where(*lab_kpi_conds, Sale.lab_status.in_(["In Lab", "Sent To Lab", "In Production", "Quality Check"])))).scalar() or 0
+        ready_pickup = (await db.execute(select(sa_func.count(Sale.id)).where(*lab_kpi_conds, Sale.lab_status.in_(["Ready For Pickup", "Customer Notified"])))).scalar() or 0
 
-    # 4. Active (Pending / Partially Paid)
-    active_stmt = select(sa_func.count(Sale.id)).where(
-        *kpi_conditions,
-        Sale.status.in_([SaleStatus.PENDING, SaleStatus.PARTIALLY_PAID])
-    )
-    active = (await db.execute(active_stmt)).scalar() or 0
+        # Valuations
+        val_sales = (await db.execute(select(sa_func.coalesce(sa_func.sum(Sale.total_amount), 0)).where(*lab_kpi_conds, *sales_tab_conds))).scalar() or 0
+        total_val = float(val_sales)
 
-    kpis = {
-        "revenue": float(revenue),
-        "totalOrders": total_orders,
-        "completed": completed,
-        "active": active,
-    }
+        # Tab counts
+        queue_count = (await db.execute(select(sa_func.count(Sale.id)).where(*lab_kpi_conds, Sale.lab_status.in_(["Confirmed", "Advance Paid", "Waiting For Lab", "Processing"])))).scalar() or 0
+        pending_count = (await db.execute(select(sa_func.count(Sale.id)).where(*lab_kpi_conds, Sale.lab_status.in_(["In Lab", "Sent To Lab", "In Production", "Quality Check"])))).scalar() or 0
+        ready_count = (await db.execute(select(sa_func.count(Sale.id)).where(*lab_kpi_conds, Sale.lab_status.in_(["Ready For Pickup", "Customer Notified"])))).scalar() or 0
+
+        kpis = {
+            "totalCount": total_count,
+            "inProduction": in_production,
+            "readyForPickup": ready_pickup,
+            "totalValuation": float(total_val),
+            "queueCount": queue_count,
+            "pendingCount": pending_count,
+            "readyCount": ready_count,
+        }
+    else:
+        kpi_conditions = [Sale.admin_id == admin_id]
+        if numeric_store_id:
+            kpi_conditions.append(Sale.store_id == numeric_store_id)
+        if date_from:
+            kpi_conditions.append(Sale.sale_date >= date_from)
+        if date_to:
+            kpi_conditions.append(Sale.sale_date <= date_to)
+
+        # 1. Total revenue
+        rev_stmt = select(sa_func.coalesce(sa_func.sum(Sale.total_amount), 0)).where(
+            *kpi_conditions, Sale.status != SaleStatus.CANCELLED
+        )
+        revenue = (await db.execute(rev_stmt)).scalar() or 0
+
+        # 2. Total orders
+        orders_stmt = select(sa_func.count(Sale.id)).where(*kpi_conditions)
+        total_orders = (await db.execute(orders_stmt)).scalar() or 0
+
+        # 3. Completed orders
+        completed_stmt = select(sa_func.count(Sale.id)).where(
+            *kpi_conditions, Sale.status == SaleStatus.COMPLETED
+        )
+        completed = (await db.execute(completed_stmt)).scalar() or 0
+
+        # 4. Active (Pending / Partially Paid)
+        active_stmt = select(sa_func.count(Sale.id)).where(
+            *kpi_conditions,
+            Sale.status.in_([SaleStatus.PENDING, SaleStatus.PARTIALLY_PAID])
+        )
+        active = (await db.execute(active_stmt)).scalar() or 0
+
+        kpis = {
+            "revenue": float(revenue),
+            "totalOrders": total_orders,
+            "completed": completed,
+            "active": active,
+        }
 
     if not paginate:
         return validated

@@ -23,6 +23,7 @@ from models.loyalty_transaction import LoyaltyTransaction, LoyaltyTransactionTyp
 from services.inventory_service import get_or_create_inventory
 from services import loyalty_service # Import loyalty_service
 from services.snapshot_service import capture_product_snapshot
+from models.prescription import Prescription
 
 from schemas.sale import (
     SaleCreate,
@@ -88,10 +89,11 @@ async def create_sale(
     total_discount = Decimal("0")
     total_tax = Decimal("0")
     sale_items: list[SaleItem] = []
+    has_lenses = False
 
     for item_data in payload.items:
         # Fetch product for cost_price snapshot
-        prod_stmt = select(Product).where(Product.id == item_data.product_id)
+        prod_stmt = select(Product).options(selectinload(Product.category)).where(Product.id == item_data.product_id)
         prod_result = await db.execute(prod_stmt)
         product = prod_result.scalar_one_or_none()
         if not product:
@@ -99,6 +101,9 @@ async def create_sale(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Product {item_data.product_id} not found",
             )
+
+        if product.category and product.category.name.lower() == "lenses":
+            has_lenses = True
 
         line_total = _compute_line_total(
             item_data.quantity,
@@ -131,6 +136,16 @@ async def create_sale(
             notes=item_data.notes,
         )
         sale_items.append((sale_item, product, snapshot))
+
+    # Validate manual discount amount
+    if payload.discount_amount > subtotal:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Discount cannot exceed the total selling price (subtotal)",
+        )
+
+    if payload.discount_amount:
+        total_discount += payload.discount_amount
 
     total_amount = (subtotal - total_discount + total_tax).quantize(Decimal("0.01"))
 
@@ -213,7 +228,24 @@ async def create_sale(
                 detail="Cannot provide both an existing customer_id and new_customer_details."
             )
     
-    # ... (rest of the sale creation logic)
+    # Resolve prescription and initial lab status
+    prescription_id = payload.prescription_id
+    if not prescription_id and customer_id_for_sale:
+        pres_stmt = (
+            select(Prescription)
+            .where(
+                Prescription.customer_id == customer_id_for_sale,
+                Prescription.is_active == True
+            )
+            .order_by(Prescription.created_at.desc())
+            .limit(1)
+        )
+        active_pres = (await db.execute(pres_stmt)).scalar_one_or_none()
+        if active_pres:
+            prescription_id = active_pres.id
+
+    initial_lab_status = "Confirmed"
+
     sale = Sale(
         invoice_number=invoice_number,
         admin_id=admin_id,
@@ -234,6 +266,8 @@ async def create_sale(
         notes=payload.notes,
         items=sale_items_unpacked,
         payments=sale_payments,
+        prescription_id=prescription_id,
+        lab_status=initial_lab_status,
     )
     db.add(sale)
     await db.flush()  # Get sale.id before loyalty operations
@@ -433,6 +467,9 @@ async def list_sales(
     limit: int = 20,
     paginate: bool = True,
     has_due: bool | None = None,
+    is_lab_order: bool | None = None,
+    tab: str | None = None,
+    lab_status_filter: str | None = None,
 ) -> tuple[list[Sale], int]:
     """List sales for an admin with optional filters, search, and pagination."""
     from models.customer import Customer
@@ -445,14 +482,39 @@ async def list_sales(
         conditions.append(Sale.store_id == store_id)
     if customer_id:
         conditions.append(Sale.customer_id == customer_id)
-    if status_filter:
-        sf = status_filter.upper().replace(" ", "_")
-        if sf == "LAB_PENDING":
-            conditions.append(Sale.status.in_([SaleStatus.PENDING, SaleStatus.PARTIALLY_PAID]))
-        elif sf == "RETURNED":
-            conditions.append(Sale.status == SaleStatus.REFUNDED)
-        else:
-            conditions.append(Sale.status == sf)
+
+    if is_lab_order:
+        # A sale is a lab order if it has an associated lab_status
+        conditions.append(Sale.lab_status.is_not(None))
+        conditions.append(Sale.lab_status != "Delivered")
+        
+        if not search:
+            if tab == "queue":
+                conditions.append(Sale.lab_status.in_(["Confirmed", "Advance Paid", "Waiting For Lab", "Processing"]))
+            elif tab == "pending":
+                conditions.append(Sale.lab_status.in_(["In Lab", "Sent To Lab", "In Production", "Quality Check"]))
+            elif tab == "ready":
+                conditions.append(Sale.lab_status.in_(["Ready For Pickup", "Customer Notified"]))
+        
+        if lab_status_filter and lab_status_filter != "All":
+            conditions.append(Sale.lab_status == lab_status_filter)
+    else:
+        # For regular sales history: direct sales OR delivered lab orders
+        conditions.append(or_(
+            Sale.lab_status.is_(None),
+            Sale.lab_status == "Delivered"
+        ))
+
+        if status_filter:
+            sf = status_filter.upper().replace(" ", "_")
+            if sf == "LAB_PENDING":
+                conditions.append(Sale.status.in_([SaleStatus.PENDING, SaleStatus.PARTIALLY_PAID]))
+            elif sf == "RETURNED":
+                conditions.append(Sale.status == SaleStatus.REFUNDED)
+            elif sf == "UNPAID":
+                conditions.append(Sale.status == SaleStatus.PENDING)
+            else:
+                conditions.append(Sale.status == sf)
     if date_from:
         conditions.append(Sale.sale_date >= date_from)
     if date_to:
@@ -520,12 +582,18 @@ async def update_sale(
     sale: Sale,
     payload: SaleUpdate,
 ) -> Sale:
-    """Update sale header (status, notes)."""
+    """Update sale header (status, notes, lab details)."""
     update_data = payload.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(sale, field, value)
+        
+    if "lab_status" in update_data and update_data["lab_status"] == "Delivered":
+        if sale.due_amount <= 0:
+            sale.status = SaleStatus.COMPLETED
+
     await db.commit()
     await db.refresh(sale)
+    await check_and_update_sales_loss(db, sale.id)
     return sale
 
 
@@ -578,6 +646,7 @@ async def cancel_sale(
     sale.status = SaleStatus.CANCELLED
     await db.commit()
     await db.refresh(sale)
+    await check_and_update_sales_loss(db, sale.id)
     return sale
 
 
@@ -618,4 +687,142 @@ async def add_sale_payment(
 
     await db.commit()
     await db.refresh(payment)
+    await check_and_update_sales_loss(db, sale.id)
     return payment
+
+
+# ── check_and_update_sales_loss ──────────────────────────────────────
+
+async def check_and_update_sales_loss(db: AsyncSession, sale_id: int):
+    from models.sale import Sale, SaleStatus
+    from models.sale_item import SaleItem
+    from models.product import Product
+    from models.expense import Expense, ExpenseOwnerType, ExpensePaymentMethod, ExpenseRecordedByType
+    from models.expense_category import ExpenseCategory
+    from sqlalchemy.orm import selectinload
+    
+    # 1. Fetch sale with products loaded
+    stmt = (
+        select(Sale)
+        .options(
+            selectinload(Sale.items).selectinload(SaleItem.product),
+            selectinload(Sale.store)
+        )
+        .where(Sale.id == sale_id)
+    )
+    res = await db.execute(stmt)
+    sale = res.scalar_one_or_none()
+    if not sale:
+        return
+
+    # 2. Check if it should have an expense
+    should_have_expense = (
+        (sale.status == SaleStatus.COMPLETED or sale.lab_status == "Delivered")
+        and sale.status not in (SaleStatus.CANCELLED, SaleStatus.REFUNDED)
+    )
+
+    # 3. Check for existing expense
+    ref_num = f"SALE-{sale.id}"
+    exp_stmt = select(Expense).where(Expense.reference_number == ref_num, Expense.deleted_at.is_(None))
+    exp_res = await db.execute(exp_stmt)
+    existing_expense = exp_res.scalar_one_or_none()
+
+    if not should_have_expense:
+        if existing_expense:
+            await db.delete(existing_expense)
+            await db.commit()
+        return
+
+    # 4. Calculate total loss
+    total_loss = Decimal("0.00")
+    loss_details = []
+    
+    for item in sale.items:
+        unit_cost = item.unit_cost or Decimal("0.00")
+        unit_price = item.unit_price or Decimal("0.00")
+        quantity = item.quantity or 0
+        if quantity <= 0:
+            continue
+            
+        # Calculate proportionate manual discount
+        item_base_total = unit_price * quantity
+        proportionate_manual_discount = Decimal("0.00")
+        if sale.subtotal > 0 and sale.discount_amount > 0:
+            proportionate_manual_discount = sale.discount_amount * (item_base_total / sale.subtotal)
+            
+        item_line_discount = item_base_total * (item.discount_percent or Decimal("0.00")) / Decimal("100")
+        total_item_discount = item_line_discount + proportionate_manual_discount
+        
+        # Final unit selling price after all discounts
+        final_selling_price = unit_price - (total_item_discount / quantity)
+        
+        # Loss formula: (Cost Price - Final Selling Price) * Quantity
+        item_loss = (unit_cost - final_selling_price) * quantity
+        
+        if item_loss > 0:
+            total_loss += item_loss
+            prod_name = item.product.name if item.product else f"Product #{item.product_id}"
+            sku = item.product.sku if item.product else "N/A"
+            loss_details.append(
+                f"- {prod_name} (SKU: {sku}): Qty={quantity}, Cost=₹{unit_cost:.2f}, "
+                f"Selling (after disc)=₹{final_selling_price:.2f}, Loss=₹{item_loss:.2f}"
+            )
+
+    # 5. Handle creation or deletion based on loss amount
+    if total_loss <= 0:
+        if existing_expense:
+            await db.delete(existing_expense)
+            await db.commit()
+        return
+
+    # Resolve "Sales Loss" category
+    cat_stmt = select(ExpenseCategory).where(
+        ExpenseCategory.admin_id == sale.admin_id,
+        ExpenseCategory.name == "Sales Loss"
+    )
+    cat_res = await db.execute(cat_stmt)
+    loss_category = cat_res.scalar_one_or_none()
+    
+    if not loss_category:
+        loss_category = ExpenseCategory(
+            admin_id=sale.admin_id,
+            name="Sales Loss",
+            description="Automatically generated category for tracking sales losses",
+            is_active=True
+        )
+        db.add(loss_category)
+        await db.flush()
+
+    title = f"Sales Loss - Invoice #{sale.invoice_number}"
+    description = (
+        f"Automatic loss calculation for Invoice #{sale.invoice_number}.\n"
+        f"Store: {sale.store.store_name if sale.store else f'Store #{sale.store_id}'}\n\n"
+        "Loss details by item:\n" + "\n".join(loss_details)
+    )
+
+    if existing_expense:
+        existing_expense.category_id = loss_category.id
+        existing_expense.title = title
+        existing_expense.description = description
+        existing_expense.amount = total_loss.quantize(Decimal("0.01"))
+        existing_expense.expense_date = sale.sale_date
+        existing_expense.is_approved = True
+    else:
+        new_expense = Expense(
+            admin_id=sale.admin_id,
+            owner_type=ExpenseOwnerType.STORE,
+            owner_id=sale.store_id,
+            category_id=loss_category.id,
+            title=title,
+            description=description,
+            amount=total_loss.quantize(Decimal("0.01")),
+            expense_date=sale.sale_date,
+            payment_method=ExpensePaymentMethod.CASH,
+            is_approved=True,
+            recorded_by_type=ExpenseRecordedByType(sale.sold_by_type.value),
+            recorded_by_id=sale.sold_by_id,
+            reference_number=ref_num
+        )
+        db.add(new_expense)
+
+    await db.commit()

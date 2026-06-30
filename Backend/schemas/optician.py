@@ -36,6 +36,11 @@ class OpticianCreate(BaseModel):
         ..., examples=["2025-03-01"],
         description="Date the optician joined",
     )
+    pf_number: str | None = Field(
+        default=None,
+        max_length=50,
+        description="Provident Fund Number (Optional)",
+    )
 
 
 class OpticianUpdate(BaseModel):
@@ -46,6 +51,11 @@ class OpticianUpdate(BaseModel):
     profile_image: str | None = Field(default=None)
     qualification: str | None = Field(default=None, max_length=255)
     is_active: bool | None = Field(default=None)
+    pf_number: str | None = Field(
+        default=None,
+        max_length=50,
+        description="Provident Fund Number (Optional)",
+    )
 
 
 class OpticianRead(BaseModel):
@@ -57,6 +67,7 @@ class OpticianRead(BaseModel):
     phone: str
     profile_image: str | None = None
     employee_code: str
+    pf_number: str | None = None
     qualification: str | None = None
     joining_date: date
     is_active: bool

@@ -183,6 +183,8 @@ const StaffDetailDrawer = ({ staff, onClose, isLoading }) => {
 
               <Section icon={Briefcase} title="Employment" color="blue">
                 <DetailRow label="Store / Branch" value={staff.store_name} />
+                <DetailRow label="Employee Code" value={staff.employee_code} mono />
+                <DetailRow label="PF Number" value={staff.pf_number || "-"} />
                 <DetailRow label="Status" value={
                   <span className={`inline-flex px-2 py-0.5 rounded text-[11px] font-bold ${staff.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
                     {staff.is_active ? 'Active' : 'Inactive'}

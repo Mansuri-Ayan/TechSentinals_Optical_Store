@@ -10,47 +10,48 @@ from db.session import async_session_maker
 from models.admin import Admin
 from models.store import Store
 from models.manager import Manager
+from models.worker import Worker
+from models.optician import Optician
 from sqlalchemy import select
 from apis.inventory.read import universal_search_inventories
 
 async def test_universal():
     async with async_session_maker() as db:
-        # Get store 33
-        store_res = await db.execute(select(Store).where(Store.id == 33))
-        store = store_res.scalar_one_or_none()
-        if not store:
-            print("Store 33 not found.")
-            return
-        
-        print(f"Store 33: {store.store_name}, Admin ID: {store.admin_id}")
-        
-        # Get admin of store 33
-        admin_res = await db.execute(select(Admin).where(Admin.id == store.admin_id))
-        admin = admin_res.scalar_one_or_none()
-        if not admin:
-            print(f"Admin {store.admin_id} not found.")
-            return
-        
-        # Test universal search API logic directly
         try:
-            res = await universal_search_inventories(
-                owner_type="STORE",
-                owner_id=33,
-                search="a",
-                category_id=None,
-                subcategory_id=None,
-                brand_id=None,
-                stock_status=None,
+            print("Querying staff members directly from database...")
+            # Query all workers
+            workers_res = await db.execute(select(Worker))
+            workers_list = workers_res.scalars().all()
+            print(f"Total Workers in DB: {len(workers_list)}")
+
+            # Query all managers
+            managers_res = await db.execute(select(Manager))
+            managers_list = managers_res.scalars().all()
+            print(f"Total Managers in DB: {len(managers_list)}")
+
+            # Query all opticians
+            opticians_res = await db.execute(select(Optician))
+            opticians_list = opticians_res.scalars().all()
+            print(f"Total Opticians in DB: {len(opticians_list)}")
+
+            # Test the service function
+            print("Testing get_staff_by_store service function...")
+            staff_items, total = await get_staff_by_store(
+                db,
+                store_id=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
                 page=1,
                 limit=20,
-                db=db,
-                current_user=admin
+                paginate=True
             )
-            print("SUCCESS! Universal Search output:")
-            print("Total:", res.total)
-            print("Items count:", len(res.items))
+            print(f"Service returned total: {total}, items returned: {len(staff_items)}")
+            if staff_items:
+                print("First staff item format:", staff_items[0])
+                # Try to validate
+                from schemas.staff import StaffRead
+                validated = StaffRead.model_validate(staff_items[0])
+                print("First staff item successfully validated with StaffRead!")
         except Exception as e:
-            print("ERROR:")
+            print("DIAGNOSTIC ERROR:")
             import traceback
             traceback.print_exc()
 

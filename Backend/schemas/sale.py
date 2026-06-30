@@ -47,7 +47,7 @@ class SaleItemCreate(BaseModel):
     )
     quantity: int = Field(..., ge=1)
     unit_price: Decimal = Field(..., ge=0, decimal_places=2)
-    discount_percent: Decimal = Field(default=Decimal("0"), ge=0, decimal_places=2)
+    discount_percent: Decimal = Field(default=Decimal("0"), ge=0, le=100, decimal_places=2)
     tax_percent: Decimal = Field(default=Decimal("0"), ge=0, decimal_places=2)
     notes: str | None = None
 
@@ -75,6 +75,9 @@ class SaleItemRead(BaseModel):
     # Auto-populated from product_snapshot via model_validator
     product_name: str | None = None
     product_sku: str | None = None
+    product_brand: str | None = None
+    product_category: str | None = None
+    product_subcategory: str | None = None
 
     @model_validator(mode="after")
     def _fill_from_snapshot(self) -> "SaleItemRead":
@@ -146,6 +149,8 @@ class SaleCreate(BaseModel):
     )
     sale_date: date = Field(..., description="Date of sale")
     notes: str | None = None
+    prescription_id: int | None = None
+    discount_amount: Decimal = Field(default=Decimal("0"), ge=0, decimal_places=2)
     items: list[SaleItemCreate] = Field(
         ..., min_length=1, description="At least one item",
     )
@@ -172,6 +177,11 @@ class SaleCreate(BaseModel):
 class SaleUpdate(BaseModel):
     status: SaleStatusEnum | None = None
     notes: str | None = None
+    lab_status: str | None = None
+    lab_id: int | None = None
+    lab_name: str | None = None
+    sent_to_lab_date: date | None = None
+    expected_delivery_date: date | None = None
 
 
 class SaleRead(BaseModel):
@@ -193,6 +203,12 @@ class SaleRead(BaseModel):
     loyalty_points_earned: int
     loyalty_points_redeemed: int
     notes: str | None = None
+    prescription_id: int | None = None
+    lab_status: str | None = None
+    lab_id: int | None = None
+    lab_name: str | None = None
+    sent_to_lab_date: date | None = None
+    expected_delivery_date: date | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -208,6 +224,8 @@ class SaleRead(BaseModel):
     staff_name: str | None = None
     staff_code: str | None = None
     staff_role: str | None = None
+    prescriptionDetails: dict | None = None
+    lensDetails: dict | None = None
 
     # Product summary fields
     product_name: str | None = None

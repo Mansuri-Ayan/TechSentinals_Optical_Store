@@ -32,6 +32,11 @@ class WorkerCreate(BaseModel):
         ..., examples=["2025-01-15"],
         description="Date the worker joined",
     )
+    pf_number: str | None = Field(
+        default=None,
+        max_length=50,
+        description="Provident Fund Number (Optional)",
+    )
 
 
 class WorkerUpdate(BaseModel):
@@ -41,6 +46,11 @@ class WorkerUpdate(BaseModel):
     phone: str | None = Field(default=None, min_length=10, max_length=10)
     profile_image: str | None = Field(default=None)
     is_active: bool | None = Field(default=None)
+    pf_number: str | None = Field(
+        default=None,
+        max_length=50,
+        description="Provident Fund Number (Optional)",
+    )
 
 
 class WorkerRead(BaseModel):
@@ -52,6 +62,7 @@ class WorkerRead(BaseModel):
     phone: str
     profile_image: str | None = None
     employee_code: str
+    pf_number: str | None = None
     joining_date: date
     is_active: bool
     last_login_at: datetime | None = None

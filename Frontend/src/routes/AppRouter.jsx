@@ -1,6 +1,6 @@
 /** @format */
 
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate, useParams } from "react-router-dom";
 import { useAuthStore, useStoreStore } from "../store/store";
 import Login from "../pages/auth/Login";
 import ProfileHome from "../pages/auth/ProfileHome";
@@ -15,6 +15,8 @@ import Suppliers from "../pages/admin/Suppliers";
 import SupplierDetail from "../pages/admin/SupplierDetail";
 import Sales from "../pages/admin/Sales";
 import LabOrders from "../pages/admin/LabOrders";
+import Labs from "../pages/admin/Labs";
+import LabDetail from "../pages/admin/LabDetail";
 import Expenses from "../pages/admin/Expenses";
 import Analyses from "../pages/admin/Analyses";
 import Stores from "../pages/admin/Stores";
@@ -204,6 +206,13 @@ const StoreRouteRedirect = ({ path }) => {
   return <Navigate to={`/admin/store/${targetStore.id}/${path}`} replace />;
 };
 
+const LabDetailRedirect = () => {
+  const { id } = useParams();
+  const { selectedStore, stores } = useStoreStore();
+  const targetStore = selectedStore || stores[0] || { id: '1' };
+  return <Navigate to={`/admin/store/${targetStore.id}/labs/${id}`} replace />;
+};
+
 const RepairsRouteRedirect = () => {
   const { selectedStore, stores } = useStoreStore();
   const targetStore = selectedStore || stores[0];
@@ -302,6 +311,13 @@ function AppRouter() {
           element={<StoreRouteRedirect path="bill-template" />}
         />
         <Route path="store/:storeId/bill-template" element={<BillTemplate />} />
+        <Route
+          path="labs"
+          element={<StoreRouteRedirect path="labs" />}
+        />
+        <Route path="store/:storeId/labs" element={<Labs />} />
+        <Route path="labs/:id" element={<LabDetailRedirect />} />
+        <Route path="store/:storeId/labs/:id" element={<LabDetail />} />
         <Route path="analyses" element={<Analyses />} />
         <Route path="warehouse" element={<Warehouse />} />
         <Route path="stores" element={<Stores />} />

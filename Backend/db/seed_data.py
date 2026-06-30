@@ -48,6 +48,7 @@ from models.refresh_token import RefreshToken
 from models.expense import Expense, ExpenseOwnerType, ExpensePaymentMethod, ExpenseRecordedByType
 from models.expense_category import ExpenseCategory
 from models.loyalty_config import LoyaltyConfig
+from models.lab import Lab
 from models.store_category_loyalty import StoreCategoryLoyalty
 from models.loyalty_transaction import LoyaltyTransaction, LoyaltyTransactionType
 from models.customer import CustomerMembershipTier
@@ -1770,6 +1771,97 @@ async def seed() -> None:
             admin_customer_map[admin_id] = cust_ids
             print(f"  [OK] seeded 5 customers for Admin {admin_id}")
 
+        # ── 19. Seed Prescriptions ────────────────────────────
+        print("\n" + "=" * 60)
+        print("  Seeding Prescriptions")
+        print("=" * 60)
+        customer_prescriptions = {}
+        for idx, admin_id in enumerate(admin_ids):
+            store_id = store_ids[idx]
+            cust_ids = admin_customer_map[admin_id]
+
+            # Fetch optician for this store
+            stmt = select(Optician).where(Optician.store_id == store_id).limit(1)
+            res = await session.execute(stmt)
+            opt = res.scalar_one_or_none()
+            optician_id = opt.id if opt else None
+
+            # Seed 5 prescriptions for the customer(s)
+            for i in range(5):
+                cust_id = cust_ids[i]
+                p_data = PRESCRIPTIONS_DATA[i]
+
+                stmt = select(Prescription).where(
+                    Prescription.customer_id == cust_id,
+                    Prescription.prescription_date == p_data["prescription_date"]
+                )
+                res = await session.execute(stmt)
+                existing = res.scalars().first()
+                if existing:
+                    customer_prescriptions[cust_id] = existing.id
+                    continue
+
+                prescription = Prescription(
+                    customer_id=cust_id,
+                    store_id=store_id,
+                    optician_id=optician_id,
+                    sph_right=p_data["sph_right"],
+                    cyl_right=p_data["cyl_right"],
+                    axis_right=p_data["axis_right"],
+                    sph_left=p_data["sph_left"],
+                    cyl_left=p_data["cyl_left"],
+                    axis_left=p_data["axis_left"],
+                    addition=p_data["addition"],
+                    pupillary_distance=p_data["pupillary_distance"],
+                    prescription_date=p_data["prescription_date"],
+                    notes=p_data["notes"],
+                    lens_type="Single Vision",
+                    lens_material="CR-39",
+                    lens_coating="Anti-Reflective",
+                    frame_preference="Full-Rim",
+                    expiry_date=p_data["prescription_date"] + timedelta(days=365),
+                    recommended_usage="Constant Wear",
+                    doctor_name=f"{opt.first_name} {opt.last_name}" if opt else "Optician",
+                    is_active=True
+                )
+                session.add(prescription)
+                await session.flush()
+                customer_prescriptions[cust_id] = prescription.id
+            print(f"  [OK] seeded 5 prescriptions for Admin {admin_id}")
+
+        # ── 17.5. Seed Lab Partners ───────────────────────────
+        print("\n" + "=" * 60)
+        print("  Seeding Lab Partners")
+        print("=" * 60)
+        admin_lab_map = {} # Maps admin_id to list of Lab IDs
+        for admin_id in admin_ids:
+            admin_lab_map[admin_id] = []
+            for l_data in [
+                {"name": "Central Optic Lab", "email": "central@opticlab.in", "contact_number": "9876543210"},
+                {"name": "Precision Lens Lab", "email": "precision@lenslab.in", "contact_number": "9876543211"},
+                {"name": "Apex Optical Processing", "email": "apex@apexoptics.in", "contact_number": "9876543212"},
+            ]:
+                stmt = select(Lab).where(
+                    Lab.admin_id == admin_id,
+                    Lab.name == l_data["name"]
+                )
+                res = await session.execute(stmt)
+                existing_lab = res.scalar_one_or_none()
+                if existing_lab:
+                    admin_lab_map[admin_id].append(existing_lab.id)
+                else:
+                    lab = Lab(
+                        admin_id=admin_id,
+                        name=l_data["name"],
+                        email=l_data["email"],
+                        contact_number=l_data["contact_number"],
+                        is_active=True
+                    )
+                    session.add(lab)
+                    await session.flush()
+                    admin_lab_map[admin_id].append(lab.id)
+            print(f"  [OK] seeded 3 lab partners for Admin {admin_id}")
+
         # ── 18. Seed Sales & Items & Payments ──────────────────
         print("\n" + "=" * 60)
         print("  Seeding Sales, Items, Payments")
@@ -1815,6 +1907,40 @@ async def seed() -> None:
                 if loyalty_config and loyalty_config.price_points_enabled:
                     loyalty_points_earned = int((PRODUCTS[i]["selling_price"] / price_interval) * price_points)
 
+                # Determine lab tracking details for seeded orders
+                pres_id = customer_prescriptions.get(cust_ids[i])
+                lab_status = None
+                lab_id = None
+                lab_name = None
+                sent_to_lab_date = None
+                expected_delivery_date = None
+                
+                # We only seed lab tracking fields if there is a prescription (i < 4)
+                if pres_id and i < 4:
+                    stages = ["Confirmed", "Sent To Lab", "Ready For Pickup", "Delivered"]
+                    lab_status = stages[i]
+                    if lab_status in ["Sent To Lab", "Ready For Pickup", "Delivered"]:
+                        lab_name = "Central Optic Lab"
+                        lab_id = admin_lab_map[admin_id][0] # Select Central Optic Lab ID
+                        sent_to_lab_date = date(2025, 6, 6)
+                        expected_delivery_date = date(2025, 6, 10)
+                        
+                    if lab_status == "Delivered":
+                        # Delivered is fully paid and COMPLETED
+                        sale_paid = total_sale_amt
+                        sale_due = 0
+                        sale_status = SaleStatus.COMPLETED
+                    elif lab_status == "Ready For Pickup":
+                        # Ready for pickup is partially paid
+                        sale_status = SaleStatus.PARTIALLY_PAID
+                        sale_due = total_sale_amt / 2
+                        sale_paid = total_sale_amt - sale_due
+                    elif lab_status == "Confirmed":
+                        # Confirmed is unpaid
+                        sale_paid = 0
+                        sale_due = total_sale_amt
+                        sale_status = SaleStatus.PENDING
+
                 sale = Sale(
                     invoice_number=inv_num,
                     admin_id=admin_id,
@@ -1831,7 +1957,13 @@ async def seed() -> None:
                     paid_amount=sale_paid,
                     due_amount=sale_due,
                     loyalty_points_earned=loyalty_points_earned,
-                    loyalty_points_redeemed=0 # Assuming no redemption in initial seed sales
+                    loyalty_points_redeemed=0,
+                    prescription_id=pres_id,
+                    lab_status=lab_status,
+                    lab_id=lab_id,
+                    lab_name=lab_name,
+                    sent_to_lab_date=sent_to_lab_date,
+                    expected_delivery_date=expected_delivery_date,
                 )
                 session.add(sale)
                 await session.flush()
@@ -1850,68 +1982,17 @@ async def seed() -> None:
                 )
                 session.add(sale_item)
                 
-                payment = SalePayment(
-                    sale_id=sale.id,
-                    amount=sale_paid,
-                    payment_method=SalePaymentMethod.UPI,
-                    reference_number=f"TXN-{uuid.uuid4().hex[:8].upper()}"
-                )
-                session.add(payment)
+                if sale_paid > 0:
+                    payment = SalePayment(
+                        sale_id=sale.id,
+                        amount=sale_paid,
+                        payment_method=SalePaymentMethod.UPI,
+                        reference_number=f"TXN-{uuid.uuid4().hex[:8].upper()}"
+                    )
+                    session.add(payment)
             print(f"  [OK] seeded 5 sales, items, and payments for Store {store_id}")
 
-        # ── 19. Seed Prescriptions ────────────────────────────
-        print("\n" + "=" * 60)
-        print("  Seeding Prescriptions")
-        print("=" * 60)
-        for idx, admin_id in enumerate(admin_ids):
-            store_id = store_ids[idx]
-            cust_ids = admin_customer_map[admin_id]
-
-            # Fetch optician for this store
-            stmt = select(Optician).where(Optician.store_id == store_id).limit(1)
-            res = await session.execute(stmt)
-            opt = res.scalar_one_or_none()
-            optician_id = opt.id if opt else None
-
-            # Seed 5 prescriptions for the customer(s)
-            for i in range(5):
-                cust_id = cust_ids[i]
-                p_data = PRESCRIPTIONS_DATA[i]
-
-                stmt = select(Prescription).where(
-                    Prescription.customer_id == cust_id,
-                    Prescription.prescription_date == p_data["prescription_date"]
-                )
-                res = await session.execute(stmt)
-                existing = res.scalars().first()
-                if existing:
-                    continue
-
-                prescription = Prescription(
-                    customer_id=cust_id,
-                    store_id=store_id,
-                    optician_id=optician_id,
-                    sph_right=p_data["sph_right"],
-                    cyl_right=p_data["cyl_right"],
-                    axis_right=p_data["axis_right"],
-                    sph_left=p_data["sph_left"],
-                    cyl_left=p_data["cyl_left"],
-                    axis_left=p_data["axis_left"],
-                    addition=p_data["addition"],
-                    pupillary_distance=p_data["pupillary_distance"],
-                    prescription_date=p_data["prescription_date"],
-                    notes=p_data["notes"],
-                    lens_type="Single Vision",
-                    lens_material="CR-39",
-                    lens_coating="Anti-Reflective",
-                    frame_preference="Full-Rim",
-                    expiry_date=p_data["prescription_date"] + timedelta(days=365),
-                    recommended_usage="Constant Wear",
-                    doctor_name=f"{opt.first_name} {opt.last_name}" if opt else "Optician",
-                    is_active=True
-                )
-                session.add(prescription)
-            print(f"  [OK] seeded 5 prescriptions for Admin {admin_id}")
+        # Section 19 Seed Prescriptions was moved before Section 18 to allow linking sales.
 
         # ── 20. Seed LoyaltyTransaction ──────────────────────
         print("\n" + "=" * 60)

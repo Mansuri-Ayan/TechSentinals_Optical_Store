@@ -25,6 +25,7 @@ const getDefaultValues = (initialData, storeId) => {
       password: '',
       confirmPassword: '',
       store_id: storeId === 'admin' ? '' : storeId,
+      pfNumber: '',
     };
   }
   return {
@@ -39,6 +40,7 @@ const getDefaultValues = (initialData, storeId) => {
     password: '',
     confirmPassword: '',
     store_id: initialData.store_id || '',
+    pfNumber: initialData.pf_number || '',
   };
 };
 
@@ -107,6 +109,7 @@ const AddStaffModal = ({ isOpen, onClose, onSubmitStaff, initialData, isSaving =
       phone: data.phone,
       is_active: data.isActive,
       store_id: Number(data.store_id || storeId),
+      pf_number: data.pfNumber || null,
     };
 
     const createPayload = {
@@ -303,6 +306,19 @@ const AddStaffModal = ({ isOpen, onClose, onSubmitStaff, initialData, isSaving =
                     <FieldError message={errors.joiningDate?.message} />
                   </div>
                 )}
+
+                {/* PF Number */}
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+                    PF Number
+                  </label>
+                  <input
+                    {...register('pfNumber')}
+                    type="text"
+                    placeholder="Enter PF Number"
+                    className={inputCls(false)}
+                  />
+                </div>
 
                 {/* Qualification — optician only */}
                 {watchedRole === 'optician' && (

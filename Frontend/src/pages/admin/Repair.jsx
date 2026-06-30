@@ -419,11 +419,10 @@ const Repair = () => {
                         {repair.is_warranty ? 'Free' : fmtCurrency(repair.estimated_cost)}
                       </td>
                       <td className="px-5 py-4">
-                        <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-bold border ${
-                          repair.is_warranty
+                        <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-bold border ${repair.is_warranty
                             ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
                             : 'text-slate-500 bg-slate-50 border-slate-200'
-                        }`}>
+                          }`}>
                           {repair.is_warranty ? 'Yes (Covered)' : 'No'}
                         </span>
                       </td>
@@ -480,11 +479,10 @@ const Repair = () => {
                   <div className="flex justify-between items-center pt-2 border-t border-slate-50 text-xs" onClick={e => e.stopPropagation()}>
                     <div>
                       <span className="text-slate-400 block font-medium">Warranty</span>
-                      <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-bold border ${
-                        repair.is_warranty
+                      <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-bold border ${repair.is_warranty
                           ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
                           : 'text-slate-500 bg-slate-50 border-slate-200'
-                      }`}>
+                        }`}>
                         {repair.is_warranty ? 'In Warranty' : 'Paid'}
                       </span>
                     </div>
@@ -556,9 +554,8 @@ const Repair = () => {
                     <select
                       value={form.store_id}
                       onChange={e => setForm(p => ({ ...p, store_id: e.target.value }))}
-                      className={`w-full px-3 py-2.5 text-sm font-semibold rounded-xl border bg-white focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 ${
-                        errors.store_id ? 'border-red-400 focus:ring-4 focus:ring-red-100' : 'border-slate-200'
-                      }`}
+                      className={`w-full px-3 py-2.5 text-sm font-semibold rounded-xl border bg-white focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 ${errors.store_id ? 'border-red-400 focus:ring-4 focus:ring-red-100' : 'border-slate-200'
+                        }`}
                     >
                       <option value="">Select Store Branch...</option>
                       {stores.filter(s => s.id !== 'admin').map(s => (
@@ -578,11 +575,10 @@ const Repair = () => {
                         key={opt.key}
                         type="button"
                         onClick={() => handleCustomerTypeChange(opt.key)}
-                        className={`py-2 text-xs font-bold rounded-lg transition-all ${
-                          customerType === opt.key
+                        className={`py-2 text-xs font-bold rounded-lg transition-all ${customerType === opt.key
                             ? 'bg-white text-slate-800 shadow-sm border border-slate-200'
                             : 'text-slate-400 hover:text-slate-600'
-                        }`}
+                          }`}
                       >
                         {opt.label}
                       </button>
@@ -601,9 +597,8 @@ const Repair = () => {
                       placeholder="Enter new customer name"
                       value={form.customer_name}
                       onChange={e => setForm(p => ({ ...p, customer_name: e.target.value }))}
-                      className={`w-full px-3 py-2.5 text-sm font-semibold rounded-xl border focus:outline-none ${
-                        errors.customer_name ? 'border-red-400 focus:ring-4 focus:ring-red-100' : 'border-slate-200 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500'
-                      }`}
+                      className={`w-full px-3 py-2.5 text-sm font-semibold rounded-xl border focus:outline-none ${errors.customer_name ? 'border-red-400 focus:ring-4 focus:ring-red-100' : 'border-slate-200 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500'
+                        }`}
                     />
                     {errors.customer_name && <p className="text-xs text-red-500 mt-1">{errors.customer_name}</p>}
                   </div>
@@ -623,9 +618,8 @@ const Repair = () => {
                       <select
                         value={selectedCustomerId}
                         onChange={e => handleCustomerSelect(e.target.value)}
-                        className={`w-full px-3 py-2.5 text-sm font-semibold rounded-xl border focus:outline-none bg-white ${
-                          errors.customer ? 'border-red-400 focus:ring-4 focus:ring-red-100' : 'border-slate-200 focus:ring-4 focus:ring-blue-500/10'
-                        }`}
+                        className={`w-full px-3 py-2.5 text-sm font-semibold rounded-xl border focus:outline-none bg-white ${errors.customer ? 'border-red-400 focus:ring-4 focus:ring-red-100' : 'border-slate-200 focus:ring-4 focus:ring-blue-500/10'
+                          }`}
                       >
                         <option value="">Choose customer...</option>
                         {filteredCustomersForSelect.map(c => (
@@ -723,10 +717,9 @@ const Repair = () => {
                       disabled={form.is_warranty}
                       value={form.is_warranty ? '0' : form.estimated_cost}
                       onChange={e => setForm(p => ({ ...p, estimated_cost: e.target.value }))}
-                      className={`w-full px-3 py-2.5 text-sm font-semibold rounded-xl border focus:outline-none ${
-                        form.is_warranty ? 'bg-slate-50 border-slate-200 text-slate-400' :
-                        errors.estimated_cost ? 'border-red-400 focus:ring-4 focus:ring-red-100' : 'border-slate-200 focus:ring-4 focus:ring-blue-500/10'
-                      }`}
+                      className={`w-full px-3 py-2.5 text-sm font-semibold rounded-xl border focus:outline-none ${form.is_warranty ? 'bg-slate-50 border-slate-200 text-slate-400' :
+                          errors.estimated_cost ? 'border-red-400 focus:ring-4 focus:ring-red-100' : 'border-slate-200 focus:ring-4 focus:ring-blue-500/10'
+                        }`}
                     />
                     {errors.estimated_cost && <p className="text-xs text-red-500 mt-1">{errors.estimated_cost}</p>}
                   </div>

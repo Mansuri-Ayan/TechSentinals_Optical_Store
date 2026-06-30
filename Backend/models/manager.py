@@ -85,6 +85,12 @@ class Manager(Base):
         comment="Unique employee identifier code",
     )
 
+    pf_number = Column(
+        String(50),
+        nullable=True,
+        comment="Provident Fund number (optional)",
+    )
+
     joining_date = Column(
         Date,
         nullable=False,

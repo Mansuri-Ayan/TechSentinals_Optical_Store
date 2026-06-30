@@ -36,6 +36,7 @@ async def create_optician(
         phone=payload.phone,
         password_hash=hash_password(payload.password),
         employee_code=employee_code,
+        pf_number=payload.pf_number,
         qualification=payload.qualification,
         joining_date=payload.joining_date,
     )
