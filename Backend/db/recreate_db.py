@@ -1,6 +1,7 @@
 import asyncio
 import sys
 from pathlib import Path
+from sqlalchemy import text
 _backend_dir = Path(__file__).resolve().parent.parent
 if str(_backend_dir) not in sys.path:
     sys.path.insert(0, str(_backend_dir))
@@ -23,12 +24,24 @@ async def recreate_db():
     print("=" * 60)
     
     async with engine.begin() as conn:
-        print("  Dropping all existing tables...")
-        await conn.run_sync(Base.metadata.drop_all)
+        print("  Terminating other connections to optical_db...")
+        try:
+            await conn.execute(text(
+                "SELECT pg_terminate_backend(pg_stat_activity.pid) "
+                "FROM pg_stat_activity "
+                "WHERE pg_stat_activity.datname = 'optical_db' "
+                "AND pid <> pg_backend_pid();"
+            ))
+        except Exception as e:
+            print(f"  Warning: failed to terminate other connections: {e}")
+            
+        print("  Dropping all existing tables (dropping public schema cascade)...")
+        await conn.execute(text("DROP SCHEMA public CASCADE;"))
+        await conn.execute(text("CREATE SCHEMA public;"))
         print("  Creating all tables...")
         await conn.run_sync(Base.metadata.create_all)
         
     print("  [OK] Re-creation complete. Running seeds...")
     await seed()
 if __name__ == "__main__":
-    asyncio.run(recreate_db())
+    asyncio.run(recreate_db())

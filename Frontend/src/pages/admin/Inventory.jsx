@@ -23,6 +23,7 @@ import {
   Store,
   ChevronDown,
   ArrowRightLeft,
+  Pencil,
 } from "lucide-react";
 
 import Pagination from "../../components/shared/Pagination";
@@ -33,6 +34,7 @@ import PlaceOrderModal from "../../components/admin/PlaceOrderModal";
 import AdminDirectTransferModal from "../../components/admin/AdminDirectTransferModal";
 import AdminRequestStockModal from "../../components/admin/AdminRequestStockModal";
 import AddTransactionModal from "../../components/admin/suppliers/AddTransactionModal";
+import EditInventoryModal from "../../components/admin/EditInventoryModal";
 
 import { useStoreStore, useAuthStore } from "../../store/store";
 import { useCategories, useSubcategories } from "../../hooks/useCategories";
@@ -40,7 +42,8 @@ import { useBrands } from "../../hooks/useBrands";
 import { useInventory } from "../../hooks/useInventory";
 import { useSuppliers } from "../../hooks/useSuppliers";
 import { usePurchaseOrders } from "../../hooks/usePurchaseOrders";
-import { createProductApi } from "../../api/product/product.api";
+import { createProductApi, updateProductApi } from "../../api/product/product.api";
+import { addSupplierProductApi } from "../../api/suppliers/supplier.api";
 
 /* ─────────────────────────────────────────────────────────
    DYNAMIC STYLING MAPS
@@ -152,7 +155,7 @@ const StatusBadge = ({ status }) => {
 /* ─────────────────────────────────────────────────────────
    PRODUCT CARD
    ───────────────────────────────────────────────────────── */
-const ProductCard = ({ item, onViewDetails, onDelete, onRequestStock, onRestockSupplier }) => {
+const ProductCard = ({ item, onViewDetails, onDelete, onEdit, onRequestStock, onRestockSupplier }) => {
   const { stores } = useStoreStore();
   const actualStoresCount = stores.filter(s => s.store_name !== 'All Store' && s.name !== 'All Store').length;
 
@@ -194,12 +197,19 @@ const ProductCard = ({ item, onViewDetails, onDelete, onRequestStock, onRestockS
           <StatusBadge status={status} />
         </div>
 
-        {/* Delete button (top-right, hover only) */}
+        {/* Actions (top-right, hover only) */}
         {item.id && (
           <div
-            className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
+            className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1.5"
             onClick={(e) => e.stopPropagation()}
           >
+            <button
+              onClick={() => onEdit(item)}
+              className="w-7 h-7 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-center text-blue-605 hover:bg-blue-100 transition-colors"
+              title="Edit item"
+            >
+              <Pencil className="w-3.5 h-3.5" />
+            </button>
             <button
               onClick={() => onDelete(item.id)}
               className="w-7 h-7 bg-red-50 border border-red-200 rounded-lg flex items-center justify-center text-red-500 hover:bg-red-100 transition-colors"
@@ -383,7 +393,7 @@ const SearchSuggestions = ({ items, searchTerm, onSelectProduct }) => {
         
         return (
           <div
-            key={item.product_id || item.id}
+            key={item.id ? `inv-${item.id}` : `prod-${item.product_id || item.id}`}
             onClick={() => onSelectProduct(item)}
             className="px-4 py-3 hover:bg-slate-50 cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-2 transition-all font-sans text-left"
           >
@@ -467,6 +477,8 @@ const Inventory = () => {
 
   const [showRecordPurchase, setShowRecordPurchase] = useState(false);
   const [preselectedProductId, setPreselectedProductId] = useState(null);
+  const [preselectedSupplierId, setPreselectedSupplierId] = useState(null);
+  const [editItem, setEditItem] = useState(null);
 
   const { suppliers } = useSuppliers("admin");
   const { recordPurchaseAsync } = usePurchaseOrders({
@@ -474,9 +486,8 @@ const Inventory = () => {
   });
 
   const handleSupplierPurchase = async (data) => {
-    const defaultSupplierId = suppliers && suppliers.length > 0 ? suppliers[0].id : data.categoryId;
     await recordPurchaseAsync({
-      supplierId: defaultSupplierId,
+      supplierId: Number(data.supplierId),
       storeId: data.storeId === 'warehouse' ? 'warehouse' : data.storeId,
       productId: data.productId,
       quantity: data.quantity,
@@ -491,6 +502,7 @@ const Inventory = () => {
     });
     setShowRecordPurchase(false);
     setPreselectedProductId(null);
+    setPreselectedSupplierId(null);
     inventoryQuery.refetch();
   };
 
@@ -636,7 +648,7 @@ const Inventory = () => {
       image: item.image_url || item.image,
       quantity: item.available_quantity,
       store: item.owner_name || selectedStore?.store_name || "Store",
-      supplier: "Vision Supply Co.",
+      supplier: item.supplier_name || "No Supplier",
     }));
   }, [items, selectedStore]);
 
@@ -651,7 +663,7 @@ const Inventory = () => {
       image: detailItem.image_url || detailItem.image,
       quantity: detailItem.available_quantity,
       store: detailItem.owner_name || selectedStore?.store_name || "Store",
-      supplier: "Vision Supply Co.",
+      supplier: detailItem.supplier_name || "No Supplier",
     };
   }, [detailItem, selectedStore]);
 
@@ -667,7 +679,7 @@ const Inventory = () => {
       image: viewProductItem.image_url || viewProductItem.image,
       quantity: viewProductItem.available_quantity,
       store: viewProductItem.owner_name || selectedStore?.store_name || "Store",
-      supplier: "Vision Supply Co.",
+      supplier: viewProductItem.supplier_name || "No Supplier",
     };
   }, [viewProductItem, selectedStore]);
 
@@ -737,6 +749,20 @@ const Inventory = () => {
 
       const product = await createProductApi(productPayload);
 
+      // Link to supplier if supplier_id is provided
+      if (data.supplier_id) {
+        try {
+          await addSupplierProductApi(Number(data.supplier_id), {
+            product_id: product.id,
+            unit_price: Number(data.cost_price),
+            minimum_order_quantity: 1,
+            lead_time_days: 0,
+          });
+        } catch (err) {
+          console.error("Failed to link supplier to product:", err);
+        }
+      }
+
       const targetStoreId = data.store_id || inPageStoreId;
       const isTargetAdmin = targetStoreId === "admin";
       const resolvedOwnerType = isTargetAdmin ? "ADMIN" : "STORE";
@@ -750,6 +776,58 @@ const Inventory = () => {
         quantity: Number(data.quantity),
         reorder_level: Number(data.reorder_level),
       });
+    }
+  };
+
+  const handleEditItem = async (data) => {
+    try {
+      // 1. Update the product
+      const productPayload = {
+        name: data.product_name,
+        category_id: data.category_id,
+        subcategory_id: data.subcategory_id,
+        brand_id: data.brand_id,
+        cost_price: Number(data.cost_price),
+        selling_price: Number(data.selling_price),
+        discount_percent: Number(data.discount_percent || 0),
+        warranty_months: Number(data.warranty_months || 0),
+        description: data.description || null,
+        image_url: data.image || null,
+        frame_details: data.frame_details || null,
+        lens_details: data.lens_details || null,
+        accessory_details: data.accessory_details || null,
+      };
+
+      await updateProductApi(data.product_id, productPayload);
+
+      // 2. Update the inventory level details (reorder level)
+      await updateInventoryAsync({
+        id: data.id,
+        payload: {
+          reorder_level: Number(data.reorder_level),
+        },
+      });
+
+      // 3. Link new supplier if it changed
+      if (data.supplier_id && Number(data.supplier_id) !== Number(editItem.supplier_id)) {
+        try {
+          await addSupplierProductApi(Number(data.supplier_id), {
+            product_id: data.product_id,
+            unit_price: Number(data.cost_price),
+            minimum_order_quantity: 1,
+            lead_time_days: 0,
+          });
+        } catch (err) {
+          console.error("Failed to link new supplier to product during edit:", err);
+        }
+      }
+
+      toast.success("Inventory item updated successfully.");
+      setEditItem(null);
+      inventoryQuery.refetch();
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.detail || "Failed to update inventory item.");
     }
   };
 
@@ -1207,13 +1285,15 @@ const Inventory = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
               {formattedItems.map((item) => (
                 <ProductCard
-                  key={item.product_id || item.id}
+                  key={item.id ? `inv-${item.id}` : `prod-${item.product_id || item.id}`}
                   item={item}
                   onViewDetails={setDetailItem}
                   onDelete={handleDelete}
+                  onEdit={setEditItem}
                   onRequestStock={handleRequestStockInit}
                   onRestockSupplier={(product) => {
                     setPreselectedProductId(product.product_id || product.id);
+                    setPreselectedSupplierId(product.supplier_id || null);
                     setShowRecordPurchase(true);
                   }}
                 />
@@ -1240,6 +1320,10 @@ const Inventory = () => {
       <InventoryDetailDrawer
         item={detailItemFormatted}
         onClose={() => setDetailItem(null)}
+        onEdit={(item) => {
+          setDetailItem(null);
+          setEditItem(item);
+        }}
       />
 
       <ProductViewModal
@@ -1286,14 +1370,22 @@ const Inventory = () => {
       <AddTransactionModal
         isOpen={showRecordPurchase}
         defaultProductId={preselectedProductId}
-        supplierName="Supplier"
+        defaultSupplierId={preselectedSupplierId}
         storeName={inPageStoreId === 'all' || inPageStoreId === 'admin' ? "Warehouse" : "Store"}
         activeStoreId={inPageStoreId === 'all' || inPageStoreId === 'admin' ? "warehouse" : inPageStoreId}
         onClose={() => {
           setShowRecordPurchase(false);
           setPreselectedProductId(null);
+          setPreselectedSupplierId(null);
         }}
         onSubmit={handleSupplierPurchase}
+      />
+
+      <EditInventoryModal
+        isOpen={!!editItem}
+        inventoryItem={editItem}
+        onClose={() => setEditItem(null)}
+        onSubmit={handleEditItem}
       />
     </div>
   );

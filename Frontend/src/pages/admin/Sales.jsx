@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   Search, Store, ShoppingCart, UserCheck, ChevronRight,
-  X, Package, Clock, Users, DollarSign
+  X, Package, Clock, Users, DollarSign, Printer
 } from 'lucide-react';
 import { useSales } from '../../hooks/useSales';
 import { useStores } from '../../hooks/useStores';
@@ -250,8 +250,8 @@ const Sales = () => {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-100">
-                  {['Order ID', 'Customer Name', 'Product Name', 'Branch', 'Staff', 'Order Date', 'Amount', 'Status'].map(col => (
-                    <th key={col} className="px-5 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">
+                  {['Order ID', 'Customer Name', 'Product Name', 'Branch', 'Staff', 'Order Date', 'Amount', 'Status', 'Actions'].map(col => (
+                    <th key={col} className={`px-5 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap ${col === 'Actions' ? 'text-right' : 'text-left'}`}>
                       {col}
                     </th>
                   ))}
@@ -284,6 +284,18 @@ const Sales = () => {
                     <td className="px-5 py-4">
                       <StatusBadge status={sale.status} />
                     </td>
+                    <td className="px-5 py-4 text-right">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedSale({ ...sale, initialTab: 'bill' });
+                        }}
+                        className="p-1.5 hover:bg-slate-100 text-slate-500 hover:text-slate-900 rounded-lg transition-colors cursor-pointer inline-flex items-center justify-center border border-slate-150"
+                        title="Print / Share Bill"
+                      >
+                        <Printer className="w-3.5 h-3.5" />
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -303,7 +315,19 @@ const Sales = () => {
                     <span className="text-[10px] font-mono font-bold text-slate-400">{sale.orderId}</span>
                     <h3 className="font-bold text-slate-950 text-sm mt-0.5">{sale.customerName}</h3>
                   </div>
-                  <StatusBadge status={sale.status} />
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedSale({ ...sale, initialTab: 'bill' });
+                      }}
+                      className="p-1.5 hover:bg-slate-100 text-slate-500 hover:text-slate-900 rounded-lg transition-colors cursor-pointer border border-slate-200 inline-flex items-center justify-center"
+                      title="Print / Share Bill"
+                    >
+                      <Printer className="w-3.5 h-3.5" />
+                    </button>
+                    <StatusBadge status={sale.status} />
+                  </div>
                 </div>
                 
                 <div className="text-xs text-slate-600">

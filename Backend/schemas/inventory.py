@@ -86,6 +86,8 @@ class InventoryRead(BaseModel):
     image_url: str | None = None
     discount_percent: Decimal = Decimal("0.00")
     warranty_months: int = 0
+    supplier_id: int | None = None
+    supplier_name: str | None = None
 
     # Nested type-specific details
     frame_product: FrameDetailsRead | None = None
@@ -126,6 +128,8 @@ class UniversalInventoryRead(BaseModel):
     image_url: str | None = None
     discount_percent: Decimal = Decimal("0.00")
     warranty_months: int = 0
+    supplier_id: int | None = None
+    supplier_name: str | None = None
 
     quantity: int = 0
     available_quantity: int = 0

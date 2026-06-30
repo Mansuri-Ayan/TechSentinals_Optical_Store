@@ -235,7 +235,9 @@ const NewTransactionModal = ({
     const e = {};
     const type = form.type;
 
-    if (!form.product) e.product = 'Product is required';
+    if (!form.product || isNaN(Number(form.product))) {
+      e.product = 'A valid product selection is required';
+    }
     if (!form.quantity || isNaN(form.quantity) || Number(form.quantity) < 1) {
       e.quantity = 'Enter a valid quantity (≥ 1)';
     }
@@ -247,6 +249,11 @@ const NewTransactionModal = ({
         e.receiver = 'Sender and receiver must be different';
       }
 
+      const senderId = form.sender === 'admin' ? (user?.id || 1) : Number(form.sender);
+      const receiverId = form.receiver === 'admin' ? (user?.id || 1) : Number(form.receiver);
+      if (isNaN(senderId)) e.sender = 'Invalid sender store selection';
+      if (isNaN(receiverId)) e.receiver = 'Invalid receiver store selection';
+
       const selectedItem = inventoryItems.find(item => String(item.product_id) === String(form.product));
       if (selectedItem && Number(form.quantity) > Number(selectedItem.available_quantity || 0)) {
         e.quantity = `Only ${selectedItem.available_quantity || 0} available in sender stock`;
@@ -257,12 +264,17 @@ const NewTransactionModal = ({
       }
     } else if (['Damage', 'Loss', 'Sale'].includes(type)) {
       if (!form.sender) e.sender = 'Affected store/owner is required';
+      const senderId = form.sender === 'admin' ? (user?.id || 1) : Number(form.sender);
+      if (isNaN(senderId)) e.sender = 'Invalid store/owner selection';
+
       const selectedItem = inventoryItems.find(item => String(item.product_id) === String(form.product));
       if (selectedItem && Number(form.quantity) > Number(selectedItem.available_quantity || 0)) {
         e.quantity = `Only ${selectedItem.available_quantity || 0} available in stock`;
       }
     } else if (type === 'Return') {
       if (!form.sender) e.sender = 'Affected store/owner is required';
+      const senderId = form.sender === 'admin' ? (user?.id || 1) : Number(form.sender);
+      if (isNaN(senderId)) e.sender = 'Invalid store/owner selection';
     }
 
     setErrors(e);
@@ -281,9 +293,9 @@ const NewTransactionModal = ({
         product_id: Number(form.product),
         quantity: Number(form.quantity),
         from_owner_type: form.sender === 'admin' ? 'ADMIN' : 'STORE',
-        from_owner_id: form.sender === 'admin' ? user?.id : Number(form.sender),
+        from_owner_id: form.sender === 'admin' ? (user?.id || 1) : Number(form.sender),
         to_owner_type: form.receiver === 'admin' ? 'ADMIN' : 'STORE',
-        to_owner_id: form.receiver === 'admin' ? user?.id : Number(form.receiver),
+        to_owner_id: form.receiver === 'admin' ? (user?.id || 1) : Number(form.receiver),
         remarks: form.remarks || null,
       };
     } else if (type === 'Purchase') {
@@ -292,14 +304,14 @@ const NewTransactionModal = ({
         quantity: Number(form.quantity),
         purchase_price: Number(form.purchasePrice),
         owner_type: currentStore?.id === 'admin' ? 'ADMIN' : 'STORE',
-        owner_id: currentStore?.id === 'admin' ? user?.id : Number(currentStore?.id),
+        owner_id: currentStore?.id === 'admin' ? (user?.id || 1) : Number(currentStore?.id),
         remarks: form.remarks || null,
       };
     } else {
       payload = {
         product_id: Number(form.product),
         owner_type: form.sender === 'admin' ? 'ADMIN' : 'STORE',
-        owner_id: form.sender === 'admin' ? user?.id : Number(form.sender),
+        owner_id: form.sender === 'admin' ? (user?.id || 1) : Number(form.sender),
         quantity: Number(form.quantity),
         remarks: form.remarks || null,
       };

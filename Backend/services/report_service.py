@@ -17,6 +17,9 @@ from models.supplier import Supplier
 from models.purchase_order import PurchaseOrder
 from models.category import Category
 from models.brand import Brand
+from models.expense import Expense
+from models.expense_category import ExpenseCategory
+from schemas.staff import StaffRead
 from schemas.report import (
     StoreReportDetails, ProductPerformance, InventoryAlertDetail,
     StaffReportDetails, DashboardReport, DashboardKPIs, TrendDataPoint,
@@ -24,7 +27,7 @@ from schemas.report import (
     InventoryStatusPoint, InventoryDistributionPoint, BusinessInsights,
     RecentOrderRow, RecentTransactionRow, RecentCustomerRow, AnalysesReport,
     AnalysesKPIs, RevenueBreakdownPoint, SupplierVolumePoint, PaymentMethodPoint,
-    BrandRevenuePoint
+    BrandRevenuePoint, StaffDetailResponse, StaffSaleRow, StaffExpenseRow
 )
 
 
@@ -259,6 +262,202 @@ async def get_staff_report(
         discounts_given=discounts_given,
         unique_customers_served=unique_customers,
         top_products_sold=top_products
+    )
+
+
+async def get_staff_detailed_report(
+    db: AsyncSession,
+    admin_id: int,
+    staff_type: str,
+    staff_id: int,
+) -> StaffDetailResponse:
+    """
+    Compiles full detail report for a specific staff member including profile,
+    key performance metrics, recent sales, incurred expenses, and sales trend.
+    """
+    # 1. Fetch Staff Member details based on polymorphic StaffType
+    first_name, last_name, employee_code = "Unknown", "Staff", "N/A"
+    joining_date = date.today()
+    is_active = True
+    email = None
+    phone = "N/A"
+    profile_image = None
+    qualification = None
+    store_id = 0
+    store_name = "Unknown Store"
+    last_login_at = None
+    created_at = datetime.now()
+    updated_at = datetime.now()
+
+    if staff_type == "MANAGER":
+        staff_res = await db.execute(select(Manager).where(Manager.id == staff_id))
+        staff = staff_res.scalar_one_or_none()
+        if not staff:
+            raise ValueError("Manager not found")
+        first_name, last_name, employee_code = staff.first_name, staff.last_name, staff.employee_code
+        joining_date = staff.joining_date
+        is_active = staff.is_active
+        email = staff.email
+        phone = staff.phone
+        profile_image = staff.profile_image
+        store_id = staff.store_id
+        last_login_at = staff.last_login_at
+        created_at = staff.created_at
+        updated_at = staff.updated_at
+    elif staff_type == "WORKER":
+        staff_res = await db.execute(select(Worker).where(Worker.id == staff_id))
+        staff = staff_res.scalar_one_or_none()
+        if not staff:
+            raise ValueError("Worker not found")
+        first_name, last_name, employee_code = staff.first_name, staff.last_name, staff.employee_code
+        joining_date = staff.joining_date
+        is_active = staff.is_active
+        email = staff.email
+        phone = staff.phone
+        profile_image = staff.profile_image
+        store_id = staff.store_id
+        last_login_at = staff.last_login_at
+        created_at = staff.created_at
+        updated_at = staff.updated_at
+    elif staff_type == "OPTICIAN":
+        staff_res = await db.execute(select(Optician).where(Optician.id == staff_id))
+        staff = staff_res.scalar_one_or_none()
+        if not staff:
+            raise ValueError("Optician not found")
+        first_name, last_name, employee_code = staff.first_name, staff.last_name, staff.employee_code
+        joining_date = staff.joining_date
+        is_active = staff.is_active
+        email = staff.email
+        phone = staff.phone
+        profile_image = staff.profile_image
+        qualification = staff.qualification
+        store_id = staff.store_id
+        last_login_at = staff.last_login_at
+        created_at = staff.created_at
+        updated_at = staff.updated_at
+    else:
+        raise ValueError("Invalid staff type")
+
+    # Fetch store name
+    if store_id:
+        st_res = await db.execute(select(Store.store_name).where(Store.id == store_id))
+        store_name = st_res.scalar() or "Unknown Store"
+
+    # Construct StaffRead object
+    staff_info = StaffRead(
+        id=staff_id,
+        store_id=store_id,
+        store_name=store_name,
+        role=staff_type.lower(),
+        first_name=first_name,
+        last_name=last_name,
+        email=email,
+        phone=phone,
+        profile_image=profile_image,
+        employee_code=employee_code,
+        joining_date=joining_date,
+        is_active=is_active,
+        qualification=qualification,
+        last_login_at=last_login_at,
+        created_at=created_at,
+        updated_at=updated_at,
+    )
+
+    # 2. Query basic sales metrics for this staff member (all time)
+    sales_data = await db.execute(
+        select(
+            func.count(Sale.id).label("sales_count"),
+            func.sum(Sale.total_amount).label("revenue"),
+            func.sum(Sale.discount_amount).label("discounts_given"),
+            func.count(func.distinct(Sale.customer_id)).label("unique_customers")
+        ).where(
+            Sale.sold_by_type == staff_type,
+            Sale.sold_by_id == staff_id,
+            Sale.admin_id == admin_id
+        )
+    )
+    sales_row = sales_data.first()
+    sales_count = sales_row.sales_count or 0
+    revenue = sales_row.revenue or Decimal("0.00")
+    discounts_given = sales_row.discounts_given or Decimal("0.00")
+    unique_customers = sales_row.unique_customers or 0
+
+    # 3. Query sales list (recent 100)
+    sales_stmt = select(Sale, Customer).join(
+        Customer, Customer.id == Sale.customer_id, isouter=True
+    ).where(
+        Sale.sold_by_type == staff_type,
+        Sale.sold_by_id == staff_id,
+        Sale.admin_id == admin_id
+    ).order_by(desc(Sale.sale_date), desc(Sale.created_at)).limit(100)
+    
+    sales_res = await db.execute(sales_stmt)
+    sales_list = []
+    for sale, cust in sales_res.all():
+        cust_name = f"{cust.first_name} {cust.last_name}" if cust else "Walk-in Customer"
+        sales_list.append(StaffSaleRow(
+            id=sale.id,
+            invoice_number=sale.invoice_number,
+            customer_name=cust_name,
+            total_amount=sale.total_amount,
+            status=sale.status.value if hasattr(sale.status, "value") else str(sale.status),
+            sale_date=sale.sale_date
+        ))
+
+    # 4. Query expenses incurred by this staff member (salaries/reimbursements/etc.)
+    expenses_stmt = select(Expense, ExpenseCategory).join(
+        ExpenseCategory, ExpenseCategory.id == Expense.category_id
+    ).where(
+        Expense.incurred_by_type == staff_type,
+        Expense.incurred_by_id == staff_id,
+        Expense.deleted_at.is_(None)
+    ).order_by(desc(Expense.expense_date))
+    
+    expenses_res = await db.execute(expenses_stmt)
+    expenses_list = []
+    total_expenses = Decimal("0.00")
+    for exp, cat in expenses_res.all():
+        total_expenses += exp.amount
+        expenses_list.append(StaffExpenseRow(
+            id=exp.id,
+            title=exp.title,
+            category_name=cat.name,
+            amount=exp.amount,
+            expense_date=exp.expense_date,
+            payment_method=exp.payment_method.value if hasattr(exp.payment_method, "value") else str(exp.payment_method),
+            is_approved=exp.is_approved,
+            is_rejected=exp.is_rejected
+        ))
+
+    # 5. Query sales trend for current year (Jan -> Dec)
+    today = date.today()
+    year_start = date(today.year, 1, 1)
+    year_end = date(today.year, 12, 31)
+    trend_sales_stmt = select(Sale.sale_date, Sale.total_amount).where(
+        Sale.sold_by_type == staff_type,
+        Sale.sold_by_id == staff_id,
+        Sale.sale_date.between(year_start, year_end),
+        Sale.admin_id == admin_id
+    )
+    trend_sales_res = await db.execute(trend_sales_stmt)
+    months_short = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    sales_trend_dict = {m: Decimal("0.00") for m in months_short}
+    for row in trend_sales_res.all():
+        m_lbl = months_short[row[0].month - 1]
+        sales_trend_dict[m_lbl] += row[1]
+    
+    sales_trend = [TrendDataPoint(label=k, value=v) for k, v in sales_trend_dict.items()]
+
+    return StaffDetailResponse(
+        staff_info=staff_info,
+        revenue=revenue,
+        sales_count=sales_count,
+        discounts_given=discounts_given,
+        unique_customers_served=unique_customers,
+        total_expenses_incurred=total_expenses,
+        sales=sales_list,
+        expenses=expenses_list,
+        sales_trend=sales_trend
     )
 
 

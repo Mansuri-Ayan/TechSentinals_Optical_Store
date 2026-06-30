@@ -1,12 +1,14 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { createPortal as portal } from 'react-dom';
 import {
   X, Package, Tag, Truck, BarChart3, DollarSign,
   Store, CheckCircle, AlertTriangle, XCircle, Image as ImageIcon, Sliders,
   User, Users, CreditCard, UserCheck, Calendar, IndianRupee, ShoppingCart,
   Receipt, FileText, RefreshCw, Shield, ThumbsUp, ThumbsDown,
-  Briefcase, Clock, Phone, Mail,
+  Briefcase, Clock, Phone, Mail, Pencil, Printer, Share2, Eye, Sparkles
 } from 'lucide-react';
+import { useCustomer } from '../../hooks/useCustomers';
+import { getBillTemplateSettings } from '../../utils/billSettings';
 
 const statusConfig = {
   'in_stock':    { label: 'In Stock',     color: 'text-emerald-700 bg-emerald-50 border-emerald-200', dot: 'bg-emerald-500', icon: CheckCircle },
@@ -111,8 +113,19 @@ const RejectReasonPrompt = ({ onConfirm, onCancel }) => {
    MAIN DRAWER COMPONENT
    Props: item, onClose, onApprove, onReject, isApproving, isRejecting, isLoading
 ───────────────────────────────────────────────────────── */
-const InventoryDetailDrawer = ({ item, onClose, onApprove, onReject, isApproving, isRejecting, isLoading, onUpdateStatus }) => {
+const InventoryDetailDrawer = ({ item, onClose, onEdit, onApprove, onReject, isApproving, isRejecting, isLoading, onUpdateStatus }) => {
   const [showRejectPrompt, setShowRejectPrompt] = useState(false);
+  const [activeTab, setActiveTab] = useState('details');
+
+  useEffect(() => {
+    if (item) {
+      setActiveTab(item.initialTab || 'details');
+    }
+  }, [item]);
+
+  // Hook to fetch customer prescription details for sales bills
+  const customerIdForPrescription = item?.type === 'sales' ? item.customer_id : null;
+  const { customer: customerDetails } = useCustomer(customerIdForPrescription);
 
   if (!item) return null;
 
@@ -422,10 +435,65 @@ const InventoryDetailDrawer = ({ item, onClose, onApprove, onReject, isApproving
 
   /* ── SALES DRAWER ──────────────────────────────────────── */
   if (item.type === 'sales') {
+    const billSettings = getBillTemplateSettings(item.store_id || item.storeId);
+
+    const handleWhatsAppShare = () => {
+      const cleanPhone = (item.customerPhone || '').replace(/\D/g, '');
+      const phoneWithCountry = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
+      const shareText = `Dear ${item.customerName || 'Customer'},\nHere is your Optical Invoice from ${billSettings.headerText}.\nInvoice No: ${item.orderId}\nDate: ${item.orderDate}\nTotal Amount: ₹${Number(item.totalAmount).toLocaleString('en-IN')}\nOutstanding Due: ₹${Number(item.dueAmount || 0).toLocaleString('en-IN')}\nStatus: ${item.paymentStatus}\nThank you for choosing us!`;
+      const url = `https://api.whatsapp.com/send?phone=${phoneWithCountry}&text=${encodeURIComponent(shareText)}`;
+      window.open(url, '_blank');
+    };
+
     return portal(
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[2000] flex justify-end animate-fade-in font-sans">
+      <div id="sales-detail-drawer-overlay" className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[2000] flex justify-end animate-fade-in font-sans">
         <div className="absolute inset-0" onClick={onClose} aria-hidden />
-        <div className="relative w-full sm:max-w-md h-full bg-slate-50 shadow-2xl flex flex-col animate-slide-up">
+        
+        {/* CSS style injection to optimize browser printing of the drawer bill */}
+        <style>{`
+          @media print {
+            body * {
+              visibility: hidden;
+            }
+            #print-drawer-bill, #print-drawer-bill * {
+              visibility: visible;
+            }
+            #sales-detail-drawer-overlay {
+              position: static !important;
+              display: block !important;
+              width: 100% !important;
+              height: auto !important;
+              background: transparent !important;
+              backdrop-filter: none !important;
+            }
+            #sales-detail-drawer-content {
+              position: static !important;
+              display: block !important;
+              width: 100% !important;
+              max-width: 100% !important;
+              height: auto !important;
+              background: transparent !important;
+              box-shadow: none !important;
+              transform: none !important;
+            }
+            #print-drawer-bill {
+              position: absolute;
+              left: 0;
+              top: 0;
+              width: 100% !important;
+              max-width: 100% !important;
+              border: none !important;
+              box-shadow: none !important;
+              padding: 0 !important;
+              margin: 0 !important;
+            }
+            .no-print {
+              display: none !important;
+            }
+          }
+        `}</style>
+
+        <div id="sales-detail-drawer-content" className="relative w-full sm:max-w-md h-full bg-slate-50 shadow-2xl flex flex-col animate-slide-up">
 
           {/* Header */}
           <div className="flex items-center justify-between px-5 py-4 bg-white border-b border-slate-100 flex-shrink-0">
@@ -444,71 +512,339 @@ const InventoryDetailDrawer = ({ item, onClose, onApprove, onReject, isApproving
             </button>
           </div>
 
-          {/* Status badge */}
-          <div className="px-5 py-3 bg-white border-b border-slate-100 flex-shrink-0 flex items-center justify-between">
-            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${
-              item.status === 'Completed' ? 'text-emerald-700 bg-emerald-50 border-emerald-200' :
-              item.status === 'Cancelled' ? 'text-slate-600 bg-slate-100 border-slate-200' :
-              item.status === 'Returned'  ? 'text-red-700 bg-red-50 border-red-200' :
-              'text-amber-700 bg-amber-50 border-amber-200'
-            }`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${
-                item.status === 'Completed' ? 'bg-emerald-500' :
-                item.status === 'Cancelled' ? 'bg-slate-400' :
-                item.status === 'Returned'  ? 'bg-red-500' :
-                'bg-amber-500'
-              }`} />
-              {item.status}
-            </span>
-            <span className="text-xs text-slate-400 font-semibold">Order Date: {item.orderDate}</span>
+          {/* Sub tabs inside drawer */}
+          <div className="flex bg-white px-5 border-b border-slate-100 flex-shrink-0 no-print">
+            <button
+              onClick={() => setActiveTab('details')}
+              className={`flex-1 py-3.5 text-xs font-bold text-center border-b-2 transition-all cursor-pointer ${
+                activeTab === 'details'
+                  ? 'border-slate-900 text-slate-900 font-black'
+                  : 'border-transparent text-slate-400 hover:text-slate-700'
+              }`}
+            >
+              Details Info
+            </button>
+            <button
+              onClick={() => setActiveTab('bill')}
+              className={`flex-1 py-3.5 text-xs font-bold text-center border-b-2 transition-all cursor-pointer ${
+                activeTab === 'bill'
+                  ? 'border-slate-900 text-slate-900 font-black'
+                  : 'border-transparent text-slate-400 hover:text-slate-700'
+              }`}
+            >
+              Printable Bill
+            </button>
           </div>
+
+          {/* Status badge strip (only for Details tab) */}
+          {activeTab === 'details' && (
+            <div className="px-5 py-3 bg-white border-b border-slate-100 flex-shrink-0 flex items-center justify-between no-print animate-fade-in">
+              <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${
+                item.status === 'Completed' ? 'text-emerald-700 bg-emerald-50 border-emerald-200' :
+                item.status === 'Cancelled' ? 'text-slate-600 bg-slate-100 border-slate-200' :
+                item.status === 'Returned'  ? 'text-red-700 bg-red-50 border-red-200' :
+                'text-amber-700 bg-amber-50 border-amber-200'
+              }`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${
+                  item.status === 'Completed' ? 'bg-emerald-500' :
+                  item.status === 'Cancelled' ? 'bg-slate-400' :
+                  item.status === 'Returned'  ? 'bg-red-500' :
+                  'bg-amber-500'
+                }`} />
+                {item.status}
+              </span>
+              <span className="text-xs text-slate-400 font-semibold">Order Date: {item.orderDate}</span>
+            </div>
+          )}
 
           {/* Scrollable content */}
-          <div className="flex-1 overflow-y-auto hide-scrollbar px-4 py-4 space-y-3">
-            <Section icon={User} title="Customer Information" color="emerald">
-              <DetailRow label="Customer Name" value={item.customerName} />
-              <DetailRow label="Phone Number"  value={item.customerPhone} />
-              <DetailRow label="Address"       value={item.customerAddress} />
-            </Section>
-            <Section icon={CreditCard} title="Payment Information" color="rose">
-              <DetailRow label="Total Amount"   value={`₹${Number(item.totalAmount).toLocaleString('en-IN')}`} />
-              <DetailRow label="Paid Amount"    value={`₹${Number(item.paidAmount).toLocaleString('en-IN')}`} />
-              <DetailRow label="Due Amount"     value={`₹${Number(item.dueAmount).toLocaleString('en-IN')}`} />
-              <DetailRow label="Payment Status" value={
-                <span className={`inline-flex px-2 py-0.5 rounded text-[11px] font-bold ${
-                  item.paymentStatus === 'Paid' ? 'bg-emerald-50 text-emerald-700' :
-                  item.paymentStatus === 'Partially Paid' ? 'bg-amber-50 text-amber-700' :
-                  'bg-red-50 text-red-700'
-                }`}>
-                  {item.paymentStatus}
-                </span>
-              } />
-              <DetailRow label="Payment Method" value={item.paymentMethod} />
-            </Section>
-            <Section icon={Package} title="Product Information" color="blue">
-              <DetailRow label="Product Name" value={item.productName} />
-              <DetailRow label="Category"     value={item.productCategory} />
-              <DetailRow label="Sub Category" value={item.productSubcategory} />
-              <DetailRow label="Quantity"     value={item.productQuantity} />
-              <DetailRow label="Price"        value={`₹${Number(item.productPrice).toLocaleString('en-IN')}`} />
-            </Section>
-            <Section icon={UserCheck} title="Staff Information" color="purple">
-              <DetailRow label="Staff Name"    value={item.staffName} />
-              <DetailRow label="Employee Code" value={item.staffCode} mono />
-              <DetailRow label="Role"          value={item.staffRole} />
-            </Section>
-            <Section icon={Truck} title="Delivery Information" color="amber">
-              <DetailRow label="Store/Branch Name" value={item.branchName} />
-              <DetailRow label="Delivery Date"     value={item.deliveryDate ? new Date(item.deliveryDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'} />
-              <DetailRow label="Order Status"      value={item.status} />
-            </Section>
+          <div className="flex-1 overflow-y-auto hide-scrollbar px-4 py-4">
+            
+            {/* ── DETAILS TAB CONTENT ── */}
+            {activeTab === 'details' && (
+              <div className="space-y-3 animate-fade-in no-print">
+                <Section icon={User} title="Customer Information" color="emerald">
+                  <DetailRow label="Customer Name" value={item.customerName} />
+                  <DetailRow label="Phone Number"  value={item.customerPhone} />
+                  <DetailRow label="Address"       value={item.customerAddress} />
+                </Section>
+                <Section icon={CreditCard} title="Payment Information" color="rose">
+                  <DetailRow label="Total Amount"   value={`₹${Number(item.totalAmount).toLocaleString('en-IN')}`} />
+                  <DetailRow label="Paid Amount"    value={`₹${Number(item.paidAmount).toLocaleString('en-IN')}`} />
+                  <DetailRow label="Due Amount"     value={`₹${Number(item.dueAmount).toLocaleString('en-IN')}`} />
+                  <DetailRow label="Payment Status" value={
+                    <span className={`inline-flex px-2 py-0.5 rounded text-[11px] font-bold ${
+                      item.paymentStatus === 'Paid' ? 'bg-emerald-50 text-emerald-700' :
+                      item.paymentStatus === 'Partially Paid' ? 'bg-amber-50 text-amber-700' :
+                      'bg-red-50 text-red-700'
+                    }`}>
+                      {item.paymentStatus}
+                    </span>
+                  } />
+                  <DetailRow label="Payment Method" value={item.paymentMethod} />
+                </Section>
+                <Section icon={Package} title="Product Information" color="blue">
+                  <DetailRow label="Product Name" value={item.productName} />
+                  <DetailRow label="Category"     value={item.productCategory} />
+                  <DetailRow label="Sub Category" value={item.productSubcategory} />
+                  <DetailRow label="Quantity"     value={item.productQuantity} />
+                  <DetailRow label="Price"        value={`₹${Number(item.productPrice).toLocaleString('en-IN')}`} />
+                </Section>
+                <Section icon={UserCheck} title="Staff Information" color="purple">
+                  <DetailRow label="Staff Name"    value={item.staffName} />
+                  <DetailRow label="Employee Code" value={item.staffCode} mono />
+                  <DetailRow label="Role"          value={item.staffRole} />
+                </Section>
+                <Section icon={Truck} title="Delivery Information" color="amber">
+                  <DetailRow label="Store/Branch Name" value={item.branchName} />
+                  <DetailRow label="Delivery Date"     value={item.deliveryDate ? new Date(item.deliveryDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'} />
+                  <DetailRow label="Order Status"      value={item.status} />
+                </Section>
+              </div>
+            )}
+
+            {/* ── BILL TAB CONTENT (PRINTABLE INVOICE) ── */}
+            {activeTab === 'bill' && (
+              <div
+                id="print-drawer-bill"
+                style={{ borderTop: `5px solid ${billSettings.themeColor}` }}
+                className="bg-white rounded-2xl border border-slate-200/80 p-5 space-y-5 text-slate-800 shadow-sm font-sans animate-fade-in"
+              >
+                
+                {/* Invoice Header */}
+                <div className="flex justify-between items-start gap-4 border-b border-slate-100 pb-4">
+                  <div className="min-w-0">
+                    {billSettings.logo ? (
+                      <img src={billSettings.logo} alt="Logo" className="max-h-10 mb-2 object-contain" />
+                    ) : (
+                      <div className="h-8 w-8 rounded-lg bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center mb-2">
+                        <Sparkles className="w-4 h-4 text-emerald-500" />
+                      </div>
+                    )}
+                    <h2 className="text-sm font-black text-slate-900 tracking-tight leading-tight">
+                      {billSettings.headerText}
+                    </h2>
+                    <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wide mt-0.5">{billSettings.subHeaderText}</p>
+                    <p className="text-[9px] text-slate-500 font-semibold mt-1 leading-snug max-w-[200px]">{billSettings.address}</p>
+                    <p className="text-[8px] text-slate-405 font-semibold mt-0.5">Phone: {billSettings.contactPhone} · Email: {billSettings.contactEmail}</p>
+                    {billSettings.showGst && billSettings.gstNumber && (
+                      <p className="text-[8px] text-slate-450 font-bold uppercase tracking-wider mt-0.5">GSTIN: {billSettings.gstNumber}</p>
+                    )}
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    <p className="text-[10px] font-mono font-bold text-slate-800 bg-slate-50 border border-slate-200 px-2 py-1 rounded-lg inline-block leading-none">
+                      {item.orderId}
+                    </p>
+                    <p className="text-[9px] text-slate-400 font-bold mt-1">
+                      Date: {new Date(item.orderDate || item.sale_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Billing Summary */}
+                <div className="grid grid-cols-2 gap-4 pb-4 border-b border-slate-100 text-xs">
+                  <div>
+                    <h3 className="text-[9px] font-extrabold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1">
+                      <User className="w-3.5 h-3.5" /> Customer Details
+                    </h3>
+                    <div className="font-semibold text-slate-500 space-y-0.5 leading-tight">
+                      <p className="font-bold text-slate-900">{item.customerName}</p>
+                      <p>Phone: {item.customerPhone || '—'}</p>
+                      {item.customerAddress && <p className="truncate max-w-[170px]" title={item.customerAddress}>Address: {item.customerAddress}</p>}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <h3 className="text-[9px] font-extrabold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1 justify-end">
+                      Payment Details
+                    </h3>
+                    <div className="font-semibold text-slate-500 space-y-0.5 leading-tight">
+                      <p className="font-bold text-slate-900">Paid via: <span style={{ color: billSettings.themeColor }} className="font-black">{item.paymentMethod || 'Cash'}</span></p>
+                      <p>Outstanding: ₹{Number(item.dueAmount || 0).toLocaleString('en-IN')}</p>
+                      <p>Status: <span style={{ backgroundColor: `${billSettings.themeColor}10`, color: billSettings.themeColor, borderColor: `${billSettings.themeColor}30` }} className="inline-flex px-1.5 py-0.5 rounded font-extrabold border text-[9px] leading-none">{item.paymentStatus}</span></p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Prescription Specifications */}
+                {billSettings.showPrescription ? (
+                  customerDetails?.prescription ? (
+                    <div className="bg-slate-50 border border-slate-150 rounded-xl p-3 text-xs space-y-2">
+                      <h3 className="text-[9px] font-extrabold text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                        <Eye className="w-3.5 h-3.5 text-purple-500" /> Lens & Prescription Specs
+                      </h3>
+                      <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[10px] font-semibold text-slate-500">
+                        {customerDetails.prescription.lensType && <div>Lens Type: <span className="text-slate-950 font-bold">{customerDetails.prescription.lensType}</span></div>}
+                        {customerDetails.prescription.framePreference && <div>Frame Pref: <span className="text-slate-950 font-bold">{customerDetails.prescription.framePreference}</span></div>}
+                        {customerDetails.prescription.doctorName && <div>Doctor Name: <span className="text-slate-950 font-bold">{customerDetails.prescription.doctorName}</span></div>}
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 mt-1 pt-1.5 border-t border-slate-200/40">
+                        {customerDetails.prescription.rightEye && (
+                          <div className="bg-white rounded-lg p-2 border border-slate-100">
+                            <p className="text-[8px] font-black text-blue-600 uppercase tracking-wider mb-1 flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 rounded-full bg-blue-500" /> OD (Right)
+                            </p>
+                            <div className="grid grid-cols-3 gap-1 text-[9px] font-bold text-slate-400">
+                              <div>SPH: <span className="text-slate-800 font-black">{customerDetails.prescription.rightEye.sph ?? '—'}</span></div>
+                              <div>CYL: <span className="text-slate-800 font-black">{customerDetails.prescription.rightEye.cyl ?? '—'}</span></div>
+                              <div>AXIS: <span className="text-slate-800 font-black">{customerDetails.prescription.rightEye.axis ?? '—'}</span></div>
+                            </div>
+                          </div>
+                        )}
+                        {customerDetails.prescription.leftEye && (
+                          <div className="bg-white rounded-lg p-2 border border-slate-100">
+                            <p className="text-[8px] font-black text-emerald-600 uppercase tracking-wider mb-1 flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> OS (Left)
+                            </p>
+                            <div className="grid grid-cols-3 gap-1 text-[9px] font-bold text-slate-400">
+                              <div>SPH: <span className="text-slate-800 font-black">{customerDetails.prescription.leftEye.sph ?? '—'}</span></div>
+                              <div>CYL: <span className="text-slate-800 font-black">{customerDetails.prescription.leftEye.cyl ?? '—'}</span></div>
+                              <div>AXIS: <span className="text-slate-800 font-black">{customerDetails.prescription.leftEye.axis ?? '—'}</span></div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="bg-slate-50 border border-dashed border-slate-200 rounded-xl p-3 text-center text-[10px] font-semibold text-slate-400">
+                      No prescription details attached
+                    </div>
+                  )
+                ) : null}
+
+                {/* Particulars Items Table */}
+                <div className="space-y-2">
+                  <h3 className="text-[9px] font-extrabold text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                    <ShoppingCart className="w-3.5 h-3.5" /> Particulars Items
+                  </h3>
+                  <div className="border border-slate-100 rounded-xl overflow-hidden text-xs">
+                    <table className="w-full text-left">
+                      <thead>
+                        <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 font-bold uppercase text-[9px] tracking-wider">
+                          <th className="px-3 py-2">Product Description</th>
+                          <th className="px-2 py-2 text-center">Qty</th>
+                          <th className="px-3 py-2 text-right">Price</th>
+                          <th className="px-3 py-2 text-right">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-50 font-semibold text-slate-700">
+                        {item.items && item.items.length > 0 ? (
+                          item.items.map((saleItem, idx) => (
+                            <tr key={idx} className="hover:bg-slate-50/50">
+                              <td className="px-3 py-2">
+                                <p className="font-bold text-slate-900">{saleItem.product_name || item.productName || 'Optical Product'}</p>
+                                {saleItem.notes && <p className="text-[9px] text-slate-400 font-semibold mt-0.5">{saleItem.notes}</p>}
+                              </td>
+                              <td className="px-2 py-2 text-center font-mono font-bold text-slate-800">{saleItem.quantity}</td>
+                              <td className="px-3 py-2 text-right font-mono font-bold text-slate-800">₹{Number(saleItem.unit_price).toLocaleString('en-IN')}</td>
+                              <td className="px-3 py-2 text-right font-mono font-black text-slate-950">₹{Number(saleItem.line_total).toLocaleString('en-IN')}</td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr className="hover:bg-slate-50/50">
+                            <td className="px-3 py-2">
+                              <p className="font-bold text-slate-900">{item.productName || 'Optical Product'}</p>
+                            </td>
+                            <td className="px-2 py-2 text-center font-mono font-bold text-slate-800">{item.productQuantity || 1}</td>
+                            <td className="px-3 py-2 text-right font-mono font-bold text-slate-800">₹{Number(item.productPrice || item.totalAmount || 0).toLocaleString('en-IN')}</td>
+                            <td className="px-3 py-2 text-right font-mono font-black text-slate-950">₹{Number(item.totalAmount || 0).toLocaleString('en-IN')}</td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Calculations and QR Code layout */}
+                <div className="flex gap-4 justify-between items-end border-t border-slate-100 pt-3">
+                  {/* Payment QR Code */}
+                  {billSettings.qrCode ? (
+                    <div className="text-left bg-white border border-slate-150 p-2 text-slate-400 rounded-xl flex flex-col items-center shadow-sm w-20 shrink-0">
+                      <img src={billSettings.qrCode} alt="Scan to pay" className="w-16 h-16 object-contain" />
+                      <span className="text-[6px] font-black text-slate-400 uppercase tracking-widest block text-center mt-0.5">Scan to Pay</span>
+                    </div>
+                  ) : (
+                    <div />
+                  )}
+
+                  {/* Calculations */}
+                  <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 flex flex-col gap-1.5 max-w-[240px] ml-auto text-xs font-semibold flex-1 w-full">
+                    <div className="flex justify-between items-center text-slate-500">
+                      <span>Subtotal</span>
+                      <span className="font-mono font-bold">₹{Number(item.subtotal || item.totalAmount || 0).toLocaleString('en-IN')}</span>
+                    </div>
+                    {Number(item.discount_amount || 0) > 0 && (
+                      <div className="flex justify-between items-center text-red-500">
+                        <span>Discount</span>
+                        <span className="font-mono font-bold">- ₹{Number(item.discount_amount).toLocaleString('en-IN')}</span>
+                      </div>
+                    )}
+                    {billSettings.showGst && Number(item.tax_amount || 0) > 0 && (
+                      <div className="flex justify-between items-center text-slate-500">
+                        <span>GST (Tax)</span>
+                        <span className="font-mono font-bold">+ ₹{Number(item.tax_amount).toLocaleString('en-IN')}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between items-center text-slate-800 font-extrabold border-t border-slate-200/50 pt-1.5 mt-0.5">
+                      <span>Final Total</span>
+                      <span className="font-mono font-black text-slate-950">₹{Number(item.totalAmount).toLocaleString('en-IN')}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-emerald-600 font-extrabold">
+                      <span>Amount Paid</span>
+                      <span className="font-mono font-bold">₹{Number(item.paidAmount || item.totalAmount || 0).toLocaleString('en-IN')}</span>
+                    </div>
+                    {Number(item.dueAmount || 0) > 0 && (
+                      <div className="flex justify-between items-center text-amber-600 font-extrabold">
+                        <span>Balance Due</span>
+                        <span className="font-mono font-bold">₹{Number(item.dueAmount).toLocaleString('en-IN')}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Footer Notes */}
+                <div className="text-center text-[9px] font-bold text-slate-400 border-t border-slate-50 pt-3 italic tracking-wide">
+                  {billSettings.footerText}
+                </div>
+
+              </div>
+            )}
+
           </div>
 
-          <div className="px-5 py-4 bg-white border-t border-slate-100 flex-shrink-0">
-            <button onClick={onClose}
-              className="w-full py-2.5 bg-slate-900 text-white rounded-xl font-semibold text-sm hover:bg-slate-700 transition-all shadow-md hover:shadow-lg">
-              Close
-            </button>
+          {/* Footer Actions */}
+          <div className="px-5 py-4 bg-white border-t border-slate-100 flex-shrink-0 no-print">
+            {activeTab === 'bill' ? (
+              <div className="space-y-2">
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => window.print()}
+                    className="flex-1 py-2.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl font-bold text-xs uppercase tracking-wider transition-all shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <Printer className="w-3.5 h-3.5" />
+                    Print / PDF
+                  </button>
+                  <button
+                    onClick={handleWhatsAppShare}
+                    className="flex-1 py-2.5 bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100/50 rounded-xl font-bold text-xs uppercase tracking-wider transition-all shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <Share2 className="w-3.5 h-3.5" />
+                    WhatsApp
+                  </button>
+                </div>
+                <button
+                  onClick={onClose}
+                  className="w-full py-2.5 bg-slate-900 text-white rounded-xl font-bold text-xs uppercase tracking-wider hover:bg-slate-700 transition-all shadow-md"
+                >
+                  Close Bill
+                </button>
+              </div>
+            ) : (
+              <button onClick={onClose}
+                className="w-full py-2.5 bg-slate-900 text-white rounded-xl font-semibold text-sm hover:bg-slate-700 transition-all shadow-md hover:shadow-lg">
+                Close Details
+              </button>
+            )}
           </div>
         </div>
       </div>,
@@ -833,10 +1169,29 @@ const InventoryDetailDrawer = ({ item, onClose, onApprove, onReject, isApproving
         </div>
 
         <div className="px-5 py-4 bg-white border-t border-slate-100 flex-shrink-0">
-          <button onClick={onClose}
-            className="w-full py-2.5 bg-slate-900 text-white rounded-xl font-semibold text-sm hover:bg-slate-700 transition-all shadow-md hover:shadow-lg">
-            Close
-          </button>
+          {onEdit ? (
+            <div className="flex gap-3">
+              <button
+                onClick={() => onEdit(item)}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-blue-50 border border-blue-200 text-blue-700 hover:bg-blue-100 rounded-xl font-bold transition-all text-sm shadow-sm"
+              >
+                <Pencil className="w-4 h-4" /> Edit
+              </button>
+              <button
+                onClick={onClose}
+                className="flex-1 py-2.5 bg-slate-900 text-white rounded-xl font-semibold text-sm hover:bg-slate-700 transition-all shadow-md hover:shadow-lg"
+              >
+                Close
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={onClose}
+              className="w-full py-2.5 bg-slate-900 text-white rounded-xl font-semibold text-sm hover:bg-slate-700 transition-all shadow-md hover:shadow-lg"
+            >
+              Close
+            </button>
+          )}
         </div>
       </div>
     </div>,

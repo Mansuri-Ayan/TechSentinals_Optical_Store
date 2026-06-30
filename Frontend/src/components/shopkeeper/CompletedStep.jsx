@@ -1,9 +1,15 @@
 import { useState } from 'react';
-import { User, Eye, ShoppingBag, CheckCircle, Printer, Share2, ArrowLeft, RefreshCw, Sparkles } from 'lucide-react';
+import { User, Eye, ShoppingBag, CheckCircle, Printer, Share2, RefreshCw, Sparkles } from 'lucide-react';
+import { useAuthStore } from '../../store/store';
+import { getBillTemplateSettings } from '../../utils/billSettings';
 
 
 const CompletedStep = ({ customer, cart, prescription, paymentInfo, savedCustomer, onReset, onBackToPayment }) => {
   const [copied, setCopied] = useState(false);
+  const { user } = useAuthStore();
+  const storeId = savedCustomer?.store_id || user?.store_id || 'default';
+  const billSettings = getBillTemplateSettings(storeId);
+
   const orderId = savedCustomer?.orders?.[0]?.id || 'ORD-UNKNOWN';
   const orderDate = savedCustomer?.orders?.[0]?.date || new Date().toISOString().split('T')[0];
 
@@ -87,22 +93,39 @@ const CompletedStep = ({ customer, cart, prescription, paymentInfo, savedCustome
       </div>
 
       {/* ── Receipt/Bill Printable Area ── */}
-      <div id="print-receipt-area" className="bg-white rounded-3xl border border-slate-150 shadow-xl overflow-hidden p-6 sm:p-8 space-y-6">
+      <div
+        id="print-receipt-area"
+        style={{ borderTop: `6px solid ${billSettings.themeColor}` }}
+        className="bg-white rounded-3xl border border-slate-150 shadow-xl overflow-hidden p-6 sm:p-8 space-y-6"
+      >
         
         {/* Receipt Header */}
         <div className="flex justify-between items-start gap-4 border-b border-slate-100 pb-5">
-          <div>
-            <h2 className="text-lg font-black text-slate-900 tracking-tight flex items-center gap-1.5">
-              <Sparkles className="w-5 h-5 text-emerald-500" />
-              TechSentinals Optical Store
+          <div className="min-w-0">
+            {billSettings.logo ? (
+              <img src={billSettings.logo} alt="Logo" className="max-h-12 mb-2 object-contain" />
+            ) : (
+              <div className="h-9 w-9 rounded-lg bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center mb-2">
+                <Sparkles className="w-5 h-5 text-emerald-500" />
+              </div>
+            )}
+            <h2 className="text-lg font-black text-slate-900 tracking-tight leading-tight">
+              {billSettings.headerText}
             </h2>
-            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wide mt-1">Tax Invoice / Receipt</p>
+            <p className="text-[10px] text-slate-450 font-bold uppercase tracking-wide mt-1">
+              {billSettings.subHeaderText}
+            </p>
+            <p className="text-[10px] text-slate-500 font-semibold mt-1.5 max-w-[240px] leading-snug">{billSettings.address}</p>
+            <p className="text-[9px] text-slate-400 font-semibold mt-0.5">Phone: {billSettings.contactPhone} · Email: {billSettings.contactEmail}</p>
+            {billSettings.showGst && billSettings.gstNumber && (
+              <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">GSTIN: {billSettings.gstNumber}</p>
+            )}
           </div>
-          <div className="text-right">
-            <p className="text-xs font-mono font-bold text-slate-850 bg-slate-50 border border-slate-200 px-2.5 py-1.5 rounded-xl inline-block">
+          <div className="text-right flex-shrink-0">
+            <p className="text-xs font-mono font-bold text-slate-850 bg-slate-50 border border-slate-200 px-2.5 py-1.5 rounded-xl inline-block leading-none">
               {orderId}
             </p>
-            <p className="text-[10px] text-slate-400 font-bold mt-1">
+            <p className="text-[10px] text-slate-400 font-bold mt-1.5">
               Date: {new Date(orderDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
             </p>
           </div>
@@ -126,24 +149,24 @@ const CompletedStep = ({ customer, cart, prescription, paymentInfo, savedCustome
             <h3 className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-2 md:justify-end flex items-center gap-1">
               Payment Method
             </h3>
-            <div className="text-xs font-semibold text-slate-650 space-y-1">
-              <p className="font-bold text-slate-900">Paid via: <span className="text-emerald-600">{paymentInfo?.method || 'Cash'}</span></p>
+            <div className="text-xs font-semibold text-slate-655 space-y-1">
+              <p className="font-bold text-slate-900">Paid via: <span style={{ color: billSettings.themeColor }} className="font-black">{paymentInfo?.method || 'Cash'}</span></p>
               {paymentInfo?.method === 'UPI' && paymentInfo?.upiId && (
                 <p className="font-mono">Ref ID: {paymentInfo.upiId}</p>
               )}
               <p>Outstanding Balance: ₹{remainingAmount.toLocaleString('en-IN')}</p>
-              <p>Receipt Status: <span className="inline-flex px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 font-extrabold border border-emerald-200">Paid</span></p>
+              <p>Receipt Status: <span style={{ backgroundColor: `${billSettings.themeColor}10`, color: billSettings.themeColor, borderColor: `${billSettings.themeColor}30` }} className="inline-flex px-1.5 py-0.5 rounded font-extrabold border text-[10px] leading-none">Paid</span></p>
             </div>
           </div>
         </div>
 
         {/* Prescription Summary */}
-        {hasPrescription ? (
+        {billSettings.showPrescription && hasPrescription ? (
           <div className="bg-slate-50/70 border border-slate-150 rounded-2xl p-4 sm:p-5">
             <h3 className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
               <Eye className="w-3.5 h-3.5 text-purple-500" /> Lens & Prescription Details
             </h3>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs mb-3 font-semibold text-slate-650">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs mb-3 font-semibold text-slate-655">
               {prescription.lensType && <div>Lens Type: <span className="text-slate-900 font-bold">{prescription.lensType}</span></div>}
               {prescription.framePreference && <div>Frame Pref: <span className="text-slate-900 font-bold">{prescription.framePreference}</span></div>}
               {prescription.doctorName && <div>Doctor Name: <span className="text-slate-900 font-bold">{prescription.doctorName}</span></div>}
@@ -158,9 +181,9 @@ const CompletedStep = ({ customer, cart, prescription, paymentInfo, savedCustome
                       <span className="w-1.5 h-1.5 rounded-full bg-blue-500" /> Right Eye (OD)
                     </p>
                     <div className="grid grid-cols-3 gap-2 text-[10px] font-semibold text-slate-500">
-                      <div>SPH: <span className="font-bold text-slate-800">{prescription.rightEye.sph ?? '—'}</span></div>
-                      <div>CYL: <span className="font-bold text-slate-800">{prescription.rightEye.cyl ?? '—'}</span></div>
-                      <div>AXIS: <span className="font-bold text-slate-800">{prescription.rightEye.axis ?? '—'}</span></div>
+                      <div>SPH: <span className="font-bold text-slate-850">{prescription.rightEye.sph ?? '—'}</span></div>
+                      <div>CYL: <span className="font-bold text-slate-850">{prescription.rightEye.cyl ?? '—'}</span></div>
+                      <div>AXIS: <span className="font-bold text-slate-850">{prescription.rightEye.axis ?? '—'}</span></div>
                     </div>
                   </div>
                 )}
@@ -170,20 +193,16 @@ const CompletedStep = ({ customer, cart, prescription, paymentInfo, savedCustome
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Left Eye (OS)
                     </p>
                     <div className="grid grid-cols-3 gap-2 text-[10px] font-semibold text-slate-500">
-                      <div>SPH: <span className="font-bold text-slate-800">{prescription.leftEye.sph ?? '—'}</span></div>
-                      <div>CYL: <span className="font-bold text-slate-800">{prescription.leftEye.cyl ?? '—'}</span></div>
-                      <div>AXIS: <span className="font-bold text-slate-800">{prescription.leftEye.axis ?? '—'}</span></div>
+                      <div>SPH: <span className="font-bold text-slate-850">{prescription.leftEye.sph ?? '—'}</span></div>
+                      <div>CYL: <span className="font-bold text-slate-850">{prescription.leftEye.cyl ?? '—'}</span></div>
+                      <div>AXIS: <span className="font-bold text-slate-850">{prescription.leftEye.axis ?? '—'}</span></div>
                     </div>
                   </div>
                 )}
               </div>
             )}
           </div>
-        ) : (
-          <div className="bg-slate-50/50 border border-dashed border-slate-200 rounded-2xl p-4 text-center text-xs font-semibold text-slate-450">
-            No Prescription Details Attached (Skipped)
-          </div>
-        )}
+        ) : null}
 
         {/* Invoice Items table */}
         <div className="space-y-3">
@@ -221,38 +240,55 @@ const CompletedStep = ({ customer, cart, prescription, paymentInfo, savedCustome
           </div>
         </div>
 
-        {/* Pricing calculations */}
-        <div className="bg-slate-50/80 border border-slate-100 rounded-2xl p-4 sm:p-5 flex flex-col gap-2.5 max-w-md ml-auto">
-          <div className="flex justify-between items-center text-xs text-slate-500 font-bold">
-            <span>Subtotal</span>
-            <span className="font-mono">₹{totalAmount.toLocaleString('en-IN')}</span>
-          </div>
-          {discount > 0 && (
-            <div className="flex justify-between items-center text-xs text-red-500 font-bold">
-              <span>Discounts Applied</span>
-              <span className="font-mono">- ₹{discount.toLocaleString('en-IN')}</span>
+        {/* Pricing calculations & QR Code */}
+        <div className="flex flex-col sm:flex-row gap-5 items-end justify-between">
+          {/* Payment QR Code */}
+          {billSettings.qrCode ? (
+            <div className="text-left bg-white border border-slate-150 p-3 rounded-2xl flex flex-col items-center shadow-sm w-32 shrink-0">
+              <img src={billSettings.qrCode} alt="Scan to pay" className="w-24 h-24 object-contain" />
+              <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest block text-center mt-1.5">Scan to Pay</span>
             </div>
+          ) : (
+            <div />
           )}
-          {loyaltyDiscount > 0 && (
-            <div className="flex justify-between items-center text-xs text-emerald-600 font-bold">
-              <span>Loyalty Points Discount</span>
-              <span className="font-mono">- ₹{loyaltyDiscount.toLocaleString('en-IN')}</span>
+
+          <div className="bg-slate-50/80 border border-slate-100 rounded-2xl p-4 sm:p-5 flex flex-col gap-2.5 max-w-md ml-auto flex-1 w-full">
+            <div className="flex justify-between items-center text-xs text-slate-500 font-bold">
+              <span>Subtotal</span>
+              <span className="font-mono">₹{totalAmount.toLocaleString('en-IN')}</span>
             </div>
-          )}
-          <div className="flex justify-between items-center text-xs text-slate-800 font-extrabold border-t border-slate-200/60 pt-2">
-            <span>Final Total</span>
-            <span className="text-sm font-black text-slate-950 font-mono">₹{finalAmount.toLocaleString('en-IN')}</span>
-          </div>
-          <div className="flex justify-between items-center text-xs text-emerald-600 font-extrabold pt-1">
-            <span>Amount Received</span>
-            <span className="font-mono">₹{receivedAmount.toLocaleString('en-IN')}</span>
-          </div>
-          {remainingAmount > 0 && (
-            <div className="flex justify-between items-center text-xs text-amber-600 font-extrabold">
-              <span>Balance Due</span>
-              <span className="font-mono">₹{remainingAmount.toLocaleString('en-IN')}</span>
+            {discount > 0 && (
+              <div className="flex justify-between items-center text-xs text-red-500 font-bold">
+                <span>Discounts Applied</span>
+                <span className="font-mono">- ₹{discount.toLocaleString('en-IN')}</span>
+              </div>
+            )}
+            {loyaltyDiscount > 0 && (
+              <div className="flex justify-between items-center text-xs text-emerald-600 font-bold">
+                <span>Loyalty Points Discount</span>
+                <span className="font-mono">- ₹{loyaltyDiscount.toLocaleString('en-IN')}</span>
+              </div>
+            )}
+            <div className="flex justify-between items-center text-xs text-slate-800 font-extrabold border-t border-slate-200/60 pt-2">
+              <span>Final Total</span>
+              <span className="text-sm font-black text-slate-950 font-mono">₹{finalAmount.toLocaleString('en-IN')}</span>
             </div>
-          )}
+            <div className="flex justify-between items-center text-xs text-emerald-600 font-extrabold pt-1">
+              <span>Amount Received</span>
+              <span className="font-mono">₹{receivedAmount.toLocaleString('en-IN')}</span>
+            </div>
+            {remainingAmount > 0 && (
+              <div className="flex justify-between items-center text-xs text-amber-600 font-extrabold">
+                <span>Balance Due</span>
+                <span className="font-mono">₹{remainingAmount.toLocaleString('en-IN')}</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Footer Notes */}
+        <div className="text-center text-[10px] font-bold text-slate-450 border-t border-slate-50 pt-4 italic">
+          {billSettings.footerText}
         </div>
 
       </div>
@@ -260,15 +296,6 @@ const CompletedStep = ({ customer, cart, prescription, paymentInfo, savedCustome
       {/* ── Buttons Section ── */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-3 no-print">
         <div className="flex gap-2 w-full sm:w-auto">
-          <button
-            onClick={onBackToPayment}
-            className="flex items-center justify-center gap-2 px-5 py-3 border border-slate-200 hover:border-slate-350 text-slate-650 hover:text-slate-900 bg-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all shadow-sm cursor-pointer w-full sm:w-auto"
-            type="button"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Previous Step
-          </button>
-          
           <button
             onClick={handlePrint}
             className="flex items-center justify-center gap-2 px-5 py-3 border border-slate-205 hover:bg-slate-50 text-slate-800 bg-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all shadow-sm cursor-pointer w-full sm:w-auto"

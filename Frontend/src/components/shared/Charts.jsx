@@ -18,23 +18,24 @@ export const LineChart = ({
   gradientColor = '#10B981',
   height = 160
 }) => {
-  const maxVal = useMemo(() => Math.max(...data.map(d => d.value), 1), [data]);
+  const maxVal = useMemo(() => Math.max(...data.map(d => Number(d.value || 0)), 1), [data]);
 
-  const points = useMemo(() => {
+  const pathD = useMemo(() => {
+    if (!data || data.length === 0) return '';
     return data.map((d, i) => {
+      const val = Number(d.value || 0);
       const x = 40 + i * (250 / Math.max(1, data.length - 1));
-      const y = 135 - (d.value / maxVal) * 105;
-      return `${x},${y}`;
+      const y = 135 - (val / maxVal) * 105;
+      return `${i === 0 ? 'M' : 'L'} ${x},${y}`;
     }).join(' ');
   }, [data, maxVal]);
 
   const areaPath = useMemo(() => {
-    if (!points) return '';
-    const pointsList = points.split(' ');
-    const firstX = pointsList[0].split(',')[0];
-    const lastX = pointsList[pointsList.length - 1].split(',')[0];
-    return `M ${firstX},135 L ${points} L ${lastX},135 Z`;
-  }, [points]);
+    if (!pathD || data.length === 0) return '';
+    const firstX = 40;
+    const lastX = 40 + (data.length - 1) * (250 / Math.max(1, data.length - 1));
+    return `${pathD} L ${lastX},135 L ${firstX},135 Z`;
+  }, [pathD, data]);
 
   return (
     <div className="w-full h-full min-h-[220px] pt-4 px-2 select-none relative">
@@ -56,9 +57,9 @@ export const LineChart = ({
         {areaPath && <path d={areaPath} fill="url(#lineGrad)" className="transition-all duration-300" />}
 
         {/* Line stroke */}
-        {points && (
+        {pathD && (
           <path
-            d={`M 40,135 L ${points}`}
+            d={pathD}
             fill="none"
             stroke={strokeColor}
             strokeWidth="2"
@@ -70,8 +71,9 @@ export const LineChart = ({
 
         {/* Points & Interactive Tooltips */}
         {data.map((d, i) => {
+          const val = Number(d.value || 0);
           const x = 40 + i * (250 / Math.max(1, data.length - 1));
-          const y = 135 - (d.value / maxVal) * 105;
+          const y = 135 - (val / maxVal) * 105;
           return (
             <g key={i} className="group cursor-pointer">
               <circle
@@ -81,7 +83,7 @@ export const LineChart = ({
                 fill="#FFFFFF"
                 stroke={strokeColor}
                 strokeWidth="1.75"
-                className="transition-all duration-200 group-hover:r-5.5 group-hover:stroke-emerald-600"
+                className="transition-all duration-200 group-hover:r-5 group-hover:stroke-emerald-600"
               />
               {/* Tooltip background */}
               <rect
@@ -100,7 +102,7 @@ export const LineChart = ({
                 textAnchor="middle"
                 className="text-[7.5px] font-bold fill-white opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none"
               >
-                {d.value >= 1000 ? `₹${(d.value / 1000).toFixed(0)}k` : `₹${d.value}`}
+                {val >= 1000 ? `₹${(val / 1000).toFixed(0)}k` : `₹${val}`}
               </text>
               {/* Axis Label */}
               <text
@@ -111,7 +113,7 @@ export const LineChart = ({
               >
                 {d.label}
               </text>
-              <title>{`${d.label}: ${formatRupee(d.value)}`}</title>
+              <title>{`${d.label}: ${formatRupee(val)}`}</title>
             </g>
           );
         })}

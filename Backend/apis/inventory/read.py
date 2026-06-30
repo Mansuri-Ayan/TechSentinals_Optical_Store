@@ -24,6 +24,14 @@ def _inventory_to_read(inv, store_map: dict | None = None) -> InventoryRead:
     elif store_map:
         owner_name = store_map.get(inv.owner_id, "Unknown Store")
 
+    supplier_id = None
+    supplier_name = None
+    if product and product.supplier_products:
+        active_sps = [sp for sp in product.supplier_products if sp.is_active and sp.supplier]
+        if active_sps:
+            supplier_id = active_sps[0].supplier_id
+            supplier_name = active_sps[0].supplier.company_name
+
     return InventoryRead(
         **{c.key: getattr(inv, c.key) for c in inv.__table__.columns},
         owner_name=owner_name,
@@ -45,6 +53,8 @@ def _inventory_to_read(inv, store_map: dict | None = None) -> InventoryRead:
         lens_product=product.lens_product if product else None,
         accessory_product=product.accessory_product if product else None,
         other_stocks=getattr(inv, "other_stocks", []),
+        supplier_id=supplier_id,
+        supplier_name=supplier_name,
     )
 
 
@@ -437,6 +447,7 @@ async def universal_search_inventories(
     )
 
     stmt_count = select(func.count(Product.id)).where(*product_conditions)
+    from models.supplier_product import SupplierProduct
     stmt_data = (
         select(Product)
         .where(*product_conditions)
@@ -447,6 +458,7 @@ async def universal_search_inventories(
             selectinload(Product.frame_product),
             selectinload(Product.lens_product),
             selectinload(Product.accessory_product),
+            selectinload(Product.supplier_products).selectinload(SupplierProduct.supplier),
         )
         .order_by(Product.id.desc())
     )
@@ -595,6 +607,14 @@ async def universal_search_inventories(
         else:
             owner_name = store_map.get(resolved_owner_id, f"Store {resolved_owner_id}")
 
+        supplier_id = None
+        supplier_name = None
+        if p.supplier_products:
+            active_sps = [sp for sp in p.supplier_products if sp.is_active and sp.supplier]
+            if active_sps:
+                supplier_id = active_sps[0].supplier_id
+                supplier_name = active_sps[0].supplier.company_name
+
         items.append(
             UniversalInventoryRead(
                 id=local_rec.id if local_rec else None,
@@ -613,6 +633,8 @@ async def universal_search_inventories(
                 image_url=p.image_url,
                 discount_percent=p.discount_percent,
                 warranty_months=p.warranty_months,
+                supplier_id=supplier_id,
+                supplier_name=supplier_name,
                 
                 # local stock
                 quantity=local_rec.quantity if local_rec else 0,

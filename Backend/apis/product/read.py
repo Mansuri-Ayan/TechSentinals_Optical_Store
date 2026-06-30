@@ -35,7 +35,7 @@ async def list_products(
     brand_id: int | None = Query(None),
     search: str | None = Query(None, description="Search by name or SKU"),
     active_only: bool = Query(True),
-    limit: int = Query(100, ge=1, le=500),
+    limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),

@@ -25,6 +25,8 @@ import AdminRepair from "../pages/admin/Repair";
 import AdminCustomers from "../pages/admin/Customers";
 import AdminCustomerDetail from "../pages/admin/CustomerDetail";
 import Warehouse from "../pages/admin/Warehouse";
+import StaffDetail from "../pages/admin/StaffDetail";
+import BillTemplate from "../pages/admin/BillTemplate";
 
 // Shopkeeper imports
 import ShopKeeperLayout from "../layouts/ShopKeeperLayout";
@@ -272,6 +274,7 @@ function AppRouter() {
         <Route path="dashboard" element={<Dashboard />} />
         <Route path="staff" element={<StaffRouteRedirect />} />
         <Route path="store/:storeId/staff" element={<Staff />} />
+        <Route path="store/:storeId/staff/:staffId" element={<StaffDetail />} />
         <Route path="inventory" element={<InventoryRouteRedirect />} />
         <Route path="store/:storeId/inventory" element={<Inventory />} />
         <Route path="brands" element={<BrandsRouteRedirect />} />
@@ -294,6 +297,11 @@ function AppRouter() {
           element={<StoreRouteRedirect path="lab-orders" />}
         />
         <Route path="store/:storeId/lab-orders" element={<LabOrders />} />
+        <Route
+          path="bill-template"
+          element={<StoreRouteRedirect path="bill-template" />}
+        />
+        <Route path="store/:storeId/bill-template" element={<BillTemplate />} />
         <Route path="analyses" element={<Analyses />} />
         <Route path="warehouse" element={<Warehouse />} />
         <Route path="stores" element={<Stores />} />
@@ -337,6 +345,7 @@ function AppRouter() {
         <Route path="customers/:customerId" element={<CustomerDetail />} />
         <Route path="inventory" element={<ShopkeeperInventory />} />
         <Route path="sales" element={<ShopkeeperSales />} />
+        <Route path="bill-template" element={<BillTemplate />} />
         <Route path="lab-orders" element={<LabOrders />} />
         <Route path="staff" element={<ShopkeeperStaff />} />
         <Route path="expenses" element={<ShopkeeperExpenses />} />

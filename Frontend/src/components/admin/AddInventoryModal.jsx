@@ -6,6 +6,7 @@ import { X, Package, Image as ImageIcon, Loader2 } from 'lucide-react';
 import { useCategories, useSubcategories } from '../../hooks/useCategories';
 import { useBrands } from '../../hooks/useBrands';
 import { useStoreStore } from '../../store/store';
+import SupplierSelect from './SupplierSelect';
 
 /* ─── helpers ─────────────────────────────────────── */
 const FieldError = ({ message }) =>
@@ -39,6 +40,7 @@ const getDefaultItemValues = (storeId = '') => ({
   subcategory_id: '',
   brand: '',
   supplier: '',
+  supplier_id: '',
   quantity: '',
   reorder_level: '',
   cost_price: '',
@@ -264,16 +266,20 @@ const InventoryItemForm = ({
             <FieldError message={itemErrors.brand?.message} />
           </div>
 
-          <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-1.5">Supplier <span className="text-red-500">*</span></label>
+          <div className="sm:col-span-2">
             <input
-              {...register(`items.${index}.supplier`, { required: 'Supplier is required' })}
-              type="text"
-              disabled={isPending}
-              placeholder="e.g. Vision Supply Co."
-              className={inputCls(!!itemErrors.supplier)}
+              type="hidden"
+              {...register(`items.${index}.supplier_id`, { required: 'Supplier is required' })}
             />
-            <FieldError message={itemErrors.supplier?.message} />
+            <SupplierSelect
+              selectedSupplierId={watch(`items.${index}.supplier_id`)}
+              onChange={(supplier) => {
+                setValue(`items.${index}.supplier_id`, supplier ? String(supplier.id) : '');
+                setValue(`items.${index}.supplier`, supplier ? supplier.company_name : '');
+              }}
+              error={itemErrors.supplier_id?.message}
+              disabled={isPending}
+            />
           </div>
 
           <div className="sm:col-span-2">

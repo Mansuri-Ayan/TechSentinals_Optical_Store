@@ -6,6 +6,7 @@ import {
 import { useCategories, useSubcategories } from '../../../hooks/useCategories';
 import { useProducts } from '../../../hooks/useProducts';
 import { useStores } from '../../../hooks/useStores';
+import SupplierSelect from '../SupplierSelect';
 
 const PAYMENT_METHODS = ['Cash', 'Bank Transfer', 'Cheque', 'UPI', 'Credit'];
 
@@ -27,9 +28,10 @@ const EMPTY = {
   unitSellingPrice: '',
   discountPercent: '0.00',
   profitMargin: '',
+  supplierId: '',
 };
 
-const AddTransactionModal = ({ isOpen, defaultProductId, supplierName, storeName, activeStoreId, onClose, onSubmit }) => {
+const AddTransactionModal = ({ isOpen, defaultProductId, defaultSupplierId, storeName, activeStoreId, onClose, onSubmit }) => {
   const [form, setForm] = useState(EMPTY);
   const [errors, setErrors] = useState({});
   const { stores } = useStores();
@@ -52,7 +54,7 @@ const AddTransactionModal = ({ isOpen, defaultProductId, supplierName, storeName
   });
 
   // Fetch all products (for defaultProductId lookup when category/subcategory aren't selected yet)
-  const { products: allProducts } = useProducts({ limit: 1000 });
+  const { products: allProducts } = useProducts({ limit: 500 });
 
   useEffect(() => {
     if (isOpen) {
@@ -60,10 +62,11 @@ const AddTransactionModal = ({ isOpen, defaultProductId, supplierName, storeName
         ...EMPTY,
         storeId: activeStoreId ? String(activeStoreId) : '',
         enterUnitCostPrice: true,
+        supplierId: defaultSupplierId ? String(defaultSupplierId) : '',
       });
       setErrors({});
     }
-  }, [isOpen, activeStoreId]);
+  }, [isOpen, activeStoreId, defaultSupplierId]);
 
   // Set category and subcategory from defaultProductId once products list is fetched
   useEffect(() => {
@@ -211,6 +214,7 @@ const AddTransactionModal = ({ isOpen, defaultProductId, supplierName, storeName
 
   const validate = () => {
     const e = {};
+    if (!form.supplierId)    e.supplierId    = 'Supplier is required';
     if (!form.categoryId)    e.categoryId    = 'Category is required';
     if (!form.subcategoryId) e.subcategoryId = 'Sub-category is required';
     if (!form.productId)     e.productId     = 'Product is required';
@@ -241,6 +245,7 @@ const AddTransactionModal = ({ isOpen, defaultProductId, supplierName, storeName
     e.preventDefault();
     if (!validate()) return;
     onSubmit({
+      supplierId: Number(form.supplierId),
       categoryId: Number(form.categoryId),
       subcategoryId: Number(form.subcategoryId),
       productId: Number(form.productId),
@@ -287,7 +292,7 @@ const AddTransactionModal = ({ isOpen, defaultProductId, supplierName, storeName
             </div>
             <div>
               <h2 className="text-base font-bold text-slate-900">Record Purchase (Goods & Payment)</h2>
-              <p className="text-xs text-slate-500 truncate max-w-[280px]">Supplier: {supplierName}</p>
+              <p className="text-xs text-slate-500 truncate max-w-[280px]">Restock inventory and record supplier transaction.</p>
             </div>
           </div>
           <button type="button" onClick={handleClose} className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors">
@@ -299,9 +304,20 @@ const AddTransactionModal = ({ isOpen, defaultProductId, supplierName, storeName
         <form onSubmit={handleSubmit} className="overflow-y-auto flex-1 min-h-0">
           <div className="px-5 py-5 space-y-4">
             
+            {/* Section: Supplier */}
+            <div className="space-y-3 font-sans">
+              <SupplierSelect
+                selectedSupplierId={form.supplierId}
+                onChange={supplier => set('supplierId', supplier ? String(supplier.id) : '')}
+                error={errors.supplierId}
+              />
+            </div>
+
+            <hr className="border-slate-100" />
+            
             {/* Section: Goods Details */}
             <div className="space-y-3 font-sans">
-              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">1. Goods details</h3>
+              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">2. Goods details</h3>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {/* Category */}
@@ -367,7 +383,7 @@ const AddTransactionModal = ({ isOpen, defaultProductId, supplierName, storeName
 
               {/* Destination & Payment Details */}
               <div className="space-y-3 font-sans">
-                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">2. Destination & Payment details</h3>
+                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">3. Destination & Payment details</h3>
                 
                 {/* Receiving Store selection dropdown */}
                 <div>
@@ -388,7 +404,7 @@ const AddTransactionModal = ({ isOpen, defaultProductId, supplierName, storeName
                 {/* Pricing details section */}
                 <div className="pt-2 border-t border-slate-100 space-y-3 md:col-span-2">
                   <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">1.5 Pricing details</h4>
+                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">2.5 Pricing details</h4>
                     <label className="inline-flex items-center gap-2 cursor-pointer">
                       <input
                         type="checkbox"

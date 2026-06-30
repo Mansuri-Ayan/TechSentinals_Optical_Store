@@ -38,3 +38,8 @@ export const deleteStaffApi = async ({ role, id }) => {
   const response = await api.delete(`/stores/${role}s/${id}`);
   return response.data;
 };
+
+export const getStaffDetailApi = async (role, staffId) => {
+  const response = await api.get(`/reports/staff/${role}/${staffId}/details`);
+  return response.data;
+};

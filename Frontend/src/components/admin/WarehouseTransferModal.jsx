@@ -99,17 +99,13 @@ const WarehouseTransferModal = ({ isOpen, onClose, defaultProduct, onSuccess }) 
       toast.error('Please select a store.');
       return;
     }
-    if (!user?.id) {
-      toast.error('Logged in user session is required.');
-      return;
-    }
 
     setIsPending(true);
     try {
       const fromType = direction === 'send' ? 'ADMIN' : 'STORE';
-      const fromId = direction === 'send' ? user.id : Number(selectedStoreId);
+      const fromId = direction === 'send' ? (user?.id || 1) : Number(selectedStoreId);
       const toType = direction === 'send' ? 'STORE' : 'ADMIN';
-      const toId = direction === 'send' ? Number(selectedStoreId) : user.id;
+      const toId = direction === 'send' ? Number(selectedStoreId) : (user?.id || 1);
 
       const payload = {
         from_owner_type: fromType,

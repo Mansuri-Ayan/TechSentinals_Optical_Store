@@ -5,6 +5,7 @@ import {
   deleteStaffApi,
   getStoreStaffApi,
   updateStaffApi,
+  getStaffDetailApi,
 } from '../api/staff/staff.api';
 
 export const staffQueryKey = (storeId, params) => ['stores', storeId, 'staff', params];
@@ -85,4 +86,14 @@ export const useStoreStaff = (storeId, params) => {
     isSavingStaff: createStaffMutation.isPending || updateStaffMutation.isPending,
     isDeletingStaff: deleteStaffMutation.isPending,
   };
+};
+
+export const useStaffDetail = (role, staffId) => {
+  return useQuery({
+    queryKey: ['staff', role, staffId, 'details'],
+    queryFn: () => getStaffDetailApi(role, staffId),
+    enabled: Boolean(role) && Boolean(staffId),
+    retry: false,
+    staleTime: 1000 * 60 * 5,
+  });
 };

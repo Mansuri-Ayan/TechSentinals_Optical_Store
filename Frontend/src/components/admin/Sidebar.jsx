@@ -24,6 +24,7 @@ import {
   Clock,
   Award,
   Warehouse,
+  FileText,
 } from "lucide-react";
 import { useAuth } from "../../hooks/useAuth";
 import { useAuthStore, useStoreStore } from "../../store/store";
@@ -138,10 +139,9 @@ const Sidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) => {
     stores[0] || { id: "1", store_name: "Main Branch" };
   const getStoreName = (store) =>
     store?.store_name || store?.name || "Select Store";
-  const staffRoute =
-    currentStore && currentStore.id !== "admin"
-      ? `/admin/store/${currentStore.id}/staff`
-      : "/admin/dashboard";
+  const staffRoute = currentStore
+    ? `/admin/store/${currentStore.id}/staff`
+    : "/admin/dashboard";
   const inventoryRoute = currentStore
     ? `/admin/store/${currentStore.id}/inventory`
     : "/admin/dashboard";
@@ -172,6 +172,9 @@ const Sidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) => {
     : "/admin/dashboard";
   const loyaltyRoute = currentStore
     ? `/admin/store/${currentStore.id}/loyalty`
+    : "/admin/dashboard";
+  const billTemplateRoute = currentStore
+    ? `/admin/store/${currentStore.id}/bill-template`
     : "/admin/dashboard";
 
   const handleStoreSelect = (store) => {
@@ -251,6 +254,15 @@ const Sidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) => {
       location.pathname.includes("/loyalty")
     ) {
       navigate(`/admin/store/${store.id}/loyalty`);
+    } else if (
+      location.pathname.startsWith("/admin/store/") &&
+      location.pathname.includes("/bill-template")
+    ) {
+      if (store.id === "admin") {
+        navigate("/admin/dashboard");
+      } else {
+        navigate(`/admin/store/${store.id}/bill-template`);
+      }
     } else {
       // Default fallback
       if (store.id === "admin") {
@@ -324,55 +336,45 @@ const Sidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) => {
               </h2>
             )
           ) : (
-            <div className="relative flex-1 min-w-0" ref={dropdownRef}>
-              <button
-                onClick={() =>
-                  !isCollapsed && setIsDropdownOpen(!isDropdownOpen)
-                }
-                className={`flex items-center justify-between w-full bg-transparent text-white font-semibold focus:outline-none py-2 text-left ${isCollapsed ? "justify-center" : ""}`}
-                title={isCollapsed ? getStoreName(currentStore) : undefined}
-                disabled={isCollapsed}
-              >
-                {isCollapsed ? (
-                  <div className="w-8 h-8 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 text-xs font-black">
-                    {getStoreName(currentStore)[0]?.toUpperCase()}
-                  </div>
-                ) : (
-                  <>
-                    <span className="truncate text-base">
-                      {getStoreName(currentStore)}
-                    </span>
-                    <ChevronDown
-                      className={`w-4 h-4 text-slate-400 transition-transform flex-shrink-0 ml-2 ${isDropdownOpen ? "rotate-180" : ""}`}
-                    />
-                  </>
-                )}
-              </button>
+            !isCollapsed && (
+              <div className="relative flex-1 min-w-0" ref={dropdownRef}>
+                <button
+                  onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                  className="flex items-center justify-between w-full bg-transparent text-white font-semibold focus:outline-none py-2 text-left"
+                >
+                  <span className="truncate text-base">
+                    {getStoreName(currentStore)}
+                  </span>
+                  <ChevronDown
+                    className={`w-4 h-4 text-slate-400 transition-transform flex-shrink-0 ml-2 ${isDropdownOpen ? "rotate-180" : ""}`}
+                  />
+                </button>
 
-              {/* Custom Dropdown Menu */}
-              {!isCollapsed && isDropdownOpen && (
-                <div className="absolute top-full left-0 right-0 mt-2 bg-[#1E293B] border border-slate-700 rounded-xl shadow-xl overflow-hidden z-50 animate-fade-in max-h-60 overflow-y-auto hide-scrollbar">
-                  {stores.map((store) => (
-                    <button
-                      key={store.id}
-                      onClick={() => {
-                        handleStoreSelect(store);
-                      }}
-                      className={`w-full text-left px-4 py-3 flex items-center justify-between text-sm transition-colors ${
-                        currentStore?.id === store.id
-                          ? "bg-emerald-500/10 text-emerald-400 font-semibold"
-                          : "text-slate-300 hover:bg-slate-700/50 hover:text-white"
-                      }`}
-                    >
-                      <span className="truncate">{getStoreName(store)}</span>
-                      {currentStore?.id === store.id && (
-                        <Check className="w-4 h-4" />
-                      )}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+                {/* Custom Dropdown Menu */}
+                {isDropdownOpen && (
+                  <div className="absolute top-full left-0 right-0 mt-2 bg-[#1E293B] border border-slate-700 rounded-xl shadow-xl overflow-hidden z-50 animate-fade-in max-h-60 overflow-y-auto hide-scrollbar">
+                    {stores.map((store) => (
+                      <button
+                        key={store.id}
+                        onClick={() => {
+                          handleStoreSelect(store);
+                        }}
+                        className={`w-full text-left px-4 py-3 flex items-center justify-between text-sm transition-colors ${
+                          currentStore?.id === store.id
+                            ? "bg-emerald-500/10 text-emerald-400 font-semibold"
+                            : "text-slate-300 hover:bg-slate-700/50 hover:text-white"
+                        }`}
+                      >
+                        <span className="truncate">{getStoreName(store)}</span>
+                        {currentStore?.id === store.id && (
+                          <Check className="w-4 h-4" />
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
           )}
 
           {/* Toggle Button for collapsing on desktop */}
@@ -729,6 +731,34 @@ const Sidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) => {
             />
             {!isCollapsed && (
               <span className="font-medium text-sm">Loyalty</span>
+            )}
+          </NavLink>
+
+          <NavLink
+            to="/admin/bill-template"
+            end
+            title={isCollapsed ? "Bill Settings" : undefined}
+            className={({ isActive }) => {
+              const isBillActive =
+                isActive || location.pathname.includes("/bill-template");
+              return `flex items-center ${isCollapsed ? "justify-center px-0" : "px-4"} py-2.5 rounded-xl transition-all duration-200 group ${
+                isBillActive
+                  ? "bg-emerald-500/10 text-emerald-400 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_0_10px_rgba(16,185,129,0.1)] border border-emerald-500/20"
+                  : "text-slate-400 hover:bg-white/5 hover:text-slate-202 border border-transparent"
+              }`;
+            }}
+            onClick={(e) => {
+              if (currentStore) {
+                e.preventDefault();
+                navigate(billTemplateRoute);
+              }
+            }}
+          >
+            <FileText
+              className={`w-5 h-5 transition-transform group-hover:scale-110 flex-shrink-0 ${isCollapsed ? "" : "mr-3"}`}
+            />
+            {!isCollapsed && (
+              <span className="font-medium text-sm">Bill Settings</span>
             )}
           </NavLink>
         </nav>

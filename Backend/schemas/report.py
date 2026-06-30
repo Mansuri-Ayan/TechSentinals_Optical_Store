@@ -2,6 +2,7 @@
 from datetime import date, datetime
 from decimal import Decimal
 from pydantic import BaseModel, ConfigDict
+from schemas.staff import StaffRead
 
 
 # High-level detail response schemas
@@ -210,4 +211,36 @@ class AnalysesReport(BaseModel):
     transaction_payment_analytics: list[PaymentMethodPoint]
     brand_revenue_comparison: list[BrandRevenuePoint]
     monthly_customer_growth: list[TrendDataPoint]
+
+
+class StaffSaleRow(BaseModel):
+    id: int
+    invoice_number: str
+    customer_name: str | None = None
+    total_amount: Decimal
+    status: str
+    sale_date: date
+
+
+class StaffExpenseRow(BaseModel):
+    id: int
+    title: str
+    category_name: str
+    amount: Decimal
+    expense_date: date
+    payment_method: str
+    is_approved: bool
+    is_rejected: bool
+
+
+class StaffDetailResponse(BaseModel):
+    staff_info: StaffRead
+    revenue: Decimal
+    sales_count: int
+    discounts_given: Decimal
+    unique_customers_served: int
+    total_expenses_incurred: Decimal
+    sales: list[StaffSaleRow]
+    expenses: list[StaffExpenseRow]
+    sales_trend: list[TrendDataPoint]
 

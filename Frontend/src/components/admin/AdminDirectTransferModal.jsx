@@ -122,10 +122,10 @@ const AdminDirectTransferModal = ({ isOpen, onClose, product, sourceStore, activ
       }
       
       const fromType = fromStoreObj.owner_type || 'STORE';
-      const fromId = fromType === 'ADMIN' ? (user?.id || 0) : Number(fromStoreObj.id);
+      const fromId = fromType === 'ADMIN' ? (user?.id || 1) : Number(fromStoreObj.id);
       
       const toType = targetStore.owner_type || 'STORE';
-      const toId = toType === 'ADMIN' ? (user?.id || 0) : Number(targetStore.id);
+      const toId = toType === 'ADMIN' ? (user?.id || 1) : Number(targetStore.id);
 
       const payload = {
         from_owner_type: fromType,

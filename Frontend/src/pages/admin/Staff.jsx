@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import {
   Plus,
   Users,
@@ -219,6 +219,7 @@ const StaffDetailDrawer = ({ staff, onClose, isLoading }) => {
 ───────────────────────────────────────────────────────── */
 const Staff = () => {
   const { storeId } = useParams();
+  const navigate = useNavigate();
   const { stores, selectedStore, setSelectedStore } = useStoreStore();
   const [inPageStoreId, setInPageStoreId] = useState(storeId);
   const [searchTerm, setSearchTerm] = useState("");
@@ -573,7 +574,7 @@ const Staff = () => {
               formattedStaff.map((person) => (
                 <div
                   key={`${person.role}-${person.id}`}
-                  onClick={() => handleStaffClick(person)}
+                  onClick={() => navigate(`/admin/store/${storeId}/staff/${person.id}?role=${person.role}`)}
                   className="bg-white border border-slate-100 rounded-xl sm:rounded-2xl p-3 sm:p-4 shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5 group relative overflow-hidden cursor-pointer"
                 >
                   <div

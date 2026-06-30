@@ -234,6 +234,7 @@ async def get_inventories_by_owner(
     total_filtered = count_result.scalar() or 0
 
     # ── Data query ──
+    from models.supplier_product import SupplierProduct
     data_stmt = (
         select(Inventory)
         .join(Product, Inventory.product_id == Product.id)
@@ -242,6 +243,7 @@ async def get_inventories_by_owner(
             selectinload(Inventory.product).selectinload(Product.category),
             selectinload(Inventory.product).selectinload(Product.subcategory),
             selectinload(Inventory.product).selectinload(Product.brand),
+            selectinload(Inventory.product).selectinload(Product.supplier_products).selectinload(SupplierProduct.supplier),
         )
         .order_by(Inventory.id.desc())
     )
