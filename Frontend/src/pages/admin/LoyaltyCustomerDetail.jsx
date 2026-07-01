@@ -12,13 +12,12 @@ import RewardsCard from '../../components/loyalty/RewardsCard';
 import { useLoyaltyCustomerDetail } from '../../hooks/useLoyalty';
 import { useStoreStore } from '../../store/store';
 import { usePagePermissions } from '../../hooks/usePermissions'; 
+import { useRoleContext } from '../../hooks/useRoleContext';
 
 const LoyaltyCustomerDetail = () => {
   const { id } = useParams();
   const perms = usePagePermissions('loyalty');
-  const { selectedStore, stores } = useStoreStore();
-  const targetStore = selectedStore || stores[0];
-  const storeId = targetStore?.id || 'admin';
+  const { storeId, buildPath } = useRoleContext();
   const { data: rawCustomer, isLoading, isError } = useLoyaltyCustomerDetail(id, storeId, 'admin');
 
   const mapCustomer = (raw) => {
@@ -77,7 +76,7 @@ const LoyaltyCustomerDetail = () => {
           <AlertTriangle className="w-12 h-12 text-red-500 mx-auto mb-4" />
           <h2 className="text-lg font-bold text-slate-900 mb-1">Customer Not Found</h2>
           <p className="text-slate-500 text-sm mb-6">The customer profile you are looking for is missing.</p>
-          <Link to="/admin/loyalty" className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#0A0F1F] text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-colors">
+          <Link to={buildPath('loyalty')} className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#0A0F1F] text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-colors">
             Back to Loyalty Dashboard
           </Link>
         </div>
@@ -92,16 +91,16 @@ const LoyaltyCustomerDetail = () => {
       {/* Breadcrumbs */}
       <div className="mb-6">
         <div className="flex items-center text-sm text-slate-500 font-semibold mb-3 space-x-2 flex-wrap">
-          <Link to="/admin/dashboard" className="hover:text-slate-800 transition-colors">Dashboard</Link>
+          <Link to={buildPath('dashboard')} className="hover:text-slate-800 transition-colors">Dashboard</Link>
           <ChevronRight className="w-4 h-4 flex-shrink-0" />
-          <Link to="/admin/loyalty" className="hover:text-slate-800 transition-colors">Loyalty Program</Link>
+          <Link to={buildPath('loyalty')} className="hover:text-slate-800 transition-colors">Loyalty Program</Link>
           <ChevronRight className="w-4 h-4 flex-shrink-0" />
           <span className="text-slate-900 font-extrabold truncate">{customer.name}</span>
         </div>
       </div>
 
       {/* Profile Header */}
-      <LoyaltyCustomerCard customer={customer} backPath="/admin/loyalty" />
+      <LoyaltyCustomerCard customer={customer} backPath={buildPath('loyalty')} />
 
       {/* Summary KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-6 sm:mb-8">

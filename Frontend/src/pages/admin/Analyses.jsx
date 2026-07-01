@@ -9,6 +9,7 @@ import { useStoreStore } from '../../store/store';
 import StoreSwitcher from '../../components/admin/stores/StoreSwitcher';
 import { useAnalyses } from '../../hooks/useAnalyses';
 import { useChartAnimation } from '../../hooks/useChartAnimation';
+import { useRoleContext } from '../../hooks/useRoleContext';
 
 /* ─────────────────────────────────────────────────────────
    PREMIUM WIDGET CARD (STRIPE-LIKE NOTION AESTHETICS)
@@ -279,16 +280,18 @@ const CustomerGrowthChart = ({ data: rawData }) => {
 
 const Analyses = () => {
   const navigate = useNavigate();
+  const { storeId, buildPath, showStoreSwitcher, isPathAdmin } = useRoleContext();
   const { stores, selectedStore, setSelectedStore } = useStoreStore();
   const [selectedStoreFilter, setSelectedStoreFilter] = useState('All Store');
   const [dateRange, setDateRange] = useState('This Year');
 
   // Find active store ID based on selectedStoreFilter name
   const activeStoreId = useMemo(() => {
+    if (!showStoreSwitcher) return storeId ? Number(storeId) : null;
     if (selectedStoreFilter === 'All' || selectedStoreFilter === 'All Store') return null;
     const matchedStore = stores.find(s => (s.store_name || s.name) === selectedStoreFilter);
     return matchedStore?.id || null;
-  }, [selectedStoreFilter, stores]);
+  }, [selectedStoreFilter, stores, showStoreSwitcher, storeId]);
 
   // Fetch real analyses data from backend
   const { data, isLoading, refetch } = useAnalyses(activeStoreId, dateRange);
@@ -422,14 +425,16 @@ const Analyses = () => {
           </div>
 
           {/* Store Switcher */}
-          <StoreSwitcher
-            selectedStoreFilter={selectedStoreFilter}
-            onStoreChange={(val) => {
-              setSelectedStoreFilter(val);
-              const matchedStore = stores.find(s => (s.store_name || s.name) === val);
-              setSelectedStore(matchedStore || null);
-            }}
-          />
+          {showStoreSwitcher && (
+            <StoreSwitcher
+              selectedStoreFilter={selectedStoreFilter}
+              onStoreChange={(val) => {
+                setSelectedStoreFilter(val);
+                const matchedStore = stores.find(s => (s.store_name || s.name) === val);
+                setSelectedStore(matchedStore || null);
+              }}
+            />
+          )}
 
           {/* Buttons */}
           <div className="flex items-center gap-2">

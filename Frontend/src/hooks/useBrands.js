@@ -1,10 +1,15 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useLocation } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import {
   getBrandsApi,
   createBrandApi,
   updateBrandApi,
   deleteBrandApi,
+  getShopkeeperBrandsApi,
+  createShopkeeperBrandApi,
+  updateShopkeeperBrandApi,
+  deleteShopkeeperBrandApi,
 } from '../api/brand/brand.api';
 
 export const brandsQueryKey = ['brands'];
@@ -17,6 +22,13 @@ export const brandsQueryKey = ['brands'];
  */
 export const useBrands = (storeId = null, filters = {}) => {
   const queryClient = useQueryClient();
+  const location = useLocation();
+  const isPathAdmin = location.pathname.startsWith('/admin');
+
+  const getBrands = isPathAdmin ? getBrandsApi : getShopkeeperBrandsApi;
+  const createBrand = isPathAdmin ? createBrandApi : createShopkeeperBrandApi;
+  const updateBrand = isPathAdmin ? updateBrandApi : updateShopkeeperBrandApi;
+  const deleteBrand = isPathAdmin ? deleteBrandApi : deleteShopkeeperBrandApi;
 
   const params = {
     page: filters.page || 1,
@@ -29,7 +41,7 @@ export const useBrands = (storeId = null, filters = {}) => {
 
   const query = useQuery({
     queryKey: [brandsQueryKey, storeId, params],
-    queryFn: () => getBrandsApi(params),
+    queryFn: () => getBrands(params),
     enabled: true,
     staleTime: 1000 * 60 * 2,
     retry: false,
@@ -41,19 +53,19 @@ export const useBrands = (storeId = null, filters = {}) => {
   };
 
   const createBrandMutation = useMutation({
-    mutationFn: createBrandApi,
+    mutationFn: createBrand,
     onSuccess: () => { invalidate(); toast.success('Brand created successfully.'); },
     onError: (err) => { toast.error(err.response?.data?.detail || 'Failed to create brand.'); },
   });
 
   const updateBrandMutation = useMutation({
-    mutationFn: ({ id, payload }) => updateBrandApi(id, payload),
+    mutationFn: ({ id, payload }) => updateBrand(id, payload),
     onSuccess: () => { invalidate(); toast.success('Brand updated successfully.'); },
     onError: (err) => { toast.error(err.response?.data?.detail || 'Failed to update brand.'); },
   });
 
   const deleteBrandMutation = useMutation({
-    mutationFn: deleteBrandApi,
+    mutationFn: deleteBrand,
     onSuccess: () => { invalidate(); toast.success('Brand deactivated successfully.'); },
     onError: (err) => { toast.error(err.response?.data?.detail || 'Failed to delete brand.'); },
   });

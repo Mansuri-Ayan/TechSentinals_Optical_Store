@@ -12,6 +12,7 @@ import DeleteConfirmModal from '../../components/admin/suppliers/DeleteConfirmMo
 import { useStoreStore } from '../../store/store';
 import { useSuppliers } from '../../hooks/useSuppliers';
 import { usePurchaseOrders } from '../../hooks/usePurchaseOrders';
+import { useRoleContext } from '../../hooks/useRoleContext';
 
 const ITEMS_PER_PAGE = 12;
 
@@ -127,7 +128,7 @@ const SupplierCard = ({ supplier: s, onClick, onEdit, onDelete }) => (
 ───────────────────────────────────────────────────────── */
 const Suppliers = () => {
   const navigate = useNavigate();
-  const { storeId } = useParams();
+  const { storeId, buildPath, showStoreSwitcher, isPathAdmin } = useRoleContext();
   const { selectedStore, setSelectedStore, stores } = useStoreStore();
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -243,13 +244,13 @@ const Suppliers = () => {
   const [showAddModal, setShowAddModal]   = useState(false);
 
   useEffect(() => {
-    if (storeId && stores.length > 0) {
+    if (isPathAdmin && storeId && stores.length > 0) {
       const urlStore = stores.find(s => String(s.id) === String(storeId));
       if (urlStore && (!selectedStore || String(selectedStore.id) !== String(storeId))) {
         setSelectedStore(urlStore);
       }
     }
-  }, [storeId, stores, selectedStore, setSelectedStore]);
+  }, [storeId, stores, selectedStore, setSelectedStore, isPathAdmin]);
 
   /* ── Filter ── */
   const toSupplierPayload = (data) => ({
@@ -311,7 +312,7 @@ const Suppliers = () => {
       {/* ── Breadcrumb + Header ── */}
       <div className="mb-6 sm:mb-8">
         <div className="flex items-center text-sm text-slate-500 font-medium mb-3 space-x-2">
-          <Link to="/admin/dashboard" className="hover:text-slate-800 transition-colors">Dashboard</Link>
+          <Link to={buildPath('dashboard')} className="hover:text-slate-800 transition-colors">Dashboard</Link>
           <ChevronRight className="w-4 h-4 flex-shrink-0" />
           <span className="text-slate-900 font-semibold">Suppliers</span>
         </div>
@@ -326,7 +327,7 @@ const Suppliers = () => {
             </p>
           </div>
           <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
-            {storeId === 'admin' && (
+            {showStoreSwitcher && (
               <div className="relative animate-fade-in">
                 <select
                   value={inPageStoreId}
@@ -450,7 +451,7 @@ const Suppliers = () => {
                   {displayedPurchaseOrders.map(po => (
                     <tr
                       key={po.id}
-                      onClick={() => navigate(`/admin/store/${inPageStoreId}/suppliers/${po.supplier_id}`)}
+                      onClick={() => navigate(buildPath(`suppliers/${po.supplier_id}`)) }
                       className="hover:bg-blue-50/40 transition-colors cursor-pointer"
                     >
                       <td className="px-5 py-4">
@@ -481,7 +482,7 @@ const Suppliers = () => {
                       </td>
                       <td className="px-5 py-4" onClick={e => e.stopPropagation()}>
                         <button
-                          onClick={() => navigate(`/admin/store/${inPageStoreId}/suppliers/${po.supplier_id}`)}
+                          onClick={() => navigate(buildPath(`suppliers/${po.supplier_id}`))}
                           className="px-3 py-1.5 bg-[#0A0F1F] text-white hover:bg-slate-800 text-xs font-semibold rounded-lg shadow-sm transition-all flex items-center gap-1 cursor-pointer"
                         >
                           View Supplier <ChevronRight className="w-3 h-3" />
@@ -498,7 +499,7 @@ const Suppliers = () => {
               {displayedPurchaseOrders.map(po => (
                 <div
                   key={po.id}
-                  onClick={() => navigate(`/admin/store/${inPageStoreId}/suppliers/${po.supplier_id}`)}
+                  onClick={() => navigate(buildPath(`suppliers/${po.supplier_id}`))}
                   className="p-4 bg-white border border-slate-100 rounded-2xl shadow-sm hover:shadow-md cursor-pointer transition-shadow"
                 >
                   <div className="flex justify-between items-start mb-3">
@@ -555,7 +556,7 @@ const Suppliers = () => {
               <SupplierCard
                 key={s.id}
                 supplier={s}
-                onClick={() => navigate(`/admin/store/${inPageStoreId}/suppliers/${s.id}`)}
+                onClick={() => navigate(buildPath(`suppliers/${s.id}`))}
                 onEdit={setEditSupplier}
                 onDelete={setDeleteSupplier}
               />

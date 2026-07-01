@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useLocation } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import {
   getCategoriesApi,
@@ -9,6 +10,14 @@ import {
   createSubcategoryApi,
   updateSubcategoryApi,
   deleteSubcategoryApi,
+  getShopkeeperCategoriesApi,
+  createShopkeeperCategoryApi,
+  updateShopkeeperCategoryApi,
+  deleteShopkeeperCategoryApi,
+  getShopkeeperSubcategoriesApi,
+  createShopkeeperSubcategoryApi,
+  updateShopkeeperSubcategoryApi,
+  deleteShopkeeperSubcategoryApi,
 } from '../api/category/category.api';
 
 export const categoriesQueryKey = ['categories'];
@@ -22,6 +31,13 @@ export const subcategoriesQueryKey = ['subcategories'];
  */
 export const useCategories = (storeId = null, filters = {}) => {
   const queryClient = useQueryClient();
+  const location = useLocation();
+  const isPathAdmin = location.pathname.startsWith('/admin');
+
+  const getCategories = isPathAdmin ? getCategoriesApi : getShopkeeperCategoriesApi;
+  const createCategory = isPathAdmin ? createCategoryApi : createShopkeeperCategoryApi;
+  const updateCategory = isPathAdmin ? updateCategoryApi : updateShopkeeperCategoryApi;
+  const deleteCategory = isPathAdmin ? deleteCategoryApi : deleteShopkeeperCategoryApi;
 
   const params = {
     page: filters.page || 1,
@@ -33,7 +49,7 @@ export const useCategories = (storeId = null, filters = {}) => {
 
   const query = useQuery({
     queryKey: [categoriesQueryKey, storeId, params],
-    queryFn: () => getCategoriesApi(params),
+    queryFn: () => getCategories(params),
     enabled: true,
     staleTime: 1000 * 60 * 2,
     retry: false,
@@ -45,19 +61,19 @@ export const useCategories = (storeId = null, filters = {}) => {
   };
 
   const createCategoryMutation = useMutation({
-    mutationFn: createCategoryApi,
+    mutationFn: createCategory,
     onSuccess: () => { invalidate(); toast.success('Category created successfully.'); },
     onError: (err) => { toast.error(err.response?.data?.detail || 'Failed to create category.'); },
   });
 
   const updateCategoryMutation = useMutation({
-    mutationFn: ({ id, payload }) => updateCategoryApi(id, payload),
+    mutationFn: ({ id, payload }) => updateCategory(id, payload),
     onSuccess: () => { invalidate(); toast.success('Category updated successfully.'); },
     onError: (err) => { toast.error(err.response?.data?.detail || 'Failed to update category.'); },
   });
 
   const deleteCategoryMutation = useMutation({
-    mutationFn: deleteCategoryApi,
+    mutationFn: deleteCategory,
     onSuccess: () => { invalidate(); toast.success('Category deactivated successfully.'); },
     onError: (err) => { toast.error(err.response?.data?.detail || 'Failed to delete category.'); },
   });
@@ -91,6 +107,13 @@ export const useCategories = (storeId = null, filters = {}) => {
  */
 export const useSubcategories = (categoryId, storeId = null, filters = {}) => {
   const queryClient = useQueryClient();
+  const location = useLocation();
+  const isPathAdmin = location.pathname.startsWith('/admin');
+
+  const getSubcategories = isPathAdmin ? getSubcategoriesApi : getShopkeeperSubcategoriesApi;
+  const createSubcategory = isPathAdmin ? createSubcategoryApi : createShopkeeperSubcategoryApi;
+  const updateSubcategory = isPathAdmin ? updateSubcategoryApi : updateShopkeeperSubcategoryApi;
+  const deleteSubcategory = isPathAdmin ? deleteSubcategoryApi : deleteShopkeeperSubcategoryApi;
 
   const params = {
     page: filters.page || 1,
@@ -102,7 +125,7 @@ export const useSubcategories = (categoryId, storeId = null, filters = {}) => {
 
   const query = useQuery({
     queryKey: [subcategoriesQueryKey, categoryId, storeId, params],
-    queryFn: () => getSubcategoriesApi(categoryId, params),
+    queryFn: () => getSubcategories(categoryId, params),
     enabled: !!categoryId,
     staleTime: 1000 * 60 * 2,
     retry: false,
@@ -116,19 +139,19 @@ export const useSubcategories = (categoryId, storeId = null, filters = {}) => {
   };
 
   const createSubcategoryMutation = useMutation({
-    mutationFn: (payload) => createSubcategoryApi(categoryId, payload),
+    mutationFn: (payload) => createSubcategory(categoryId, payload),
     onSuccess: () => { invalidate(); toast.success('Subcategory created successfully.'); },
     onError: (err) => { toast.error(err.response?.data?.detail || 'Failed to create subcategory.'); },
   });
 
   const updateSubcategoryMutation = useMutation({
-    mutationFn: ({ id, payload }) => updateSubcategoryApi(id, payload),
+    mutationFn: ({ id, payload }) => updateSubcategory(id, payload),
     onSuccess: () => { invalidate(); toast.success('Subcategory updated successfully.'); },
     onError: (err) => { toast.error(err.response?.data?.detail || 'Failed to update subcategory.'); },
   });
 
   const deleteSubcategoryMutation = useMutation({
-    mutationFn: deleteSubcategoryApi,
+    mutationFn: deleteSubcategory,
     onSuccess: () => { invalidate(); toast.success('Subcategory deactivated successfully.'); },
     onError: (err) => { toast.error(err.response?.data?.detail || 'Failed to delete subcategory.'); },
   });

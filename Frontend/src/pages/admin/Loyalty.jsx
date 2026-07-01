@@ -13,6 +13,7 @@ import GlobalLoyaltyConfigModal from '../../components/loyalty/GlobalLoyaltyConf
 import AdjustPointsModal from '../../components/loyalty/AdjustPointsModal';
 import PermissionGuard from '../../components/shared/PermissionGuard';
 import { usePagePermissions } from '../../hooks/usePermissions'; 
+import { useRoleContext } from '../../hooks/useRoleContext';
 
 import {
   useLoyaltyConfig,
@@ -28,7 +29,7 @@ import {
 } from '../../hooks/useLoyalty';
 
 const Loyalty = () => {
-  const { storeId } = useParams();
+  const { storeId, buildPath } = useRoleContext();
   const navigate = useNavigate();
   const perms = usePagePermissions('loyalty');
   const isAdminAll = storeId === 'admin';
@@ -318,7 +319,7 @@ const Loyalty = () => {
         </div>
         <LoyaltyCustomerTable 
           data={customersData} 
-          routePrefix="/admin/loyalty" 
+          routePrefix={buildPath('loyalty')} 
           searchTerm={searchTerm}
           setSearchTerm={setSearchTerm}
           tierFilter={tierFilter}

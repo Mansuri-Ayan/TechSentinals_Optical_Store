@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import {
   Search, Store, ShoppingCart, UserCheck, ChevronRight,
   X, Package, Clock, Users, DollarSign, Printer, Calendar
@@ -9,6 +9,7 @@ import { useStores } from '../../hooks/useStores';
 import { useStoreStore } from '../../store/store';
 import Pagination from '../../components/shared/Pagination';
 import InventoryDetailDrawer from '../../components/admin/InventoryDetailDrawer';
+import { useRoleContext } from '../../hooks/useRoleContext';
 
 const STATUS_CFG = {
   Completed: { color: 'text-emerald-700 bg-emerald-50 border-emerald-200', dot: 'bg-emerald-500' },
@@ -44,9 +45,10 @@ const Sales = () => {
   const queryBranch = searchParams.get('branch');
   const queryStatus = searchParams.get('status');
 
+  const { storeId, buildPath, showStoreSwitcher, isPathAdmin } = useRoleContext();
   const { selectedStore } = useStoreStore();
 
-  const [selectedBranch, setSelectedBranch] = useState(queryBranch || 'All');
+  const [selectedBranch, setSelectedBranch] = useState(queryBranch || storeId || 'All');
   const [selectedStatus, setSelectedStatus] = useState(queryStatus || 'All');
   const [selectedPayment, setSelectedPayment] = useState('All');
   const [searchInput, setSearchInput] = useState('');
@@ -59,10 +61,10 @@ const Sales = () => {
   const { stores } = useStores();
 
   useEffect(() => {
-    if (selectedStore && selectedStore.id !== 'admin') {
+    if (isPathAdmin && selectedStore && selectedStore.id !== 'admin') {
       setSelectedBranch(selectedStore.id);
     }
-  }, [selectedStore]);
+  }, [selectedStore, isPathAdmin]);
 
   // Debounce search term
   useEffect(() => {
@@ -102,7 +104,7 @@ const Sales = () => {
       {/* Breadcrumb + Header */}
       <div className="mb-6 sm:mb-8">
         <div className="flex items-center text-sm text-slate-500 font-medium mb-3 space-x-2">
-          <span className="hover:text-slate-800 cursor-pointer transition-colors">Dashboard</span>
+          <Link to={buildPath('dashboard')} className="hover:text-slate-800 transition-colors">Dashboard</Link>
           <ChevronRight className="w-4 h-4 flex-shrink-0" />
           <span className="text-slate-900 font-semibold">Sales History</span>
         </div>
@@ -145,7 +147,7 @@ const Sales = () => {
         
         {/* Branch and Payment Selectors */}
         <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
-          {selectedStore?.id === 'admin' && (
+          {showStoreSwitcher && (
             <>
               <label className="text-sm font-semibold text-slate-600 flex items-center gap-1.5 whitespace-nowrap">
                 <Store className="w-4 h-4 text-slate-400" /> Branch:

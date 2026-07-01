@@ -1,9 +1,10 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Search, Users, ChevronRight, X as XIcon, UserCheck, UserPlus, Repeat, Store, ChevronDown } from 'lucide-react';
 import Pagination from '../../components/shared/Pagination';
 import { useCustomers } from '../../hooks/useCustomers';
 import { useStoreStore } from '../../store/store';
+import { useRoleContext } from '../../hooks/useRoleContext';
 
 const ITEMS_PER_PAGE = 12;
 
@@ -11,7 +12,7 @@ const ITEMS_PER_PAGE = 12;
 const StatusBadge = ({ status }) => {
   const colors = {
     Active: 'text-emerald-700 bg-emerald-50 border-emerald-200',
-    Inactive: 'text-slate-650 bg-slate-105 border-slate-200',
+    Inactive: 'text-slate-655 bg-slate-105 border-slate-200',
     VIP: 'text-amber-700 bg-amber-50 border-amber-200',
   };
   const dots = {
@@ -35,22 +36,22 @@ const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-dig
 ───────────────────────────────────────────────────────── */
 const Customers = () => {
   const navigate = useNavigate();
-  const { storeId } = useParams();
+  const { storeId: contextStoreId, buildPath, showStoreSwitcher, isPathAdmin } = useRoleContext();
   const { selectedStore, setSelectedStore, stores } = useStoreStore();
-  const [inPageStoreId, setInPageStoreId] = useState(storeId);
+  const [inPageStoreId, setInPageStoreId] = useState(contextStoreId);
 
   useEffect(() => {
-    setInPageStoreId(storeId);
-  }, [storeId]);
+    setInPageStoreId(contextStoreId);
+  }, [contextStoreId]);
 
   useEffect(() => {
-    if (storeId && stores.length > 0) {
-      const urlStore = stores.find(s => String(s.id) === String(storeId));
-      if (urlStore && (!selectedStore || String(selectedStore.id) !== String(storeId))) {
+    if (isPathAdmin && contextStoreId && stores.length > 0) {
+      const urlStore = stores.find(s => String(s.id) === String(contextStoreId));
+      if (urlStore && (!selectedStore || String(selectedStore.id) !== String(contextStoreId))) {
         setSelectedStore(urlStore);
       }
     }
-  }, [storeId, stores, selectedStore, setSelectedStore]);
+  }, [contextStoreId, stores, selectedStore, setSelectedStore, isPathAdmin]);
 
   const queryStoreId = inPageStoreId === 'admin' ? undefined : Number(inPageStoreId);
 
@@ -116,7 +117,7 @@ const Customers = () => {
       {/* ── Breadcrumb + Header ── */}
       <div className="mb-6 sm:mb-8">
         <div className="flex items-center text-sm text-slate-500 font-medium mb-3 space-x-2">
-          <Link to="/admin/dashboard" className="hover:text-slate-800 transition-colors">Dashboard</Link>
+          <Link to={buildPath('dashboard')} className="hover:text-slate-800 transition-colors">Dashboard</Link>
           <ChevronRight className="w-4 h-4 flex-shrink-0" />
           <span className="text-slate-900 font-semibold">Customers</span>
         </div>
@@ -131,7 +132,7 @@ const Customers = () => {
             </p>
           </div>
           <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
-            {storeId === 'admin' && (
+            {showStoreSwitcher && (
               <div className="relative animate-fade-in">
                 <select
                   value={inPageStoreId}
@@ -245,7 +246,7 @@ const Customers = () => {
                     return (
                       <tr
                         key={c.id}
-                        onClick={() => navigate(`/admin/store/${inPageStoreId}/customers/${c.id}`)}
+                        onClick={() => navigate(buildPath(`customers/${c.id}`))}
                         className="hover:bg-blue-50/40 transition-colors cursor-pointer group"
                       >
                         <td className="px-5 py-4">
@@ -297,7 +298,7 @@ const Customers = () => {
               return (
                 <div
                   key={c.id}
-                  onClick={() => navigate(`/admin/store/${inPageStoreId}/customers/${c.id}`)}
+                  onClick={() => navigate(buildPath(`customers/${c.id}`))}
                   className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-4 space-y-3 cursor-pointer hover:shadow-md hover:border-blue-200 active:scale-[0.99] transition-all"
                 >
                   <div className="flex items-start justify-between gap-2">

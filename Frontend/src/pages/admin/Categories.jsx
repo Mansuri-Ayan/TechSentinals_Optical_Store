@@ -10,6 +10,7 @@ import { useStoreStore } from '../../store/store';
 import { useCategories, useSubcategories } from '../../hooks/useCategories';
 import PermissionGuard from '../../components/shared/PermissionGuard';
 import { usePagePermissions } from '../../hooks/usePermissions';
+import { useRoleContext } from '../../hooks/useRoleContext';
 
 const ITEMS_PER_PAGE = 8;
 
@@ -73,7 +74,7 @@ const getCategoryTheme = (name) => {
 
 const StatusBadge = ({ isActive }) => {
   return (
-    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border ${isActive ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-slate-600 bg-slate-100 border-slate-200'}`}>
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border ${isActive ? 'text-emerald-700 bg-emerald-550 border-emerald-220' : 'text-slate-650 bg-slate-100 border-slate-200'}`}>
       <span className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-emerald-500' : 'bg-slate-400'} flex-shrink-0`} />
       {isActive ? 'Active' : 'Inactive'}
     </span>
@@ -82,23 +83,23 @@ const StatusBadge = ({ isActive }) => {
 
 const Categories = () => {
   const navigate = useNavigate();
-  const { storeId } = useParams();
+  const { storeId: contextStoreId, buildPath, showStoreSwitcher, isPathAdmin } = useRoleContext();
   const { selectedStore, setSelectedStore, stores } = useStoreStore();
-  const [inPageStoreId, setInPageStoreId] = useState(storeId);
+  const [inPageStoreId, setInPageStoreId] = useState(contextStoreId);
 
   useEffect(() => {
-    setInPageStoreId(storeId);
-  }, [storeId]);
+    setInPageStoreId(contextStoreId);
+  }, [contextStoreId]);
 
   // Sync storeId from URL with global store state
   useEffect(() => {
-    if (storeId && stores.length > 0) {
-      const urlStore = stores.find(s => String(s.id) === String(storeId));
-      if (urlStore && (!selectedStore || String(selectedStore.id) !== String(storeId))) {
+    if (isPathAdmin && contextStoreId && stores.length > 0) {
+      const urlStore = stores.find(s => String(s.id) === String(contextStoreId));
+      if (urlStore && (!selectedStore || String(selectedStore.id) !== String(contextStoreId))) {
         setSelectedStore(urlStore);
       }
     }
-  }, [storeId, stores, selectedStore, setSelectedStore]);
+  }, [contextStoreId, stores, selectedStore, setSelectedStore, isPathAdmin]);
 
   const [selectedCategory, setSelectedCategory] = useState(null); // full category object
   const [searchTerm, setSearchTerm] = useState('');
@@ -212,11 +213,11 @@ const Categories = () => {
   }, [deleteSubcategoryAsync]);
 
   const handleViewCategoryItems = (categoryId) => {
-    navigate(`/admin/store/${inPageStoreId}/inventory?category_id=${categoryId}`);
+    navigate(buildPath(`inventory?category_id=${categoryId}`));
   };
 
   const handleViewSubcategoryItems = (subcategoryId) => {
-    navigate(`/admin/store/${inPageStoreId}/inventory?category_id=${selectedCategory.id}&subcategory_id=${subcategoryId}`);
+    navigate(buildPath(`inventory?category_id=${selectedCategory.id}&subcategory_id=${subcategoryId}`));
   };
 
   const selectedCatTheme = useMemo(() => {
@@ -228,7 +229,7 @@ const Categories = () => {
       {/* ── Breadcrumb + Header ── */}
       <div className="mb-6 sm:mb-8">
         <div className="flex items-center text-sm text-slate-500 font-medium mb-3 space-x-2">
-          <Link to="/admin/dashboard" className="hover:text-slate-800 transition-colors">Dashboard</Link>
+          <Link to={buildPath('dashboard')} className="hover:text-slate-800 transition-colors">Dashboard</Link>
           <ChevronRight className="w-4 h-4 flex-shrink-0" />
           <button onClick={handleBack} className={`hover:text-slate-800 transition-colors ${!selectedCategory ? 'text-slate-900 font-semibold' : ''}`}>
             Categories
@@ -244,7 +245,7 @@ const Categories = () => {
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
           <div className="flex items-center gap-3">
             {selectedCategory && (
-              <button onClick={handleBack} className="p-2 bg-white border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 hover:text-slate-900 transition-colors mr-1 shadow-sm">
+              <button onClick={handleBack} className="p-2 bg-white border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-550 hover:text-slate-900 transition-colors mr-1 shadow-sm">
                 <ArrowLeft className="w-5 h-5" />
               </button>
             )}
@@ -262,7 +263,7 @@ const Categories = () => {
           </div>
           
           <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
-            {storeId === 'admin' && (
+            {showStoreSwitcher && (
               <div className="relative">
                 <select
                   value={inPageStoreId}

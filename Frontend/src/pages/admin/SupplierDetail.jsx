@@ -14,6 +14,7 @@ import AddPaymentModal from '../../components/admin/suppliers/AddPaymentModal';
 import { useStoreStore } from '../../store/store';
 import { useSupplier, useSupplierProducts, useSuppliers } from '../../hooks/useSuppliers';
 import { usePurchaseOrders } from '../../hooks/usePurchaseOrders';
+import { useRoleContext } from '../../hooks/useRoleContext';
 
 /* ── Helpers ── */
 const fmt = (n) => `₹${Number(n).toLocaleString('en-IN')}`;
@@ -58,20 +59,21 @@ const TABS = [
 ];
 
 const SupplierDetail = () => {
-  const { storeId, id } = useParams();
+  const { storeId, buildPath, showStoreSwitcher, isPathAdmin } = useRoleContext();
+  const { id } = useParams();
   const navigate = useNavigate();
 
   const { stores, selectedStore, setSelectedStore } = useStoreStore();
   
   // Active store check and auto-sync
   useEffect(() => {
-    if (storeId && stores.length > 0) {
+    if (isPathAdmin && storeId && stores.length > 0) {
       const urlStore = stores.find(st => String(st.id) === String(storeId));
       if (urlStore && (!selectedStore || String(selectedStore.id) !== String(storeId))) {
         setSelectedStore(urlStore);
       }
     }
-  }, [storeId, stores, selectedStore, setSelectedStore]);
+  }, [storeId, stores, selectedStore, setSelectedStore, isPathAdmin]);
 
   const activeStoreName = useMemo(() => {
     const matched = stores.find(st => String(st.id) === String(storeId));
@@ -245,7 +247,7 @@ const SupplierDetail = () => {
   const handleDeleteConfirm = async () => {
     await deleteSupplierAsync(id);
     setShowDeleteModal(false);
-    navigate(`/admin/store/${storeId}/suppliers`);
+    navigate(buildPath('suppliers'));
   };
 
   if (isLoadingSupplier) {
@@ -264,7 +266,7 @@ const SupplierDetail = () => {
           <AlertTriangle className="w-12 h-12 text-red-500 mx-auto mb-4" />
           <h2 className="text-lg font-bold text-slate-900 mb-1">Supplier Not Found</h2>
           <p className="text-slate-500 text-sm mb-6">The supplier you are looking for does not exist or has been deleted.</p>
-          <Link to={`/admin/store/${storeId}/suppliers`} className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#0A0F1F] text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-colors">
+          <Link to={buildPath('suppliers')} className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#0A0F1F] text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-colors">
             <ChevronLeft className="w-4 h-4" /> Back to Suppliers
           </Link>
         </div>
@@ -277,9 +279,9 @@ const SupplierDetail = () => {
       {/* Breadcrumbs */}
       <div className="mb-6">
         <div className="flex items-center text-sm text-slate-500 font-medium mb-3 space-x-2 flex-wrap">
-          <Link to="/admin/dashboard" className="hover:text-slate-800 transition-colors">Dashboard</Link>
+          <Link to={buildPath('dashboard')} className="hover:text-slate-800 transition-colors">Dashboard</Link>
           <ChevronRight className="w-4 h-4 flex-shrink-0" />
-          <Link to={`/admin/store/${storeId}/suppliers`} className="hover:text-slate-800 transition-colors">Suppliers</Link>
+          <Link to={buildPath('suppliers')} className="hover:text-slate-800 transition-colors">Suppliers</Link>
           <ChevronRight className="w-4 h-4 flex-shrink-0" />
           <span className="text-slate-900 font-semibold truncate max-w-[150px] sm:max-w-xs">{s.name}</span>
         </div>
@@ -289,7 +291,7 @@ const SupplierDetail = () => {
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6 sm:mb-8 pb-6 border-b border-slate-100">
         <div className="flex items-center gap-4 min-w-0">
           <button
-            onClick={() => navigate(`/admin/store/${storeId}/suppliers`)}
+            onClick={() => navigate(buildPath('suppliers'))}
             className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm flex-shrink-0"
             title="Back to list"
           >

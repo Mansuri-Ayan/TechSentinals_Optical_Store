@@ -46,6 +46,7 @@ import { createProductApi, updateProductApi } from "../../api/product/product.ap
 import { addSupplierProductApi } from "../../api/suppliers/supplier.api";
 import PermissionGuard from "../../components/shared/PermissionGuard";
 import { usePagePermissions } from "../../hooks/usePermissions";
+import { useRoleContext } from "../../hooks/useRoleContext";
 
 /* ─────────────────────────────────────────────────────────
    DYNAMIC STYLING MAPS
@@ -166,7 +167,7 @@ const ProductCard = ({ item, onViewDetails, onDelete, onEdit, onRequestStock, on
   const grad = GRAD_PALETTE[item.id % GRAD_PALETTE.length];
   const [showOtherStock, setShowOtherStock] = useState(false);
 
-  const { storeId } = useParams();
+  const { storeId } = useRoleContext();
   const isBranchView = storeId && storeId !== "admin";
 
   const perms = usePagePermissions({
@@ -445,7 +446,7 @@ const SearchSuggestions = ({ items, searchTerm, onSelectProduct }) => {
    MAIN PAGE
    ───────────────────────────────────────────────────────── */
 const Inventory = () => {
-  const { storeId } = useParams();
+  const { storeId, buildPath, showStoreSwitcher, isPathAdmin } = useRoleContext();
   const { user } = useAuthStore();
   const { stores, selectedStore, setSelectedStore } = useStoreStore();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -569,13 +570,14 @@ const Inventory = () => {
 
   /* Sync URL Store ID to store management store */
   useEffect(() => {
+    if (!isPathAdmin) return;
     const routeStore = stores.find(
       (store) => String(store.id) === String(storeId),
     );
     if (routeStore && selectedStore?.id !== routeStore.id) {
       setSelectedStore(routeStore);
     }
-  }, [selectedStore?.id, setSelectedStore, storeId, stores]);
+  }, [selectedStore?.id, setSelectedStore, storeId, stores, isPathAdmin]);
 
   // Synchronize URL query params to state when they change
   useEffect(() => {
@@ -963,9 +965,12 @@ const Inventory = () => {
       {/* Breadcrumb + Header */}
       <div className="mb-6 sm:mb-8">
         <div className="flex items-center text-sm text-slate-500 font-medium mb-3 space-x-2">
-          <span className="hover:text-slate-800 cursor-pointer transition-colors">
+          <Link
+            to={buildPath('dashboard')}
+            className="hover:text-slate-800 transition-colors"
+          >
             Dashboard
-          </span>
+          </Link>
           <ChevronRight className="w-4 h-4 flex-shrink-0" />
           <span className="text-slate-900 font-semibold">Inventory</span>
         </div>
@@ -979,7 +984,7 @@ const Inventory = () => {
             </p>
           </div>
           <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
-            {storeId === 'admin' && (
+            {showStoreSwitcher && (
               <div className="relative">
                 <select
                   value={inPageStoreId}

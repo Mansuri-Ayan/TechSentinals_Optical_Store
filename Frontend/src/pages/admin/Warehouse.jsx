@@ -27,6 +27,7 @@ import { useSuppliers } from "../../hooks/useSuppliers";
 import { useQuery } from "@tanstack/react-query";
 import PermissionGuard from '../../components/shared/PermissionGuard';
 import { usePagePermissions } from '../../hooks/usePermissions';
+import { useRoleContext } from '../../hooks/useRoleContext';
 
 const getCategoryConfig = (name) => {
   const normalized = (name || "").toLowerCase();
@@ -114,9 +115,10 @@ const TABS = [
 ];
 
 const Warehouse = () => {
+  const { storeId, buildPath, showStoreSwitcher, isPathAdmin } = useRoleContext();
   const { user } = useAuthStore();
   const { selectedStore } = useStoreStore();
-  const isBranchView = selectedStore && selectedStore.id !== "admin";
+  const isBranchView = !isPathAdmin || (selectedStore && selectedStore.id !== "admin");
   const [searchParams, setSearchParams] = useSearchParams();
 
   const queryCategoryId = searchParams.get("category_id");
@@ -459,7 +461,7 @@ const Warehouse = () => {
       {/* Header section */}
       <div className="mb-6 sm:mb-8">
         <div className="flex items-center text-sm text-slate-500 font-semibold mb-3 space-x-2">
-          <span className="hover:text-slate-800 transition-colors cursor-pointer">Dashboard</span>
+          <Link to={buildPath('dashboard')} className="hover:text-slate-800 transition-colors cursor-pointer">Dashboard</Link>
           <ChevronRight className="w-4 h-4 flex-shrink-0" />
           <span className="text-slate-900 font-extrabold">Warehouse Inventory</span>
         </div>

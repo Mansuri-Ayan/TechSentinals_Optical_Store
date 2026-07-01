@@ -18,6 +18,7 @@ import { useProducts } from '../../hooks/useProducts';
 import { getInventoryApi } from '../../api/inventory/inventory.api';
 import PermissionGuard from '../../components/shared/PermissionGuard';
 import { usePagePermissions } from '../../hooks/usePermissions'; 
+import { useRoleContext } from '../../hooks/useRoleContext';
 
 /* ─────────────────────────────────────────────────────────
    CONSTANTS & MOCK DATA
@@ -552,7 +553,7 @@ const NewTransactionModal = ({
    MAIN PAGE
 ───────────────────────────────────────────────────────── */
 const Transactions = () => {
-  const { storeId } = useParams();
+  const { storeId, buildPath, showStoreSwitcher, isPathAdmin } = useRoleContext();
   const { selectedStore, setSelectedStore, stores } = useStoreStore();
   const [searchParams, setSearchParams] = useSearchParams();
   const [inPageStoreId, setInPageStoreId] = useState(storeId);
@@ -667,13 +668,13 @@ const Transactions = () => {
   const mappedAllTransactions = useMemo(() => allTransactions.map(mapTransaction), [allTransactions]);
 
   useEffect(() => {
-    if (storeId && stores.length > 0) {
+    if (isPathAdmin && storeId && stores.length > 0) {
       const urlStore = stores.find(s => String(s.id) === String(storeId));
       if (urlStore && (!selectedStore || String(selectedStore.id) !== String(storeId))) {
         setSelectedStore(urlStore);
       }
     }
-  }, [storeId, stores, selectedStore, setSelectedStore]);
+  }, [storeId, stores, selectedStore, setSelectedStore, isPathAdmin]);
 
   /* ── Filtered list (tab filtering only — search/type are handled server-side) ── */
   const filtered = useMemo(() => {
@@ -728,7 +729,7 @@ const Transactions = () => {
       {/* ── Breadcrumb + Header ── */}
       <div className="mb-6 sm:mb-8">
         <div className="flex items-center text-sm text-slate-500 font-medium mb-3 space-x-2">
-          <Link to="/admin/dashboard" className="hover:text-slate-800 transition-colors">Dashboard</Link>
+          <Link to={buildPath('dashboard')} className="hover:text-slate-800 transition-colors">Dashboard</Link>
           <ChevronRight className="w-4 h-4 flex-shrink-0" />
           <span className="text-slate-900 font-semibold">Transactions</span>
         </div>
@@ -743,7 +744,7 @@ const Transactions = () => {
             </p>
           </div>
           <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
-            {storeId === 'admin' && (
+            {showStoreSwitcher && (
               <div className="relative animate-fade-in">
                 <select
                   value={inPageStoreId}

@@ -11,6 +11,7 @@ import { useAuthStore, useStoreStore } from '../../store/store';
 import Pagination from '../../components/shared/Pagination';
 import PermissionGuard from '../../components/shared/PermissionGuard';
 import { usePagePermissions } from '../../hooks/usePermissions';
+import { useRoleContext } from '../../hooks/useRoleContext';
 
 /* ── Constants ── */
 const REPAIR_TYPES = [
@@ -60,7 +61,7 @@ const getStatusLabel = (status) =>
 
 /* ── MAIN COMPONENT ── */
 const Repair = () => {
-  const { storeId } = useParams();
+  const { storeId, buildPath, showStoreSwitcher, isPathAdmin } = useRoleContext();
   const { user } = useAuthStore();
   const { stores } = useStoreStore();
   const { customers, isLoading: customersLoading } = useCustomers();
@@ -269,7 +270,7 @@ const Repair = () => {
       {/* Breadcrumbs */}
       <div className="mb-6 sm:mb-8">
         <div className="flex items-center text-sm text-slate-500 font-medium mb-3 space-x-2">
-          <Link to="/admin/dashboard" className="hover:text-slate-800 transition-colors">Dashboard</Link>
+          <Link to={buildPath('dashboard')} className="hover:text-slate-800 transition-colors">Dashboard</Link>
           <ChevronRight className="w-4 h-4 flex-shrink-0" />
           <span className="text-slate-900 font-semibold">Repairs & Services</span>
         </div>
@@ -285,7 +286,7 @@ const Repair = () => {
             </p>
           </div>
           <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
-            {storeId === 'admin' && (
+            {showStoreSwitcher && (
               <div className="relative">
                 <select
                   value={inPageStoreId}
@@ -386,7 +387,7 @@ const Repair = () => {
               <table className="w-full text-sm min-w-[1100px]">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-100 text-left">
-                    {['Repair ID', 'Customer', ...(storeId === 'admin' ? ['Store'] : []), 'Type', 'Description', 'Date Received', 'Cost', 'Warranty', 'Status'].map(col => (
+                    {['Repair ID', 'Customer', ...(isPathAdmin ? ['Store'] : []), 'Type', 'Description', 'Date Received', 'Cost', 'Warranty', 'Status'].map(col => (
                       <th key={col} className="px-5 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">
                         {col}
                       </th>
@@ -404,7 +405,7 @@ const Repair = () => {
                       <td className="px-5 py-4 text-sm font-bold text-slate-800">
                         {repair.customer_full_name || repair.customer_name || '—'}
                       </td>
-                      {storeId === 'admin' && (
+                      {isPathAdmin && (
                         <td className="px-5 py-4 text-xs font-bold">
                           <span className="inline-block px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200">
                             {repair.store_name || 'All Store'}
@@ -466,7 +467,7 @@ const Repair = () => {
                       <span className="inline-block px-2.5 py-0.5 rounded-lg bg-blue-50 text-blue-700 border border-blue-100 text-[10px] font-bold">
                         {getTypeBadge(repair.repair_type)}
                       </span>
-                      {storeId === 'admin' && (
+                      {isPathAdmin && (
                         <span className="inline-block px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200 text-[9px] font-bold">
                           {repair.store_name || 'All Store'}
                         </span>
@@ -554,7 +555,7 @@ const Repair = () => {
               <div className="px-5 sm:px-6 py-5 space-y-4">
 
                 {/* Store selection dropdown (Admin Warehouse view only) */}
-                {storeId === 'admin' && (
+                {showStoreSwitcher && (
                   <div>
                     <label className="text-xs font-semibold text-slate-600 mb-1.5 block">Store Branch <span className="text-red-500">*</span></label>
                     <select

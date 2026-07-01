@@ -1,6 +1,6 @@
- import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { useParams } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import { useStoreStore, useAuthStore } from '../../store/store';
 import {
   Search, Store, ChevronRight, X, Filter,
@@ -25,6 +25,7 @@ import { AddExpenseModal, AddCategoryModal } from '../../components/admin/AddExp
 import PermissionGuard from '../../components/shared/PermissionGuard';
 import { usePagePermissions } from '../../hooks/usePermissions'; 
 import api from '../../lib/axios';
+import { useRoleContext } from '../../hooks/useRoleContext';
 
 /* ─────────────────────────────────────────────────────────
    CONSTANTS
@@ -33,7 +34,7 @@ const ITEMS_PER_PAGE = 10;
 const TODAY = new Date().toISOString().split('T')[0];
 
 const APPROVAL_CONFIG = {
-  Approved: { color: 'text-emerald-700 bg-emerald-50 border-emerald-200', dot: 'bg-emerald-500' },
+  Approved: { color: 'text-emerald-700 bg-emerald-550 border-emerald-220', dot: 'bg-emerald-500' },
   Pending:  { color: 'text-amber-700  bg-amber-50  border-amber-200',     dot: 'bg-amber-500'   },
   Rejected: { color: 'text-red-700    bg-red-50    border-red-200',       dot: 'bg-red-500'     },
 };
@@ -80,7 +81,8 @@ const ApprovalBadge = ({ isApproved, isRejected }) => {
    MAIN EXPENSES PAGE
 ───────────────────────────────────────────────────────── */
 const Expenses = () => {
-  const { store_id } = useParams();
+  const { storeId, buildPath, showStoreSwitcher, isPathAdmin } = useRoleContext();
+  const store_id = storeId;
   const { stores } = useStoreStore();
   const { user } = useAuthStore();
   const perms = usePagePermissions('expenses');
@@ -304,7 +306,7 @@ const Expenses = () => {
       {/* ── Breadcrumb + Header ── */}
       <div className="mb-6 sm:mb-8">
         <div className="flex items-center text-sm text-slate-500 font-medium mb-3 gap-1.5">
-          <span className="hover:text-slate-800 cursor-pointer transition-colors">Dashboard</span>
+          <Link to={buildPath('dashboard')} className="hover:text-slate-800 transition-colors">Dashboard</Link>
           <ChevronRight className="w-4 h-4 flex-shrink-0" />
           <span className="text-slate-900 font-semibold">Expenses</span>
         </div>
@@ -318,7 +320,7 @@ const Expenses = () => {
             </p>
           </div>
           <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
-            {store_id === 'admin' && (
+            {showStoreSwitcher && (
               <div className="relative">
                 <select
                   value={inPageStoreId}

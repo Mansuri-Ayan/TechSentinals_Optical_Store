@@ -9,6 +9,7 @@ import { useStoreStore } from '../../store/store';
 import { useBrands } from '../../hooks/useBrands';
 import PermissionGuard from '../../components/shared/PermissionGuard';
 import { usePagePermissions } from '../../hooks/usePermissions';
+import { useRoleContext } from '../../hooks/useRoleContext';
 
 const ITEMS_PER_PAGE = 8;
 
@@ -23,23 +24,23 @@ const StatusBadge = ({ isActive }) => {
 
 const Brands = () => {
   const navigate = useNavigate();
-  const { storeId } = useParams();
+  const { storeId: contextStoreId, buildPath, showStoreSwitcher, isPathAdmin } = useRoleContext();
   const { selectedStore, setSelectedStore, stores } = useStoreStore();
-  const [inPageStoreId, setInPageStoreId] = useState(storeId);
+  const [inPageStoreId, setInPageStoreId] = useState(contextStoreId);
 
   useEffect(() => {
-    setInPageStoreId(storeId);
-  }, [storeId]);
+    setInPageStoreId(contextStoreId);
+  }, [contextStoreId]);
 
   // Sync storeId from URL with global store state
   useEffect(() => {
-    if (storeId && stores.length > 0) {
-      const urlStore = stores.find(s => String(s.id) === String(storeId));
-      if (urlStore && (!selectedStore || String(selectedStore.id) !== String(storeId))) {
+    if (isPathAdmin && contextStoreId && stores.length > 0) {
+      const urlStore = stores.find(s => String(s.id) === String(contextStoreId));
+      if (urlStore && (!selectedStore || String(selectedStore.id) !== String(contextStoreId))) {
         setSelectedStore(urlStore);
       }
     }
-  }, [storeId, stores, selectedStore, setSelectedStore]);
+  }, [contextStoreId, stores, selectedStore, setSelectedStore, isPathAdmin]);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -115,7 +116,7 @@ const Brands = () => {
   }, [deleteBrandAsync]);
 
   const handleViewBrandItems = (brandId) => {
-    navigate(`/admin/store/${inPageStoreId}/inventory?brand_id=${brandId}`);
+    navigate(buildPath(`inventory?brand_id=${brandId}`));
   };
 
   return (
@@ -123,7 +124,7 @@ const Brands = () => {
       {/* ── Breadcrumb + Header ── */}
       <div className="mb-6 sm:mb-8">
         <div className="flex items-center text-sm text-slate-500 font-medium mb-3 space-x-2">
-          <Link to="/admin/dashboard" className="hover:text-slate-800 transition-colors">Dashboard</Link>
+          <Link to={buildPath('dashboard')} className="hover:text-slate-800 transition-colors">Dashboard</Link>
           <ChevronRight className="w-4 h-4 flex-shrink-0" />
           <span className="text-slate-900 font-semibold">Brands</span>
         </div>
@@ -138,7 +139,7 @@ const Brands = () => {
             </p>
           </div>
           <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
-            {storeId === 'admin' && (
+            {showStoreSwitcher && (
               <div className="relative">
                 <select
                   value={inPageStoreId}

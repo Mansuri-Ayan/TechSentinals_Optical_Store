@@ -14,6 +14,7 @@ import AddOpticalModal from '../../components/shopkeeper/AddOpticalModal';
 import AddOrderModal from '../../components/shopkeeper/AddOrderModal';
 import PermissionGuard from '../../components/shared/PermissionGuard';
 import { usePagePermissions } from '../../hooks/usePermissions';
+import { useRoleContext } from '../../hooks/useRoleContext';
 
 /* ── Helpers ── */
 const fmt = (n) => `₹${Number(n).toLocaleString('en-IN')}`;
@@ -30,7 +31,7 @@ const getDiffStr = (newVal, oldVal) => {
 
 const CUSTOMER_STATUS_CFG = {
   Active:   'text-emerald-700 bg-emerald-50 border-emerald-200',
-  Inactive: 'text-slate-600 bg-slate-105 border-slate-200',
+  Inactive: 'text-slate-655 bg-slate-105 border-slate-200',
   VIP:      'text-amber-700 bg-amber-50 border-amber-200',
 };
 
@@ -63,7 +64,8 @@ const GRAD_PALETTE = [
 ];
 
 const CustomerDetail = () => {
-  const { storeId, customerId } = useParams();
+  const { storeId, buildPath } = useRoleContext();
+  const { customerId } = useParams();
   const navigate = useNavigate();
   const perms = usePagePermissions('customers');
   const txPerms = usePagePermissions('transactions');
@@ -238,7 +240,7 @@ const CustomerDetail = () => {
           <AlertTriangle className="w-12 h-12 text-red-500 mx-auto mb-4" />
           <h2 className="text-lg font-bold text-slate-900 mb-1">Customer Not Found</h2>
           <p className="text-slate-500 text-sm mb-6">The customer profile you are looking for is missing.</p>
-          <Link to={`/admin/store/${storeId}/customers`} className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#0A0F1F] text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-colors">
+          <Link to={buildPath('customers')} className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#0A0F1F] text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-colors">
             <ChevronLeft className="w-4 h-4" /> Back to Customers
           </Link>
         </div>
@@ -256,9 +258,9 @@ const CustomerDetail = () => {
       {/* Breadcrumbs */}
       <div className="mb-6">
         <div className="flex items-center text-sm text-slate-500 font-semibold mb-3 space-x-2 flex-wrap">
-          <Link to="/admin/dashboard" className="hover:text-slate-800 transition-colors">Dashboard</Link>
+          <Link to={buildPath('dashboard')} className="hover:text-slate-800 transition-colors">Dashboard</Link>
           <ChevronRight className="w-4 h-4 flex-shrink-0" />
-          <Link to={`/admin/store/${storeId}/customers`} className="hover:text-slate-800 transition-colors">Customers</Link>
+          <Link to={buildPath('customers')} className="hover:text-slate-800 transition-colors">Customers</Link>
           <ChevronRight className="w-4 h-4 flex-shrink-0" />
           <span className="text-slate-900 font-extrabold truncate max-w-[150px] sm:max-w-xs">{fullName}</span>
         </div>
@@ -268,7 +270,7 @@ const CustomerDetail = () => {
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6 sm:mb-8 pb-6 border-b border-slate-100">
         <div className="flex items-center gap-4 min-w-0">
           <button
-            onClick={() => navigate(`/admin/store/${storeId}/customers`)}
+            onClick={() => navigate(buildPath('customers'))}
             className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm flex-shrink-0 cursor-pointer"
             title="Back to list"
           >

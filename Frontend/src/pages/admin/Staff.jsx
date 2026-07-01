@@ -34,6 +34,7 @@ import { useStoreStaff } from "../../hooks/useStaff";
 import { getWorkerById, getOpticianById, getManagerById } from "../../api/staff/staff.api";
 import PermissionGuard from "../../components/shared/PermissionGuard";
 import { usePagePermissions } from "../../hooks/usePermissions";
+import { useRoleContext } from "../../hooks/useRoleContext";
 
 const roleOptions = [
   { value: "all", label: "All Roles" },
@@ -222,7 +223,7 @@ const StaffDetailDrawer = ({ staff, onClose, isLoading }) => {
    MAIN STAFF PAGE
 ───────────────────────────────────────────────────────── */
 const Staff = () => {
-  const { storeId } = useParams();
+  const { storeId, buildPath, showStoreSwitcher, isPathAdmin } = useRoleContext();
   const navigate = useNavigate();
   const { stores, selectedStore, setSelectedStore } = useStoreStore();
   const [inPageStoreId, setInPageStoreId] = useState(storeId);
@@ -403,6 +404,14 @@ const Staff = () => {
     });
   };
 
+  const handleCardClick = (person) => {
+    if (isPathAdmin) {
+      navigate(buildPath(`staff/${person.id}?role=${person.role}`));
+    } else {
+      handleStaffClick(person);
+    }
+  };
+
   const handleStaffClick = async (staffMember) => {
     setSelectedStaff(staffMember);
     setDrawerLoading(true);
@@ -429,7 +438,7 @@ const Staff = () => {
       <div className="mb-6 sm:mb-8">
         <div className="flex items-center text-sm text-slate-500 font-medium mb-3 sm:mb-4 space-x-2">
           <Link
-            to="/admin/dashboard"
+            to={buildPath('dashboard')}
             className="hover:text-slate-800 transition-colors"
           >
             Dashboard
@@ -449,7 +458,7 @@ const Staff = () => {
           </div>
 
           <div className="flex items-center space-x-3">
-            {storeId === 'admin' && (
+            {showStoreSwitcher && (
               <div className="relative">
                 <select
                   value={inPageStoreId}
@@ -586,7 +595,7 @@ const Staff = () => {
               formattedStaff.map((person) => (
                 <div
                   key={`${person.role}-${person.id}`}
-                  onClick={() => navigate(`/admin/store/${storeId}/staff/${person.id}?role=${person.role}`)}
+                  onClick={() => handleCardClick(person)}
                   className="bg-white border border-slate-100 rounded-xl sm:rounded-2xl p-3 sm:p-4 shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5 group relative overflow-hidden cursor-pointer"
                 >
                   <div
@@ -613,12 +622,12 @@ const Staff = () => {
                       </div>
                       <div className="ml-3 md:ml-5 min-w-0">
                         <div className="text-sm md:text-base font-bold text-slate-900 truncate">
-                          {person.name}
+                           {person.name}
                         </div>
                         <div className="text-xs md:text-sm font-medium text-slate-500 mt-0.5 truncate">
                           {person.email || "No email added"}
                         </div>
-                        {storeId === "admin" && person.store_name && (
+                        {showStoreSwitcher && person.store_name && (
                           <div className="text-[11px] font-semibold text-emerald-600 mt-1 flex items-center gap-1">
                             <Store className="w-3.5 h-3.5 flex-shrink-0" />
                             <span>{person.store_name}</span>
