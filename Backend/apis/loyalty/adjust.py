@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Path
+from core.deps import require_permission, get_user_admin_id
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from core.deps import get_db, get_current_admin, get_current_manager
+from core.deps import get_db, get_current_user, get_current_manager
 from models.admin import Admin
 from models.manager import Manager
 from models.customer import Customer
@@ -21,6 +22,7 @@ async def _adjust_loyalty_points(
     given_by_type: str,
     given_by_id: int,
 ) -> LoyaltyCustomerStats:
+    # admin_id is passed in by the caller (admin or shopkeeper endpoint)
     
     # Fetch LoyaltyConfig for the store
     config_stmt = select(LoyaltyConfig).where(LoyaltyConfig.store_id == store_id)
@@ -98,22 +100,23 @@ async def adjust_loyalty_points_admin(
     payload: LoyaltyAdjustRequest,
     store_id: int = Path(..., description="The ID of the store"),
     db: AsyncSession = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin),
+    current_user = Depends(require_permission('loyalty', 'read')),
 ) -> LoyaltyCustomerStats:
+    admin_id = get_user_admin_id(current_user)
     # Ensure the store belongs to the admin
     store_check_stmt = select(LoyaltyConfig).where(LoyaltyConfig.store_id == store_id)
     store_check_result = await db.execute(store_check_stmt)
     store_loyalty_config = store_check_result.scalar_one_or_none()
-    if not store_loyalty_config or store_loyalty_config.store.admin_id != current_admin.id:
+    if not store_loyalty_config or store_loyalty_config.store.admin_id != admin_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied to this store")
 
     return await _adjust_loyalty_points(
         db,
         store_id,
-        current_admin.id,
+        admin_id,
         payload,
         given_by_type="ADMIN",
-        given_by_id=current_admin.id
+        given_by_id=admin_id
     )
 
 
@@ -127,13 +130,13 @@ async def adjust_loyalty_points_admin(
 async def adjust_loyalty_points_shopkeeper(
     payload: LoyaltyAdjustRequest,
     db: AsyncSession = Depends(get_db),
-    current_manager: Manager = Depends(get_current_manager),
+    current_user = Depends(require_permission('loyalty', 'write')),
 ) -> LoyaltyCustomerStats:
     return await _adjust_loyalty_points(
         db,
-        current_manager.store_id,
-        current_manager.store.admin_id,
+        current_user.store_id,
+        get_user_admin_id(current_user),
         payload,
-        given_by_type="MANAGER",
-        given_by_id=current_manager.id
+        given_by_type=current_user.token_role.upper(),
+        given_by_id=current_user.id
     )

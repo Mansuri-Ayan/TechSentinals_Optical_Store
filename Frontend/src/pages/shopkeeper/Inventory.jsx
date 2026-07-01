@@ -9,9 +9,9 @@ import { useAuthStore, useStoreStore } from '../../store/store';
 import { useInventory } from '../../hooks/useInventory';
 import { useCategories, useSubcategories } from '../../hooks/useCategories';
 import NotificationBell from '../../components/shared/NotificationBell';
-import RequestStockModal from '../../components/shopkeeper/RequestStockModal';
 import Pagination from '../../components/shared/Pagination';
 import { useStores } from '../../hooks/useStores';
+import PermissionGuard from '../../components/shared/PermissionGuard';
 
 const getCategoryConfig = (name) => {
   const normalized = (name || '').toLowerCase();
@@ -156,12 +156,14 @@ const ShopkeeperStockDropdown = ({ item, onRequestHandler }) => {
               <span className="font-semibold text-slate-650">{stock.store_name}</span>
               <div className="flex items-center gap-1.5">
                 <span className="font-bold text-slate-800">{stock.available_quantity} units</span>
-                <button
-                  onClick={() => onRequestHandler(item, stock)}
-                  className="px-2 py-0.5 bg-blue-500/10 text-blue-700 hover:bg-blue-600 hover:text-white border border-blue-500/20 rounded-lg font-bold transition-all"
-                >
-                  Request
-                </button>
+                <PermissionGuard permission="inventory:transfer">
+                  <button
+                    onClick={() => onRequestHandler(item, stock)}
+                    className="px-2 py-0.5 bg-blue-500/10 text-blue-700 hover:bg-blue-600 hover:text-white border border-blue-500/20 rounded-lg font-bold transition-all"
+                  >
+                    Request
+                  </button>
+                </PermissionGuard>
               </div>
             </div>
           ))}
@@ -381,7 +383,12 @@ const Inventory = () => {
   }
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto animate-fade-in font-sans">
+    <PermissionGuard permission="inventory:read" fallback={
+      <div className="p-8 text-center text-slate-500">
+        You do not have permission to view this page.
+      </div>
+    }>
+      <div className="p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto animate-fade-in font-sans">
       {/* ── Breadcrumb ── */}
       <div className="mb-6 sm:mb-8">
         <div className="flex items-center text-sm text-slate-500 font-semibold mb-3 space-x-2">
@@ -637,47 +644,51 @@ const Inventory = () => {
 
                     {/* Request from viewed store button */}
                     {!isViewingOwnStore && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          const isWH = viewStoreId === 'warehouse';
-                          handleRequestInit(item, {
-                            store_id: isWH ? 0 : viewStoreId,
-                            store_name: viewStoreLabel,
-                            owner_type: isWH ? 'ADMIN' : 'STORE',
-                            available_quantity: item.available_quantity,
-                          });
-                        }}
-                        className="w-full mt-2 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl text-xs font-bold hover:from-blue-600 hover:to-blue-700 transition-all shadow-sm flex items-center justify-center gap-1.5"
-                      >
-                        <ArrowRightLeft className="w-3.5 h-3.5" />
-                        Request from {viewStoreLabel}
-                      </button>
+                      <PermissionGuard permission="inventory:transfer">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const isWH = viewStoreId === 'warehouse';
+                            handleRequestInit(item, {
+                              store_id: isWH ? 0 : viewStoreId,
+                              store_name: viewStoreLabel,
+                              owner_type: isWH ? 'ADMIN' : 'STORE',
+                              available_quantity: item.available_quantity,
+                            });
+                          }}
+                          className="w-full mt-2 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl text-xs font-bold hover:from-blue-600 hover:to-blue-700 transition-all shadow-sm flex items-center justify-center gap-1.5"
+                        >
+                          <ArrowRightLeft className="w-3.5 h-3.5" />
+                          Request from {viewStoreLabel}
+                        </button>
+                      </PermissionGuard>
                     )}
 
                     {isViewingOwnStore && (item.status === 'Low Stock' || item.status === 'Out of Stock') && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          const whStock = item.other_stocks?.find(s => s.owner_type === 'ADMIN');
-                          const source = whStock ? {
-                            store_id: 0,
-                            store_name: 'Central Warehouse',
-                            owner_type: 'ADMIN',
-                            available_quantity: whStock.available_quantity,
-                          } : {
-                            store_id: 0,
-                            store_name: 'Central Warehouse',
-                            owner_type: 'ADMIN',
-                            available_quantity: 0,
-                          };
-                          handleRequestInit(item, source);
-                        }}
-                        className="w-full mt-2 py-2 bg-gradient-to-r from-amber-500 to-orange-600 text-white rounded-xl text-xs font-bold hover:from-amber-600 hover:to-orange-700 transition-all shadow-sm flex items-center justify-center gap-1.5"
-                      >
-                        <ArrowRightLeft className="w-3.5 h-3.5" />
-                        Request Stock
-                      </button>
+                      <PermissionGuard permission="inventory:transfer">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const whStock = item.other_stocks?.find(s => s.owner_type === 'ADMIN');
+                            const source = whStock ? {
+                              store_id: 0,
+                              store_name: 'Central Warehouse',
+                              owner_type: 'ADMIN',
+                              available_quantity: whStock.available_quantity,
+                            } : {
+                              store_id: 0,
+                              store_name: 'Central Warehouse',
+                              owner_type: 'ADMIN',
+                              available_quantity: 0,
+                            };
+                            handleRequestInit(item, source);
+                          }}
+                          className="w-full mt-2 py-2 bg-gradient-to-r from-amber-500 to-orange-600 text-white rounded-xl text-xs font-bold hover:from-amber-600 hover:to-orange-700 transition-all shadow-sm flex items-center justify-center gap-1.5"
+                        >
+                          <ArrowRightLeft className="w-3.5 h-3.5" />
+                          Request Stock
+                        </button>
+                      </PermissionGuard>
                     )}
                     {/* Other stores stock toggle & list */}
                     {item.other_stocks && item.other_stocks.length > 0 && (
@@ -775,18 +786,21 @@ const Inventory = () => {
       )}
 
       {/* ── Request Stock Modal ── */}
-      <RequestStockModal
-        isOpen={requestModalOpen}
-        onClose={() => {
-          setRequestModalOpen(false);
-          setRequestProduct(null);
-          setRequestSourceStore(null);
-        }}
-        product={requestProduct}
-        sourceStore={requestSourceStore}
-        onSuccess={handleRequestSuccess}
-      />
+      {requestModalOpen && (
+        <RequestStockModal
+          isOpen={requestModalOpen}
+          onClose={() => {
+            setRequestModalOpen(false);
+            setRequestProduct(null);
+            setRequestSourceStore(null);
+          }}
+          product={requestProduct}
+          sourceStore={requestSourceStore}
+          onSuccess={handleRequestSuccess}
+        />
+      )}
     </div>
+    </PermissionGuard>
   );
 };
 

@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { useAuthStore } from '../../store/store';
-import { getBillTemplateSettings, saveBillTemplateSettings, defaultSettings } from '../../utils/billSettings';
+import { useBillSettings } from '../../hooks/useBillSettings';
+import { defaultSettings } from '../../utils/billSettings';
 import {
   Sparkles, FileText, CheckCircle, RefreshCw, Upload, Eye, ShoppingCart, User, CreditCard
 } from 'lucide-react';
@@ -19,19 +20,37 @@ const COLOR_SWATCHES = [
 export default function BillTemplate() {
   const { storeId: routeStoreId } = useParams();
   const { user } = useAuthStore();
-  const storeId = routeStoreId || user?.store_id || 'default';
+  const storeId = routeStoreId || user?.store_id;
+
+  const { settings: fetchedSettings, isLoading, updateSettingsAsync, isUpdating } = useBillSettings(storeId);
 
   const [settings, setSettings] = useState(defaultSettings);
   const [logoPreview, setLogoPreview] = useState(null);
   const [qrPreview, setQrPreview] = useState(null);
 
-  // Load configuration for this store
+  // Load configuration for this store from API
   useEffect(() => {
-    const loaded = getBillTemplateSettings(storeId);
-    setSettings(loaded);
-    setLogoPreview(loaded.logo);
-    setQrPreview(loaded.qrCode);
-  }, [storeId]);
+    if (fetchedSettings) {
+      // Map snake_case from backend to camelCase for frontend state
+      const mappedSettings = {
+        headerText: fetchedSettings.header_text ?? defaultSettings.headerText,
+        subHeaderText: fetchedSettings.sub_header_text ?? defaultSettings.subHeaderText,
+        address: fetchedSettings.address ?? defaultSettings.address,
+        contactEmail: fetchedSettings.contact_email ?? defaultSettings.contactEmail,
+        contactPhone: fetchedSettings.contact_phone ?? defaultSettings.contactPhone,
+        gstNumber: fetchedSettings.gst_number ?? defaultSettings.gstNumber,
+        logo: fetchedSettings.logo,
+        qrCode: fetchedSettings.qr_code,
+        showPrescription: fetchedSettings.show_prescription ?? defaultSettings.showPrescription,
+        showGst: fetchedSettings.show_gst ?? defaultSettings.showGst,
+        themeColor: fetchedSettings.theme_color ?? defaultSettings.themeColor,
+        footerText: fetchedSettings.footer_text ?? defaultSettings.footerText,
+      };
+      setSettings(mappedSettings);
+      setLogoPreview(mappedSettings.logo);
+      setQrPreview(mappedSettings.qrCode);
+    }
+  }, [fetchedSettings]);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -71,20 +90,63 @@ export default function BillTemplate() {
     if (field === 'qrCode') setQrPreview(null);
   };
 
-  const handleSave = () => {
-    saveBillTemplateSettings(storeId, settings);
-    toast.success('Bill template settings saved successfully.');
-  };
-
-  const handleReset = () => {
-    if (window.confirm('Reset template to default settings? Any customized values will be lost.')) {
-      setSettings(defaultSettings);
-      setLogoPreview(defaultSettings.logo);
-      setQrPreview(defaultSettings.qrCode);
-      saveBillTemplateSettings(storeId, defaultSettings);
-      toast.info('Template settings reset to default values.');
+  const handleSave = async () => {
+    // Map camelCase state back to snake_case payload
+    const payload = {
+      header_text: settings.headerText,
+      sub_header_text: settings.subHeaderText,
+      address: settings.address,
+      contact_email: settings.contactEmail,
+      contact_phone: settings.contactPhone,
+      gst_number: settings.gstNumber,
+      logo: settings.logo,
+      qr_code: settings.qrCode,
+      show_prescription: settings.showPrescription,
+      show_gst: settings.showGst,
+      theme_color: settings.themeColor,
+      footer_text: settings.footerText,
+    };
+    
+    try {
+      await updateSettingsAsync(payload);
+    } catch (err) {
+      // Error handled by hook
     }
   };
+
+  const handleReset = async () => {
+    if (window.confirm('Reset template to default settings? Any customized values will be lost.')) {
+      const payload = {
+        header_text: defaultSettings.headerText,
+        sub_header_text: defaultSettings.subHeaderText,
+        address: defaultSettings.address,
+        contact_email: defaultSettings.contactEmail,
+        contact_phone: defaultSettings.contactPhone,
+        gst_number: defaultSettings.gstNumber,
+        logo: null,
+        qr_code: null,
+        show_prescription: defaultSettings.showPrescription,
+        show_gst: defaultSettings.showGst,
+        theme_color: defaultSettings.themeColor,
+        footer_text: defaultSettings.footerText,
+      };
+      
+      try {
+        await updateSettingsAsync(payload);
+        toast.info('Template settings reset to default values.');
+      } catch (err) {
+        // Error handled by hook
+      }
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#0A0F1F]"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto animate-fade-in font-sans">

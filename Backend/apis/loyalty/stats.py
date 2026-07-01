@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Path
+from core.deps import require_permission, get_user_admin_id
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_
 from sqlalchemy.orm import joinedload
-from core.deps import get_db, get_current_admin, get_current_manager
+from core.deps import get_db, get_current_user, get_current_manager
 from models.admin import Admin
 from models.manager import Manager
 from models.customer import Customer, CustomerMembershipTier
@@ -15,6 +16,7 @@ from datetime import datetime, timedelta, timezone
 router = APIRouter()
 
 async def _get_loyalty_stats(db: AsyncSession, store_id: int | None, admin_id: int) -> LoyaltyStatsRead:
+    # admin_id is passed in by the caller (admin or shopkeeper endpoint)
     # Validate store ownership
     from sqlalchemy.orm import joinedload
     from models.store import Store
@@ -160,6 +162,7 @@ async def _get_loyalty_stats(db: AsyncSession, store_id: int | None, admin_id: i
 
 
 async def _get_loyalty_trends(db: AsyncSession, store_id: int | None, admin_id: int) -> List[LoyaltyTrendData]:
+    # admin_id is passed in by the caller (admin or shopkeeper endpoint)
     # Validate store ownership
     from sqlalchemy.orm import joinedload
     from models.store import Store
@@ -216,6 +219,7 @@ async def _get_loyalty_trends(db: AsyncSession, store_id: int | None, admin_id: 
 
 
 async def _get_loyalty_tier_distribution(db: AsyncSession, store_id: int | None, admin_id: int) -> List[LoyaltyTierDistribution]:
+    # admin_id is passed in by the caller (admin or shopkeeper endpoint)
     # Validate store ownership
     from sqlalchemy.orm import joinedload
     from models.store import Store
@@ -286,9 +290,10 @@ async def _get_loyalty_tier_distribution(db: AsyncSession, store_id: int | None,
 )
 async def get_loyalty_stats_all_admin(
     db: AsyncSession = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin),
+    current_user = Depends(require_permission('loyalty', 'read')),
 ) -> LoyaltyStatsRead:
-    return await _get_loyalty_stats(db, None, current_admin.id)
+    admin_id = get_user_admin_id(current_user)
+    return await _get_loyalty_stats(db, None, admin_id)
 
 
 @router.get(
@@ -298,9 +303,10 @@ async def get_loyalty_stats_all_admin(
 )
 async def get_loyalty_trends_all_admin(
     db: AsyncSession = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin),
+    current_user = Depends(require_permission('loyalty', 'read')),
 ) -> List[LoyaltyTrendData]:
-    return await _get_loyalty_trends(db, None, current_admin.id)
+    admin_id = get_user_admin_id(current_user)
+    return await _get_loyalty_trends(db, None, admin_id)
 
 
 @router.get(
@@ -310,9 +316,10 @@ async def get_loyalty_trends_all_admin(
 )
 async def get_loyalty_tier_distribution_all_admin(
     db: AsyncSession = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin),
+    current_user = Depends(require_permission('loyalty', 'read')),
 ) -> List[LoyaltyTierDistribution]:
-    return await _get_loyalty_tier_distribution(db, None, current_admin.id)
+    admin_id = get_user_admin_id(current_user)
+    return await _get_loyalty_tier_distribution(db, None, admin_id)
 
 
 @router.get(
@@ -323,9 +330,10 @@ async def get_loyalty_tier_distribution_all_admin(
 async def get_loyalty_stats_admin(
     store_id: int = Path(..., description="The ID of the store"),
     db: AsyncSession = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin),
+    current_user = Depends(require_permission('loyalty', 'read')),
 ) -> LoyaltyStatsRead:
-    return await _get_loyalty_stats(db, store_id, current_admin.id)
+    admin_id = get_user_admin_id(current_user)
+    return await _get_loyalty_stats(db, store_id, admin_id)
 
 
 @router.get(
@@ -336,9 +344,10 @@ async def get_loyalty_stats_admin(
 async def get_loyalty_trends_admin(
     store_id: int = Path(..., description="The ID of the store"),
     db: AsyncSession = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin),
+    current_user = Depends(require_permission('loyalty', 'read')),
 ) -> List[LoyaltyTrendData]:
-    return await _get_loyalty_trends(db, store_id, current_admin.id)
+    admin_id = get_user_admin_id(current_user)
+    return await _get_loyalty_trends(db, store_id, admin_id)
 
 
 @router.get(
@@ -349,9 +358,10 @@ async def get_loyalty_trends_admin(
 async def get_loyalty_tier_distribution_admin(
     store_id: int = Path(..., description="The ID of the store"),
     db: AsyncSession = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin),
+    current_user = Depends(require_permission('loyalty', 'read')),
 ) -> List[LoyaltyTierDistribution]:
-    return await _get_loyalty_tier_distribution(db, store_id, current_admin.id)
+    admin_id = get_user_admin_id(current_user)
+    return await _get_loyalty_tier_distribution(db, store_id, admin_id)
 
 
 # --- Shopkeeper Endpoints ---
@@ -363,9 +373,9 @@ async def get_loyalty_tier_distribution_admin(
 )
 async def get_loyalty_stats_shopkeeper(
     db: AsyncSession = Depends(get_db),
-    current_manager: Manager = Depends(get_current_manager),
+    current_user = Depends(require_permission('loyalty', 'read')),
 ) -> LoyaltyStatsRead:
-    return await _get_loyalty_stats(db, current_manager.store_id, current_manager.store.admin_id)
+    return await _get_loyalty_stats(db, current_user.store_id, get_user_admin_id(current_user))
 
 
 @router.get(
@@ -375,9 +385,9 @@ async def get_loyalty_stats_shopkeeper(
 )
 async def get_loyalty_trends_shopkeeper(
     db: AsyncSession = Depends(get_db),
-    current_manager: Manager = Depends(get_current_manager),
+    current_user = Depends(require_permission('loyalty', 'read')),
 ) -> List[LoyaltyTrendData]:
-    return await _get_loyalty_trends(db, current_manager.store_id, current_manager.store.admin_id)
+    return await _get_loyalty_trends(db, current_user.store_id, get_user_admin_id(current_user))
 
 
 @router.get(
@@ -387,6 +397,6 @@ async def get_loyalty_trends_shopkeeper(
 )
 async def get_loyalty_tier_distribution_shopkeeper(
     db: AsyncSession = Depends(get_db),
-    current_manager: Manager = Depends(get_current_manager),
+    current_user = Depends(require_permission('loyalty', 'read')),
 ) -> List[LoyaltyTierDistribution]:
-    return await _get_loyalty_tier_distribution(db, current_manager.store_id, current_manager.store.admin_id)
+    return await _get_loyalty_tier_distribution(db, current_user.store_id, get_user_admin_id(current_user))

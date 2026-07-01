@@ -1,7 +1,7 @@
 # API: worker/read.py
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from core.deps import get_current_user
+from core.deps import require_permission
 from db.session import get_db
 from models.admin import Admin
 from models.manager import Manager
@@ -27,7 +27,7 @@ async def list_workers(
     is_active: bool | None = Query(default=None, description="Filter by active status"),
     paginate: bool = Query(default=True, description="Enable or disable pagination"),
     db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_user),
+    current_user = Depends(require_permission("workers", "read")),
 ) -> PaginatedResponse[WorkerRead]:
     if isinstance(current_user, Admin):
         store = await get_store(db, store_id)
@@ -76,7 +76,7 @@ async def list_workers(
 async def get_worker_endpoint(
     worker_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_user),
+    current_user = Depends(require_permission("workers", "read")),
 ) -> WorkerRead:
     worker = await get_worker(db, worker_id)
     if worker is None:

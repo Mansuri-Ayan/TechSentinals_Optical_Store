@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import joinedload
-from core.deps import get_db, get_current_manager
+from core.deps import get_db, require_permission, get_user_admin_id
 from models.manager import Manager
 from models.loyalty_config import LoyaltyConfig
 from models.store_category_loyalty import StoreCategoryLoyalty
@@ -21,9 +21,9 @@ router = APIRouter()
 async def calculate_loyalty_preview(
     payload: LoyaltyCalculatePreviewRequest,
     db: AsyncSession = Depends(get_db),
-    current_manager: Manager = Depends(get_current_manager),
+    current_user = Depends(require_permission('loyalty', 'read')),
 ) -> LoyaltyCalculatePreviewResponse:
-    store_id = current_manager.store_id
+    store_id = current_user.store_id
 
     # Fetch LoyaltyConfig
     config_stmt = select(LoyaltyConfig).where(LoyaltyConfig.store_id == store_id)
@@ -49,7 +49,7 @@ async def calculate_loyalty_preview(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Customer not found"
         )
-    if customer.store_id != store_id and customer.admin_id != current_manager.store.admin_id:
+    if customer.store_id != store_id and customer.admin_id != get_user_admin_id(current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Customer does not belong to this store's admin"

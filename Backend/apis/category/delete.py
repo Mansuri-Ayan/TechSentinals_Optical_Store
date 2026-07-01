@@ -1,7 +1,7 @@
 # API: category/delete.py
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from core.deps import get_current_admin
+from core.deps import require_permission, get_user_admin_id
 from db.session import get_db
 from models.admin import Admin
 from schemas.category import CategoryRead, SubcategoryRead
@@ -22,10 +22,11 @@ router = APIRouter()
 async def delete_category_endpoint(
     category_id: int,
     db: AsyncSession = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin),
+    current_user = Depends(require_permission('categories', 'delete')),
 ) -> CategoryRead:
+    admin_id = get_user_admin_id(current_user)
     category = await get_category(db, category_id)
-    if category is None or category.admin_id != current_admin.id:
+    if category is None or category.admin_id != admin_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Category not found",
@@ -46,8 +47,9 @@ async def delete_category_endpoint(
 async def delete_subcategory_endpoint(
     subcategory_id: int,
     db: AsyncSession = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin),
+    current_user = Depends(require_permission('categories', 'delete')),
 ) -> SubcategoryRead:
+    admin_id = get_user_admin_id(current_user)
     subcategory = await get_subcategory(db, subcategory_id)
     if subcategory is None:
         raise HTTPException(
@@ -55,7 +57,7 @@ async def delete_subcategory_endpoint(
             detail="Subcategory not found",
         )
     parent = await get_category(db, subcategory.category_id)
-    if parent is None or parent.admin_id != current_admin.id:
+    if parent is None or parent.admin_id != admin_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Subcategory not found",

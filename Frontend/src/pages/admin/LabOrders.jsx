@@ -13,6 +13,7 @@ import { toast } from 'react-toastify';
 import Pagination from '../../components/shared/Pagination';
 import InventoryDetailDrawer from '../../components/admin/InventoryDetailDrawer';
 import { useLabs } from '../../hooks/useLabs';
+import { usePagePermissions } from '../../hooks/usePermissions';
 
 // Status color configurations
 const STATUS_CFG = {
@@ -38,6 +39,7 @@ const LabOrders = () => {
   const queryTab = searchParams.get('tab');
 
   const { selectedStore } = useStoreStore();
+  const perms = usePagePermissions('lab_orders');
   const { stores } = useStores();
 
   // 2. Filter States
@@ -463,6 +465,7 @@ const LabOrders = () => {
         onUpdateStatus={handleUpdateStatus}
         activeTab={activeTab}
         labs={labs}
+        canUpdateStatus={perms?.canUpdate !== false}
       />
 
     </div>

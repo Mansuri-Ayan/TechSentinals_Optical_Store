@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy import select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
-from core.deps import get_current_user
+from core.deps import require_permission, get_user_admin_id
 from db.session import get_db
 from models.admin import Admin
 from models.manager import Manager
@@ -221,7 +221,7 @@ async def list_customers_endpoint(
     limit: int = Query(500, ge=1, le=1000),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user=Depends(require_permission("customers", "read")),
 ) -> list[CustomerListRead]:
     admin_id = _get_user_admin_id(current_user)
 
@@ -250,7 +250,7 @@ async def list_customers_endpoint(
 async def get_by_phone_endpoint(
     phone: str,
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user=Depends(require_permission("customers", "read")),
 ) -> CustomerDetailRead:
     admin_id = _get_user_admin_id(current_user)
     customer = await get_customer_by_phone(db, admin_id, phone)
@@ -292,7 +292,7 @@ async def get_by_phone_endpoint(
 async def get_customer_endpoint(
     customer_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user=Depends(require_permission("customers", "read")),
 ) -> CustomerDetailRead:
     admin_id = _get_user_admin_id(current_user)
     customer = await get_customer(db, customer_id)
@@ -344,7 +344,7 @@ async def create_manual_order(
     customer_id: int,
     payload: ManualOrderCreate,
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user=Depends(require_permission("sales", "create")),
 ):
     admin_id = _get_user_admin_id(current_user)
     customer = await get_customer(db, customer_id)

@@ -1,7 +1,7 @@
 # API: product/update.py
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from core.deps import get_current_admin
+from core.deps import require_permission, get_user_admin_id
 from db.session import get_db
 from models.admin import Admin
 from schemas.product import ProductUpdate, ProductRead
@@ -31,10 +31,11 @@ async def update_product_endpoint(
     product_id: int,
     payload: ProductUpdate,
     db: AsyncSession = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin),
+    current_user = Depends(require_permission('products', 'update')),
 ) -> ProductRead:
+    admin_id = get_user_admin_id(current_user)
     product = await get_product(db, product_id)
-    if product is None or product.admin_id != current_admin.id:
+    if product is None or product.admin_id != admin_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Product not found",

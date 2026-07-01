@@ -8,7 +8,8 @@ import {
   Briefcase, Clock, Phone, Mail, Pencil, Printer, Share2, Eye, Sparkles, Beaker, Search, ChevronRight
 } from 'lucide-react';
 import { useCustomer } from '../../hooks/useCustomers';
-import { getBillTemplateSettings } from '../../utils/billSettings';
+import { useBillSettings } from '../../hooks/useBillSettings';
+import { defaultSettings } from '../../utils/billSettings';
 import { addSalePaymentApi } from '../../api/customer/customer.api';
 import { toast } from 'react-toastify';
 
@@ -123,9 +124,26 @@ const RejectReasonPrompt = ({ onConfirm, onCancel }) => {
 
 /* ─────────────────────────────────────────────────────────
    MAIN DRAWER COMPONENT
-   Props: item, onClose, onApprove, onReject, isApproving, isRejecting, isLoading
+   Props: item, onClose, onApprove, onReject, isApproving, isRejecting, isLoading, canApprove, canUpdateStatus
 ───────────────────────────────────────────────────────── */
-const InventoryDetailDrawer = ({ item, onClose, onEdit, onApprove, onReject, isApproving, isRejecting, isLoading, onUpdateStatus, labs = [] }) => {
+const InventoryDetailDrawer = ({ item, onClose, onEdit, onApprove, onReject, isApproving, isRejecting, isLoading, onUpdateStatus, labs = [], canApprove = true, canUpdateStatus = true }) => {
+  const storeId = item?.store_id || item?.storeId;
+  const { settings: fetchedSettings } = useBillSettings(storeId);
+  const billSettings = fetchedSettings ? {
+    headerText: fetchedSettings.header_text ?? defaultSettings.headerText,
+    subHeaderText: fetchedSettings.sub_header_text ?? defaultSettings.subHeaderText,
+    address: fetchedSettings.address ?? defaultSettings.address,
+    contactEmail: fetchedSettings.contact_email ?? defaultSettings.contactEmail,
+    contactPhone: fetchedSettings.contact_phone ?? defaultSettings.contactPhone,
+    gstNumber: fetchedSettings.gst_number ?? defaultSettings.gstNumber,
+    logo: fetchedSettings.logo,
+    qrCode: fetchedSettings.qr_code,
+    showPrescription: fetchedSettings.show_prescription ?? defaultSettings.showPrescription,
+    showGst: fetchedSettings.show_gst ?? defaultSettings.showGst,
+    themeColor: fetchedSettings.theme_color ?? defaultSettings.themeColor,
+    footerText: fetchedSettings.footer_text ?? defaultSettings.footerText,
+  } : defaultSettings;
+
   const [showRejectPrompt, setShowRejectPrompt] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState('CASH');
@@ -335,8 +353,17 @@ const InventoryDetailDrawer = ({ item, onClose, onEdit, onApprove, onReject, isA
             )}
           </div>
 
-          {/* Footer */}
-          <div className="px-5 py-4 bg-white border-t border-slate-100 flex-shrink-0">
+          {/* Footer Actions */}
+          <div className="px-5 py-4 bg-white border-t border-slate-100 flex-shrink-0 space-y-2">
+            {nextStatus && onUpdateStatus && canUpdateStatus && (
+              <button
+                onClick={() => onUpdateStatus(item.id, nextStatus)}
+                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-semibold text-sm transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-1.5"
+              >
+                <RefreshCw className="w-4 h-4" />
+                Advance to "{nextStatus}"
+              </button>
+            )}
             <button onClick={onClose}
               className="w-full py-2.5 bg-slate-900 text-white rounded-xl font-semibold text-sm hover:bg-slate-700 transition-all shadow-md hover:shadow-lg">
               Close
@@ -897,7 +924,6 @@ const InventoryDetailDrawer = ({ item, onClose, onEdit, onApprove, onReject, isA
 
   /* ── SALES DRAWER ──────────────────────────────────────── */
   if (item.type === 'sales') {
-    const billSettings = getBillTemplateSettings(item.store_id || item.storeId);
 
     const handleWhatsAppShare = () => {
       const cleanPhone = (item.customerPhone || '').replace(/\D/g, '');
@@ -1502,7 +1528,7 @@ const InventoryDetailDrawer = ({ item, onClose, onEdit, onApprove, onReject, isA
               </div>
 
               {/* Pending: show action buttons */}
-              {isPending && !showRejectPrompt && (
+              {isPending && !showRejectPrompt && canApprove && (
                 <div className="pt-3 pb-1 space-y-2">
                   <p className="text-xs text-slate-500 font-medium mb-3">Review and take action on this expense:</p>
                   <div className="flex gap-2">
@@ -1527,7 +1553,7 @@ const InventoryDetailDrawer = ({ item, onClose, onEdit, onApprove, onReject, isA
               )}
 
               {/* Inline reject reason form */}
-              {isPending && showRejectPrompt && (
+              {isPending && showRejectPrompt && canApprove && (
                 <div className="pt-3 pb-1">
                   <RejectReasonPrompt
                     onConfirm={handleRejectConfirm}

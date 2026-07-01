@@ -20,7 +20,7 @@ from models import (
     PurchaseOrder, PurchaseOrderItem, SupplierPayment,
     Customer, Sale, SaleItem, SalePayment,
     Expense, ExpenseCategory, Notification, Repair,
-    LoyaltyConfig, StoreCategoryLoyalty, LoyaltyTransaction, Lab
+    LoyaltyConfig, StoreCategoryLoyalty, LoyaltyTransaction, Lab, BillSettings
 )
 from db.seed_data import seed
 

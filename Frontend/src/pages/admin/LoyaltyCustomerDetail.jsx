@@ -11,8 +11,11 @@ import RewardsCard from '../../components/loyalty/RewardsCard';
 
 import { useLoyaltyCustomerDetail } from '../../hooks/useLoyalty';
 import { useStoreStore } from '../../store/store';
+import { usePagePermissions } from '../../hooks/usePermissions'; 
+
 const LoyaltyCustomerDetail = () => {
   const { id } = useParams();
+  const perms = usePagePermissions('loyalty');
   const { selectedStore, stores } = useStoreStore();
   const targetStore = selectedStore || stores[0];
   const storeId = targetStore?.id || 'admin';
@@ -170,6 +173,7 @@ const LoyaltyCustomerDetail = () => {
             currentPoints={customer.points}
             onRedeem={handleRedeem}
             isRedeeming={false}
+            canRedeem={perms.canUpdate}
           />
           <LoyaltyHistoryTable history={customer.history} />
         </div>

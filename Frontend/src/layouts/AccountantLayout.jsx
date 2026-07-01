@@ -2,8 +2,10 @@ import { useCallback, useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import { Menu } from 'lucide-react';
 import AccountantSidebar from '../components/accountant/AccountantSidebar';
+import { useMyPermissions } from '../hooks/usePermissions';
 
 function AccountantLayout() {
+  useMyPermissions();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   

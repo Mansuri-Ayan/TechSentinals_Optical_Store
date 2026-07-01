@@ -1,7 +1,7 @@
 # API: customer/create.py
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from core.deps import get_current_user
+from core.deps import require_permission
 from db.session import get_db
 from models.admin import Admin
 from schemas.customer import CustomerCreate, CustomerRead
@@ -21,7 +21,7 @@ router = APIRouter()
 async def create_customer_endpoint(
     payload: CustomerCreate,
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user=Depends(require_permission("customers:create", "sales:create")),
 ) -> CustomerRead:
     admin_id = _get_user_admin_id(current_user)
     if not isinstance(current_user, Admin):

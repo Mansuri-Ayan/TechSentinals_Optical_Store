@@ -2,7 +2,7 @@
 from datetime import date, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from core.deps import get_current_admin
+from core.deps import require_permission, get_user_admin_id
 from db.session import get_db
 from models.admin import Admin
 from schemas.report import StaffReportDetails, StaffDetailResponse
@@ -29,8 +29,9 @@ async def get_staff_report_endpoint(
         description="End date of report period (default: today)"
     ),
     db: AsyncSession = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin),
+    current_user = Depends(require_permission('reports', 'read')),
 ) -> StaffReportDetails:
+    admin_id = get_user_admin_id(current_user)
     # Validate staff type
     stype_upper = staff_type.upper()
     if stype_upper not in ["MANAGER", "WORKER", "OPTICIAN"]:
@@ -47,7 +48,7 @@ async def get_staff_report_endpoint(
     try:
         report = await get_staff_report(
             db=db,
-            admin_id=current_admin.id,
+            admin_id=admin_id,
             staff_type=stype_upper,
             staff_id=staff_id,
             start_date=start_date,
@@ -71,7 +72,7 @@ async def get_staff_detailed_report_endpoint(
     staff_type: str,
     staff_id: int,
     db: AsyncSession = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin),
+    current_user = Depends(require_permission('reports', 'read')),
 ) -> StaffDetailResponse:
     # Validate staff type
     stype_upper = staff_type.upper()
@@ -81,10 +82,12 @@ async def get_staff_detailed_report_endpoint(
             detail="Invalid staff_type. Must be MANAGER, WORKER, or OPTICIAN"
         )
 
+    admin_id = get_user_admin_id(current_user)
+
     try:
         report = await get_staff_detailed_report(
             db=db,
-            admin_id=current_admin.id,
+            admin_id=admin_id,
             staff_type=stype_upper,
             staff_id=staff_id,
         )

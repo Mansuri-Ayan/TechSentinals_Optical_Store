@@ -21,6 +21,7 @@ import { Award, Download, Edit2, RefreshCw, Sliders } from 'lucide-react';
 import { toast } from 'react-toastify';
 import LoyaltyStatsCards from '../../components/loyalty/LoyaltyStatsCards';
 import LoyaltyTierCard from '../../components/loyalty/LoyaltyTierCard';
+import PermissionGuard from '../../components/shared/PermissionGuard';
 
 const Loyalty = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -135,13 +136,15 @@ const Loyalty = () => {
         </div>
 
         <div className="flex items-center gap-2 w-full sm:w-auto">
-          <button
-            onClick={() => setIsGlobalConfigModalOpen(true)}
-            className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all shadow-sm hover:shadow-md hover:-translate-y-0.5 whitespace-nowrap cursor-pointer"
-          >
-            <Sliders className="w-4 h-4 text-slate-500" />
-            Program Settings
-          </button>
+          <PermissionGuard permission="loyalty:configure">
+            <button
+              onClick={() => setIsGlobalConfigModalOpen(true)}
+              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all shadow-sm hover:shadow-md hover:-translate-y-0.5 whitespace-nowrap cursor-pointer"
+            >
+              <Sliders className="w-4 h-4 text-slate-500" />
+              Program Settings
+            </button>
+          </PermissionGuard>
           <button
             onClick={handleExport}
             className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all shadow-sm hover:shadow-md hover:-translate-y-0.5 whitespace-nowrap cursor-pointer"
@@ -177,13 +180,15 @@ const Loyalty = () => {
                 <Sliders className="w-4 h-4 text-blue-500" />
                 Category Multipliers
               </h3>
-              <button
-                onClick={() => setIsConfigModalOpen(true)}
-                className="flex items-center gap-1 text-[10px] font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-lg uppercase tracking-wider transition-colors cursor-pointer"
-              >
-                <Edit2 className="w-3 h-3" />
-                Edit Multipliers
-              </button>
+              <PermissionGuard permission="loyalty:configure">
+                <button
+                  onClick={() => setIsConfigModalOpen(true)}
+                  className="flex items-center gap-1 text-[10px] font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-lg uppercase tracking-wider transition-colors cursor-pointer"
+                >
+                  <Edit2 className="w-3 h-3" />
+                  Edit Multipliers
+                </button>
+              </PermissionGuard>
             </div>
 
             <div className="overflow-hidden border border-slate-100 rounded-xl">

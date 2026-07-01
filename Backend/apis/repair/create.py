@@ -1,7 +1,7 @@
 # API: repair/create.py
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from core.deps import get_current_user, get_user_admin_id
+from core.deps import require_permission, get_user_admin_id
 from db.session import get_db
 from models.admin import Admin
 from schemas.repair import RepairCreate, RepairRead
@@ -20,7 +20,7 @@ router = APIRouter()
 async def create_repair_endpoint(
     payload: RepairCreate,
     db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_user),
+    current_user = Depends(require_permission("repairs", "create")),
 ) -> RepairRead:
     admin_id = get_user_admin_id(current_user)
 

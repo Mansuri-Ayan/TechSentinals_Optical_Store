@@ -7,6 +7,8 @@ import Pagination from '../../components/shared/Pagination';
 import AddEditBrandModal from '../../components/admin/AddEditBrandModal';
 import { useStoreStore } from '../../store/store';
 import { useBrands } from '../../hooks/useBrands';
+import PermissionGuard from '../../components/shared/PermissionGuard';
+import { usePagePermissions } from '../../hooks/usePermissions';
 
 const ITEMS_PER_PAGE = 8;
 
@@ -44,6 +46,12 @@ const Brands = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [activeStatusFilter, setActiveStatusFilter] = useState('all');
   const [modalState, setModalState] = useState({ isOpen: false, item: null });
+
+  const perms = usePagePermissions({
+    canCreate: 'brands:create',
+    canUpdate: 'brands:update',
+    canDelete: 'brands:delete'
+  });
 
   // Debounce search
   useEffect(() => {
@@ -149,13 +157,15 @@ const Brands = () => {
                 <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
               </div>
             )}
-            <button
-              onClick={() => setModalState({ isOpen: true, item: null })}
-              className="flex items-center gap-2 px-5 py-2.5 bg-[#0A0F1F] text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 flex-shrink-0 justify-center animate-fade-in"
-            >
-              <Plus className="w-4 h-4" />
-              Add Brand
-            </button>
+            <PermissionGuard permission="brands:create">
+              <button
+                onClick={() => setModalState({ isOpen: true, item: null })}
+                className="flex items-center gap-2 px-5 py-2.5 bg-[#0A0F1F] text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 flex-shrink-0 justify-center animate-fade-in"
+              >
+                <Plus className="w-4 h-4" />
+                Add Brand
+              </button>
+            </PermissionGuard>
           </div>
         </div>
       </div>
@@ -286,21 +296,25 @@ const Brands = () => {
                       View Items
                     </button>
                     {/* Edit */}
-                    <button
-                      onClick={() => setModalState({ isOpen: true, item: brand })}
-                      className="flex items-center justify-center w-9 h-9 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-colors border border-slate-200"
-                      title="Edit brand"
-                    >
-                      <Edit2 className="w-3.5 h-3.5" />
-                    </button>
+                    {perms.canUpdate && (
+                      <button
+                        onClick={() => setModalState({ isOpen: true, item: brand })}
+                        className="flex items-center justify-center w-9 h-9 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-colors border border-slate-200"
+                        title="Edit brand"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                     {/* Delete */}
-                    <button
-                      onClick={() => handleDelete(brand.id)}
-                      className="flex items-center justify-center w-9 h-9 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-colors border border-red-100"
-                      title="Deactivate brand"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    {perms.canDelete && (
+                      <button
+                        onClick={() => handleDelete(brand.id)}
+                        className="flex items-center justify-center w-9 h-9 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-colors border border-red-100"
+                        title="Deactivate brand"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>

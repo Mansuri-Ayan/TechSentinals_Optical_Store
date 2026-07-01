@@ -52,6 +52,8 @@ from models.expense_category import ExpenseCategory
 from models.expense import Expense, ExpenseOwnerType, ExpensePaymentMethod, ExpenseRecordedByType
 from models.repair import Repair, RepairType, RepairStatus, RepairStaffType
 from models.notification import Notification, NotificationType
+from models.superadmin import SuperAdmin, SuperAdminStatus
+from models.accountant import Accountant
 
 
 async def seed():
@@ -67,7 +69,7 @@ async def seed():
         # 1. ROLES (5)
         # ──────────────────────────────────────────────────────
         print("Seeding Roles...")
-        roles_data = ["admin", "manager", "worker", "optician", "receptionist"]
+        roles_data = ["admin", "manager", "worker", "optician", "receptionist", "accountant"]
         roles = []
         for r in roles_data:
             role = Role(role=r)
@@ -975,7 +977,7 @@ async def seed():
         await db.commit()
 
         print("=" * 60)
-        print("  [SUCCESS] DATABASE SEEDED SUCCESSFULLY WITH 40+ RECORDS PER TABLE!")
+        print("  [SUCCESS] BUSINESS DATA SEEDED SUCCESSFULLY!")
         print("=" * 60)
         print()
         print(f"  Admins: {len(admins)}")
@@ -1004,6 +1006,9 @@ async def seed():
         print(f"  {'-' * 30} {'-' * 15}")
         for a in admins:
             print(f"  {a.email:<30} Admin@123")
+        print()
+        print("  NOTE: Run `python seed_permissions.py` to seed")
+        print("        SuperAdmin, Permissions & Role Defaults.")
         print()
 
 

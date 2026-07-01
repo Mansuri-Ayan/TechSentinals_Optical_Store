@@ -32,6 +32,8 @@ import Pagination from "../../components/shared/Pagination";
 import { useStoreStore } from "../../store/store";
 import { useStoreStaff } from "../../hooks/useStaff";
 import { getWorkerById, getOpticianById, getManagerById } from "../../api/staff/staff.api";
+import PermissionGuard from "../../components/shared/PermissionGuard";
+import { usePagePermissions } from "../../hooks/usePermissions";
 
 const roleOptions = [
   { value: "all", label: "All Roles" },
@@ -234,6 +236,12 @@ const Staff = () => {
   const [selectedStaff, setSelectedStaff] = useState(null);
   const [drawerLoading, setDrawerLoading] = useState(false);
   const ITEMS_PER_PAGE = 20;
+
+  const perms = usePagePermissions({
+    canCreate: 'workers:create',
+    canUpdate: 'workers:update',
+    canDelete: 'workers:delete',
+  });
 
   useEffect(() => {
     setInPageStoreId(storeId);
@@ -465,13 +473,15 @@ const Staff = () => {
               <Download className="w-4 h-4 mr-2 text-slate-400" />
               Export
             </button>
-            <button
-              onClick={() => setShowAddStaff(true)}
-              className="flex items-center px-5 py-2.5 bg-[#0A0F1F] text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Add Staff
-            </button>
+            <PermissionGuard permission="workers:create">
+              <button
+                onClick={() => setShowAddStaff(true)}
+                className="flex items-center px-5 py-2.5 bg-[#0A0F1F] text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Add Staff
+              </button>
+            </PermissionGuard>
           </div>
         </div>
       </div>
@@ -644,21 +654,25 @@ const Staff = () => {
                       </div>
 
                       <div className="md:w-auto flex items-center space-x-1 md:space-x-2 md:opacity-0 group-hover:opacity-100 transition-opacity ml-auto md:ml-0">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); setEditingStaff(person); }}
-                          className="p-2 md:p-2.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg md:rounded-xl transition-colors"
-                          title="Edit"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={(e) => handleDelete(e, person)}
-                          disabled={isDeletingStaff}
-                          className="p-2 md:p-2.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg md:rounded-xl transition-colors"
-                          title="Delete"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        {perms.canUpdate && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setEditingStaff(person); }}
+                            className="p-2 md:p-2.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg md:rounded-xl transition-colors"
+                            title="Edit"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                        )}
+                        {perms.canDelete && (
+                          <button
+                            onClick={(e) => handleDelete(e, person)}
+                            disabled={isDeletingStaff}
+                            className="p-2 md:p-2.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg md:rounded-xl transition-colors"
+                            title="Delete"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>

@@ -1,7 +1,7 @@
 # API: supplier/read.py
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from core.deps import get_current_admin
+from core.deps import require_permission, get_user_admin_id
 from db.session import get_db
 from models.admin import Admin
 from schemas.pagination import PaginatedResponse
@@ -31,8 +31,9 @@ async def list_suppliers_endpoint(
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=1000),
     db: AsyncSession = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin),
+    current_user = Depends(require_permission('suppliers', 'read')),
 ) -> PaginatedResponse[SupplierRead]:
+    admin_id = get_user_admin_id(current_user)
     numeric_store_id = None
     if store_id and store_id.lower() != "admin":
         try:
@@ -41,7 +42,7 @@ async def list_suppliers_endpoint(
             raise HTTPException(status_code=400, detail="Invalid store_id format")
         
         store = await get_store(db, numeric_store_id)
-        if store is None or store.admin_id != current_admin.id:
+        if store is None or store.admin_id != admin_id:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Store not found",
@@ -50,7 +51,7 @@ async def list_suppliers_endpoint(
     offset = (page - 1) * limit
     suppliers, total = await list_suppliers(
         db,
-        admin_id=current_admin.id,
+        admin_id=admin_id,
         store_id=numeric_store_id,
         status_filter=status_filter,
         search=search,
@@ -76,10 +77,11 @@ async def list_suppliers_endpoint(
 async def get_supplier_endpoint(
     supplier_id: int,
     db: AsyncSession = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin),
+    current_user = Depends(require_permission('suppliers', 'read')),
 ) -> SupplierRead:
+    admin_id = get_user_admin_id(current_user)
     supplier = await get_supplier(db, supplier_id)
-    if not supplier or supplier.admin_id != current_admin.id:
+    if not supplier or supplier.admin_id != admin_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Supplier not found",

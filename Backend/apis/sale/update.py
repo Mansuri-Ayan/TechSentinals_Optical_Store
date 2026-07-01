@@ -1,7 +1,7 @@
 # API: sale/update.py
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from core.deps import get_current_user
+from core.deps import require_permission
 from db.session import get_db
 from models.admin import Admin
 from schemas.sale import SaleUpdate, SaleRead, SaleItemRead, SalePaymentRead
@@ -101,7 +101,7 @@ async def update_sale_endpoint(
     sale_id: int,
     payload: SaleUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user=Depends(require_permission("sales", "update")),
 ) -> SaleRead:
     admin_id = _get_user_admin_id(current_user)
     sale = await get_sale(db, sale_id)
@@ -124,7 +124,7 @@ async def update_sale_endpoint(
 async def cancel_sale_endpoint(
     sale_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user=Depends(require_permission("sales", "delete")),
 ) -> SaleRead:
     admin_id = _get_user_admin_id(current_user)
     sale = await get_sale(db, sale_id)

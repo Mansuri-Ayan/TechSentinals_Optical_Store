@@ -8,6 +8,7 @@ import LoyaltyProgress from '../../components/loyalty/LoyaltyProgress';
 import LoyaltyHistoryTable from '../../components/loyalty/LoyaltyHistoryTable';
 import LoyaltyTimeline from '../../components/loyalty/LoyaltyTimeline';
 import RewardsCard from '../../components/loyalty/RewardsCard';
+import PermissionGuard from '../../components/shared/PermissionGuard';
 
 import { useLoyaltyCustomerDetail } from '../../hooks/useLoyalty';
 const LoyaltyCustomerDetail = () => {
@@ -81,8 +82,13 @@ const LoyaltyCustomerDetail = () => {
   const redeemedCount = rawCustomer?.transactions?.filter((t) => t.type === 'REDEEMED').length ?? 0;
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto animate-fade-in font-sans">
-      {/* Breadcrumbs */}
+    <PermissionGuard permission="loyalty:read" fallback={
+      <div className="p-8 text-center text-slate-500">
+        You do not have permission to view loyalty details.
+      </div>
+    }>
+      <div className="p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto animate-fade-in font-sans">
+        {/* Breadcrumbs */}
       <div className="mb-6">
         <div className="flex items-center text-sm text-slate-500 font-semibold mb-3 space-x-2 flex-wrap">
           <Link to="/shopkeeper/dashboard" className="hover:text-slate-800 transition-colors">Dashboard</Link>
@@ -174,8 +180,9 @@ const LoyaltyCustomerDetail = () => {
           <LoyaltyProgress points={customer.points} />
           <LoyaltyTimeline timeline={customer.timeline} />
         </div>
+        </div>
       </div>
-    </div>
+    </PermissionGuard>
   );
 };
 

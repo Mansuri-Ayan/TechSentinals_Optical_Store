@@ -20,6 +20,8 @@ import { AddExpenseModal } from '../../components/admin/AddExpenseModal';
 import { useAuthStore } from '../../store/store';
 import { getStoresApi } from '../../api/stores/store.api';
 import NotificationBell from '../../components/shared/NotificationBell';
+import PermissionGuard from '../../components/shared/PermissionGuard';
+import { usePagePermissions } from '../../hooks/usePermissions';
 
 const ITEMS_PER_PAGE = 10;
 const TODAY = new Date().toISOString().split('T')[0];
@@ -87,6 +89,12 @@ const Expenses = () => {
   const [isLoading, setIsLoading]             = useState(true);
   const [isSubmitting, setIsSubmitting]       = useState(false);
   const [tabCounts, setTabCounts]             = useState({ all: 0, pending: 0, approved: 0, rejected: 0 });
+
+  const perms = usePagePermissions({
+    canCreate: 'expenses:create',
+    canUpdate: 'expenses:update',
+    canDelete: 'expenses:delete'
+  });
 
   const tabToApprovalParam = {
     all: undefined,
@@ -289,7 +297,12 @@ const Expenses = () => {
   }
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto font-sans overflow-x-hidden">
+    <PermissionGuard permission="expenses:read" fallback={
+      <div className="p-8 text-center text-slate-500">
+        You do not have permission to view this page.
+      </div>
+    }>
+      <div className="p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto font-sans overflow-x-hidden">
 
       {/* Breadcrumb + Header */}
       <div className="mb-6 sm:mb-8">
@@ -309,13 +322,15 @@ const Expenses = () => {
           </div>
           <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
             <NotificationBell role="shopkeeper" />
-            <button
-              onClick={() => { setEditingExpense(null); setShowAddModal(true); }}
-              className="flex items-center justify-center gap-2 px-5 py-2.5 bg-violet-600 text-white rounded-xl text-sm font-semibold hover:bg-violet-700 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 w-full sm:w-auto flex-shrink-0"
-            >
-              <Plus className="w-4 h-4" />
-              Add Expense
-            </button>
+            <PermissionGuard permission="expenses:create">
+              <button
+                onClick={() => { setEditingExpense(null); setShowAddModal(true); }}
+                className="flex items-center justify-center gap-2 px-5 py-2.5 bg-violet-600 text-white rounded-xl text-sm font-semibold hover:bg-violet-700 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 w-full sm:w-auto flex-shrink-0"
+              >
+                <Plus className="w-4 h-4" />
+                Add Expense
+              </button>
+            </PermissionGuard>
           </div>
         </div>
       </div>
@@ -527,20 +542,24 @@ const Expenses = () => {
                         {/* Only allow editing or deleting if the expense is pending approval */}
                         {!(exp.is_approved || exp.is_rejected) ? (
                           <div className="flex items-center space-x-1.5 md:opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button
-                              onClick={(e) => { e.stopPropagation(); setEditingExpense(exp); setShowAddModal(true); }}
-                              className="p-1.5 text-slate-400 hover:text-violet-650 hover:bg-violet-50 rounded-lg transition-colors"
-                              title="Edit"
-                            >
-                              <Edit2 className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={(e) => handleDeleteExpense(e, exp)}
-                              className="p-1.5 text-slate-405 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                              title="Delete"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                            <PermissionGuard permission="expenses:update">
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setEditingExpense(exp); setShowAddModal(true); }}
+                                className="p-1.5 text-slate-400 hover:text-violet-650 hover:bg-violet-50 rounded-lg transition-colors"
+                                title="Edit"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </button>
+                            </PermissionGuard>
+                            <PermissionGuard permission="expenses:delete">
+                              <button
+                                onClick={(e) => handleDeleteExpense(e, exp)}
+                                className="p-1.5 text-slate-405 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                title="Delete"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </PermissionGuard>
                           </div>
                         ) : (
                           <span className="text-slate-400 text-xs italic font-medium">Locked</span>
@@ -584,18 +603,22 @@ const Expenses = () => {
                 </div>
                 {!(exp.is_approved || exp.is_rejected) && (
                   <div className="pt-2 border-t border-slate-100 flex items-center justify-end gap-2 text-xs">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setEditingExpense(exp); setShowAddModal(true); }}
-                      className="px-3 py-1.5 bg-slate-50 border border-slate-200 text-slate-600 rounded-lg font-semibold hover:bg-slate-100 transition-colors flex items-center gap-1"
-                    >
-                      <Edit2 className="w-3.5 h-3.5" /> Edit
-                    </button>
-                    <button
-                      onClick={(e) => handleDeleteExpense(e, exp)}
-                      className="px-3 py-1.5 bg-red-50 border border-red-200 text-red-600 rounded-lg font-semibold hover:bg-red-100 transition-colors flex items-center gap-1"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" /> Delete
-                    </button>
+                    <PermissionGuard permission="expenses:update">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setEditingExpense(exp); setShowAddModal(true); }}
+                        className="px-3 py-1.5 bg-slate-50 border border-slate-200 text-slate-600 rounded-lg font-semibold hover:bg-slate-100 transition-colors flex items-center gap-1"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" /> Edit
+                      </button>
+                    </PermissionGuard>
+                    <PermissionGuard permission="expenses:delete">
+                      <button
+                        onClick={(e) => handleDeleteExpense(e, exp)}
+                        className="px-3 py-1.5 bg-red-50 border border-red-200 text-red-600 rounded-lg font-semibold hover:bg-red-100 transition-colors flex items-center gap-1"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" /> Delete
+                      </button>
+                    </PermissionGuard>
                   </div>
                 )}
               </div>
@@ -631,6 +654,7 @@ const Expenses = () => {
         initialData={editingExpense}
       />
     </div>
+    </PermissionGuard>
   );
 };
 

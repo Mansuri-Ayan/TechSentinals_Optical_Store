@@ -50,3 +50,12 @@ from models.notification import Notification, NotificationType
 # ── Lab Partners ──────────────────────────────────────────────
 from models.lab import Lab
 
+# ── Permissions & Roles (V2) ──────────────────────────────────
+from models.permission import Permission
+from models.global_role_permission import GlobalRolePermission, PermissionRoleType
+from models.admin_role_permission_override import AdminRolePermissionOverride
+from models.user_permission_override import UserPermissionOverride, PermissionUserType
+from models.superadmin import SuperAdmin
+from models.accountant import Accountant
+
+from models.bill_settings import BillSettings

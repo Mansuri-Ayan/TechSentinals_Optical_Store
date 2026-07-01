@@ -1,10 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Path
+from core.deps import require_permission, get_user_admin_id
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import joinedload
 from models.store import Store
 from typing import List
-from core.deps import get_db, get_current_admin, get_current_manager
+from core.deps import get_db, get_current_user, get_current_manager
 from models.admin import Admin
 from models.manager import Manager
 from models.loyalty_config import LoyaltyConfig
@@ -22,10 +23,11 @@ router = APIRouter()
 )
 async def get_loyalty_configs_all_admin(
     db: AsyncSession = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin),
+    current_user = Depends(require_permission('loyalty', 'read')),
 ) -> List[dict]:
+    admin_id = get_user_admin_id(current_user)
     # Query all stores and join their loyalty configs
-    stmt = select(Store).options(joinedload(Store.loyalty_config)).where(Store.admin_id == current_admin.id)
+    stmt = select(Store).options(joinedload(Store.loyalty_config)).where(Store.admin_id == admin_id)
     result = await db.execute(stmt)
     stores = result.scalars().all()
     
@@ -55,8 +57,9 @@ async def get_loyalty_configs_all_admin(
 async def get_loyalty_config_admin(
     store_id: int = Path(..., description="The ID of the store"),
     db: AsyncSession = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin),
+    current_user = Depends(require_permission('loyalty', 'read')),
 ) -> LoyaltyConfigRead:
+    admin_id = get_user_admin_id(current_user)
     config_stmt = select(LoyaltyConfig).where(
         LoyaltyConfig.store_id == store_id
     )
@@ -70,7 +73,7 @@ async def get_loyalty_config_admin(
         )
     
     # Ensure the admin owns the store
-    if loyalty_config.store.admin_id != current_admin.id:
+    if loyalty_config.store.admin_id != admin_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied to this store's loyalty configuration"
@@ -88,8 +91,9 @@ async def update_loyalty_config_admin(
     payload: LoyaltyConfigUpdate,
     store_id: int = Path(..., description="The ID of the store"),
     db: AsyncSession = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin),
+    current_user = Depends(require_permission('loyalty', 'read')),
 ) -> LoyaltyConfigRead:
+    admin_id = get_user_admin_id(current_user)
     config_stmt = select(LoyaltyConfig).where(
         LoyaltyConfig.store_id == store_id
     )
@@ -103,7 +107,7 @@ async def update_loyalty_config_admin(
         )
 
     # Ensure the admin owns the store
-    if loyalty_config.store.admin_id != current_admin.id:
+    if loyalty_config.store.admin_id != admin_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied to this store's loyalty configuration"
@@ -125,13 +129,13 @@ async def update_loyalty_config_admin(
 @router.get(
     "/shopkeeper/loyalty/config",
     response_model=LoyaltyConfigRead,
-    summary="Get loyalty configuration for the manager's store (Shopkeeper)",
+    summary="Get loyalty configuration for the current user's store (Shopkeeper)",
 )
 async def get_loyalty_config_shopkeeper(
     db: AsyncSession = Depends(get_db),
-    current_manager: Manager = Depends(get_current_manager),
+    current_user = Depends(require_permission('loyalty', 'read')),
 ) -> LoyaltyConfigRead:
-    store_id = current_manager.store_id
+    store_id = current_user.store_id
     config_stmt = select(LoyaltyConfig).where(
         LoyaltyConfig.store_id == store_id
     )
@@ -150,14 +154,14 @@ async def get_loyalty_config_shopkeeper(
 @router.put(
     "/shopkeeper/loyalty/config",
     response_model=LoyaltyConfigRead,
-    summary="Update loyalty configuration for the manager's store (Shopkeeper)",
+    summary="Update loyalty configuration for the current user's store (Shopkeeper)",
 )
 async def update_loyalty_config_shopkeeper(
     payload: LoyaltyConfigUpdate,
     db: AsyncSession = Depends(get_db),
-    current_manager: Manager = Depends(get_current_manager),
+    current_user = Depends(require_permission('loyalty', 'configure')),
 ) -> LoyaltyConfigRead:
-    store_id = current_manager.store_id
+    store_id = current_user.store_id
     config_stmt = select(LoyaltyConfig).where(
         LoyaltyConfig.store_id == store_id
     )

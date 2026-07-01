@@ -2,7 +2,7 @@
 import math
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from core.deps import get_current_user
+from core.deps import require_permission, get_user_admin_id
 from db.session import get_db
 from models.admin import Admin
 from schemas.brand import BrandRead
@@ -23,7 +23,7 @@ async def list_brands(
     limit: int = Query(20, ge=1, le=100),
     paginate: bool = Query(True),
     db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_user),
+    current_user = Depends(require_permission('brands', 'read')),
 ):
     if isinstance(current_user, Admin):
         admin_id = current_user.id
@@ -72,7 +72,7 @@ async def list_brands(
 async def get_brand_endpoint(
     brand_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_user),
+    current_user = Depends(require_permission('brands', 'read')),
 ) -> BrandRead:
     if isinstance(current_user, Admin):
         admin_id = current_user.id

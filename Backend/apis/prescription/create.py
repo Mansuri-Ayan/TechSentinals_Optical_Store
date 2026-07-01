@@ -1,7 +1,7 @@
 # API: prescription/create.py
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from core.deps import get_current_user
+from core.deps import require_permission, get_user_admin_id
 from db.session import get_db
 from models.admin import Admin
 from models.optician import Optician
@@ -43,7 +43,7 @@ def _prescription_to_read(p) -> PrescriptionRead:
 async def create_prescription_endpoint(
     payload: PrescriptionCreate,
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user = Depends(require_permission("prescriptions:create", "sales:create")),
 ) -> PrescriptionRead:
     admin_id = _get_user_admin_id(current_user)
     # Verify customer belongs to this admin

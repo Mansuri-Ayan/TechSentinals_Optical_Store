@@ -1,7 +1,7 @@
 # API: repair/read.py
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from core.deps import get_current_user, get_user_admin_id
+from core.deps import require_permission, get_user_admin_id
 from db.session import get_db
 from models.admin import Admin
 from schemas.repair import RepairRead, RepairListItem, RepairListResponse
@@ -55,7 +55,7 @@ async def list_repairs_endpoint(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_user),
+    current_user = Depends(require_permission("repairs", "read")),
 ) -> RepairListResponse:
     admin_id = get_user_admin_id(current_user)
 
@@ -101,7 +101,7 @@ async def list_repairs_endpoint(
 async def get_repair_endpoint(
     repair_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_user),
+    current_user = Depends(require_permission("repairs", "read")),
 ) -> RepairRead:
     admin_id = get_user_admin_id(current_user)
     repair = await get_repair(db, repair_id=repair_id, admin_id=admin_id)

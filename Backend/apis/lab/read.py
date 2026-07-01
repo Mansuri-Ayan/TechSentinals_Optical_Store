@@ -2,7 +2,7 @@
 import math
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from core.deps import get_current_user
+from core.deps import get_current_user, require_permission
 from db.session import get_db
 from models.admin import Admin
 from schemas.lab import LabRead
@@ -22,7 +22,7 @@ async def list_labs(
     limit: int = Query(10, ge=1, le=100),
     paginate: bool = Query(True),
     db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_user),
+    current_user = Depends(require_permission("sales:read", "sales:create", "sales:update", "inventory:create", "inventory:update")),
 ):
     if isinstance(current_user, Admin):
         admin_id = current_user.id
@@ -63,7 +63,7 @@ async def list_labs(
 async def get_lab_endpoint(
     lab_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_user),
+    current_user = Depends(require_permission("sales:read", "sales:create", "sales:update")),
 ) -> LabRead:
     if isinstance(current_user, Admin):
         admin_id = current_user.id
@@ -103,7 +103,7 @@ async def get_lab_orders_endpoint(
     page: int = Query(1, ge=1),
     limit: int = Query(10, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_user),
+    current_user = Depends(require_permission("sales:read", "sales:create", "sales:update")),
 ) -> LabOrdersResponse:
     if isinstance(current_user, Admin):
         admin_id = current_user.id

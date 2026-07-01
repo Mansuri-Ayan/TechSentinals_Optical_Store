@@ -1,7 +1,7 @@
 # API: store/read.py
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from core.deps import get_current_user, get_user_admin_id
+from core.deps import require_permission, get_user_admin_id, get_current_user
 from db.session import get_db
 from models.admin import Admin
 from schemas.store import StoreRead
@@ -27,11 +27,30 @@ async def list_stores(
     db: AsyncSession = Depends(get_db),
     current_user = Depends(get_current_user),
 ) -> PaginatedResponse[StoreRead]:
+    from services.permission_service import has_permission
+    
     is_active = None
     if status:
         is_active = status.upper() == "ACTIVE"
         
     admin_id = get_user_admin_id(current_user)
+    
+    # Check permissions
+    has_read_all = False
+    actor_type = getattr(current_user, "token_role", "").upper()
+    if actor_type in ("SUPERADMIN", "ADMIN"):
+        has_read_all = True
+    elif actor_type:
+        has_read_all = await has_permission(db, actor_type, current_user.id, admin_id, "stores:read")
+
+    # If they don't have global read, they can only see their own store
+    own_store_id = getattr(current_user, "store_id", None)
+    if not has_read_all and not own_store_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Missing permission: stores:read"
+        )
+        
     stores, total = await get_stores_by_admin(
         db,
         admin_id=admin_id,
@@ -42,6 +61,11 @@ async def list_stores(
         is_active=is_active,
         paginate=paginate,
     )
+    
+    if not has_read_all:
+        stores = [s for s in stores if s.id == own_store_id]
+        total = len(stores)
+        
     pages = (total + page_size - 1) // page_size if page_size > 0 else 1
     return PaginatedResponse[StoreRead](
         items=[StoreRead.model_validate(s) for s in stores],
@@ -63,8 +87,25 @@ async def get_store_endpoint(
     db: AsyncSession = Depends(get_db),
     current_user = Depends(get_current_user),
 ) -> StoreRead:
-    store = await get_store(db, store_id)
+    from services.permission_service import has_permission
     admin_id = get_user_admin_id(current_user)
+    
+    # Check permissions
+    has_read_all = False
+    actor_type = getattr(current_user, "token_role", "").upper()
+    if actor_type in ("SUPERADMIN", "ADMIN"):
+        has_read_all = True
+    elif actor_type:
+        has_read_all = await has_permission(db, actor_type, current_user.id, admin_id, "stores:read")
+        
+    own_store_id = getattr(current_user, "store_id", None)
+    if not has_read_all and own_store_id != store_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Missing permission: stores:read or not your store"
+        )
+        
+    store = await get_store(db, store_id)
     if store is None or store.admin_id != admin_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

@@ -1,7 +1,7 @@
 # API: purchase_order/read.py
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from core.deps import get_current_admin
+from core.deps import require_permission, get_user_admin_id
 from db.session import get_db
 from models.admin import Admin
 from schemas.purchase_order import (
@@ -59,11 +59,12 @@ async def list_po_endpoint(
     include_nested: bool = Query(default=False),
     has_due: bool | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin),
+    current_user = Depends(require_permission('purchase_orders', 'read')),
 ) -> list[PurchaseOrderRead]:
+    admin_id = get_user_admin_id(current_user)
     pos = await list_purchase_orders(
         db,
-        admin_id=current_admin.id,
+        admin_id=admin_id,
         supplier_id=supplier_id,
         store_id=store_id,
         status_filter=status_filter,
@@ -84,10 +85,11 @@ async def list_po_endpoint(
 async def get_po_endpoint(
     po_id: int,
     db: AsyncSession = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin),
+    current_user = Depends(require_permission('purchase_orders', 'read')),
 ) -> PurchaseOrderRead:
+    admin_id = get_user_admin_id(current_user)
     po = await get_purchase_order(db, po_id)
-    if not po or po.admin_id != current_admin.id:
+    if not po or po.admin_id != admin_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Purchase order not found",

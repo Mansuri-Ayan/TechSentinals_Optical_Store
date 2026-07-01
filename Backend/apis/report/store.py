@@ -2,7 +2,7 @@
 from datetime import date, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from core.deps import get_current_admin
+from core.deps import require_permission, get_user_admin_id
 from db.session import get_db
 from models.admin import Admin
 from schemas.report import StoreReportDetails
@@ -28,8 +28,9 @@ async def get_store_report_endpoint(
         description="End date of report period (default: today)"
     ),
     db: AsyncSession = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin),
+    current_user = Depends(require_permission('reports', 'read')),
 ) -> StoreReportDetails:
+    admin_id = get_user_admin_id(current_user)
     # Set default dates
     if not end_date:
         end_date = date.today()
@@ -39,7 +40,7 @@ async def get_store_report_endpoint(
     try:
         report = await get_store_report(
             db=db,
-            admin_id=current_admin.id,
+            admin_id=admin_id,
             store_id=store_id,
             start_date=start_date,
             end_date=end_date

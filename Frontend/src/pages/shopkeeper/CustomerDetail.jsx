@@ -13,6 +13,8 @@ import { useAuthStore, useStoreStore } from '../../store/store';
 import { toast } from 'react-toastify';
 import AddOpticalModal from '../../components/shopkeeper/AddOpticalModal';
 import AddOrderModal from '../../components/shopkeeper/AddOrderModal';
+import PermissionGuard from '../../components/shared/PermissionGuard';
+import { usePagePermissions } from '../../hooks/usePermissions';
 
 /* ── Helpers ── */
 const fmt = (n) => `₹${Number(n).toLocaleString('en-IN')}`;
@@ -299,30 +301,36 @@ const CustomerDetail = () => {
 
         {/* Top Right Action Buttons */}
         <div className="flex flex-col sm:flex-row items-center gap-2 w-full lg:w-auto justify-end flex-wrap sm:flex-nowrap">
-          <button
-            onClick={() => {
-              setSelectedClaimOrder('');
-              setShowWarrantyModal(true);
-            }}
-            className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs sm:text-sm font-bold transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 whitespace-nowrap cursor-pointer"
-          >
-            <Wrench className="w-4 h-4" />
-            Claim Warranty
-          </button>
-          <button
-            onClick={() => setShowOpticalModal(true)}
-            className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs sm:text-sm font-bold transition-all shadow-sm hover:shadow-md hover:-translate-y-0.5 whitespace-nowrap cursor-pointer"
-          >
-            <Eye className="w-4 h-4" />
-            Add Optical Information
-          </button>
-          <button
-            onClick={() => setShowOrderModal(true)}
-            className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 bg-[#0A0F1F] text-white rounded-xl text-xs sm:text-sm font-bold hover:bg-slate-800 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 whitespace-nowrap cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            Add Order
-          </button>
+          <PermissionGuard permission="repairs:create">
+            <button
+              onClick={() => {
+                setSelectedClaimOrder('');
+                setShowWarrantyModal(true);
+              }}
+              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs sm:text-sm font-bold transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 whitespace-nowrap cursor-pointer"
+            >
+              <Wrench className="w-4 h-4" />
+              Claim Warranty
+            </button>
+          </PermissionGuard>
+          <PermissionGuard permission="customers:update">
+            <button
+              onClick={() => setShowOpticalModal(true)}
+              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs sm:text-sm font-bold transition-all shadow-sm hover:shadow-md hover:-translate-y-0.5 whitespace-nowrap cursor-pointer"
+            >
+              <Eye className="w-4 h-4" />
+              Add Optical Information
+            </button>
+          </PermissionGuard>
+          <PermissionGuard permission="sales:create">
+            <button
+              onClick={() => setShowOrderModal(true)}
+              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 bg-[#0A0F1F] text-white rounded-xl text-xs sm:text-sm font-bold hover:bg-slate-800 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 whitespace-nowrap cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              Add Order
+            </button>
+          </PermissionGuard>
         </div>
       </div>
 
@@ -507,15 +515,17 @@ const CustomerDetail = () => {
                                   {isOrderInWarranty(order.date, getOrderWarrantyMonths(order)) ? 'In Warranty' : 'Out of Warranty'}
                                 </span>
                                 {isOrderInWarranty(order.date, getOrderWarrantyMonths(order)) && (
-                                  <button
-                                    onClick={() => {
-                                      setSelectedClaimOrder(order.id);
-                                      setShowWarrantyModal(true);
-                                    }}
-                                    className="text-amber-600 hover:text-amber-800 font-bold text-[10px] flex items-center gap-0.5 cursor-pointer"
-                                  >
-                                    <Wrench className="w-2.5 h-2.5" /> Claim Warranty
-                                  </button>
+                                  <PermissionGuard permission="repairs:create">
+                                    <button
+                                      onClick={() => {
+                                        setSelectedClaimOrder(order.id);
+                                        setShowWarrantyModal(true);
+                                      }}
+                                      className="text-amber-600 hover:text-amber-800 font-bold text-[10px] flex items-center gap-0.5 cursor-pointer"
+                                    >
+                                      <Wrench className="w-2.5 h-2.5" /> Claim Warranty
+                                    </button>
+                                  </PermissionGuard>
                                 )}
                               </div>
                             </td>
@@ -633,15 +643,17 @@ const CustomerDetail = () => {
                           {isOrderInWarranty(order.date, getOrderWarrantyMonths(order)) && (
                             <div>
                               <p className="text-slate-400 font-semibold mb-0.5">Action</p>
-                              <button
-                                onClick={() => {
-                                  setSelectedClaimOrder(order.id);
-                                  setShowWarrantyModal(true);
-                                }}
-                                className="text-amber-600 hover:text-amber-800 font-bold text-xs flex items-center gap-0.5 cursor-pointer"
-                              >
-                                <Wrench className="w-3 h-3" /> Claim Warranty
-                              </button>
+                              <PermissionGuard permission="repairs:create">
+                                <button
+                                  onClick={() => {
+                                    setSelectedClaimOrder(order.id);
+                                    setShowWarrantyModal(true);
+                                  }}
+                                  className="text-amber-600 hover:text-amber-800 font-bold text-xs flex items-center gap-0.5 cursor-pointer"
+                                >
+                                  <Wrench className="w-3 h-3" /> Claim Warranty
+                                </button>
+                              </PermissionGuard>
                             </div>
                           )}
                         </div>

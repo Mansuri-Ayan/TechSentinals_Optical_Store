@@ -16,6 +16,8 @@ import { useTransactions } from '../../hooks/useTransactions';
 import { useCategories } from '../../hooks/useCategories';
 import { useProducts } from '../../hooks/useProducts';
 import { getInventoryApi } from '../../api/inventory/inventory.api';
+import PermissionGuard from '../../components/shared/PermissionGuard';
+import { usePagePermissions } from '../../hooks/usePermissions'; 
 
 /* ─────────────────────────────────────────────────────────
    CONSTANTS & MOCK DATA
@@ -554,6 +556,7 @@ const Transactions = () => {
   const { selectedStore, setSelectedStore, stores } = useStoreStore();
   const [searchParams, setSearchParams] = useSearchParams();
   const [inPageStoreId, setInPageStoreId] = useState(storeId);
+  const perms = usePagePermissions('transactions');
 
   useEffect(() => {
     setInPageStoreId(storeId);
@@ -760,13 +763,15 @@ const Transactions = () => {
                 <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
               </div>
             )}
-            <button
-              onClick={() => setShowNewModal(true)}
-              className="flex items-center gap-2 px-5 py-2.5 bg-[#0A0F1F] text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 flex-shrink-0 justify-center animate-fade-in"
-            >
-              <Plus className="w-4 h-4" />
-              New Transaction
-            </button>
+            <PermissionGuard permission="transactions:create">
+              <button
+                onClick={() => setShowNewModal(true)}
+                className="flex items-center gap-2 px-5 py-2.5 bg-[#0A0F1F] text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 flex-shrink-0 justify-center animate-fade-in"
+              >
+                <Plus className="w-4 h-4" />
+                New Transaction
+              </button>
+            </PermissionGuard>
           </div>
         </div>
       </div>
@@ -1127,7 +1132,7 @@ const Transactions = () => {
         }}
         isApproving={isApprovingTransaction}
         isRejecting={isRejectingTransaction}
-        canApprove={viewTx?.status === 'Pending'}
+        canApprove={viewTx?.status === 'Pending' && perms.canUpdate}
       />
     </div>
   );

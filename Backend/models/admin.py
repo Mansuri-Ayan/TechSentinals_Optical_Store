@@ -250,6 +250,26 @@ class Admin(Base):
         cascade="all, delete-orphan",
         lazy="noload",
     )
+    accountants = relationship(
+        "Accountant",
+        back_populates="admin",
+        cascade="all, delete-orphan",
+        lazy="noload",
+    )
+    role_permission_overrides = relationship(
+        "AdminRolePermissionOverride",
+        back_populates="admin",
+        cascade="all, delete-orphan",
+        lazy="noload"
+    )
+
+    user_permission_overrides = relationship(
+        "UserPermissionOverride",
+        back_populates="admin",
+        cascade="all, delete-orphan",
+        lazy="noload",
+        foreign_keys="UserPermissionOverride.admin_id"
+    )
 
     def __repr__(self) -> str:
         return (

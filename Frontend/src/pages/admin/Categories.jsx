@@ -8,6 +8,8 @@ import Pagination from '../../components/shared/Pagination';
 import AddEditCategoryModal from '../../components/admin/AddEditCategoryModal';
 import { useStoreStore } from '../../store/store';
 import { useCategories, useSubcategories } from '../../hooks/useCategories';
+import PermissionGuard from '../../components/shared/PermissionGuard';
+import { usePagePermissions } from '../../hooks/usePermissions';
 
 const ITEMS_PER_PAGE = 8;
 
@@ -104,6 +106,12 @@ const Categories = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [catPage, setCatPage] = useState(1);
   const [addEditModal, setAddEditModal] = useState({ isOpen: false, item: null, mode: 'category' });
+
+  const perms = usePagePermissions({
+    canCreate: 'categories:create',
+    canUpdate: 'categories:update',
+    canDelete: 'categories:delete'
+  });
 
   // Debounce search
   useEffect(() => {
@@ -287,22 +295,26 @@ const Categories = () => {
                   <Package className="w-4 h-4" />
                   View All in Inventory
                 </button>
+                <PermissionGuard permission="categories:create">
+                  <button
+                    onClick={() => setAddEditModal({ isOpen: true, item: null, mode: 'subcategory' })}
+                    className="flex items-center gap-2 px-5 py-2.5 bg-[#0A0F1F] text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 flex-shrink-0 justify-center"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add Option
+                  </button>
+                </PermissionGuard>
+              </div>
+            ) : (
+              <PermissionGuard permission="categories:create">
                 <button
-                  onClick={() => setAddEditModal({ isOpen: true, item: null, mode: 'subcategory' })}
+                  onClick={() => setAddEditModal({ isOpen: true, item: null, mode: 'category' })}
                   className="flex items-center gap-2 px-5 py-2.5 bg-[#0A0F1F] text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 flex-shrink-0 justify-center"
                 >
                   <Plus className="w-4 h-4" />
-                  Add Option
+                  Add Category
                 </button>
-              </div>
-            ) : (
-              <button
-                onClick={() => setAddEditModal({ isOpen: true, item: null, mode: 'category' })}
-                className="flex items-center gap-2 px-5 py-2.5 bg-[#0A0F1F] text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 flex-shrink-0 justify-center"
-              >
-                <Plus className="w-4 h-4" />
-                Add Category
-              </button>
+              </PermissionGuard>
             )}
           </div>
         </div>
@@ -385,20 +397,24 @@ const Categories = () => {
                           View Inventory
                         </button>
                         
-                        <button
-                          onClick={() => setAddEditModal({ isOpen: true, item: cat, mode: 'category' })}
-                          className="flex items-center justify-center w-8 h-8 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-colors border border-slate-200"
-                          title="Edit category name/details"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteCategory(cat.id)}
-                          className="flex items-center justify-center w-8 h-8 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-colors border border-red-100"
-                          title="Deactivate category"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        {perms.canUpdate && (
+                          <button
+                            onClick={() => setAddEditModal({ isOpen: true, item: cat, mode: 'category' })}
+                            className="flex items-center justify-center w-8 h-8 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-colors border border-slate-200"
+                            title="Edit category name/details"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        {perms.canDelete && (
+                          <button
+                            onClick={() => handleDeleteCategory(cat.id)}
+                            className="flex items-center justify-center w-8 h-8 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-colors border border-red-100"
+                            title="Deactivate category"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </div>
                     </div>
                   );
@@ -494,20 +510,24 @@ const Categories = () => {
                           <Eye className="w-3.5 h-3.5" />
                           View Items
                         </button>
-                        <button
-                          onClick={() => setAddEditModal({ isOpen: true, item: option, mode: 'subcategory' })}
-                          className="flex items-center justify-center w-9 h-9 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-colors border border-slate-200"
-                          title="Edit option"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteSubcategory(option.id)}
-                          className="flex items-center justify-center w-9 h-9 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-colors border border-red-100"
-                          title="Deactivate option"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        {perms.canUpdate && (
+                          <button
+                            onClick={() => setAddEditModal({ isOpen: true, item: option, mode: 'subcategory' })}
+                            className="flex items-center justify-center w-9 h-9 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-colors border border-slate-200"
+                            title="Edit option"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        {perms.canDelete && (
+                          <button
+                            onClick={() => handleDeleteSubcategory(option.id)}
+                            className="flex items-center justify-center w-9 h-9 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-colors border border-red-100"
+                            title="Deactivate option"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>

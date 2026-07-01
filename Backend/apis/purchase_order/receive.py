@@ -1,7 +1,7 @@
 # API: purchase_order/receive.py
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from core.deps import get_current_admin
+from core.deps import require_permission, get_user_admin_id
 from db.session import get_db
 from models.admin import Admin
 from schemas.purchase_order import (
@@ -54,16 +54,17 @@ async def receive_goods_endpoint(
     po_id: int,
     payload: GoodsReceiptCreate,
     db: AsyncSession = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin),
+    current_user = Depends(require_permission('purchase_orders', 'read')),
 ) -> PurchaseOrderRead:
+    admin_id = get_user_admin_id(current_user)
     po = await get_purchase_order(db, po_id)
-    if not po or po.admin_id != current_admin.id:
+    if not po or po.admin_id != admin_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Purchase order not found",
         )
     await receive_goods(
-        db, po, payload, created_by=current_admin.id,
+        db, po, payload, created_by=admin_id,
     )
     # Reload with all relations
     updated_po = await get_purchase_order(db, po_id)

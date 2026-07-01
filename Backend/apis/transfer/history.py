@@ -1,7 +1,7 @@
 # API: transfer/history.py
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from core.deps import get_current_admin
+from core.deps import require_permission, get_user_admin_id
 from db.session import get_db
 from models.admin import Admin
 from schemas.pagination import PaginatedResponse
@@ -39,8 +39,9 @@ async def transaction_history_endpoint(
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=1000),
     db: AsyncSession = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin),
+    current_user = Depends(require_permission("inventory", "read")),
 ) -> PaginatedResponse[TransactionRead]:
+    admin_id = get_user_admin_id(current_user)
     if store_id is not None:
         if store_id.lower() == "admin":
             pass
@@ -54,7 +55,7 @@ async def transaction_history_endpoint(
                     detail="Invalid store_id format",
                 )
             store = await get_store(db, numeric_store_id)
-            if store is None or store.admin_id != current_admin.id:
+            if store is None or store.admin_id != admin_id:
                 from fastapi import HTTPException, status
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
@@ -64,7 +65,7 @@ async def transaction_history_endpoint(
     offset = (page - 1) * limit
     transactions, total = await get_transaction_history(
         db,
-        admin_id=current_admin.id,
+        admin_id=admin_id,
         product_id=product_id,
         inventory_id=inventory_id,
         transaction_type=transaction_type,

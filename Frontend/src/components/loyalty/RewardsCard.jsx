@@ -1,7 +1,7 @@
 import { Gift, Award, Coins } from 'lucide-react';
 import { REWARDS } from '../../data/loyaltyData';
 
-const RewardsCard = ({ currentPoints, onRedeem, isRedeeming }) => {
+const RewardsCard = ({ currentPoints, onRedeem, isRedeeming, canRedeem = true }) => {
   return (
     <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-6">
       <h3 className="text-sm font-bold text-slate-800 tracking-tight flex items-center gap-1.5 mb-6 pb-2 border-b border-slate-100">
@@ -42,17 +42,19 @@ const RewardsCard = ({ currentPoints, onRedeem, isRedeeming }) => {
               </div>
 
               <div className="mt-5">
-                <button
-                  onClick={() => onRedeem(reward.id)}
-                  disabled={!isEligible || isRedeeming}
-                  className={`w-full py-2 rounded-xl text-xs font-bold transition-all shadow-sm ${
-                    isEligible
-                      ? 'bg-emerald-600 hover:bg-emerald-755 text-white cursor-pointer hover:shadow-md hover:-translate-y-0.5'
-                      : 'bg-slate-100 text-slate-400 border border-slate-200/60 cursor-not-allowed'
-                  }`}
-                >
-                  {isRedeeming ? 'Redeeming...' : isEligible ? 'Redeem Reward' : 'Insufficient Points'}
-                </button>
+                {canRedeem && (
+                  <button
+                    onClick={() => onRedeem(reward.id)}
+                    disabled={!isEligible || isRedeeming}
+                    className={`w-full py-2 rounded-xl text-xs font-bold transition-all shadow-sm ${
+                      isEligible
+                        ? 'bg-emerald-600 hover:bg-emerald-755 text-white cursor-pointer hover:shadow-md hover:-translate-y-0.5'
+                        : 'bg-slate-100 text-slate-400 border border-slate-200/60 cursor-not-allowed'
+                    }`}
+                  >
+                    {isRedeeming ? 'Redeeming...' : isEligible ? 'Redeem Reward' : 'Insufficient Points'}
+                  </button>
+                )}
               </div>
             </div>
           );

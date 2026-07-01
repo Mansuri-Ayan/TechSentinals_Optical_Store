@@ -11,6 +11,8 @@ import LoyaltyCustomerTable from '../../components/loyalty/LoyaltyCustomerTable'
 import PointsConfigModal from '../../components/loyalty/PointsConfigModal';
 import GlobalLoyaltyConfigModal from '../../components/loyalty/GlobalLoyaltyConfigModal';
 import AdjustPointsModal from '../../components/loyalty/AdjustPointsModal';
+import PermissionGuard from '../../components/shared/PermissionGuard';
+import { usePagePermissions } from '../../hooks/usePermissions'; 
 
 import {
   useLoyaltyConfig,
@@ -28,6 +30,7 @@ import {
 const Loyalty = () => {
   const { storeId } = useParams();
   const navigate = useNavigate();
+  const perms = usePagePermissions('loyalty');
   const isAdminAll = storeId === 'admin';
   const [isRefreshing, setIsRefreshing] = useState(false);
   
@@ -146,13 +149,15 @@ const Loyalty = () => {
 
         <div className="flex items-center gap-2 w-full sm:w-auto">
           {!isAdminAll && (
-            <button
-              onClick={() => setIsGlobalConfigModalOpen(true)}
-              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all shadow-sm hover:shadow-md hover:-translate-y-0.5 whitespace-nowrap cursor-pointer"
-            >
-              <Sliders className="w-4 h-4 text-slate-500" />
-              Program Settings
-            </button>
+            <PermissionGuard permission="loyalty:update">
+              <button
+                onClick={() => setIsGlobalConfigModalOpen(true)}
+                className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all shadow-sm hover:shadow-md hover:-translate-y-0.5 whitespace-nowrap cursor-pointer"
+              >
+                <Sliders className="w-4 h-4 text-slate-500" />
+                Program Settings
+              </button>
+            </PermissionGuard>
           )}
           <button
             onClick={handleExport}
@@ -253,13 +258,15 @@ const Loyalty = () => {
                   <Sliders className="w-4 h-4 text-blue-500" />
                   Category Multipliers
                 </h3>
-                <button
-                  onClick={() => setIsConfigModalOpen(true)}
-                  className="flex items-center gap-1 text-[10px] font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-lg border border-blue-100 transition-colors cursor-pointer"
-                >
-                  <Edit3 className="w-3 h-3" />
-                  Edit Multipliers
-                </button>
+                <PermissionGuard permission="loyalty:update">
+                  <button
+                    onClick={() => setIsConfigModalOpen(true)}
+                    className="flex items-center gap-1 text-[10px] font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-lg border border-blue-100 transition-colors cursor-pointer"
+                  >
+                    <Edit3 className="w-3 h-3" />
+                    Edit Multipliers
+                  </button>
+                </PermissionGuard>
               </div>
 
               <div className="overflow-hidden border border-slate-100 rounded-xl">
@@ -319,6 +326,7 @@ const Loyalty = () => {
           currentPage={currentPage}
           setCurrentPage={setCurrentPage}
           onAdjustPoints={(c) => setAdjustCustomer(c)}
+          canAdjust={perms.canUpdate}
         />
       </div>
 

@@ -27,14 +27,15 @@ const TierBadge = ({ tier }) => {
 
 const LoyaltyCustomerTable = ({ 
   data, 
-  routePrefix, 
+  routePrefix = '/admin/loyalty',
   searchTerm, 
   setSearchTerm, 
   tierFilter, 
   setTierFilter, 
   currentPage, 
   setCurrentPage, 
-  onAdjustPoints 
+  onAdjustPoints,
+  canAdjust = true
 }) => {
   const navigate = useNavigate();
 
@@ -117,14 +118,16 @@ const LoyaltyCustomerTable = ({
                   <td className="px-5 py-4 text-xs font-semibold text-slate-500">
                     {c.last_transaction_date ? new Date(c.last_transaction_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Never'}
                   </td>
-                  <td className="px-5 py-4 text-right" onClick={(e) => e.stopPropagation()}>
-                    <div className="flex justify-end gap-2">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); onAdjustPoints(c); }}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors border border-slate-200"
-                      >
-                        Adjust Points
-                      </button>
+                  <td className="px-5 py-4 text-right">
+                    <div className="flex justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+                      {canAdjust && (
+                        <button
+                          onClick={() => onAdjustPoints(c)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors border border-slate-200"
+                        >
+                          Adjust Points
+                        </button>
+                      )}
                       <button
                         onClick={() => handleRowClick(c.customer_id)}
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-xl text-xs font-bold transition-colors border border-blue-100"

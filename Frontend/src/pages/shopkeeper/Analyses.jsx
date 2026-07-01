@@ -8,6 +8,7 @@ import {
 import { useSales } from '../../hooks/useSales';
 import { useCustomers } from '../../hooks/useCustomers';
 import { useChartAnimation } from '../../hooks/useChartAnimation';
+import PermissionGuard from '../../components/shared/PermissionGuard';
 
 /* ── Helpers ── */
 const fmtCurrency = (val) => {
@@ -535,144 +536,150 @@ const ShopkeeperAnalyses = () => {
   const loading = salesLoading || customersLoading || isRefreshing;
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto animate-fade-in font-sans overflow-x-hidden space-y-6 sm:space-y-8 bg-transparent">
-      {/* Analyses Page Header */}
-      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 border-b border-slate-100 pb-5 flex-shrink-0">
-        <div className="space-y-1.5">
-          <div className="flex items-center text-sm text-slate-500 font-semibold mb-1.5 space-x-2">
-            <Link to="/shopkeeper/dashboard" className="hover:text-slate-800 transition-colors">Dashboard</Link>
-            <ChevronRight className="w-4 h-4 flex-shrink-0" />
-            <span className="text-slate-900 font-extrabold">Analyses</span>
-          </div>
-          <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight flex items-center gap-2">
-            <BarChart3 className="w-7 h-7 text-slate-800" /> Store Analyses & Insights
-          </h1>
-          <p className="text-slate-505 text-xs sm:text-sm font-semibold">
-            Track business performance metrics, sales trends, and customer metrics for your assigned branch.
-          </p>
-        </div>
-
-        {/* Action Row */}
-        <div className="flex items-center gap-3 w-full xl:w-auto flex-wrap sm:flex-nowrap">
-          {/* Date Filter */}
-          <div className="relative flex-1 sm:flex-initial min-w-[150px]">
-            <select
-              value={dateRange}
-              onChange={(e) => setDateRange(e.target.value)}
-              className="w-full bg-white text-slate-700 text-xs font-bold py-2.5 px-4 rounded-xl border border-slate-200 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 cursor-pointer appearance-none pr-8 shadow-sm"
-            >
-              <option value="Last 30 Days">Last 30 Days</option>
-              <option value="This Month">This Month</option>
-              <option value="This Quarter">This Quarter</option>
-              <option value="This Year">This Year</option>
-            </select>
-            <Calendar className="w-3.5 h-3.5 text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-          </div>
-
-          <button
-            onClick={handleExport}
-            className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-4 py-2.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-sm active:scale-95 whitespace-nowrap"
-          >
-            <Download className="w-3.5 h-3.5 text-slate-400" /> Export CSV
-          </button>
-          <button
-            onClick={handleRefresh}
-            className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-sm active:scale-95 whitespace-nowrap"
-          >
-            <RefreshCw className="w-3.5 h-3.5" /> Refresh
-          </button>
-        </div>
+    <PermissionGuard permission="reports:read" fallback={
+      <div className="p-8 text-center text-slate-500">
+        You do not have permission to view reports.
       </div>
-
-      {/* Analytics KPI Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
-        {[
-          { title: 'Total Revenue (Paid)', value: fmtCurrency(kpis.revenue), icon: DollarSign, color: 'text-emerald-500' },
-          { title: 'Total Orders', value: kpis.orders.toLocaleString(), icon: ShoppingBag, color: 'text-blue-500' },
-          { title: 'Total Customers', value: kpis.customers.toLocaleString(), icon: Users, color: 'text-indigo-500' },
-          { title: 'Average Order Value', value: fmtCurrency(kpis.aov), icon: TrendingUp, color: 'text-purple-500' },
-          { title: 'Outstanding Balance', value: fmtCurrency(kpis.outstanding), icon: AlertTriangle, color: 'text-rose-500' },
-          { title: 'Active Customer Rate', value: `${kpis.activeRate.toFixed(1)}%`, icon: Percent, color: 'text-amber-500' }
-        ].map((stat, i) => (
-          <div
-            key={i}
-            className="bg-white p-6 rounded-2xl border border-slate-200/60 shadow-sm flex flex-col justify-between h-36 hover:shadow-md transition-all duration-300"
-          >
-            <div className="flex justify-between items-start">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-normal">{stat.title}</p>
-              <stat.icon className={`w-4.5 h-4.5 ${stat.color}`} />
+    }>
+      <div className="p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto animate-fade-in font-sans overflow-x-hidden space-y-6 sm:space-y-8 bg-transparent">
+        {/* Analyses Page Header */}
+        <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 border-b border-slate-100 pb-5 flex-shrink-0">
+          <div className="space-y-1.5">
+            <div className="flex items-center text-sm text-slate-500 font-semibold mb-1.5 space-x-2">
+              <Link to="/shopkeeper/dashboard" className="hover:text-slate-800 transition-colors">Dashboard</Link>
+              <ChevronRight className="w-4 h-4 flex-shrink-0" />
+              <span className="text-slate-900 font-extrabold">Analyses</span>
             </div>
-            <h3 className="text-xl sm:text-2xl font-black text-slate-800 tracking-tight leading-none mt-4 truncate">{stat.value}</h3>
+            <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+              <BarChart3 className="w-7 h-7 text-slate-800" /> Store Analyses & Insights
+            </h1>
+            <p className="text-slate-505 text-xs sm:text-sm font-semibold">
+              Track business performance metrics, sales trends, and customer metrics for your assigned branch.
+            </p>
           </div>
-        ))}
-      </div>
 
-      {loading ? (
-        <div className="min-h-[50vh] flex flex-col items-center justify-center p-20 bg-white rounded-3xl border border-slate-100 shadow-sm">
-          <RefreshCw className="w-10 h-10 animate-spin text-emerald-500 mb-3" />
-          <p className="text-slate-500 text-sm font-semibold">Updating store analytics reporting metrics...</p>
-        </div>
-      ) : (
-        <div className="space-y-6 sm:space-y-8">
-          
-          {/* Row 1: Sales Trend + Sales Status */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2">
-              <AnalyticsCard
-                title="Sales Trend Analysis"
-                subtitle="Gross store revenue growth trends plotted across the last 6 calendar months."
+          {/* Action Row */}
+          <div className="flex items-center gap-3 w-full xl:w-auto flex-wrap sm:flex-nowrap">
+            {/* Date Filter */}
+            <div className="relative flex-1 sm:flex-initial min-w-[150px]">
+              <select
+                value={dateRange}
+                onChange={(e) => setDateRange(e.target.value)}
+                className="w-full bg-white text-slate-700 text-xs font-bold py-2.5 px-4 rounded-xl border border-slate-200 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 cursor-pointer appearance-none pr-8 shadow-sm"
               >
-                <SalesTrendChart data={salesTrendData} />
+                <option value="Last 30 Days">Last 30 Days</option>
+                <option value="This Month">This Month</option>
+                <option value="This Quarter">This Quarter</option>
+                <option value="This Year">This Year</option>
+              </select>
+              <Calendar className="w-3.5 h-3.5 text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            </div>
+
+            <button
+              onClick={handleExport}
+              className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-4 py-2.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-sm active:scale-95 whitespace-nowrap"
+            >
+              <Download className="w-3.5 h-3.5 text-slate-400" /> Export CSV
+            </button>
+            <button
+              onClick={handleRefresh}
+              className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-sm active:scale-95 whitespace-nowrap"
+            >
+              <RefreshCw className="w-3.5 h-3.5" /> Refresh
+            </button>
+          </div>
+        </div>
+
+        {/* Analytics KPI Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
+          {[
+            { title: 'Total Revenue (Paid)', value: fmtCurrency(kpis.revenue), icon: DollarSign, color: 'text-emerald-500' },
+            { title: 'Total Orders', value: kpis.orders.toLocaleString(), icon: ShoppingBag, color: 'text-blue-500' },
+            { title: 'Total Customers', value: kpis.customers.toLocaleString(), icon: Users, color: 'text-indigo-500' },
+            { title: 'Average Order Value', value: fmtCurrency(kpis.aov), icon: TrendingUp, color: 'text-purple-500' },
+            { title: 'Outstanding Balance', value: fmtCurrency(kpis.outstanding), icon: AlertTriangle, color: 'text-rose-500' },
+            { title: 'Active Customer Rate', value: `${kpis.activeRate.toFixed(1)}%`, icon: Percent, color: 'text-amber-500' }
+          ].map((stat, i) => (
+            <div
+              key={i}
+              className="bg-white p-6 rounded-2xl border border-slate-200/60 shadow-sm flex flex-col justify-between h-36 hover:shadow-md transition-all duration-300"
+            >
+              <div className="flex justify-between items-start">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-normal">{stat.title}</p>
+                <stat.icon className={`w-4.5 h-4.5 ${stat.color}`} />
+              </div>
+              <h3 className="text-xl sm:text-2xl font-black text-slate-800 tracking-tight leading-none mt-4 truncate">{stat.value}</h3>
+            </div>
+          ))}
+        </div>
+
+        {loading ? (
+          <div className="min-h-[50vh] flex flex-col items-center justify-center p-20 bg-white rounded-3xl border border-slate-100 shadow-sm">
+            <RefreshCw className="w-10 h-10 animate-spin text-emerald-500 mb-3" />
+            <p className="text-slate-500 text-sm font-semibold">Updating store analytics reporting metrics...</p>
+          </div>
+        ) : (
+          <div className="space-y-6 sm:space-y-8">
+            
+            {/* Row 1: Sales Trend + Sales Status */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="lg:col-span-2">
+                <AnalyticsCard
+                  title="Sales Trend Analysis"
+                  subtitle="Gross store revenue growth trends plotted across the last 6 calendar months."
+                >
+                  <SalesTrendChart data={salesTrendData} />
+                </AnalyticsCard>
+              </div>
+              <div className="lg:col-span-1">
+                <AnalyticsCard
+                  title="Sales Order Breakdown"
+                  subtitle="Proportion of orders mapped by status (Completed, Pending, etc.)."
+                >
+                  <DonutChart data={salesStatusData} totalLabel="Orders" />
+                </AnalyticsCard>
+              </div>
+            </div>
+
+            {/* Row 2: Revenue Breakdown + Brand Performance + Payment Methods */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <AnalyticsCard
+                title="Revenue by Product Category"
+                subtitle="Product catalog contribution shares to overall gross sales."
+              >
+                <DonutChart data={revenueBreakdownData} totalLabel="Revenue" />
+              </AnalyticsCard>
+
+              <AnalyticsCard
+                title="Brand Performance"
+                subtitle="Revenue shares generated by major frame and lens brands."
+              >
+                <BarChart data={brandPerformanceData} />
+              </AnalyticsCard>
+
+              <AnalyticsCard
+                title="Payment Methods Used"
+                subtitle="Distribution of payment types (UPI, Cash, Card) used by customers."
+              >
+                <DonutChart data={transactionAnalyticsData} totalLabel="Receipts" />
               </AnalyticsCard>
             </div>
-            <div className="lg:col-span-1">
+
+            {/* Row 3: Customer Growth */}
+            <div className="grid grid-cols-1 gap-6">
               <AnalyticsCard
-                title="Sales Order Breakdown"
-                subtitle="Proportion of orders mapped by status (Completed, Pending, etc.)."
+                title="Monthly Customer Registrations"
+                subtitle="Cumulative customer acquisition growth over the last 6 months."
               >
-                <DonutChart data={salesStatusData} totalLabel="Orders" />
+                <CustomerGrowthChart data={customerGrowthData} />
               </AnalyticsCard>
             </div>
+
           </div>
+        )}
 
-          {/* Row 2: Revenue Breakdown + Brand Performance + Payment Methods */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <AnalyticsCard
-              title="Revenue by Product Category"
-              subtitle="Product catalog contribution shares to overall gross sales."
-            >
-              <DonutChart data={revenueBreakdownData} totalLabel="Revenue" />
-            </AnalyticsCard>
-
-            <AnalyticsCard
-              title="Brand Performance"
-              subtitle="Revenue shares generated by major frame and lens brands."
-            >
-              <BarChart data={brandPerformanceData} />
-            </AnalyticsCard>
-
-            <AnalyticsCard
-              title="Payment Methods Used"
-              subtitle="Distribution of payment types (UPI, Cash, Card) used by customers."
-            >
-              <DonutChart data={transactionAnalyticsData} totalLabel="Receipts" />
-            </AnalyticsCard>
-          </div>
-
-          {/* Row 3: Customer Growth */}
-          <div className="grid grid-cols-1 gap-6">
-            <AnalyticsCard
-              title="Monthly Customer Registrations"
-              subtitle="Cumulative customer acquisition growth over the last 6 months."
-            >
-              <CustomerGrowthChart data={customerGrowthData} />
-            </AnalyticsCard>
-          </div>
-
-        </div>
-      )}
-
-    </div>
+      </div>
+    </PermissionGuard>
   );
 };
 

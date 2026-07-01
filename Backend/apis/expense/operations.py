@@ -3,7 +3,7 @@ from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.deps import get_current_admin, get_current_user
+from core.deps import require_permission, get_user_admin_id, get_current_admin, require_permission
 from db.session import get_db
 from models.admin import Admin
 from models.manager import Manager
@@ -82,7 +82,7 @@ async def _resolve_expense_names(db: AsyncSession, p) -> ExpenseRead:
 async def create_expense_endpoint(
     payload: ExpenseCreate,
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user=Depends(require_permission("expenses", "create")),
 ) -> ExpenseRead:
     admin_id = _get_user_admin_id(current_user)
     rec_type, rec_id = _get_user_recorded_by(current_user)
@@ -127,7 +127,7 @@ async def list_expenses_endpoint(
     page: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user=Depends(require_permission("expenses", "read")),
 ):
     admin_id = _get_user_admin_id(current_user)
 
@@ -183,7 +183,7 @@ async def list_expenses_endpoint(
 async def get_expense_endpoint(
     expense_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user=Depends(require_permission("expenses", "read")),
 ) -> ExpenseRead:
     admin_id = _get_user_admin_id(current_user)
     expense = await get_expense(db, expense_id)
@@ -212,7 +212,7 @@ async def update_expense_endpoint(
     expense_id: int,
     payload: ExpenseUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user=Depends(require_permission("expenses", "update")),
 ) -> ExpenseRead:
     admin_id = _get_user_admin_id(current_user)
     expense = await get_expense(db, expense_id)
@@ -298,7 +298,7 @@ async def reject_expense_endpoint(
 async def delete_expense_endpoint(
     expense_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user=Depends(require_permission("expenses", "delete")),
 ) -> None:
     admin_id = _get_user_admin_id(current_user)
     expense = await get_expense(db, expense_id)

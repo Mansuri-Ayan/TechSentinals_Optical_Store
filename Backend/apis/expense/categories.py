@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.deps import get_current_admin, get_current_user
+from core.deps import require_permission, get_user_admin_id, get_current_admin, require_permission
 from db.session import get_db
 from models.admin import Admin
 from schemas.expense_category import (
@@ -63,7 +63,7 @@ async def list_categories_endpoint(
     search: str | None = Query(None),
     active_only: bool = Query(False),
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user=Depends(require_permission("expenses", "read")),
 ) -> list[ExpenseCategoryRead]:
     admin_id = _get_user_admin_id(current_user)
     
@@ -93,7 +93,7 @@ async def list_categories_endpoint(
 async def get_category_endpoint(
     category_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user=Depends(require_permission("expenses", "read")),
 ) -> ExpenseCategoryRead:
     admin_id = _get_user_admin_id(current_user)
     category = await get_expense_category(db, category_id)

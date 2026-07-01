@@ -1,7 +1,7 @@
 # API: product/read.py
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from core.deps import get_current_user, get_user_admin_id
+from core.deps import require_permission, get_user_admin_id, get_user_admin_id
 from db.session import get_db
 from models.admin import Admin
 from schemas.product import ProductRead
@@ -38,7 +38,7 @@ async def list_products(
     limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user = Depends(require_permission('products', 'read')),
 ) -> list[ProductRead]:
     admin_id = get_user_admin_id(current_user)
     products = await get_products_by_admin(
@@ -63,7 +63,7 @@ async def list_products(
 async def get_product_endpoint(
     product_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user = Depends(require_permission('products', 'read')),
 ) -> ProductRead:
     admin_id = get_user_admin_id(current_user)
     product = await get_product(db, product_id)

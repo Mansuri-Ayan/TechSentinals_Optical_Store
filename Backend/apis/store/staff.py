@@ -1,7 +1,7 @@
 # API: store/staff.py
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from core.deps import get_current_user
+from core.deps import require_permission, get_current_user
 from db.session import get_db
 from models.admin import Admin
 from models.manager import Manager
@@ -33,6 +33,23 @@ async def list_store_staff(
     db: AsyncSession = Depends(get_db),
     current_user = Depends(get_current_user),
 ) -> PaginatedResponse[StaffRead]:
+    from services.permission_service import has_permission
+    from core.deps import get_user_admin_id
+    admin_id = get_user_admin_id(current_user)
+    
+    actor_type = getattr(current_user, "token_role", "").upper()
+    has_access = False
+    if actor_type in ("SUPERADMIN", "ADMIN"):
+        has_access = True
+    elif actor_type:
+        has_w = await has_permission(db, actor_type, current_user.id, admin_id, "workers:read")
+        has_m = await has_permission(db, actor_type, current_user.id, admin_id, "managers:read")
+        has_o = await has_permission(db, actor_type, current_user.id, admin_id, "opticians:read")
+        has_a = await has_permission(db, actor_type, current_user.id, admin_id, "accountants:read")
+        has_access = has_w or has_m or has_o or has_a
+        
+    if not has_access:
+        raise HTTPException(status_code=403, detail="Missing permission to read staff")
     # Check permissions and resolve store IDs
     store_ids = []
     if isinstance(current_user, Admin):

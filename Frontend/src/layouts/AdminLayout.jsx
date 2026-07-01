@@ -4,8 +4,10 @@ import { Outlet } from 'react-router-dom';
 import { Menu } from 'lucide-react';
 import Sidebar from '../components/admin/Sidebar';
 import NotificationBell from '../components/shared/NotificationBell';
+import { useMyPermissions } from '../hooks/usePermissions';
 
 function AdminLayout() {
+  useMyPermissions(); // Fetch permissions on mount
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   

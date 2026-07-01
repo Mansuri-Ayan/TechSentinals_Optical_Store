@@ -1,7 +1,7 @@
 # API: manager/read.py
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from core.deps import get_current_user
+from core.deps import require_permission
 from db.session import get_db
 from models.admin import Admin
 from models.manager import Manager
@@ -27,7 +27,7 @@ async def list_managers(
     is_active: bool | None = Query(default=None, description="Filter by active status"),
     paginate: bool = Query(default=True, description="Enable or disable pagination"),
     db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_user),
+    current_user = Depends(require_permission("managers", "read")),
 ) -> PaginatedResponse[ManagerRead]:
     if isinstance(current_user, Admin):
         store = await get_store(db, store_id)
@@ -75,7 +75,7 @@ async def list_managers(
 async def get_manager_endpoint(
     manager_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_user),
+    current_user = Depends(require_permission("managers", "read")),
 ) -> ManagerRead:
     manager = await get_manager(db, manager_id)
     if manager is None:

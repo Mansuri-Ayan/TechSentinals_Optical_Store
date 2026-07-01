@@ -25,6 +25,8 @@ import { getWarehouseTransactionsApi } from "../../api/transactions/transaction.
 import { createProductApi } from "../../api/product/product.api";
 import { useSuppliers } from "../../hooks/useSuppliers";
 import { useQuery } from "@tanstack/react-query";
+import PermissionGuard from '../../components/shared/PermissionGuard';
+import { usePagePermissions } from '../../hooks/usePermissions';
 
 const getCategoryConfig = (name) => {
   const normalized = (name || "").toLowerCase();
@@ -121,6 +123,12 @@ const Warehouse = () => {
   const querySubcategoryId = searchParams.get("subcategory_id");
   const queryBrandId = searchParams.get("brand_id");
   const queryStockStatus = searchParams.get("stock_status");
+
+  const perms = usePagePermissions({
+    canCreate: 'inventory:create',
+    canUpdate: 'inventory:update',
+    canDelete: 'inventory:delete'
+  });
 
   const [activeTab, setActiveTab] = useState("catalog");
 
@@ -469,20 +477,24 @@ const Warehouse = () => {
           </div>
           {!isBranchView && (
             <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end">
-              <button
-                onClick={() => setShowTransferModal(true)}
-                className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-sm font-bold hover:bg-slate-50 shadow-sm transition-all flex-shrink-0"
-              >
-                <ArrowRightLeft className="w-4 h-4" />
-                Transfer Stock
-              </button>
-              <button
-                onClick={() => setShowAddModal(true)}
-                className="flex items-center gap-2 px-4.5 py-2.5 bg-[#0A0F1F] text-white rounded-xl text-sm font-bold hover:bg-slate-800 transition-all shadow-md flex-shrink-0"
-              >
-                <Plus className="w-4 h-4" />
-                Add Stock
-              </button>
+              <PermissionGuard permission="inventory:update">
+                <button
+                  onClick={() => setShowTransferModal(true)}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-sm font-bold hover:bg-slate-50 shadow-sm transition-all flex-shrink-0"
+                >
+                  <ArrowRightLeft className="w-4 h-4" />
+                  Transfer Stock
+                </button>
+              </PermissionGuard>
+              <PermissionGuard permission="inventory:create">
+                <button
+                  onClick={() => setShowAddModal(true)}
+                  className="flex items-center gap-2 px-4.5 py-2.5 bg-[#0A0F1F] text-white rounded-xl text-sm font-bold hover:bg-slate-800 transition-all shadow-md flex-shrink-0"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add Stock
+                </button>
+              </PermissionGuard>
             </div>
           )}
         </div>
@@ -622,12 +634,14 @@ const Warehouse = () => {
                   <Package className="w-12 h-12 text-slate-350 mx-auto mb-4" />
                   <h3 className="text-base font-bold text-slate-900 mb-1">No Warehouse Stock</h3>
                   <p className="text-slate-400 text-sm mb-4">You have not added any product stock to the warehouse yet.</p>
-                  <button
-                    onClick={() => setShowAddModal(true)}
-                    className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-md"
-                  >
-                    Add Your First Product
-                  </button>
+                  <PermissionGuard permission="inventory:create">
+                    <button
+                      onClick={() => setShowAddModal(true)}
+                      className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-md"
+                    >
+                      Add Your First Product
+                    </button>
+                  </PermissionGuard>
                 </div>
               )
             ) : (
@@ -672,33 +686,37 @@ const Warehouse = () => {
                           <span className="font-mono bg-slate-50 px-1.5 py-0.5 rounded border">{item.sku}</span>
                         </div>
                         {isBranchView ? (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleRequestStockClick(item);
-                            }}
-                            disabled={item.quantity <= 0}
-                            className={`w-full mt-3 py-2 rounded-xl text-xs font-bold transition-all text-center flex items-center justify-center gap-1.5 shadow-sm border ${
-                              item.quantity > 0
-                                ? 'bg-[#0A0F1F] text-white hover:bg-slate-800 border-transparent cursor-pointer'
-                                : 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
-                            }`}
-                          >
-                            Request Stock
-                          </button>
-                        ) : (
-                          (status === "low_stock" || status === "out_of_stock") && (
+                          <PermissionGuard permission="inventory:update">
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                setPreselectedProductId(item.product_id || item.id);
-                                setShowRecordPurchase(true);
+                                handleRequestStockClick(item);
                               }}
-                              className="mt-2 w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm"
+                              disabled={item.quantity <= 0}
+                              className={`w-full mt-3 py-2 rounded-xl text-xs font-bold transition-all text-center flex items-center justify-center gap-1.5 shadow-sm border ${
+                                item.quantity > 0
+                                  ? 'bg-[#0A0F1F] text-white hover:bg-slate-800 border-transparent cursor-pointer'
+                                  : 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
+                              }`}
                             >
-                              <Truck className="w-3.5 h-3.5" />
-                              Restock from Supplier
+                              Request Stock
                             </button>
+                          </PermissionGuard>
+                        ) : (
+                          (status === "low_stock" || status === "out_of_stock") && (
+                            <PermissionGuard permission="inventory:create">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setPreselectedProductId(item.product_id || item.id);
+                                  setShowRecordPurchase(true);
+                                }}
+                                className="mt-2 w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm"
+                              >
+                                <Truck className="w-3.5 h-3.5" />
+                                Restock from Supplier
+                              </button>
+                            </PermissionGuard>
                           )
                         )}
                       </div>
@@ -790,13 +808,15 @@ const Warehouse = () => {
           <div className="space-y-6">
             <div className="flex justify-between items-center flex-wrap gap-3">
               <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Central PO Logs</span>
-              <button
-                onClick={() => setShowRecordPurchase(true)}
-                className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-sm"
-              >
-                <Plus className="w-4 h-4" />
-                Record Purchase
-              </button>
+              <PermissionGuard permission="inventory:create">
+                <button
+                  onClick={() => setShowRecordPurchase(true)}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-sm"
+                >
+                  <Plus className="w-4 h-4" />
+                  Record Purchase
+                </button>
+              </PermissionGuard>
             </div>
 
             {isLoadingPurchaseOrders ? (

@@ -5,6 +5,7 @@ import Pagination from '../../components/shared/Pagination';
 import { useCustomers } from '../../hooks/useCustomers';
 import { useAuthStore, useStoreStore } from '../../store/store';
 import NotificationBell from '../../components/shared/NotificationBell';
+import PermissionGuard from '../../components/shared/PermissionGuard';
 
 const ITEMS_PER_PAGE = 12;
 
@@ -97,7 +98,12 @@ const Customers = () => {
   }
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto animate-fade-in font-sans">
+    <PermissionGuard permission="customers:read" fallback={
+      <div className="p-8 text-center text-slate-500">
+        You do not have permission to view customers.
+      </div>
+    }>
+      <div className="p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto animate-fade-in font-sans overflow-x-hidden space-y-6 sm:space-y-8">
 
       {/* ── Breadcrumb + Header ── */}
       <div className="mb-6 sm:mb-8">
@@ -313,6 +319,7 @@ const Customers = () => {
         </>
       )}
     </div>
+    </PermissionGuard>
   );
 };
 

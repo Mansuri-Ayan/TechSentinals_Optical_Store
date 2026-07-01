@@ -9,6 +9,9 @@ from models.admin import Admin
 from models.manager import Manager
 from models.worker import Worker
 from models.optician import Optician
+from models.superadmin import SuperAdmin
+from models.accountant import Accountant
+from services.permission_service import has_permission
 
 # Optional bearer — won't error if no header (we fall back to cookies)
 _bearer_scheme = HTTPBearer(auto_error=False)
@@ -18,9 +21,9 @@ async def get_current_user(
     request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme),
     db: AsyncSession = Depends(get_db),
-) -> Admin | Manager | Worker | Optician:
+) -> SuperAdmin | Admin | Accountant | Manager | Worker | Optician:
     """
-    Extract the current user of any role (Admin, Manager, Worker, Optician) from:
+    Extract the current user of any role from:
       1. Authorization: Bearer <token>  (header)
       2. access_token cookie             (fallback)
     """
@@ -112,12 +115,46 @@ async def get_current_user(
                 detail="Optician account is deactivated or suspended",
                 headers={"WWW-Authenticate": "Bearer"},
             )
+    elif role_name == "superadmin":
+        stmt = select(SuperAdmin).where(SuperAdmin.id == user_id)
+        result = await db.execute(stmt)
+        user = result.scalar_one_or_none()
+        if user is None or user.status != "ACTIVE" or user.deleted_at is not None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="SuperAdmin account is deactivated or suspended",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+    elif role_name == "accountant":
+        stmt = select(Accountant).where(Accountant.id == user_id)
+        result = await db.execute(stmt)
+        user = result.scalar_one_or_none()
+        if user is None or not user.is_active or user.deleted_at is not None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Accountant account is deactivated or suspended",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
     else:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token role payload is invalid",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+    # Attach computed fields for permission system
+    user.token_role = role_name
+    if role_name == "superadmin":
+        user.computed_admin_id = None
+    elif role_name == "admin":
+        user.computed_admin_id = user.id
+    elif role_name == "accountant":
+        user.computed_admin_id = getattr(user, "admin_id", None)
+    else:
+        if hasattr(user, "store") and user.store:
+            user.computed_admin_id = user.store.admin_id
+        else:
+            user.computed_admin_id = getattr(user, "admin_id", None)
 
     return user
 
@@ -158,7 +195,9 @@ async def get_current_manager(
     return current_user
 
 
-def get_user_admin_id(user) -> int:
+def get_user_admin_id(user) -> int | None:
+    if isinstance(user, SuperAdmin):
+        return None
     if isinstance(user, Admin):
         return user.id
     if hasattr(user, "store") and user.store:
@@ -169,3 +208,61 @@ def get_user_admin_id(user) -> int:
         status_code=status.HTTP_403_FORBIDDEN,
         detail="Could not determine admin scoping for user",
     )
+
+
+def require_permission(*permissions: str):
+    """
+    Dependency factory to enforce specific permissions.
+    Resolves the current actor's (type, id, admin_id) and checks the hierarchical permission chain.
+    If multiple permissions are provided, the user is granted access if they have AT LEAST ONE.
+    Legacy signature: require_permission('customers', 'create') -> 'customers:create'
+    New signature: require_permission('customers:create', 'sales:create')
+    """
+    if len(permissions) == 2 and ":" not in permissions[0] and ":" not in permissions[1]:
+        perms_to_check = [f"{permissions[0]}:{permissions[1]}"]
+    else:
+        perms_to_check = list(permissions)
+
+    async def _permission_dependency(
+        request: Request,
+        current_user = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db)
+    ):
+        actor_type = None
+        if isinstance(current_user, SuperAdmin):
+            actor_type = "SUPER_ADMIN"
+        elif isinstance(current_user, Admin):
+            actor_type = "ADMIN"
+        elif isinstance(current_user, Manager):
+            actor_type = "MANAGER"
+        elif isinstance(current_user, Worker):
+            actor_type = "WORKER"
+        elif isinstance(current_user, Optician):
+            actor_type = "OPTICIAN"
+        elif isinstance(current_user, Accountant):
+            actor_type = "ACCOUNTANT"
+
+        if not actor_type:
+            raise HTTPException(status_code=403, detail="Unrecognized actor type")
+
+        actor_admin_id = get_user_admin_id(current_user)
+
+        if actor_type in ("SUPER_ADMIN", "ADMIN"):
+            return current_user
+
+        has_any = False
+        for perm in perms_to_check:
+            granted = await has_permission(db, actor_type, current_user.id, actor_admin_id, perm)
+            if granted:
+                has_any = True
+                break
+                
+        if not has_any:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Missing permission. Required one of: {', '.join(perms_to_check)}"
+            )
+        
+        return current_user
+
+    return _permission_dependency

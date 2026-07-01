@@ -142,6 +142,7 @@ class Optician(Base):
     store = relationship(
         "Store",
         back_populates="opticians",
+        lazy="selectin",
     )
     role = relationship(
         "Role",

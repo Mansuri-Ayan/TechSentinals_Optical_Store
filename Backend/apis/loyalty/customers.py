@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Path, Query
+from core.deps import require_permission, get_user_admin_id
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, or_, desc
 from sqlalchemy.orm import joinedload
-from core.deps import get_db, get_current_admin, get_current_manager
+from core.deps import get_db, get_current_user, get_current_manager
 from models.admin import Admin
 from models.manager import Manager
 from models.customer import Customer, CustomerMembershipTier
@@ -24,8 +25,9 @@ async def _get_loyalty_customers(
     search: Optional[str] = None,
     tier: Optional[CustomerMembershipTier] = None
 ) -> PaginatedResponse[LoyaltyCustomerStats]:
+    # admin_id is passed in by the caller (admin or shopkeeper endpoint)
     # Validate store ownership
-    # For now, we rely on the `current_admin` or `current_manager` dependency to ensure access.
+    # For now, we rely on the `current_user` or `current_manager` dependency to ensure access.
     # A more explicit check could be added if `admin_id` or `store_id` is passed directly without deps.
 
     query = select(Customer).where(
@@ -94,6 +96,7 @@ async def _get_loyalty_customer_detail(
     store_id: int | None,
     admin_id: int
 ) -> LoyaltyCustomerDetailRead:
+    # admin_id is passed in by the caller (admin or shopkeeper endpoint)
     # 1. Fetch customer and verify scope
     query = select(Customer).where(
         Customer.id == customer_id,
@@ -166,9 +169,10 @@ async def get_loyalty_customers_all_admin(
     search: Optional[str] = Query(None, description="Search by customer name, phone, or email"),
     tier: Optional[CustomerMembershipTier] = Query(None, description="Filter by membership tier"),
     db: AsyncSession = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin),
+    current_user = Depends(require_permission('loyalty', 'read')),
 ) -> PaginatedResponse[LoyaltyCustomerStats]:
-    return await _get_loyalty_customers(db, None, current_admin.id, page, limit, search, tier)
+    admin_id = get_user_admin_id(current_user)
+    return await _get_loyalty_customers(db, None, admin_id, page, limit, search, tier)
 
 
 @router.get(
@@ -179,9 +183,10 @@ async def get_loyalty_customers_all_admin(
 async def get_loyalty_customer_detail_all_admin(
     customer_id: int = Path(..., description="The ID of the customer"),
     db: AsyncSession = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin),
+    current_user = Depends(require_permission('loyalty', 'read')),
 ) -> LoyaltyCustomerDetailRead:
-    return await _get_loyalty_customer_detail(db, customer_id, None, current_admin.id)
+    admin_id = get_user_admin_id(current_user)
+    return await _get_loyalty_customer_detail(db, customer_id, None, admin_id)
 @router.get(
     "/admin/store/{store_id}/loyalty/customers",
     response_model=PaginatedResponse[LoyaltyCustomerStats],
@@ -194,9 +199,10 @@ async def get_loyalty_customers_admin(
     search: Optional[str] = Query(None, description="Search by customer name, phone, or email"),
     tier: Optional[CustomerMembershipTier] = Query(None, description="Filter by membership tier"),
     db: AsyncSession = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin),
+    current_user = Depends(require_permission('loyalty', 'read')),
 ) -> PaginatedResponse[LoyaltyCustomerStats]:
-    return await _get_loyalty_customers(db, store_id, current_admin.id, page, limit, search, tier)
+    admin_id = get_user_admin_id(current_user)
+    return await _get_loyalty_customers(db, store_id, admin_id, page, limit, search, tier)
 
 
 @router.get(
@@ -208,9 +214,10 @@ async def get_loyalty_customer_detail_admin(
     store_id: int = Path(..., description="The ID of the store"),
     customer_id: int = Path(..., description="The ID of the customer"),
     db: AsyncSession = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin),
+    current_user = Depends(require_permission('loyalty', 'read')),
 ) -> LoyaltyCustomerDetailRead:
-    return await _get_loyalty_customer_detail(db, customer_id, store_id, current_admin.id)
+    admin_id = get_user_admin_id(current_user)
+    return await _get_loyalty_customer_detail(db, customer_id, store_id, admin_id)
 
 
 # --- Shopkeeper Endpoints ---
@@ -226,9 +233,9 @@ async def get_loyalty_customers_shopkeeper(
     search: Optional[str] = Query(None, description="Search by customer name, phone, or email"),
     tier: Optional[CustomerMembershipTier] = Query(None, description="Filter by membership tier"),
     db: AsyncSession = Depends(get_db),
-    current_manager: Manager = Depends(get_current_manager),
+    current_user = Depends(require_permission('loyalty', 'read')),
 ) -> PaginatedResponse[LoyaltyCustomerStats]:
-    return await _get_loyalty_customers(db, current_manager.store_id, current_manager.store.admin_id, page, limit, search, tier)
+    return await _get_loyalty_customers(db, current_user.store_id, get_user_admin_id(current_user), page, limit, search, tier)
 
 
 @router.get(
@@ -239,6 +246,6 @@ async def get_loyalty_customers_shopkeeper(
 async def get_loyalty_customer_detail_shopkeeper(
     customer_id: int = Path(..., description="The ID of the customer"),
     db: AsyncSession = Depends(get_db),
-    current_manager: Manager = Depends(get_current_manager),
+    current_user = Depends(require_permission('loyalty', 'read')),
 ) -> LoyaltyCustomerDetailRead:
-    return await _get_loyalty_customer_detail(db, customer_id, current_manager.store_id, current_manager.store.admin_id)
+    return await _get_loyalty_customer_detail(db, customer_id, current_user.store_id, get_user_admin_id(current_user))

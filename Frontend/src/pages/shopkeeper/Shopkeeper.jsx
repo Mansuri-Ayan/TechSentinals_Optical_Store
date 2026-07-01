@@ -12,6 +12,7 @@ import { createSaleApi } from '../../api/sales/sales.api';
 import { useAuthStore, useStoreStore } from '../../store/store';
 import { toast } from 'react-toastify';
 import NotificationBell from '../../components/shared/NotificationBell';
+import PermissionGuard from '../../components/shared/PermissionGuard';
 
 const POS_KEYS = {
   step: 'pos_activeStep',
@@ -383,8 +384,13 @@ const Shopkeeper = () => {
   };
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 max-w-[1400px] mx-auto animate-fade-in font-sans relative">
-      {isSubmitting && (
+    <PermissionGuard permission="sales:create" fallback={
+      <div className="p-8 text-center text-slate-500">
+        You do not have permission to create sales.
+      </div>
+    }>
+      <div className="p-4 sm:p-6 lg:p-8 max-w-[1400px] mx-auto animate-fade-in font-sans relative">
+        {isSubmitting && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-[2px] z-[9999] flex flex-col items-center justify-center">
           <div className="bg-white p-6 rounded-2xl shadow-xl border border-slate-100 flex flex-col items-center gap-3">
             <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-slate-900"></div>
@@ -484,6 +490,7 @@ const Shopkeeper = () => {
         )}
       </div>
     </div>
+    </PermissionGuard>
   );
 };
 

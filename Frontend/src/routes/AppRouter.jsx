@@ -13,6 +13,8 @@ import Categories from "../pages/admin/Categories";
 import Transactions from "../pages/admin/Transactions";
 import Suppliers from "../pages/admin/Suppliers";
 import SupplierDetail from "../pages/admin/SupplierDetail";
+import ShopkeeperSuppliers from "../pages/shopkeeper/Suppliers";
+import ShopkeeperSupplierDetail from "../pages/shopkeeper/SupplierDetail";
 import Sales from "../pages/admin/Sales";
 import LabOrders from "../pages/admin/LabOrders";
 import Labs from "../pages/admin/Labs";
@@ -29,6 +31,8 @@ import AdminCustomerDetail from "../pages/admin/CustomerDetail";
 import Warehouse from "../pages/admin/Warehouse";
 import StaffDetail from "../pages/admin/StaffDetail";
 import BillTemplate from "../pages/admin/BillTemplate";
+import Permissions from "../pages/admin/Permissions";
+import PermissionRoute from "../components/shared/PermissionRoute";
 
 // Shopkeeper imports
 import ShopKeeperLayout from "../layouts/ShopKeeperLayout";
@@ -269,13 +273,12 @@ function AppRouter() {
         }
       />
 
-      {/* Admin Routes - protected to only admins */}
       <Route
         path="/admin"
         element={
-          // <AdminRoute>
-          <AdminLayout />
-          // </AdminRoute>
+          <AdminRoute>
+            <AdminLayout />
+          </AdminRoute>
         }
       >
         {/* Redirect /admin to /admin/dashboard */}
@@ -349,6 +352,9 @@ function AppRouter() {
         />
         <Route path="store/:storeId/customers" element={<AdminCustomers />} />
         <Route path="store/:storeId/customers/:customerId" element={<AdminCustomerDetail />} />
+        
+        {/* Permissions */}
+        <Route path="permissions" element={<Permissions />} />
       </Route>
 
       {/* Shopkeeper Routes */}
@@ -356,22 +362,24 @@ function AppRouter() {
         {/* Redirect /shopkeeper to /shopkeeper/dashboard */}
         <Route index element={<Shopkeeper />} />
         <Route path="dashboard" element={<ShopkeeperDashboard />} />
-        <Route path="analyses" element={<ShopkeeperAnalyses />} />
-        <Route path="customers" element={<Customers />} />
-        <Route path="customers/:customerId" element={<CustomerDetail />} />
-        <Route path="inventory" element={<ShopkeeperInventory />} />
-        <Route path="sales" element={<ShopkeeperSales />} />
-        <Route path="bill-template" element={<BillTemplate />} />
-        <Route path="lab-orders" element={<LabOrders />} />
-        <Route path="staff" element={<ShopkeeperStaff />} />
-        <Route path="expenses" element={<ShopkeeperExpenses />} />
-        <Route path="repairs" element={<Repair />} />
-        <Route path="brands" element={<ShopkeeperBrands />} />
-        <Route path="categories" element={<ShopkeeperCategories />} />
-        <Route path="loyalty" element={<ShopkeeperLoyalty />} />
-        <Route path="loyalty/customer/:id" element={<ShopkeeperLoyaltyCustomerDetail />} />
-        <Route path="transactions" element={<ShopkeeperTransactions />} />
-        <Route path="warehouse" element={<ShopkeeperWarehouse />} />
+        <Route path="analyses" element={<PermissionRoute permission="reports:read"><ShopkeeperAnalyses /></PermissionRoute>} />
+        <Route path="customers" element={<PermissionRoute permission="customers:read"><Customers /></PermissionRoute>} />
+        <Route path="customers/:customerId" element={<PermissionRoute permission="customers:read"><CustomerDetail /></PermissionRoute>} />
+        <Route path="inventory" element={<PermissionRoute permission="inventory:read"><ShopkeeperInventory /></PermissionRoute>} />
+        <Route path="sales" element={<PermissionRoute permission="sales:read"><ShopkeeperSales /></PermissionRoute>} />
+        <Route path="bill-template" element={<PermissionRoute permission="bill_settings:read"><BillTemplate /></PermissionRoute>} />
+        <Route path="lab-orders" element={<PermissionRoute permission="prescriptions:read"><LabOrders /></PermissionRoute>} />
+        <Route path="staff" element={<PermissionRoute permission="workers:read"><ShopkeeperStaff /></PermissionRoute>} />
+        <Route path="expenses" element={<PermissionRoute permission="expenses:read"><ShopkeeperExpenses /></PermissionRoute>} />
+        <Route path="repairs" element={<PermissionRoute permission="repairs:read"><Repair /></PermissionRoute>} />
+        <Route path="brands" element={<PermissionRoute permission="brands:read"><ShopkeeperBrands /></PermissionRoute>} />
+        <Route path="categories" element={<PermissionRoute permission="categories:read"><ShopkeeperCategories /></PermissionRoute>} />
+        <Route path="loyalty" element={<PermissionRoute permission="loyalty:read"><ShopkeeperLoyalty /></PermissionRoute>} />
+        <Route path="loyalty/customer/:id" element={<PermissionRoute permission="loyalty:read"><ShopkeeperLoyaltyCustomerDetail /></PermissionRoute>} />
+        <Route path="transactions" element={<PermissionRoute permission="transactions:read"><ShopkeeperTransactions /></PermissionRoute>} />
+        <Route path="warehouse" element={<PermissionRoute permission="inventory:read"><ShopkeeperWarehouse /></PermissionRoute>} />
+        <Route path="suppliers" element={<PermissionRoute permission="suppliers:read"><ShopkeeperSuppliers /></PermissionRoute>} />
+        <Route path="suppliers/:id" element={<PermissionRoute permission="suppliers:read"><ShopkeeperSupplierDetail /></PermissionRoute>} />
       </Route>
 
       {/* Accountant Routes */}

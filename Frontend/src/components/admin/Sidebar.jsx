@@ -26,10 +26,12 @@ import {
   Warehouse,
   FileText,
   Beaker,
+  Shield,
 } from "lucide-react";
 import { useAuth } from "../../hooks/useAuth";
 import { useAuthStore, useStoreStore } from "../../store/store";
 import { useStores } from "../../hooks/useStores";
+import { useHasPermission } from "../../hooks/usePermissions";
 
 const Sidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) => {
   const { stores, selectedStore, setSelectedStore, setStores } =
@@ -90,6 +92,27 @@ const Sidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) => {
 
   const { logout, isLoggingOut } = useAuth();
   const { user } = useAuthStore();
+
+  const hasStoresRead = useHasPermission('stores:read');
+  const hasWarehouseRead = useHasPermission('inventory:read'); // Using inventory read for warehouse
+  const hasWorkersRead = useHasPermission('workers:read');
+  const hasManagersRead = useHasPermission('managers:read');
+  const hasOpticiansRead = useHasPermission('opticians:read');
+  const hasAccountantsRead = useHasPermission('accountants:read');
+  const hasStaffRead = hasWorkersRead || hasManagersRead || hasOpticiansRead || hasAccountantsRead;
+  const hasInventoryRead = useHasPermission('inventory:read');
+  const hasSalesRead = useHasPermission('sales:read');
+  const hasOrdersRead = useHasPermission('prescriptions:read');
+  const hasCustomersRead = useHasPermission('customers:read');
+  const hasBrandsRead = useHasPermission('brands:read');
+  const hasCategoriesRead = useHasPermission('categories:read');
+  const hasTransferRead = useHasPermission('inventory:transfer');
+  const hasTransactionsRead = useHasPermission('transactions:read');
+  const hasSuppliersRead = useHasPermission('suppliers:read');
+  const hasExpensesRead = useHasPermission('expenses:read');
+  const hasLoyaltyRead = useHasPermission('loyalty:read');
+  const hasPermissionsRead = useHasPermission('permissions:read');
+  const hasAnalysesRead = useHasPermission('reports:read');
 
   useEffect(() => {
     if (fetchedStores) {
@@ -438,216 +461,68 @@ const Sidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) => {
             )}
           </NavLink>
 
-          <NavLink
-            to="/admin/analyses"
-            title={isCollapsed ? "Analyses" : undefined}
-            className={({ isActive }) =>
-              `flex items-center ${isCollapsed ? "justify-center px-0" : "px-4"} py-2.5 rounded-xl transition-all duration-200 group ${
-                isActive
-                  ? "bg-emerald-500/10 text-emerald-400 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_0_10px_rgba(16,185,129,0.1)] border border-emerald-500/20"
-                  : "text-slate-400 hover:bg-white/5 hover:text-slate-202 border border-transparent"
-              }`
-            }
-          >
-            <BarChart3
-              className={`w-5 h-5 transition-transform group-hover:scale-110 flex-shrink-0 ${isCollapsed ? "" : "mr-3"}`}
-            />
-            {!isCollapsed && (
-              <span className="font-medium text-sm">Analyses</span>
-            )}
-          </NavLink>
-
-          <NavLink
-            to="/admin/stores"
-            title={isCollapsed ? "Stores" : undefined}
-            className={({ isActive }) =>
-              `flex items-center ${isCollapsed ? "justify-center px-0" : "px-4"} py-2.5 rounded-xl transition-all duration-200 group ${
-                isActive || location.pathname.startsWith("/admin/stores")
-                  ? "bg-emerald-500/10 text-emerald-400 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_0_10px_rgba(16,185,129,0.1)] border border-emerald-500/20"
-                  : "text-slate-400 hover:bg-white/5 hover:text-slate-202 border border-transparent"
-              }`
-            }
-          >
-            <Store
-              className={`w-5 h-5 transition-transform group-hover:scale-110 flex-shrink-0 ${isCollapsed ? "" : "mr-3"}`}
-            />
-            {!isCollapsed && (
-              <span className="font-medium text-sm">Stores</span>
-            )}
-          </NavLink>
-
-          <NavLink
-            to="/admin/warehouse"
-            title={isCollapsed ? "Warehouse" : undefined}
-            className={({ isActive }) =>
-              `flex items-center ${isCollapsed ? "justify-center px-0" : "px-4"} py-2.5 rounded-xl transition-all duration-200 group ${
-                isActive || location.pathname.startsWith("/admin/warehouse")
-                  ? "bg-emerald-500/10 text-emerald-400 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_0_10px_rgba(16,185,129,0.1)] border border-emerald-500/20"
-                  : "text-slate-400 hover:bg-white/5 hover:text-slate-202 border border-transparent"
-              }`
-            }
-          >
-            <Warehouse className={`w-5 h-5 transition-transform group-hover:scale-110 flex-shrink-0 ${isCollapsed ? "" : "mr-3"}`} />
-            {!isCollapsed && <span className="font-medium text-sm">Warehouse</span>}
-          </NavLink>
-
-          <NavLink
-            to={staffRoute}
-            title={isCollapsed ? "Staff Directory" : undefined}
-            className={({ isActive }) =>
-              `flex items-center ${isCollapsed ? "justify-center px-0" : "px-4"} py-2.5 rounded-xl transition-all duration-200 group ${
-                isActive
-                  ? "bg-emerald-500/10 text-emerald-400 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_0_10px_rgba(16,185,129,0.1)] border border-emerald-500/20"
-                  : "text-slate-400 hover:bg-white/5 hover:text-slate-202 border border-transparent"
-              }`
-            }
-          >
-            <Users
-              className={`w-5 h-5 transition-transform group-hover:scale-110 flex-shrink-0 ${isCollapsed ? "" : "mr-3"}`}
-            />
-            {!isCollapsed && (
-              <span className="font-medium text-sm">Staff Directory</span>
-            )}
-          </NavLink>
-
-          <NavLink
-            to={inventoryRoute}
-            title={isCollapsed ? "Inventory" : undefined}
-            className={({ isActive }) =>
-              `flex items-center ${isCollapsed ? "justify-center px-0" : "px-4"} py-2.5 rounded-xl transition-all duration-200 group ${
-                isActive
-                  ? "bg-emerald-500/10 text-emerald-400 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_0_10px_rgba(16,185,129,0.1)] border border-emerald-500/20"
-                  : "text-slate-400 hover:bg-white/5 hover:text-slate-202 border border-transparent"
-              }`
-            }
-          >
-            <Archive
-              className={`w-5 h-5 transition-transform group-hover:scale-110 flex-shrink-0 ${isCollapsed ? "" : "mr-3"}`}
-            />
-            {!isCollapsed && (
-              <span className="font-medium text-sm">Inventory</span>
-            )}
-          </NavLink>
-
-          <NavLink
-            to="/admin/sales"
-            title={isCollapsed ? "Sales" : undefined}
-            className={({ isActive }) =>
-              `flex items-center ${isCollapsed ? "justify-center px-0" : "px-4"} py-2.5 rounded-xl transition-all duration-200 group ${
-                isActive
-                  ? "bg-emerald-500/10 text-emerald-400 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_0_10px_rgba(16,185,129,0.1)] border border-emerald-500/20"
-                  : "text-slate-400 hover:bg-white/5 hover:text-slate-202 border border-transparent"
-              }`
-            }
-          >
-            <ShoppingCart
-              className={`w-5 h-5 transition-transform group-hover:scale-110 flex-shrink-0 ${isCollapsed ? "" : "mr-3"}`}
-            />
-            {!isCollapsed && <span className="font-medium text-sm">Sales</span>}
-          </NavLink>
-
-          <NavLink
-            to={labOrdersRoute}
-            title={isCollapsed ? "Orders" : undefined}
-            className={({ isActive }) =>
-              `flex items-center ${isCollapsed ? "justify-center px-0" : "px-4"} py-2.5 rounded-xl transition-all duration-200 group ${
-                isActive || location.pathname.includes("/lab-orders")
-                  ? "bg-emerald-500/10 text-emerald-400 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_0_10px_rgba(16,185,129,0.1)] border border-emerald-500/20"
-                  : "text-slate-400 hover:bg-white/5 hover:text-slate-202 border border-transparent"
-              }`
-            }
-          >
-            <Clock
-              className={`w-5 h-5 transition-transform group-hover:scale-110 flex-shrink-0 ${isCollapsed ? "" : "mr-3"}`}
-            />
-            {!isCollapsed && (
-              <span className="font-medium text-sm">Orders</span>
-            )}
-          </NavLink>
-
-          <NavLink
-            to="/admin/customers"
-            end
-            title={isCollapsed ? "Customers" : undefined}
-            className={({ isActive }) => {
-              const isCustomersActive =
-                isActive || location.pathname.includes("/customers");
-              return `flex items-center ${isCollapsed ? "justify-center px-0" : "px-4"} py-2.5 rounded-xl transition-all duration-200 group ${
-                isCustomersActive
-                  ? "bg-emerald-500/10 text-emerald-400 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_0_10px_rgba(16,185,129,0.1)] border border-emerald-500/20"
-                  : "text-slate-400 hover:bg-white/5 hover:text-slate-202 border border-transparent"
-              }`;
-            }}
-            onClick={(e) => {
-              if (currentStore) {
-                e.preventDefault();
-                navigate(customersRoute);
+          {hasAnalysesRead && (
+            <NavLink
+              to="/admin/analyses"
+              title={isCollapsed ? "Analyses" : undefined}
+              className={({ isActive }) =>
+                `flex items-center ${isCollapsed ? "justify-center px-0" : "px-4"} py-2.5 rounded-xl transition-all duration-200 group ${
+                  isActive
+                    ? "bg-emerald-500/10 text-emerald-400 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_0_10px_rgba(16,185,129,0.1)] border border-emerald-500/20"
+                    : "text-slate-400 hover:bg-white/5 hover:text-slate-202 border border-transparent"
+                }`
               }
-            }}
-          >
-            <UserCheck
-              className={`w-5 h-5 transition-transform group-hover:scale-110 flex-shrink-0 ${isCollapsed ? "" : "mr-3"}`}
-            />
-            {!isCollapsed && (
-              <span className="font-medium text-sm">Customers</span>
-            )}
-          </NavLink>
+            >
+              <BarChart3
+                className={`w-5 h-5 transition-transform group-hover:scale-110 flex-shrink-0 ${isCollapsed ? "" : "mr-3"}`}
+              />
+              {!isCollapsed && (
+                <span className="font-medium text-sm">Analyses</span>
+              )}
+            </NavLink>
+          )}
 
-          <NavLink
-            to="/admin/brands"
-            end
-            title={isCollapsed ? "Brands" : undefined}
-            className={({ isActive }) => {
-              const isBrandsActive =
-                isActive || location.pathname.includes("/brands");
-              return `flex items-center ${isCollapsed ? "justify-center px-0" : "px-4"} py-2.5 rounded-xl transition-all duration-200 group ${
-                isBrandsActive
-                  ? "bg-emerald-500/10 text-emerald-400 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_0_10px_rgba(16,185,129,0.1)] border border-emerald-500/20"
-                  : "text-slate-400 hover:bg-white/5 hover:text-slate-200 border border-transparent"
-              }`;
-            }}
-            onClick={(e) => {
-              if (currentStore) {
-                e.preventDefault();
-                navigate(brandsRoute);
+          {hasStoresRead && (
+            <NavLink
+              to="/admin/stores"
+              title={isCollapsed ? "Stores" : undefined}
+              className={({ isActive }) =>
+                `flex items-center ${isCollapsed ? "justify-center px-0" : "px-4"} py-2.5 rounded-xl transition-all duration-200 group ${
+                  isActive || location.pathname.startsWith("/admin/stores")
+                    ? "bg-emerald-500/10 text-emerald-400 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_0_10px_rgba(16,185,129,0.1)] border border-emerald-500/20"
+                    : "text-slate-400 hover:bg-white/5 hover:text-slate-202 border border-transparent"
+                }`
               }
-            }}
-          >
-            <Tag
-              className={`w-5 h-5 transition-transform group-hover:scale-110 flex-shrink-0 ${isCollapsed ? "" : "mr-3"}`}
-            />
-            {!isCollapsed && (
-              <span className="font-medium text-sm">Brands</span>
-            )}
-          </NavLink>
+            >
+              <Store
+                className={`w-5 h-5 transition-transform group-hover:scale-110 flex-shrink-0 ${isCollapsed ? "" : "mr-3"}`}
+              />
+              {!isCollapsed && (
+                <span className="font-medium text-sm">Stores</span>
+              )}
+            </NavLink>
+          )}
 
-          <NavLink
-            to="/admin/categories"
-            end
-            title={isCollapsed ? "Categories" : undefined}
-            className={({ isActive }) => {
-              const isCategoriesActive =
-                isActive || location.pathname.includes("/categories");
-              return `flex items-center ${isCollapsed ? "justify-center px-0" : "px-4"} py-2.5 rounded-xl transition-all duration-200 group ${
-                isCategoriesActive
-                  ? "bg-emerald-500/10 text-emerald-400 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_0_10px_rgba(16,185,129,0.1)] border border-emerald-500/20"
-                  : "text-slate-400 hover:bg-white/5 hover:text-slate-200 border border-transparent"
-              }`;
-            }}
-            onClick={(e) => {
-              if (currentStore) {
-                e.preventDefault();
-                navigate(categoriesRoute);
+          {hasWarehouseRead && (
+            <NavLink
+              to="/admin/warehouse"
+              title={isCollapsed ? "Warehouse" : undefined}
+              className={({ isActive }) =>
+                `flex items-center ${isCollapsed ? "justify-center px-0" : "px-4"} py-2.5 rounded-xl transition-all duration-200 group ${
+                  isActive || location.pathname.startsWith("/admin/warehouse")
+                    ? "bg-emerald-500/10 text-emerald-400 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_0_10px_rgba(16,185,129,0.1)] border border-emerald-500/20"
+                    : "text-slate-400 hover:bg-white/5 hover:text-slate-202 border border-transparent"
+                }`
               }
-            }}
-          >
-            <Layers
-              className={`w-5 h-5 transition-transform group-hover:scale-110 flex-shrink-0 ${isCollapsed ? "" : "mr-3"}`}
-            />
-            {!isCollapsed && (
-              <span className="font-medium text-sm">Categories</span>
-            )}
-          </NavLink>
+            >
+              <Warehouse
+                className={`w-5 h-5 transition-transform group-hover:scale-110 flex-shrink-0 ${isCollapsed ? "" : "mr-3"}`}
+              />
+              {!isCollapsed && (
+                <span className="font-medium text-sm">Warehouse</span>
+              )}
+            </NavLink>
+          )}
 
           <NavLink
             to={transactionsRoute}
@@ -734,25 +609,58 @@ const Sidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) => {
             )}
           </NavLink>
 
+          {hasStaffRead && (
+            <NavLink
+              to={staffRoute}
+              title={isCollapsed ? "Staff Directory" : undefined}
+              className={({ isActive }) =>
+                `flex items-center ${isCollapsed ? "justify-center px-0" : "px-4"} py-2.5 rounded-xl transition-all duration-200 group ${
+                  isActive
+                    ? "bg-emerald-500/10 text-emerald-400 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_0_10px_rgba(16,185,129,0.1)] border border-emerald-500/20"
+                    : "text-slate-400 hover:bg-white/5 hover:text-slate-202 border border-transparent"
+                }`
+              }
+            >
+              <Users
+                className={`w-5 h-5 transition-transform group-hover:scale-110 flex-shrink-0 ${isCollapsed ? "" : "mr-3"}`}
+              />
+              {!isCollapsed && (
+                <span className="font-medium text-sm">Staff Directory</span>
+              )}
+            </NavLink>
+          )}
+
+          {hasInventoryRead && (
+            <NavLink
+              to={inventoryRoute}
+              title={isCollapsed ? "Inventory" : undefined}
+              className={({ isActive }) =>
+                `flex items-center ${isCollapsed ? "justify-center px-0" : "px-4"} py-2.5 rounded-xl transition-all duration-200 group ${
+                  isActive
+                    ? "bg-emerald-500/10 text-emerald-400 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_0_10px_rgba(16,185,129,0.1)] border border-emerald-500/20"
+                    : "text-slate-400 hover:bg-white/5 hover:text-slate-202 border border-transparent"
+                }`
+              }
+            >
+              <Archive
+                className={`w-5 h-5 transition-transform group-hover:scale-110 flex-shrink-0 ${isCollapsed ? "" : "mr-3"}`}
+              />
+              {!isCollapsed && (
+                <span className="font-medium text-sm">Inventory</span>
+              )}
+            </NavLink>
+          )}
+
           <NavLink
             to="/admin/loyalty"
-            end
             title={isCollapsed ? "Loyalty" : undefined}
-            className={({ isActive }) => {
-              const isLoyaltyActive =
-                isActive || location.pathname.includes("/loyalty");
-              return `flex items-center ${isCollapsed ? "justify-center px-0" : "px-4"} py-2.5 rounded-xl transition-all duration-200 group ${
-                isLoyaltyActive
+            className={({ isActive }) =>
+              `flex items-center ${isCollapsed ? "justify-center px-0" : "px-4"} py-2.5 rounded-xl transition-all duration-200 group ${
+                isActive || location.pathname.startsWith("/admin/loyalty")
                   ? "bg-emerald-500/10 text-emerald-400 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_0_10px_rgba(16,185,129,0.1)] border border-emerald-500/20"
                   : "text-slate-400 hover:bg-white/5 hover:text-slate-202 border border-transparent"
-              }`;
-            }}
-            onClick={(e) => {
-              if (currentStore) {
-                e.preventDefault();
-                navigate(loyaltyRoute);
-              }
-            }}
+              }`
+            }
           >
             <Award
               className={`w-5 h-5 transition-transform group-hover:scale-110 flex-shrink-0 ${isCollapsed ? "" : "mr-3"}`}
@@ -789,6 +697,261 @@ const Sidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) => {
               <span className="font-medium text-sm">Bill Settings</span>
             )}
           </NavLink>
+
+
+          {hasSalesRead && (
+            <NavLink
+              to="/admin/sales"
+              title={isCollapsed ? "Sales" : undefined}
+              className={({ isActive }) =>
+                `flex items-center ${isCollapsed ? "justify-center px-0" : "px-4"} py-2.5 rounded-xl transition-all duration-200 group ${
+                  isActive
+                    ? "bg-emerald-500/10 text-emerald-400 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_0_10px_rgba(16,185,129,0.1)] border border-emerald-500/20"
+                    : "text-slate-400 hover:bg-white/5 hover:text-slate-202 border border-transparent"
+                }`
+              }
+            >
+              <ShoppingCart
+                className={`w-5 h-5 transition-transform group-hover:scale-110 flex-shrink-0 ${isCollapsed ? "" : "mr-3"}`}
+              />
+              {!isCollapsed && <span className="font-medium text-sm">Sales</span>}
+            </NavLink>
+          )}
+
+          {hasOrdersRead && (
+            <NavLink
+              to={labOrdersRoute}
+              title={isCollapsed ? "Orders" : undefined}
+              className={({ isActive }) =>
+                `flex items-center ${isCollapsed ? "justify-center px-0" : "px-4"} py-2.5 rounded-xl transition-all duration-200 group ${
+                  isActive || location.pathname.includes("/lab-orders")
+                    ? "bg-emerald-500/10 text-emerald-400 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_0_10px_rgba(16,185,129,0.1)] border border-emerald-500/20"
+                    : "text-slate-400 hover:bg-white/5 hover:text-slate-202 border border-transparent"
+                }`
+              }
+            >
+              <Clock
+                className={`w-5 h-5 transition-transform group-hover:scale-110 flex-shrink-0 ${isCollapsed ? "" : "mr-3"}`}
+              />
+              {!isCollapsed && (
+                <span className="font-medium text-sm">Orders</span>
+              )}
+            </NavLink>
+          )}
+
+          {hasCustomersRead && (
+            <NavLink
+              to="/admin/customers"
+              end
+              title={isCollapsed ? "Customers" : undefined}
+              className={({ isActive }) => {
+                const isCustomersActive =
+                  isActive || location.pathname.includes("/customers");
+                return `flex items-center ${isCollapsed ? "justify-center px-0" : "px-4"} py-2.5 rounded-xl transition-all duration-200 group ${
+                  isCustomersActive
+                    ? "bg-emerald-500/10 text-emerald-400 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_0_10px_rgba(16,185,129,0.1)] border border-emerald-500/20"
+                    : "text-slate-400 hover:bg-white/5 hover:text-slate-202 border border-transparent"
+                }`;
+              }}
+              onClick={(e) => {
+                if (currentStore) {
+                  e.preventDefault();
+                  navigate(customersRoute);
+                }
+              }}
+            >
+              <UserCheck
+                className={`w-5 h-5 transition-transform group-hover:scale-110 flex-shrink-0 ${isCollapsed ? "" : "mr-3"}`}
+              />
+              {!isCollapsed && (
+                <span className="font-medium text-sm">Customers</span>
+              )}
+            </NavLink>
+          )}
+
+          {hasBrandsRead && (
+            <NavLink
+              to="/admin/brands"
+              end
+              title={isCollapsed ? "Brands" : undefined}
+              className={({ isActive }) => {
+                const isBrandsActive =
+                  isActive || location.pathname.includes("/brands");
+                return `flex items-center ${isCollapsed ? "justify-center px-0" : "px-4"} py-2.5 rounded-xl transition-all duration-200 group ${
+                  isBrandsActive
+                    ? "bg-emerald-500/10 text-emerald-400 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_0_10px_rgba(16,185,129,0.1)] border border-emerald-500/20"
+                    : "text-slate-400 hover:bg-white/5 hover:text-slate-200 border border-transparent"
+                }`;
+              }}
+              onClick={(e) => {
+                if (currentStore) {
+                  e.preventDefault();
+                  navigate(brandsRoute);
+                }
+              }}
+            >
+              <Tag
+                className={`w-5 h-5 transition-transform group-hover:scale-110 flex-shrink-0 ${isCollapsed ? "" : "mr-3"}`}
+              />
+              {!isCollapsed && (
+                <span className="font-medium text-sm">Brands</span>
+              )}
+            </NavLink>
+          )}
+
+          {hasCategoriesRead && (
+            <NavLink
+              to="/admin/categories"
+              end
+              title={isCollapsed ? "Categories" : undefined}
+              className={({ isActive }) => {
+                const isCategoriesActive =
+                  isActive || location.pathname.includes("/categories");
+                return `flex items-center ${isCollapsed ? "justify-center px-0" : "px-4"} py-2.5 rounded-xl transition-all duration-200 group ${
+                  isCategoriesActive
+                    ? "bg-emerald-500/10 text-emerald-400 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_0_10px_rgba(16,185,129,0.1)] border border-emerald-500/20"
+                    : "text-slate-400 hover:bg-white/5 hover:text-slate-200 border border-transparent"
+                }`;
+              }}
+              onClick={(e) => {
+                if (currentStore) {
+                  e.preventDefault();
+                  navigate(categoriesRoute);
+                }
+              }}
+            >
+              <Layers
+                className={`w-5 h-5 transition-transform group-hover:scale-110 flex-shrink-0 ${isCollapsed ? "" : "mr-3"}`}
+              />
+              {!isCollapsed && (
+                <span className="font-medium text-sm">Categories</span>
+              )}
+            </NavLink>
+          )}
+
+          {hasTransactionsRead && (
+            <NavLink
+              to={transactionsRoute}
+              title={isCollapsed ? "Transactions" : undefined}
+              className={({ isActive }) =>
+                `flex items-center ${isCollapsed ? "justify-center px-0" : "px-4"} py-2.5 rounded-xl transition-all duration-200 group ${
+                  isActive
+                    ? "bg-emerald-500/10 text-emerald-400 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_0_10px_rgba(16,185,129,0.1)] border border-emerald-500/20"
+                    : "text-slate-400 hover:bg-white/5 hover:text-slate-202 border border-transparent"
+                }`
+              }
+            >
+              <ArrowRightLeft
+                className={`w-5 h-5 transition-transform group-hover:scale-110 flex-shrink-0 ${isCollapsed ? "" : "mr-3"}`}
+              />
+              {!isCollapsed && (
+                <span className="font-medium text-sm">Transactions</span>
+              )}
+            </NavLink>
+          )}
+
+          {hasSuppliersRead && (
+            <NavLink
+              to={suppliersRoute}
+              title={isCollapsed ? "Suppliers" : undefined}
+              className={({ isActive }) =>
+                `flex items-center ${isCollapsed ? "justify-center px-0" : "px-4"} py-2.5 rounded-xl transition-all duration-200 group ${
+                  isActive
+                    ? "bg-emerald-500/10 text-emerald-400 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_0_10px_rgba(16,185,129,0.1)] border border-emerald-500/20"
+                    : "text-slate-400 hover:bg-white/5 hover:text-slate-202 border border-transparent"
+                }`
+              }
+            >
+              <Truck
+                className={`w-5 h-5 transition-transform group-hover:scale-110 flex-shrink-0 ${isCollapsed ? "" : "mr-3"}`}
+              />
+              {!isCollapsed && (
+                <span className="font-medium text-sm">Suppliers</span>
+              )}
+            </NavLink>
+          )}
+
+          {hasExpensesRead && (
+            <NavLink
+              to="/admin/expenses"
+              end
+              title={isCollapsed ? "Expenses" : undefined}
+              className={({ isActive }) => {
+                const isExpensesActive =
+                  isActive || location.pathname.includes("/expenses");
+                return `flex items-center ${isCollapsed ? "justify-center px-0" : "px-4"} py-2.5 rounded-xl transition-all duration-200 group ${
+                  isExpensesActive
+                    ? "bg-emerald-500/10 text-emerald-400 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_0_10px_rgba(16,185,129,0.1)] border border-emerald-500/20"
+                    : "text-slate-400 hover:bg-white/5 hover:text-slate-202 border border-transparent"
+                }`;
+              }}
+              onClick={(e) => {
+                if (currentStore) {
+                  e.preventDefault();
+                  navigate(expensesRoute);
+                }
+              }}
+            >
+              <Receipt
+                className={`w-5 h-5 transition-transform group-hover:scale-110 flex-shrink-0 ${isCollapsed ? "" : "mr-3"}`}
+              />
+              {!isCollapsed && (
+                <span className="font-medium text-sm">Expenses</span>
+              )}
+            </NavLink>
+          )}
+
+          {hasLoyaltyRead && (
+            <NavLink
+              to="/admin/loyalty"
+              end
+              title={isCollapsed ? "Loyalty" : undefined}
+              className={({ isActive }) => {
+                const isLoyaltyActive =
+                  isActive || location.pathname.includes("/loyalty");
+                return `flex items-center ${isCollapsed ? "justify-center px-0" : "px-4"} py-2.5 rounded-xl transition-all duration-200 group ${
+                  isLoyaltyActive
+                    ? "bg-emerald-500/10 text-emerald-400 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_0_10px_rgba(16,185,129,0.1)] border border-emerald-500/20"
+                    : "text-slate-400 hover:bg-white/5 hover:text-slate-202 border border-transparent"
+                }`;
+              }}
+              onClick={(e) => {
+                if (currentStore) {
+                  e.preventDefault();
+                  navigate(loyaltyRoute);
+                }
+              }}
+            >
+              <Award
+                className={`w-5 h-5 transition-transform group-hover:scale-110 flex-shrink-0 ${isCollapsed ? "" : "mr-3"}`}
+              />
+              {!isCollapsed && (
+                <span className="font-medium text-sm">Loyalty</span>
+              )}
+            </NavLink>
+          )}
+
+          {hasPermissionsRead && (
+            <NavLink
+              to="/admin/permissions"
+              title={isCollapsed ? "Permissions" : undefined}
+              className={({ isActive }) =>
+                `flex items-center ${isCollapsed ? "justify-center px-0" : "px-4"} py-2.5 rounded-xl transition-all duration-200 group ${
+                  isActive
+                    ? "bg-emerald-500/10 text-emerald-400 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_0_10px_rgba(16,185,129,0.1)] border border-emerald-500/20"
+                    : "text-slate-400 hover:bg-white/5 hover:text-slate-200 border border-transparent"
+                }`
+              }
+            >
+              <Shield
+                className={`w-5 h-5 transition-transform group-hover:scale-110 flex-shrink-0 ${isCollapsed ? "" : "mr-3"}`}
+              />
+              {!isCollapsed && (
+                <span className="font-medium text-sm">Permissions</span>
+              )}
+            </NavLink>
+          )}
+
         </nav>
 
         {/* User Profile & Footer */}

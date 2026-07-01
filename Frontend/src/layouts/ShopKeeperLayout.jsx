@@ -2,8 +2,10 @@ import { useCallback, useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import { Menu } from 'lucide-react';
 import ShopkeeperSidebar from '../components/shopkeeper/ShopkeeperSidebar';
+import { useMyPermissions } from '../hooks/usePermissions';
 
 export default function ShopKeeperLayout() {
+  useMyPermissions();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   

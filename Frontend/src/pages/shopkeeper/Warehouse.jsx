@@ -6,9 +6,10 @@ import {
 import { useAuthStore } from '../../store/store';
 import { useInventory } from '../../hooks/useInventory';
 import { useCategories } from '../../hooks/useCategories';
-import RequestStockModal from '../../components/shopkeeper/RequestStockModal';
 import NotificationBell from '../../components/shared/NotificationBell';
 import Pagination from '../../components/shared/Pagination';
+import PermissionGuard from '../../components/shared/PermissionGuard';
+import RequestStockModal from '../../components/shopkeeper/RequestStockModal';
 
 const getCategoryConfig = (name) => {
   const normalized = (name || '').toLowerCase();
@@ -226,7 +227,12 @@ const ShopkeeperWarehouse = () => {
   ];
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto animate-fade-in font-sans">
+    <PermissionGuard permission="inventory:read" fallback={
+      <div className="p-8 text-center text-slate-500">
+        You do not have permission to view this page.
+      </div>
+    }>
+      <div className="p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto animate-fade-in font-sans">
       {/* Breadcrumbs & Header */}
       <div className="mb-6 sm:mb-8 flex justify-between items-start">
         <div>
@@ -396,17 +402,19 @@ const ShopkeeperWarehouse = () => {
                       </div>
 
                       {/* Request Stock button */}
-                      <button
-                        onClick={(e) => handleRequestStockClick(item, e)}
-                        disabled={!canRequest}
-                        className={`w-full mt-3 py-2 rounded-xl text-xs font-bold transition-all text-center flex items-center justify-center gap-1.5 shadow-sm border ${
-                          canRequest
-                            ? 'bg-[#0A0F1F] text-white hover:bg-slate-800 border-transparent cursor-pointer'
-                            : 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
-                        }`}
-                      >
-                        Request Stock
-                      </button>
+                      <PermissionGuard permission="inventory:transfer">
+                        <button
+                          onClick={(e) => handleRequestStockClick(item, e)}
+                          disabled={!canRequest}
+                          className={`w-full mt-3 py-2 rounded-xl text-xs font-bold transition-all text-center flex items-center justify-center gap-1.5 shadow-sm border ${
+                            canRequest
+                              ? 'bg-[#0A0F1F] text-white hover:bg-slate-800 border-transparent cursor-pointer'
+                              : 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
+                          }`}
+                        >
+                          Request Stock
+                        </button>
+                      </PermissionGuard>
                     </div>
                   </div>
                 );
@@ -424,16 +432,19 @@ const ShopkeeperWarehouse = () => {
       </div>
 
       {/* MODALS */}
-      <RequestStockModal
-        isOpen={showRequestModal}
-        onClose={() => {
-          setShowRequestModal(false);
-          setSelectedProduct(null);
-        }}
-        product={selectedProduct}
-        onSuccess={handleRequestSuccess}
-      />
+      {showRequestModal && (
+        <RequestStockModal
+          isOpen={showRequestModal}
+          onClose={() => {
+            setShowRequestModal(false);
+            setSelectedProduct(null);
+          }}
+          product={selectedProduct}
+          onSuccess={handleRequestSuccess}
+        />
+      )}
     </div>
+    </PermissionGuard>
   );
 };
 

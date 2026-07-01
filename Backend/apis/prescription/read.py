@@ -1,7 +1,7 @@
 # API: prescription/read.py
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from core.deps import get_current_user
+from core.deps import require_permission, get_user_admin_id
 from db.session import get_db
 from models.admin import Admin
 from schemas.prescription import PrescriptionRead, PrescriptionListRead
@@ -65,7 +65,7 @@ async def list_prescriptions_endpoint(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user = Depends(require_permission('prescriptions', 'read')),
 ) -> list[PrescriptionListRead]:
     admin_id = _get_user_admin_id(current_user)
     # Verify customer belongs to this admin
@@ -96,7 +96,7 @@ async def list_prescriptions_endpoint(
 async def get_active_prescription_endpoint(
     customer_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user = Depends(require_permission('prescriptions', 'read')),
 ) -> PrescriptionRead | None:
     admin_id = _get_user_admin_id(current_user)
     # Verify customer belongs to this admin
@@ -127,7 +127,7 @@ async def get_active_prescription_endpoint(
 async def get_prescription_endpoint(
     prescription_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user = Depends(require_permission('prescriptions', 'read')),
 ) -> PrescriptionRead:
     admin_id = _get_user_admin_id(current_user)
     prescription = await get_prescription(db, prescription_id)

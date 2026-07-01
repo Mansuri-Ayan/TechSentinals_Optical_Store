@@ -22,6 +22,8 @@ import { getStoresApi } from '../../api/stores/store.api';
 import Pagination from '../../components/shared/Pagination';
 import InventoryDetailDrawer from '../../components/admin/InventoryDetailDrawer';
 import { AddExpenseModal, AddCategoryModal } from '../../components/admin/AddExpenseModal';
+import PermissionGuard from '../../components/shared/PermissionGuard';
+import { usePagePermissions } from '../../hooks/usePermissions'; 
 import api from '../../lib/axios';
 
 /* ─────────────────────────────────────────────────────────
@@ -81,6 +83,7 @@ const Expenses = () => {
   const { store_id } = useParams();
   const { stores } = useStoreStore();
   const { user } = useAuthStore();
+  const perms = usePagePermissions('expenses');
   const [inPageStoreId, setInPageStoreId] = useState(store_id);
   
   const [searchInput, setSearchInput]         = useState('');
@@ -331,13 +334,15 @@ const Expenses = () => {
                 <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
               </div>
             )}
-            <button
-              onClick={() => setShowAddModal(true)}
-              className="flex items-center justify-center gap-2 px-5 py-2.5 bg-violet-600 text-white rounded-xl text-sm font-semibold hover:bg-violet-700 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 w-full sm:w-auto flex-shrink-0"
-            >
-              <Plus className="w-4 h-4" />
-              Add Expense
-            </button>
+            <PermissionGuard permission="expenses:create">
+              <button
+                onClick={() => setShowAddModal(true)}
+                className="flex items-center justify-center gap-2 px-5 py-2.5 bg-violet-600 text-white rounded-xl text-sm font-semibold hover:bg-violet-700 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 w-full sm:w-auto flex-shrink-0"
+              >
+                <Plus className="w-4 h-4" />
+                Add Expense
+              </button>
+            </PermissionGuard>
           </div>
         </div>
       </div>
@@ -645,6 +650,7 @@ const Expenses = () => {
         onClose={() => setSelectedExpense(null)}
         onApprove={handleApprove}
         onReject={handleReject}
+        canApprove={perms.canUpdate}
       />
 
       {/* ── Add Expense Modal ── */}

@@ -8,6 +8,8 @@ import Pagination from '../../components/shared/Pagination';
 import AddEditCategoryModal from '../../components/admin/AddEditCategoryModal';
 import { useAuthStore, useStoreStore } from '../../store/store';
 import { useShopkeeperCategories, useShopkeeperSubcategories } from '../../hooks/useShopkeeperCategories';
+import PermissionGuard from '../../components/shared/PermissionGuard';
+
 
 const ITEMS_PER_PAGE = 8;
 
@@ -202,7 +204,12 @@ const Categories = () => {
   }, [selectedCategory]);
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 max-w-[1400px] mx-auto animate-fade-in font-sans">
+    <PermissionGuard permission="categories:read" fallback={
+      <div className="p-8 text-center text-slate-500">
+        You do not have permission to view this page.
+      </div>
+    }>
+      <div className="p-4 sm:p-6 lg:p-8 max-w-[1400px] mx-auto animate-fade-in font-sans">
       {/* ── Breadcrumb + Header ── */}
       <div className="mb-6 sm:mb-8">
         <div className="flex items-center text-sm text-slate-500 font-medium mb-3 space-x-2">
@@ -248,22 +255,26 @@ const Categories = () => {
                 <Package className="w-4 h-4" />
                 View All in Inventory
               </button>
-              <button
-                onClick={() => setAddEditModal({ isOpen: true, item: null, mode: 'subcategory' })}
-                className="flex items-center gap-2 px-5 py-2.5 bg-[#0A0F1F] text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 flex-shrink-0 justify-center"
-              >
-                <Plus className="w-4 h-4" />
-                Add Option
-              </button>
+              <PermissionGuard permission="inventory:create">
+                <button
+                  onClick={() => setAddEditModal({ isOpen: true, item: null, mode: 'subcategory' })}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-[#0A0F1F] text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 flex-shrink-0 justify-center"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add Option
+                </button>
+              </PermissionGuard>
             </div>
           ) : (
-            <button
-              onClick={() => setAddEditModal({ isOpen: true, item: null, mode: 'category' })}
-              className="flex items-center gap-2 px-5 py-2.5 bg-[#0A0F1F] text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 flex-shrink-0 w-full sm:w-auto justify-center"
-            >
-              <Plus className="w-4 h-4" />
-              Add Category
-            </button>
+            <PermissionGuard permission="inventory:create">
+              <button
+                onClick={() => setAddEditModal({ isOpen: true, item: null, mode: 'category' })}
+                className="flex items-center gap-2 px-5 py-2.5 bg-[#0A0F1F] text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 flex-shrink-0 w-full sm:w-auto justify-center"
+              >
+                <Plus className="w-4 h-4" />
+                Add Category
+              </button>
+            </PermissionGuard>
           )}
         </div>
       </div>
@@ -345,20 +356,24 @@ const Categories = () => {
                           View Inventory
                         </button>
                         
-                        <button
-                          onClick={() => setAddEditModal({ isOpen: true, item: cat, mode: 'category' })}
-                          className="flex items-center justify-center w-8 h-8 bg-slate-100 text-slate-655 rounded-xl hover:bg-slate-200 transition-colors border border-slate-200"
-                          title="Edit category name/details"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteCategory(cat.id)}
-                          className="flex items-center justify-center w-8 h-8 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-colors border border-red-100"
-                          title="Deactivate category"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        <PermissionGuard permission="inventory:update">
+                          <button
+                            onClick={() => setAddEditModal({ isOpen: true, item: cat, mode: 'category' })}
+                            className="flex items-center justify-center w-8 h-8 bg-slate-100 text-slate-655 rounded-xl hover:bg-slate-200 transition-colors border border-slate-200"
+                            title="Edit category name/details"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                        </PermissionGuard>
+                        <PermissionGuard permission="inventory:delete">
+                          <button
+                            onClick={() => handleDeleteCategory(cat.id)}
+                            className="flex items-center justify-center w-8 h-8 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-colors border border-red-100"
+                            title="Deactivate category"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </PermissionGuard>
                       </div>
                     </div>
                   );
@@ -454,20 +469,24 @@ const Categories = () => {
                           <Eye className="w-3.5 h-3.5" />
                           View Items
                         </button>
-                        <button
-                          onClick={() => setAddEditModal({ isOpen: true, item: option, mode: 'subcategory' })}
-                          className="flex items-center justify-center w-9 h-9 bg-slate-105 text-slate-600 rounded-xl hover:bg-slate-200 transition-colors border border-slate-200"
-                          title="Edit option"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteSubcategory(option.id)}
-                          className="flex items-center justify-center w-9 h-9 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-colors border border-red-100"
-                          title="Deactivate option"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        <PermissionGuard permission="inventory:update">
+                          <button
+                            onClick={() => setAddEditModal({ isOpen: true, item: option, mode: 'subcategory' })}
+                            className="flex items-center justify-center w-9 h-9 bg-slate-105 text-slate-600 rounded-xl hover:bg-slate-200 transition-colors border border-slate-200"
+                            title="Edit option"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                        </PermissionGuard>
+                        <PermissionGuard permission="inventory:delete">
+                          <button
+                            onClick={() => handleDeleteSubcategory(option.id)}
+                            className="flex items-center justify-center w-9 h-9 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-colors border border-red-100"
+                            title="Deactivate option"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </PermissionGuard>
                       </div>
                     </div>
                   </div>
@@ -495,6 +514,7 @@ const Categories = () => {
         isSaving={isSavingCategory || isSavingSubcategory}
       />
     </div>
+    </PermissionGuard>
   );
 };
 

@@ -135,6 +135,7 @@ class Manager(Base):
     store = relationship(
         "Store",
         back_populates="managers",
+        lazy="selectin",
     )
     role = relationship(
         "Role",

@@ -1,7 +1,7 @@
 # API: supplier/update.py
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from core.deps import get_current_admin
+from core.deps import require_permission, get_user_admin_id
 from db.session import get_db
 from models.admin import Admin
 from schemas.supplier import SupplierUpdate, SupplierRead
@@ -26,10 +26,11 @@ async def update_supplier_endpoint(
     supplier_id: int,
     payload: SupplierUpdate,
     db: AsyncSession = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin),
+    current_user = Depends(require_permission('suppliers', 'update')),
 ) -> SupplierRead:
+    admin_id = get_user_admin_id(current_user)
     supplier = await get_supplier(db, supplier_id)
-    if not supplier or supplier.admin_id != current_admin.id:
+    if not supplier or supplier.admin_id != admin_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Supplier not found",
@@ -47,10 +48,11 @@ async def update_supplier_endpoint(
 async def delete_supplier_endpoint(
     supplier_id: int,
     db: AsyncSession = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin),
+    current_user = Depends(require_permission('suppliers', 'update')),
 ) -> None:
+    admin_id = get_user_admin_id(current_user)
     supplier = await get_supplier(db, supplier_id)
-    if not supplier or supplier.admin_id != current_admin.id:
+    if not supplier or supplier.admin_id != admin_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Supplier not found",

@@ -5,6 +5,7 @@ import { useSales } from '../../hooks/useSales';
 import { useCustomers } from '../../hooks/useCustomers';
 import NotificationBell from '../../components/shared/NotificationBell';
 import { useChartAnimation } from '../../hooks/useChartAnimation';
+import PermissionGuard from '../../components/shared/PermissionGuard';
 
 const fmtDate = (d) => d
   ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
@@ -388,12 +389,14 @@ const Dashboard = () => {
             <Clock className="w-5 h-5 text-emerald-500" />
             <h2 className="text-base sm:text-lg font-bold text-slate-900">Recent Transactions</h2>
           </div>
-          <button
-            onClick={() => navigate('/shopkeeper/customers')}
-            className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 transition-colors cursor-pointer"
-          >
-            View Customer List <ArrowUpRight className="w-3.5 h-3.5" />
-          </button>
+          <PermissionGuard permission="customers:read">
+            <button
+              onClick={() => navigate('/shopkeeper/customers')}
+              className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 transition-colors cursor-pointer"
+            >
+              View Customer List <ArrowUpRight className="w-3.5 h-3.5" />
+            </button>
+          </PermissionGuard>
         </div>
         
         {/* Desktop Table */}

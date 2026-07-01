@@ -1,7 +1,7 @@
 # API: prescription/update.py
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from core.deps import get_current_user
+from core.deps import require_permission, get_user_admin_id
 from db.session import get_db
 from models.admin import Admin
 from schemas.prescription import PrescriptionUpdate, PrescriptionRead
@@ -42,7 +42,7 @@ async def update_prescription_endpoint(
     prescription_id: int,
     payload: PrescriptionUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user = Depends(require_permission('prescriptions', 'update')),
 ) -> PrescriptionRead:
     admin_id = _get_user_admin_id(current_user)
     prescription = await get_prescription(db, prescription_id)
@@ -77,7 +77,7 @@ async def update_prescription_endpoint(
 async def delete_prescription_endpoint(
     prescription_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user = Depends(require_permission('prescriptions', 'update')),
 ) -> None:
     admin_id = _get_user_admin_id(current_user)
     prescription = await get_prescription(db, prescription_id)

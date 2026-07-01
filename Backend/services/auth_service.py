@@ -13,6 +13,8 @@ from models.admin import Admin
 from models.manager import Manager
 from models.worker import Worker
 from models.optician import Optician
+from models.superadmin import SuperAdmin
+from models.accountant import Accountant
 from models.refresh_token import RefreshToken
 from schemas.token import TokenPair
 
@@ -26,7 +28,7 @@ async def authenticate_user_by_role(
     email: str,
     password: str,
     role: str,
-) -> tuple[Admin | Manager | Worker | Optician, str] | None:
+) -> tuple[SuperAdmin | Admin | Accountant | Manager | Worker | Optician, str] | None:
     """
     Validate credentials by querying the specific table matching the role parameter.
     Returns a tuple of (user, role_string) or None if validation fails.
@@ -58,13 +60,27 @@ async def authenticate_user_by_role(
         user = result.scalar_one_or_none()
         if user and verify_password(password, user.password_hash) and user.is_active and user.deleted_at is None:
             return user, "optician"
+            
+    elif role == "superadmin":
+        stmt = select(SuperAdmin).where(SuperAdmin.email == email)
+        result = await db.execute(stmt)
+        user = result.scalar_one_or_none()
+        if user and verify_password(password, user.password_hash) and user.status == "ACTIVE" and user.deleted_at is None:
+            return user, "superadmin"
+
+    elif role == "accountant":
+        stmt = select(Accountant).where(Accountant.email == email)
+        result = await db.execute(stmt)
+        user = result.scalar_one_or_none()
+        if user and verify_password(password, user.password_hash) and user.is_active and user.deleted_at is None:
+            return user, "accountant"
 
     return None
 
 
 async def create_tokens(
     db: AsyncSession,
-    user: Admin | Manager | Worker | Optician,
+    user: SuperAdmin | Admin | Accountant | Manager | Worker | Optician,
     role_name: str,
     device_fingerprint: str | None = None,
 ) -> TokenPair:
@@ -97,6 +113,10 @@ async def create_tokens(
         token_record.worker_id = user.id
     elif role_name == "optician":
         token_record.optician_id = user.id
+    elif role_name == "superadmin":
+        token_record.superadmin_id = user.id
+    elif role_name == "accountant":
+        token_record.accountant_id = user.id
 
     db.add(token_record)
 

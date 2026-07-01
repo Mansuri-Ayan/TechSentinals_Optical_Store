@@ -1,7 +1,7 @@
 # API: purchase_order/create.py
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from core.deps import get_current_admin
+from core.deps import require_permission, get_user_admin_id
 from db.session import get_db
 from models.admin import Admin
 from schemas.purchase_order import PurchaseOrderCreate, PurchaseOrderRead, PurchaseOrderItemRead
@@ -40,12 +40,13 @@ def _po_to_read(po) -> PurchaseOrderRead:
 async def create_po_endpoint(
     payload: PurchaseOrderCreate,
     db: AsyncSession = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin),
+    current_user = Depends(require_permission('purchase_orders', 'create')),
 ) -> PurchaseOrderRead:
+    admin_id = get_user_admin_id(current_user)
     po = await create_purchase_order(
         db,
-        admin_id=current_admin.id,
-        created_by=current_admin.id,
+        admin_id=admin_id,
+        created_by=admin_id,
         payload=payload,
     )
     # Reload with all relations

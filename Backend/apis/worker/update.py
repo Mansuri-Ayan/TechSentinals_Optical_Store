@@ -1,7 +1,7 @@
 # API: worker/update.py
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from core.deps import get_current_user
+from core.deps import require_permission
 from db.session import get_db
 from models.admin import Admin
 from models.manager import Manager
@@ -22,7 +22,7 @@ async def update_worker_endpoint(
     worker_id: int,
     payload: WorkerUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_user),
+    current_user = Depends(require_permission("workers", "update")),
 ) -> WorkerRead:
     worker = await get_worker(db, worker_id)
     if worker is None:

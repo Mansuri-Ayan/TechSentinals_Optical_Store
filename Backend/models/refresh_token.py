@@ -50,6 +50,20 @@ class RefreshToken(Base):
         comment="FK → opticians.id — owner of this token (if optician)",
     )
 
+    superadmin_id = Column(
+        BigInteger,
+        ForeignKey("super_admins.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+
+    accountant_id = Column(
+        BigInteger,
+        ForeignKey("accountants.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+
     token_hash = Column(
         Text,
         nullable=False,
@@ -98,6 +112,16 @@ class RefreshToken(Base):
     )
     optician = relationship(
         "Optician",
+        back_populates="refresh_tokens",
+    )
+
+    superadmin = relationship(
+        "SuperAdmin",
+        back_populates="refresh_tokens",
+    )
+
+    accountant = relationship(
+        "Accountant",
         back_populates="refresh_tokens",
     )
 

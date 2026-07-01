@@ -1,14 +1,30 @@
 import { useState } from 'react';
 import { User, Eye, ShoppingBag, CheckCircle, Printer, Share2, RefreshCw, Sparkles } from 'lucide-react';
 import { useAuthStore } from '../../store/store';
-import { getBillTemplateSettings } from '../../utils/billSettings';
-
+import { useBillSettings } from '../../hooks/useBillSettings';
+import { defaultSettings } from '../../utils/billSettings';
 
 const CompletedStep = ({ customer, cart, prescription, paymentInfo, savedCustomer, onReset, onBackToPayment }) => {
   const [copied, setCopied] = useState(false);
   const { user } = useAuthStore();
   const storeId = savedCustomer?.store_id || user?.store_id || 'default';
-  const billSettings = getBillTemplateSettings(storeId);
+  
+  const { settings: fetchedSettings } = useBillSettings(storeId !== 'default' ? storeId : null);
+  
+  const billSettings = fetchedSettings ? {
+    headerText: fetchedSettings.header_text ?? defaultSettings.headerText,
+    subHeaderText: fetchedSettings.sub_header_text ?? defaultSettings.subHeaderText,
+    address: fetchedSettings.address ?? defaultSettings.address,
+    contactEmail: fetchedSettings.contact_email ?? defaultSettings.contactEmail,
+    contactPhone: fetchedSettings.contact_phone ?? defaultSettings.contactPhone,
+    gstNumber: fetchedSettings.gst_number ?? defaultSettings.gstNumber,
+    logo: fetchedSettings.logo,
+    qrCode: fetchedSettings.qr_code,
+    showPrescription: fetchedSettings.show_prescription ?? defaultSettings.showPrescription,
+    showGst: fetchedSettings.show_gst ?? defaultSettings.showGst,
+    themeColor: fetchedSettings.theme_color ?? defaultSettings.themeColor,
+    footerText: fetchedSettings.footer_text ?? defaultSettings.footerText,
+  } : defaultSettings;
 
   const orderId = savedCustomer?.orders?.[0]?.id || 'ORD-UNKNOWN';
   const orderDate = savedCustomer?.orders?.[0]?.date || new Date().toISOString().split('T')[0];

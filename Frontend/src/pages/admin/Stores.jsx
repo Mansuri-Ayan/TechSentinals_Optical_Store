@@ -8,6 +8,7 @@ import { useStores } from '../../hooks/useStores';
 import { useStoreStore } from '../../store/store';
 import AddStoreModal from '../../components/admin/AddStoreModal';
 import Pagination from '../../components/shared/Pagination';
+import PermissionGuard from '../../components/shared/PermissionGuard';
 
 const indianStates = [
   'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh',
@@ -149,13 +150,15 @@ const Stores = () => {
               Manage optical store branches, managers, staff rosters, inventory distribution, and sales.
             </p>
           </div>
-          <button
-            onClick={handleAddClick}
-            className="flex items-center gap-2 px-5 py-2.5 bg-[#0A0F1F] text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 flex-shrink-0 w-full sm:w-auto justify-center"
-          >
-            <Plus className="w-4 h-4" />
-            Add Store
-          </button>
+          <PermissionGuard permission="stores:create">
+            <button
+              onClick={handleAddClick}
+              className="flex items-center gap-2 px-5 py-2.5 bg-[#0A0F1F] text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 flex-shrink-0 w-full sm:w-auto justify-center"
+            >
+              <Plus className="w-4 h-4" />
+              Add Store
+            </button>
+          </PermissionGuard>
         </div>
       </div>
 
@@ -385,20 +388,24 @@ const Stores = () => {
                           >
                             <ChevronRight className="w-4 h-4" />
                           </button>
-                          <button
-                            onClick={(e) => handleEditClick(e, store)}
-                            className="p-2 text-slate-500 hover:text-amber-600 hover:bg-amber-50 border border-transparent hover:border-amber-100 rounded-xl transition-all"
-                            title="Edit branch"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={(e) => handleDeleteClick(e, store)}
-                            className="p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-100 rounded-xl transition-all"
-                            title="Delete branch"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          <PermissionGuard permission="stores:update">
+                            <button
+                              onClick={(e) => handleEditClick(e, store)}
+                              className="p-2 text-slate-500 hover:text-amber-600 hover:bg-amber-50 border border-transparent hover:border-amber-100 rounded-xl transition-all"
+                              title="Edit branch"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                          </PermissionGuard>
+                          <PermissionGuard permission="stores:delete">
+                            <button
+                              onClick={(e) => handleDeleteClick(e, store)}
+                              className="p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-100 rounded-xl transition-all"
+                              title="Delete branch"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </PermissionGuard>
                         </div>
                       </td>
                     </tr>

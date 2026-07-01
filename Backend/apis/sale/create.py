@@ -1,7 +1,7 @@
 # API: sale/create.py
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from core.deps import get_current_user
+from core.deps import require_permission
 from db.session import get_db
 from models.admin import Admin
 from schemas.sale import SaleCreate, SaleRead, SaleItemRead, SalePaymentRead
@@ -52,7 +52,7 @@ def _sale_to_read(sale) -> SaleRead:
 async def create_sale_endpoint(
     payload: SaleCreate,
     db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_user),
+    current_user = Depends(require_permission("sales", "create")),
 ) -> SaleRead:
     if isinstance(current_user, Admin):
         admin_id = current_user.id

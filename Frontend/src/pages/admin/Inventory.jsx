@@ -44,6 +44,8 @@ import { useSuppliers } from "../../hooks/useSuppliers";
 import { usePurchaseOrders } from "../../hooks/usePurchaseOrders";
 import { createProductApi, updateProductApi } from "../../api/product/product.api";
 import { addSupplierProductApi } from "../../api/suppliers/supplier.api";
+import PermissionGuard from "../../components/shared/PermissionGuard";
+import { usePagePermissions } from "../../hooks/usePermissions";
 
 /* ─────────────────────────────────────────────────────────
    DYNAMIC STYLING MAPS
@@ -167,6 +169,10 @@ const ProductCard = ({ item, onViewDetails, onDelete, onEdit, onRequestStock, on
   const { storeId } = useParams();
   const isBranchView = storeId && storeId !== "admin";
 
+  const perms = usePagePermissions({
+    canDelete: 'inventory:delete'
+  });
+
   return (
     <div
       onClick={() => onViewDetails(item)}
@@ -203,20 +209,24 @@ const ProductCard = ({ item, onViewDetails, onDelete, onEdit, onRequestStock, on
             className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1.5"
             onClick={(e) => e.stopPropagation()}
           >
-            <button
-              onClick={() => onEdit(item)}
-              className="w-7 h-7 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-center text-blue-605 hover:bg-blue-100 transition-colors"
-              title="Edit item"
-            >
-              <Pencil className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={() => onDelete(item.id)}
-              className="w-7 h-7 bg-red-50 border border-red-200 rounded-lg flex items-center justify-center text-red-500 hover:bg-red-100 transition-colors"
-              title="Delete item"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
+            {(!perms || perms.canUpdate) && (
+              <button
+                onClick={() => onEdit(item)}
+                className="w-7 h-7 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-center text-blue-605 hover:bg-blue-100 transition-colors"
+                title="Edit item"
+              >
+                <Pencil className="w-3.5 h-3.5" />
+              </button>
+            )}
+            {(!perms || perms.canDelete) && (
+              <button
+                onClick={() => onDelete(item.id)}
+                className="w-7 h-7 bg-red-50 border border-red-200 rounded-lg flex items-center justify-center text-red-500 hover:bg-red-100 transition-colors"
+                title="Delete item"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
         )}
 
@@ -444,6 +454,12 @@ const Inventory = () => {
   const querySubcategoryId = searchParams.get("subcategory_id");
   const queryBrandId = searchParams.get("brand_id");
   const queryStockStatus = searchParams.get("stock_status");
+
+  const perms = usePagePermissions({
+    canCreate: 'inventory:create',
+    canUpdate: 'inventory:update',
+    canDelete: 'inventory:delete'
+  });
 
   /* Filters & Pagination states */
   const [inPageStoreId, setInPageStoreId] = useState(storeId);
@@ -979,13 +995,15 @@ const Inventory = () => {
                 <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
               </div>
             )}
-            <button
-              onClick={() => setShowAddModal(true)}
-              className="flex items-center gap-2 px-5 py-2.5 bg-[#0A0F1F] text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 flex-shrink-0"
-            >
-              <Plus className="w-4 h-4" />
-              Add Inventory
-            </button>
+            <PermissionGuard permission="inventory:create">
+              <button
+                onClick={() => setShowAddModal(true)}
+                className="flex items-center gap-2 px-5 py-2.5 bg-[#0A0F1F] text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 flex-shrink-0"
+              >
+                <Plus className="w-4 h-4" />
+                Add Inventory
+              </button>
+            </PermissionGuard>
           </div>
         </div>
       </div>

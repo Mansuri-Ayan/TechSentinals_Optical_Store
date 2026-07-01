@@ -2151,6 +2151,134 @@ async def seed() -> None:
                 session.add(expense)
             print(f"  [OK] seeded 5 expense categories and 5 expenses for Admin {admin_id}")
 
+        # ── 22. Seed Permissions ─────────────────────────────
+        print("\n" + "=" * 60)
+        print("  Seeding Permissions & SuperAdmin")
+        print("=" * 60)
+        from models.permission import Permission
+        from models.global_role_permission import GlobalRolePermission
+        from models.superadmin import SuperAdmin
+
+        stmt = select(SuperAdmin).where(SuperAdmin.email == "super@visionary.in")
+        super_admin = (await session.execute(stmt)).scalar_one_or_none()
+        if not super_admin:
+            super_admin = SuperAdmin(
+                first_name="Super",
+                last_name="Admin",
+                email="super@visionary.in",
+                password_hash=hash_password("SuperAdmin@123"),
+                status="ACTIVE"
+            )
+            session.add(super_admin)
+            await session.flush()
+
+        PERMISSIONS_SEED = [
+            ("brands", "create", "Create Brands", False),
+            ("brands", "delete", "Delete Brands", True),
+            ("brands", "read", "Read Brands", False),
+            ("brands", "update", "Update Brands", False),
+            ("categories", "create", "Create Categories", False),
+            ("categories", "delete", "Delete Categories", True),
+            ("categories", "read", "Read Categories", False),
+            ("categories", "update", "Update Categories", False),
+            ("customers", "create", "Create Customers", False),
+            ("customers", "delete", "Delete Customers", True),
+            ("customers", "read", "Read Customers", False),
+            ("customers", "update", "Update Customers", False),
+            ("expenses", "create", "Create Expenses", False),
+            ("expenses", "delete", "Delete Expenses", True),
+            ("expenses", "read", "Read Expenses", False),
+            ("expenses", "update", "Update Expenses", False),
+            ("inventory", "create", "Create Inventory", False),
+            ("inventory", "read", "Read Inventory", False),
+            ("inventory", "transfer", "Transfer Inventory", False),
+            ("inventory", "update", "Update Inventory", False),
+            ("loyalty", "configure", "Configure Loyalty", False),
+            ("loyalty", "read", "Read Loyalty", False),
+            ("loyalty", "write", "Write Loyalty", False),
+            ("managers", "create", "Create Managers", False),
+            ("managers", "delete", "Delete Managers", True),
+            ("managers", "read", "Read Managers", False),
+            ("managers", "update", "Update Managers", False),
+            ("opticians", "create", "Create Opticians", False),
+            ("opticians", "delete", "Delete Opticians", True),
+            ("opticians", "read", "Read Opticians", False),
+            ("opticians", "update", "Update Opticians", False),
+            ("prescriptions", "create", "Create Prescriptions", False),
+            ("prescriptions", "read", "Read Prescriptions", False),
+            ("prescriptions", "update", "Update Prescriptions", False),
+            ("products", "create", "Create Products", False),
+            ("products", "delete", "Delete Products", True),
+            ("products", "read", "Read Products", False),
+            ("products", "update", "Update Products", False),
+            ("purchase_orders", "create", "Create Purchase_orders", False),
+            ("purchase_orders", "read", "Read Purchase_orders", False),
+            ("purchase_orders", "update", "Update Purchase_orders", False),
+            ("repairs", "create", "Create Repairs", False),
+            ("repairs", "delete", "Delete Repairs", True),
+            ("repairs", "read", "Read Repairs", False),
+            ("repairs", "update", "Update Repairs", False),
+            ("reports", "read", "Read Reports", False),
+            ("sales", "create", "Create Sales", False),
+            ("sales", "delete", "Delete Sales", True),
+            ("sales", "read", "Read Sales", False),
+            ("sales", "update", "Update Sales", False),
+            ("stores", "create", "Create Stores", False),
+            ("stores", "delete", "Delete Stores", True),
+            ("stores", "read", "Read Stores", False),
+            ("stores", "update", "Update Stores", False),
+            ("suppliers", "create", "Create Suppliers", False),
+            ("suppliers", "read", "Read Suppliers", False),
+            ("suppliers", "update", "Update Suppliers", False),
+            ("workers", "create", "Create Workers", False),
+            ("workers", "delete", "Delete Workers", True),
+            ("workers", "read", "Read Workers", False),
+            ("workers", "update", "Update Workers", False),
+        ]
+
+
+        
+        for p in PERMISSIONS_SEED:
+            stmt = select(Permission).where(Permission.key == f"{p[0]}:{p[1]}")
+            perm = (await session.execute(stmt)).scalar_one_or_none()
+            if not perm:
+                perm = Permission(
+                    key=f"{p[0]}:{p[1]}",
+                    module=p[0],
+                    action=p[1],
+                    display_name=p[2],
+                    is_dangerous=p[3],
+                    is_active=True
+                )
+                session.add(perm)
+                await session.flush()
+            
+            # Global Roles
+            role_defaults = {
+                "ADMIN": True,
+                "MANAGER": p[0] in ["inventory", "sales", "customers", "loyalty", "products", "brands", "categories", "prescriptions", "repairs", "reports", "expenses", "suppliers", "purchase_orders"] or (p[0] in ["workers", "opticians"] and p[1] in ["read", "create", "update"]),
+                "WORKER": p[0] in ["sales", "customers", "loyalty", "prescriptions", "products", "brands", "categories"] and p[1] in ["read", "create", "update", "write", "configure"],
+                "OPTICIAN": p[0] in ["customers", "prescriptions", "products", "brands", "categories", "loyalty"] and p[1] in ["read", "create", "update", "write", "configure"],
+                "ACCOUNTANT": p[0] in ["sales", "reports", "expenses"] and p[1] == "read"
+            }
+            
+            for role_type, is_granted in role_defaults.items():
+                stmt = select(GlobalRolePermission).where(
+                    GlobalRolePermission.permission_id == perm.id,
+                    GlobalRolePermission.role_type == role_type
+                )
+                gp = (await session.execute(stmt)).scalar_one_or_none()
+                if not gp:
+                    gp = GlobalRolePermission(
+                        permission_id=perm.id,
+                        role_type=role_type,
+                        is_granted=is_granted,
+                        updated_by_superadmin_id=super_admin.id
+                    )
+                    session.add(gp)
+        
+        print("  [OK] seeded permissions and SuperAdmin")
+
         await session.commit()
 
     print("\n" + "=" * 60)

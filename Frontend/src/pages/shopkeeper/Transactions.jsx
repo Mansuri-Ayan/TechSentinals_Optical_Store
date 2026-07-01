@@ -17,6 +17,8 @@ import { useCategories } from '../../hooks/useCategories';
 import { useProducts } from '../../hooks/useProducts';
 import { useStores } from '../../hooks/useStores';
 import { getInventoryApi } from '../../api/inventory/inventory.api';
+import PermissionGuard from '../../components/shared/PermissionGuard';
+import { useHasPermission } from '../../hooks/usePermissions';
 
 /* ─────────────────────────────────────────────────────────
    CONSTANTS
@@ -483,6 +485,7 @@ const NewTransactionModal = ({
    ───────────────────────────────────────────────────────── */
 const Transactions = () => {
   const { user } = useAuthStore();
+  const hasApprovePermission = useHasPermission('transactions:approve');
   const [searchParams, setSearchParams] = useSearchParams();
   const queryType = searchParams.get('type');
   const querySearch = searchParams.get('search');
@@ -655,7 +658,12 @@ const Transactions = () => {
   const selectCls = 'px-3 py-2 text-sm font-medium border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 bg-white text-slate-700 transition-all';
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto animate-fade-in font-sans">
+    <PermissionGuard permission="sales:read" fallback={
+      <div className="p-8 text-center text-slate-500">
+        You do not have permission to view this page.
+      </div>
+    }>
+      <div className="p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto animate-fade-in font-sans">
 
       {/* ── Breadcrumb + Header ── */}
       <div className="mb-6 sm:mb-8">
@@ -676,13 +684,15 @@ const Transactions = () => {
           </div>
           <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
             <NotificationBell role="shopkeeper" />
-            <button
-              onClick={() => setShowNewModal(true)}
-              className="flex items-center gap-2 px-5 py-2.5 bg-[#0A0F1F] text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 flex-shrink-0 w-full sm:w-auto justify-center"
-            >
-              <Plus className="w-4 h-4" />
-              New Transfer Request
-            </button>
+            <PermissionGuard permission="transactions:create">
+              <button
+                onClick={() => setShowNewModal(true)}
+                className="flex items-center gap-2 px-5 py-2.5 bg-[#0A0F1F] text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 flex-shrink-0 w-full sm:w-auto justify-center"
+              >
+                <Plus className="w-4 h-4" />
+                New Transfer Request
+              </button>
+            </PermissionGuard>
           </div>
         </div>
       </div>
@@ -857,7 +867,7 @@ const Transactions = () => {
                     
                     // Rules 4 & 5 Approval Authorization Checks
                     const isPending = tx.status === 'Pending';
-                    const canApprove = isPending && (
+                    const canApprove = hasApprovePermission && isPending && (
                       (tx.isRequest && String(tx.sendStoreId) === String(user?.store_id)) || // Rule 4: Sender approves pull request
                       (!tx.isRequest && String(tx.receiveStoreId) === String(user?.store_id)) // Rule 5: Receiver approves push
                     );
@@ -941,7 +951,7 @@ const Transactions = () => {
               
               // Rules 4 & 5 Approval Authorization Checks
               const isPending = tx.status === 'Pending';
-              const canApprove = isPending && (
+              const canApprove = hasApprovePermission && isPending && (
                 (tx.isRequest && String(tx.sendStoreId) === String(user?.store_id)) || // Sender approves pull request
                 (!tx.isRequest && String(tx.receiveStoreId) === String(user?.store_id)) // Receiver approves push
               );
@@ -1039,12 +1049,13 @@ const Transactions = () => {
         }}
         isApproving={isApprovingTransaction}
         isRejecting={isRejectingTransaction}
-        canApprove={viewTx?.status === 'Pending' && (
+        canApprove={hasApprovePermission && viewTx?.status === 'Pending' && (
           (viewTx.isRequest && String(viewTx.sendStoreId) === String(user?.store_id)) ||
           (!viewTx.isRequest && String(viewTx.receiveStoreId) === String(user?.store_id))
         )}
       />
     </div>
+    </PermissionGuard>
   );
 };
 

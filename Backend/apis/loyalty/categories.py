@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Path
+from core.deps import require_permission, get_user_admin_id
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import joinedload
-from core.deps import get_db, get_current_admin, get_current_manager
+from core.deps import get_db, get_current_user, get_current_manager
 from models.admin import Admin
 from models.manager import Manager
 from models.store_category_loyalty import StoreCategoryLoyalty
@@ -21,8 +22,9 @@ router = APIRouter()
 async def get_loyalty_categories_admin(
     store_id: int = Path(..., description="The ID of the store"),
     db: AsyncSession = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin),
+    current_user = Depends(require_permission('loyalty', 'read')),
 ) -> List[StoreCategoryLoyaltyRead]:
+    admin_id = get_user_admin_id(current_user)
     # Check if the admin owns the store
     # This implicit check relies on StoreCategoryLoyalty.store relationship loading Store
     # and then checking admin_id. We can also explicitly check the store first.
@@ -39,7 +41,7 @@ async def get_loyalty_categories_admin(
         store_stmt = select(Store).where(Store.id == store_id)
         store_result = await db.execute(store_stmt)
         store = store_result.scalar_one_or_none()
-        if not store or store.admin_id != current_admin.id:
+        if not store or store.admin_id != admin_id:
              raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Store not found or access denied"
@@ -48,7 +50,7 @@ async def get_loyalty_categories_admin(
         return []
 
     # Verify admin ownership for any returned category loyalty config
-    if category_loyalties[0].store.admin_id != current_admin.id:
+    if category_loyalties[0].store.admin_id != admin_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied to this store's loyalty categories"
@@ -69,8 +71,9 @@ async def update_loyalty_category_admin(
     store_id: int = Path(..., description="The ID of the store"),
     category_id: int = Path(..., description="The ID of the category"),
     db: AsyncSession = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin),
+    current_user = Depends(require_permission('loyalty', 'read')),
 ) -> StoreCategoryLoyaltyRead:
+    admin_id = get_user_admin_id(current_user)
     scl_stmt = select(StoreCategoryLoyalty).options(
         joinedload(StoreCategoryLoyalty.store),
         joinedload(StoreCategoryLoyalty.category)
@@ -87,7 +90,7 @@ async def update_loyalty_category_admin(
             detail="Loyalty category configuration not found"
         )
 
-    if category_loyalty.store.admin_id != current_admin.id:
+    if category_loyalty.store.admin_id != admin_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied to this store's loyalty category configuration"
@@ -113,9 +116,9 @@ async def update_loyalty_category_admin(
 )
 async def get_loyalty_categories_shopkeeper(
     db: AsyncSession = Depends(get_db),
-    current_manager: Manager = Depends(get_current_manager),
+    current_user = Depends(require_permission('loyalty', 'read')),
 ) -> List[StoreCategoryLoyaltyRead]:
-    store_id = current_manager.store_id
+    store_id = current_user.store_id
     scl_stmt = select(StoreCategoryLoyalty).options(
         joinedload(StoreCategoryLoyalty.category)
     ).where(StoreCategoryLoyalty.store_id == store_id)
@@ -136,9 +139,9 @@ async def update_loyalty_category_shopkeeper(
     payload: StoreCategoryLoyaltyUpdate,
     category_id: int = Path(..., description="The ID of the category"),
     db: AsyncSession = Depends(get_db),
-    current_manager: Manager = Depends(get_current_manager),
+    current_user = Depends(require_permission('loyalty', 'configure')),
 ) -> StoreCategoryLoyaltyRead:
-    store_id = current_manager.store_id
+    store_id = current_user.store_id
     scl_stmt = select(StoreCategoryLoyalty).options(
         joinedload(StoreCategoryLoyalty.category)
     ).where(

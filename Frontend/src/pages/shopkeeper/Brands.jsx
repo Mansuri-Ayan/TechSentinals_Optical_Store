@@ -7,6 +7,8 @@ import Pagination from '../../components/shared/Pagination';
 import AddEditBrandModal from '../../components/admin/AddEditBrandModal';
 import { useAuthStore, useStoreStore } from '../../store/store';
 import { useShopkeeperBrands } from '../../hooks/useShopkeeperBrands';
+import PermissionGuard from '../../components/shared/PermissionGuard';
+import { usePagePermissions } from '../../hooks/usePermissions';
 
 const ITEMS_PER_PAGE = 8;
 
@@ -65,6 +67,12 @@ const Brands = () => {
     active_status: activeStatusFilter !== 'all' ? activeStatusFilter : undefined,
   });
 
+  const perms = usePagePermissions({
+    canCreate: 'inventory:create',
+    canUpdate: 'inventory:update',
+    canDelete: 'inventory:delete'
+  });
+
   /* ── Handlers ── */
   const handleSaveBrand = useCallback(async (data) => {
     try {
@@ -97,7 +105,12 @@ const Brands = () => {
   };
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 max-w-[1400px] mx-auto animate-fade-in font-sans">
+    <PermissionGuard permission="brands:read" fallback={
+      <div className="p-8 text-center text-slate-500">
+        You do not have permission to view this page.
+      </div>
+    }>
+      <div className="p-4 sm:p-6 lg:p-8 max-w-[1400px] mx-auto animate-fade-in font-sans">
       {/* ── Breadcrumb + Header ── */}
       <div className="mb-6 sm:mb-8">
         <div className="flex items-center text-sm text-slate-500 font-medium mb-3 space-x-2">
@@ -115,13 +128,15 @@ const Brands = () => {
               Manage product brands, tracking active status and inventory associations.
             </p>
           </div>
-          <button
-            onClick={() => setModalState({ isOpen: true, item: null })}
-            className="flex items-center gap-2 px-5 py-2.5 bg-[#0A0F1F] text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 flex-shrink-0 w-full sm:w-auto justify-center"
-          >
-            <Plus className="w-4 h-4" />
-            Add Brand
-          </button>
+          <PermissionGuard permission="inventory:create">
+            <button
+              onClick={() => setModalState({ isOpen: true, item: null })}
+              className="flex items-center gap-2 px-5 py-2.5 bg-[#0A0F1F] text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 flex-shrink-0 w-full sm:w-auto justify-center"
+            >
+              <Plus className="w-4 h-4" />
+              Add Brand
+            </button>
+          </PermissionGuard>
         </div>
       </div>
 
@@ -251,21 +266,25 @@ const Brands = () => {
                       View Items
                     </button>
                     {/* Edit */}
-                    <button
-                      onClick={() => setModalState({ isOpen: true, item: brand })}
-                      className="flex items-center justify-center w-9 h-9 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-colors border border-slate-200"
-                      title="Edit brand"
-                    >
-                      <Edit2 className="w-3.5 h-3.5" />
-                    </button>
+                    <PermissionGuard permission="inventory:update">
+                      <button
+                        onClick={() => setModalState({ isOpen: true, item: brand })}
+                        className="flex items-center justify-center w-9 h-9 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-colors border border-slate-200"
+                        title="Edit brand"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                    </PermissionGuard>
                     {/* Delete */}
-                    <button
-                      onClick={() => handleDelete(brand.id)}
-                      className="flex items-center justify-center w-9 h-9 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-colors border border-red-100"
-                      title="Deactivate brand"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    <PermissionGuard permission="inventory:delete">
+                      <button
+                        onClick={() => handleDelete(brand.id)}
+                        className="flex items-center justify-center w-9 h-9 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-colors border border-red-100"
+                        title="Deactivate brand"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </PermissionGuard>
                   </div>
                 </div>
               </div>
@@ -290,6 +309,7 @@ const Brands = () => {
         isSaving={isSaving}
       />
     </div>
+    </PermissionGuard>
   );
 };
 

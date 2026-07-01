@@ -31,6 +31,12 @@ from routes.notification_router import router as notification_router
 from routes.loyalty_router import router as loyalty_router
 from routes.shopkeeper_loyalty_router import router as shopkeeper_loyalty_router
 from routes.lab_router import lab_router
+from apis.permission.me import router as permission_me_router
+from apis.permission.tier2 import router as permission_tier2_router
+from apis.permission.tier3 import router as permission_tier3_router
+from apis.permission.staff_list import router as permission_staff_list_router
+from routes.superadmin_router import superadmin_router
+from apis.bill_settings.operations import router as bill_settings_router
 from db.session import engine
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -110,3 +116,10 @@ app.include_router(notification_router)
 app.include_router(loyalty_router)
 app.include_router(shopkeeper_loyalty_router)
 app.include_router(lab_router)
+# ── Permissions & SuperAdmin module ───────────────────────────
+app.include_router(permission_me_router)
+app.include_router(permission_tier2_router)
+app.include_router(permission_tier3_router)
+app.include_router(permission_staff_list_router)
+app.include_router(superadmin_router)
+app.include_router(bill_settings_router, prefix="/api/v1/bill-settings", tags=["Bill Settings"])

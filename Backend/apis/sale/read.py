@@ -4,7 +4,7 @@ from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from core.deps import get_current_user
+from core.deps import require_permission
 from db.session import get_db
 from models.admin import Admin
 from models.sale import StaffType, SaleStatus, Sale
@@ -173,7 +173,7 @@ async def list_sales_endpoint(
     tab: str | None = Query(default=None),
     lab_status: str | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_user),
+    current_user = Depends(require_permission("sales", "read")),
 ):
     if isinstance(current_user, Admin):
         admin_id = current_user.id
@@ -333,7 +333,7 @@ async def list_sales_endpoint(
 async def get_sale_endpoint(
     sale_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_user),
+    current_user = Depends(require_permission("sales", "read")),
 ) -> SaleRead:
     sale = await get_sale(db, sale_id)
     

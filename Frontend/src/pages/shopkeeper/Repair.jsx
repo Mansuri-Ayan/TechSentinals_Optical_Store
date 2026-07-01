@@ -10,6 +10,8 @@ import { useRepairs, useRepairMutations } from '../../hooks/useRepairs';
 import { useAuthStore, useStoreStore } from '../../store/store';
 import Pagination from '../../components/shared/Pagination';
 import NotificationBell from '../../components/shared/NotificationBell';
+import PermissionGuard from '../../components/shared/PermissionGuard';
+import { usePagePermissions } from '../../hooks/usePermissions';
 
 /* ── Constants ── */
 const REPAIR_TYPES = [
@@ -63,6 +65,11 @@ const Repair = () => {
   const { stores, selectedStore } = useStoreStore();
   const { customers, isLoading: customersLoading } = useCustomers();
   const { updateRepairStatusAsync, isUpdatingStatus } = useRepairMutations();
+
+  const perms = usePagePermissions({
+    canCreate: 'repairs:create',
+    canUpdate: 'repairs:update'
+  });
 
   /* ── Filters & Pagination ── */
   const [searchTerm, setSearchTerm] = useState('');
@@ -270,13 +277,15 @@ const Repair = () => {
             >
               <RefreshCw className="w-3.5 h-3.5" />
             </button>
-            <button
-              onClick={() => setShowAddModal(true)}
-              className="flex items-center gap-1.5 px-4 py-2.5 bg-[#0A0F1F] text-white rounded-xl text-xs sm:text-sm font-bold hover:bg-slate-800 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 whitespace-nowrap cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              Book Repair
-            </button>
+            <PermissionGuard permission="repairs:create">
+              <button
+                onClick={() => setShowAddModal(true)}
+                className="flex items-center gap-1.5 px-4 py-2.5 bg-[#0A0F1F] text-white rounded-xl text-xs sm:text-sm font-bold hover:bg-slate-800 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 whitespace-nowrap cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                Book Repair
+              </button>
+            </PermissionGuard>
           </div>
         </div>
       </div>
@@ -387,7 +396,7 @@ const Repair = () => {
                         <select
                           value={repair.status}
                           onChange={e => handleStatusChange(repair.id, e.target.value)}
-                          disabled={isUpdatingStatus}
+                          disabled={isUpdatingStatus || !perms.canUpdate}
                           className={`px-2.5 py-1 text-xs font-bold rounded-lg border focus:outline-none focus:ring-4 focus:ring-blue-500/10 cursor-pointer transition-all ${getStatusBadgeClass(repair.status)}`}
                         >
                           {REPAIR_STATUSES.map(st => (
@@ -448,6 +457,7 @@ const Repair = () => {
                       <select
                         value={repair.status}
                         onChange={e => handleStatusChange(repair.id, e.target.value)}
+                        disabled={isUpdatingStatus || !perms.canUpdate}
                         className={`w-full px-2 py-1 text-[11px] font-bold rounded-lg border focus:outline-none ${getStatusBadgeClass(repair.status)}`}
                       >
                         {REPAIR_STATUSES.map(st => (
@@ -699,6 +709,7 @@ const Repair = () => {
           onClose={() => setSelectedRepairForView(null)}
           onStatusChange={handleStatusChange}
           isUpdatingStatus={isUpdatingStatus}
+          canUpdate={perms.canUpdate}
         />
       )}
     </div>
@@ -739,7 +750,7 @@ const Section = ({ icon: Icon, title, children, color = 'blue' }) => {
 };
 
 /* ── REPAIR VIEW DETAIL DRAWER ── */
-const RepairDetailDrawer = ({ repair, onClose, onStatusChange, isUpdatingStatus }) => {
+const RepairDetailDrawer = ({ repair, onClose, onStatusChange, isUpdatingStatus, canUpdate }) => {
   if (!repair) return null;
 
   const warrantyConfig = repair.is_warranty
@@ -826,7 +837,7 @@ const RepairDetailDrawer = ({ repair, onClose, onStatusChange, isUpdatingStatus 
             <select
               value={repair.status}
               onChange={e => onStatusChange(repair.id, e.target.value)}
-              disabled={isUpdatingStatus}
+              disabled={isUpdatingStatus || !canUpdate}
               className={`w-full px-3 py-2 text-sm font-bold rounded-xl border focus:outline-none focus:ring-4 focus:ring-blue-500/10 cursor-pointer ${getStatusBadgeClass(repair.status)}`}
             >
               {REPAIR_STATUSES.map(st => (

@@ -1,7 +1,7 @@
 # API: supplier/create.py
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from core.deps import get_current_admin
+from core.deps import require_permission, get_user_admin_id
 from db.session import get_db
 from models.admin import Admin
 from schemas.supplier import SupplierCreate, SupplierRead
@@ -26,7 +26,8 @@ def _supplier_to_read(s) -> SupplierRead:
 async def create_supplier_endpoint(
     payload: SupplierCreate,
     db: AsyncSession = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin),
+    current_user = Depends(require_permission('suppliers', 'create')),
 ) -> SupplierRead:
-    supplier = await create_supplier(db, admin_id=current_admin.id, payload=payload)
+    admin_id = get_user_admin_id(current_user)
+    supplier = await create_supplier(db, admin_id=admin_id, payload=payload)
     return _supplier_to_read(supplier)

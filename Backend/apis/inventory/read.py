@@ -1,7 +1,7 @@
 # API: inventory/read.py
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from core.deps import get_current_user
+from core.deps import require_permission, get_user_admin_id
 from db.session import get_db
 from models.admin import Admin
 from schemas.inventory import InventoryRead, InventoryResponse, UniversalInventoryResponse
@@ -157,7 +157,7 @@ async def list_inventories(
     limit: int = Query(default=20, ge=1, le=100, description="Page size"),
     paginate: bool = Query(default=True, description="Enable pagination"),
     db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_user),
+    current_user = Depends(require_permission('inventory', 'read')),
 ) -> InventoryResponse:
     from core.deps import get_user_admin_id
     from sqlalchemy import select
@@ -255,7 +255,7 @@ async def list_warehouse_inventories(
     limit: int = Query(default=20, ge=1, le=100, description="Page size"),
     paginate: bool = Query(default=True, description="Enable pagination"),
     db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_user),
+    current_user = Depends(require_permission('inventory', 'read')),
 ) -> InventoryResponse:
     from core.deps import get_user_admin_id
     from sqlalchemy import select
@@ -317,7 +317,7 @@ async def list_warehouse_inventories(
 )
 async def low_stock_items(
     db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_user),
+    current_user = Depends(require_permission('inventory', 'read')),
 ) -> list[InventoryRead]:
     from core.deps import get_user_admin_id
     from sqlalchemy import select
@@ -367,7 +367,7 @@ async def universal_search_inventories(
     limit: int = Query(default=20, ge=1, le=100, description="Page size"),
     paginate: bool = Query(default=True, description="Enable pagination"),
     db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_user),
+    current_user = Depends(require_permission('inventory', 'read')),
 ) -> UniversalInventoryResponse:
     from core.deps import get_user_admin_id
     from sqlalchemy import select, and_, or_, func
@@ -670,7 +670,7 @@ async def universal_search_inventories(
 async def get_inventory_endpoint(
     inventory_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_user),
+    current_user = Depends(require_permission('inventory', 'read')),
 ) -> InventoryRead:
     inv = await get_inventory(db, inventory_id)
     if inv is None:

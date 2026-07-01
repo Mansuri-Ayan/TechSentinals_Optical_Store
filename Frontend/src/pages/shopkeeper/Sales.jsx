@@ -8,6 +8,7 @@ import Pagination from '../../components/shared/Pagination';
 import { useSales } from '../../hooks/useSales';
 import NotificationBell from '../../components/shared/NotificationBell';
 import InventoryDetailDrawer from '../../components/admin/InventoryDetailDrawer';
+import PermissionGuard from '../../components/shared/PermissionGuard';
 
 const STATUS_CFG = {
   Completed:   { color: 'text-emerald-700 bg-emerald-50 border-emerald-200', dot: 'bg-emerald-500' },
@@ -123,29 +124,34 @@ const Sales = () => {
   }, [sales]);
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto animate-fade-in font-sans overflow-x-hidden">
-      {/* ── Breadcrumbs ── */}
-      <div className="mb-6 sm:mb-8">
-        <div className="flex items-center text-sm text-slate-500 font-semibold mb-3 space-x-2">
-          <Link to="/shopkeeper/dashboard" className="hover:text-slate-800 transition-colors">Dashboard</Link>
-          <ChevronRight className="w-4 h-4 flex-shrink-0" />
-          <span className="text-slate-900 font-extrabold">Sales History</span>
-        </div>
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
-              <ShoppingCart className="w-8 h-8 text-blue-500" />
-              Sales History
-            </h1>
-            <p className="text-slate-505 mt-1.5 text-xs sm:text-sm font-semibold">
-              Track and monitor optical customer sales, pending orders, and store revenues.
-            </p>
-          </div>
-          <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
-            <NotificationBell role="shopkeeper" />
-          </div>
-        </div>
+    <PermissionGuard permission="sales:read" fallback={
+      <div className="p-8 text-center text-slate-500">
+        You do not have permission to view sales records.
       </div>
+    }>
+      <div className="p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto animate-fade-in font-sans overflow-x-hidden">
+        {/* ── Breadcrumbs ── */}
+        <div className="mb-6 sm:mb-8">
+          <div className="flex items-center text-sm text-slate-500 font-semibold mb-3 space-x-2">
+            <Link to="/shopkeeper/dashboard" className="hover:text-slate-800 transition-colors">Dashboard</Link>
+            <ChevronRight className="w-4 h-4 flex-shrink-0" />
+            <span className="text-slate-900 font-extrabold">Sales History</span>
+          </div>
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
+                <ShoppingCart className="w-8 h-8 text-blue-500" />
+                Sales History
+              </h1>
+              <p className="text-slate-505 mt-1.5 text-xs sm:text-sm font-semibold">
+                Track and monitor optical customer sales, pending orders, and store revenues.
+              </p>
+            </div>
+            <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
+              <NotificationBell role="shopkeeper" />
+            </div>
+          </div>
+        </div>
 
       {/* ── KPI Cards ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
@@ -318,6 +324,7 @@ const Sales = () => {
         onClose={() => setSelectedSale(null)}
       />
     </div>
+    </PermissionGuard>
   );
 };
 

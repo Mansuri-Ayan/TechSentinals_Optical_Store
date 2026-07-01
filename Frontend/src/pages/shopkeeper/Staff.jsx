@@ -25,6 +25,8 @@ import { useAuthStore } from "../../store/store";
 import { useStoreStaff } from "../../hooks/useStaff";
 import NotificationBell from "../../components/shared/NotificationBell";
 import { getWorkerById, getOpticianById, getManagerById } from "../../api/staff/staff.api";
+import PermissionGuard from "../../components/shared/PermissionGuard";
+import { useHasPermission } from "../../hooks/usePermissions";
 
 const roleOptions = [
   { value: "all", label: "All Roles" },
@@ -66,6 +68,12 @@ const Staff = () => {
   const [selectedStaff, setSelectedStaff] = useState(null);
   const [drawerLoading, setDrawerLoading] = useState(false);
   const ITEMS_PER_PAGE = 10;
+
+  const canCreate = useHasPermission('workers:create') || useHasPermission('opticians:create');
+  const canUpdate = useHasPermission('workers:update') || useHasPermission('opticians:update');
+  const canDelete = useHasPermission('workers:delete') || useHasPermission('opticians:delete');
+
+  const hasStaffRead = useHasPermission('workers:read') || useHasPermission('managers:read') || useHasPermission('opticians:read') || useHasPermission('accountants:read');
 
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -245,8 +253,16 @@ const Staff = () => {
     );
   }
 
+  if (!hasStaffRead) {
+    return (
+      <div className="p-8 text-center text-slate-500">
+        You do not have permission to view staff.
+      </div>
+    );
+  }
+
   return (
-    <div className="p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto animate-fade-in font-sans overflow-x-hidden">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto animate-fade-in font-sans overflow-x-hidden space-y-6 sm:space-y-8">
       
       {/* Header */}
       <div className="mb-6 sm:mb-8">
@@ -267,13 +283,15 @@ const Staff = () => {
           </div>
           <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
             <NotificationBell role="shopkeeper" />
-            <button
-              onClick={() => setShowAddStaff(true)}
-              className="flex items-center justify-center gap-2 px-5 py-2.5 bg-slate-900 text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 w-full sm:w-auto flex-shrink-0"
-            >
-              <Plus className="w-4 h-4" />
-              Add Staff
-            </button>
+            {canCreate && (
+              <button
+                onClick={() => setShowAddStaff(true)}
+                className="flex items-center justify-center gap-2 px-5 py-2.5 bg-slate-900 text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 w-full sm:w-auto flex-shrink-0"
+              >
+                <Plus className="w-4 h-4" />
+                Add Staff
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -446,21 +464,25 @@ const Staff = () => {
                         </td>
                         <td className="px-5 py-4 whitespace-nowrap">
                           <div className="flex items-center space-x-1.5 md:opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button
-                              onClick={(e) => { e.stopPropagation(); setEditingStaff(person); }}
-                              className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
-                              title="Edit"
-                            >
-                              <Edit2 className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={(e) => handleDelete(e, person)}
-                              disabled={isDeletingStaff}
-                              className="p-1.5 text-slate-400 hover:text-red-650 hover:bg-red-50 rounded-lg transition-colors"
-                              title="Delete"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                            {canUpdate && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setEditingStaff(person); }}
+                                className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                                title="Edit"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </button>
+                            )}
+                            {canDelete && (
+                              <button
+                                onClick={(e) => handleDelete(e, person)}
+                                disabled={isDeletingStaff}
+                                className="p-1.5 text-slate-400 hover:text-red-650 hover:bg-red-50 rounded-lg transition-colors"
+                                title="Delete"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -525,19 +547,23 @@ const Staff = () => {
                   </div>
 
                   <div className="pt-2 border-t border-slate-100 flex items-center justify-end gap-2 text-xs">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setEditingStaff(person); }}
-                      className="px-3 py-1.5 bg-slate-50 border border-slate-200 text-slate-600 rounded-lg font-semibold hover:bg-slate-100 transition-colors flex items-center gap-1"
-                    >
-                      <Edit2 className="w-3.5 h-3.5" /> Edit
-                    </button>
-                    <button
-                      onClick={(e) => handleDelete(e, person)}
-                      disabled={isDeletingStaff}
-                      className="px-3 py-1.5 bg-red-50 border border-red-200 text-red-600 rounded-lg font-semibold hover:bg-red-100 transition-colors flex items-center gap-1"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" /> Delete
-                    </button>
+                    {canUpdate && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setEditingStaff(person); }}
+                        className="px-3 py-1.5 bg-slate-50 border border-slate-200 text-slate-600 rounded-lg font-semibold hover:bg-slate-100 transition-colors flex items-center gap-1"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" /> Edit
+                      </button>
+                    )}
+                    {canDelete && (
+                      <button
+                        onClick={(e) => handleDelete(e, person)}
+                        disabled={isDeletingStaff}
+                        className="px-3 py-1.5 bg-red-50 border border-red-200 text-red-600 rounded-lg font-semibold hover:bg-red-100 transition-colors flex items-center gap-1"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" /> Delete
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}

@@ -1,7 +1,7 @@
 # API: optician/delete.py
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from core.deps import get_current_user
+from core.deps import require_permission
 from db.session import get_db
 from models.admin import Admin
 from models.manager import Manager
@@ -20,8 +20,8 @@ router = APIRouter()
 async def delete_optician_endpoint(
     optician_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_user),
-):
+    current_user = Depends(require_permission("opticians", "delete")),
+) -> None:
     optician = await get_optician(db, optician_id)
     if optician is None:
         raise HTTPException(

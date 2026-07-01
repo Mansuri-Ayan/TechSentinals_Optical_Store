@@ -1,7 +1,7 @@
 # API: customer/update.py
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from core.deps import get_current_user
+from core.deps import require_permission
 from db.session import get_db
 from models.admin import Admin
 from schemas.customer import CustomerUpdate, CustomerRead
@@ -25,7 +25,7 @@ async def update_customer_endpoint(
     customer_id: int,
     payload: CustomerUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user=Depends(require_permission("customers", "update")),
 ) -> CustomerRead:
     admin_id = _get_user_admin_id(current_user)
     customer = await get_customer(db, customer_id)
@@ -55,7 +55,7 @@ async def update_customer_endpoint(
 async def delete_customer_endpoint(
     customer_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user=Depends(require_permission("customers", "delete")),
 ) -> None:
     admin_id = _get_user_admin_id(current_user)
     customer = await get_customer(db, customer_id)

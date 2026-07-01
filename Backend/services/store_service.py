@@ -12,8 +12,9 @@ from models.product import Product
 from models.category import Category
 from models.expense import Expense, ExpenseOwnerType
 from models.customer import Customer
-from models.loyalty_config import LoyaltyConfig # New Import
-from models.store_category_loyalty import StoreCategoryLoyalty # New Import
+from models.loyalty_config import LoyaltyConfig
+from models.store_category_loyalty import StoreCategoryLoyalty
+from models.bill_settings import BillSettings
 from schemas.store import StoreCreate, StoreUpdate
 
 
@@ -50,6 +51,10 @@ async def create_store(
     # Auto-create default LoyaltyConfig for the new store
     default_loyalty_config = LoyaltyConfig(store_id=new_store.id)
     db.add(default_loyalty_config)
+
+    # Auto-create default BillSettings for the new store
+    default_bill_settings = BillSettings(store_id=new_store.id)
+    db.add(default_bill_settings)
 
     # Auto-create default StoreCategoryLoyalty for existing categories of this admin
     categories_stmt = select(Category).where(Category.admin_id == admin_id)
