@@ -306,7 +306,7 @@ const LabOrders = () => {
           <button
             onClick={() => {
               setSelectedBranch('All');
-              setSelectedStatus('All');
+              setActiveTab('queue');
               setDateFrom('');
               setDateTo('');
               setSearchInput('');

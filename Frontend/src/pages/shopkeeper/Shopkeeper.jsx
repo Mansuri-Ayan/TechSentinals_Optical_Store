@@ -66,6 +66,7 @@ const Shopkeeper = () => {
   const [prescription, setPrescription] = useState(() => safeParse(POS_KEYS.prescription, defaultPrescription));
 
   const [savedCustomer, setSavedCustomer] = useState(null);
+  const [savedSaleId, setSavedSaleId] = useState(null);
   const [paymentInfo, setPaymentInfo] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { user } = useAuthStore();
@@ -353,6 +354,7 @@ const Shopkeeper = () => {
       };
 
       setSavedCustomer(resultCustomer);
+      setSavedSaleId(saleResult.id);
       setPaymentInfo(paymentInfoObj);
       toast.success('Order completed and submitted successfully!');
       setActiveStep(5);
@@ -370,6 +372,7 @@ const Shopkeeper = () => {
     setPrescription(defaultPrescription);
     setPaymentInfo(null);
     setSavedCustomer(null);
+    setSavedSaleId(null);
     setActiveStep(1);
     // Clear localStorage
     Object.values(POS_KEYS).forEach((k) => localStorage.removeItem(k));
@@ -484,6 +487,7 @@ const Shopkeeper = () => {
             prescription={prescription}
             paymentInfo={paymentInfo}
             savedCustomer={savedCustomer}
+            saleId={savedSaleId}
             onReset={handleReset}
             onBackToPayment={() => setActiveStep(4)}
           />

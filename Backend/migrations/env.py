@@ -24,7 +24,7 @@ from models import (
     Category, Subcategory, Product, FrameProduct, LensProduct, AccessoryProduct,
     Inventory, InventoryTransaction, Supplier, SupplierStoreLink, SupplierProduct,
     PurchaseOrder, PurchaseOrderItem, SupplierPayment, Customer, Prescription, Sale, SaleItem, SalePayment,
-    Expense, ExpenseCategory
+    Expense, ExpenseCategory, Bill
 )
 
 target_metadata = Base.metadata

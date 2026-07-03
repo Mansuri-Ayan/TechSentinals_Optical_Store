@@ -29,3 +29,14 @@ export const createSaleApi = async (payload) => {
   const response = await api.post('/sales/', payload);
   return response.data;
 };
+
+/**
+ * Fetch backend-generated HTML bill for a sale.
+ * 
+ * @param {number|string} saleId - The sale ID.
+ */
+export const getSaleBillApi = async (saleId) => {
+  const response = await api.get(`/sales/${saleId}/bill`);
+  return response.data;
+};
+

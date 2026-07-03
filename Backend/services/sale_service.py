@@ -421,6 +421,8 @@ async def create_sale(
         db.add(txn)
 
     await db.commit()
+    from services.bill_service import update_bill_for_sale
+    await update_bill_for_sale(db, sale.id)
     stmt = (
         select(Sale)
         .options(
@@ -593,6 +595,8 @@ async def update_sale(
 
     await db.commit()
     await db.refresh(sale)
+    from services.bill_service import update_bill_for_sale
+    await update_bill_for_sale(db, sale.id)
     await check_and_update_sales_loss(db, sale.id)
     return sale
 
@@ -646,6 +650,8 @@ async def cancel_sale(
     sale.status = SaleStatus.CANCELLED
     await db.commit()
     await db.refresh(sale)
+    from services.bill_service import update_bill_for_sale
+    await update_bill_for_sale(db, sale.id)
     await check_and_update_sales_loss(db, sale.id)
     return sale
 
@@ -687,6 +693,8 @@ async def add_sale_payment(
 
     await db.commit()
     await db.refresh(payment)
+    from services.bill_service import update_bill_for_sale
+    await update_bill_for_sale(db, sale.id)
     await check_and_update_sales_loss(db, sale.id)
     return payment
 

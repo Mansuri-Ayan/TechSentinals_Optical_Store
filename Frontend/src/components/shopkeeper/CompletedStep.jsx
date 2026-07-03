@@ -1,12 +1,31 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { User, Eye, ShoppingBag, CheckCircle, Printer, Share2, RefreshCw, Sparkles } from 'lucide-react';
 import { useAuthStore } from '../../store/store';
 import { useBillSettings } from '../../hooks/useBillSettings';
 import { defaultSettings } from '../../utils/billSettings';
+import { getSaleBillApi } from '../../api/sales/sales.api';
 
-const CompletedStep = ({ customer, cart, prescription, paymentInfo, savedCustomer, onReset, onBackToPayment }) => {
+const CompletedStep = ({ customer, cart, prescription, paymentInfo, savedCustomer, saleId, onReset, onBackToPayment }) => {
   const [copied, setCopied] = useState(false);
+  const [billHtml, setBillHtml] = useState('');
+  const [loading, setLoading] = useState(false);
   const { user } = useAuthStore();
+
+  useEffect(() => {
+    if (saleId) {
+      setLoading(true);
+      getSaleBillApi(saleId)
+        .then((res) => {
+          setBillHtml(res.html_content);
+        })
+        .catch((err) => {
+          console.error("Failed to load backend bill HTML:", err);
+        })
+        .finally(() => {
+          setLoading(false);
+        });
+    }
+  }, [saleId]);
   const storeId = savedCustomer?.store_id || user?.store_id || 'default';
   
   const { settings: fetchedSettings } = useBillSettings(storeId !== 'default' ? storeId : null);
@@ -111,202 +130,211 @@ const CompletedStep = ({ customer, cart, prescription, paymentInfo, savedCustome
       {/* ── Receipt/Bill Printable Area ── */}
       <div
         id="print-receipt-area"
-        style={{ borderTop: `6px solid ${billSettings.themeColor}` }}
-        className="bg-white rounded-3xl border border-slate-150 shadow-xl overflow-hidden p-6 sm:p-8 space-y-6"
+        style={!billHtml ? { borderTop: `6px solid ${billSettings.themeColor}` } : {}}
+        className={!billHtml ? "bg-white rounded-3xl border border-slate-150 shadow-xl overflow-hidden p-6 sm:p-8 space-y-6" : ""}
       >
-        
-        {/* Receipt Header */}
-        <div className="flex justify-between items-start gap-4 border-b border-slate-100 pb-5">
-          <div className="min-w-0">
-            {billSettings.logo ? (
-              <img src={billSettings.logo} alt="Logo" className="max-h-12 mb-2 object-contain" />
-            ) : (
-              <div className="h-9 w-9 rounded-lg bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center mb-2">
-                <Sparkles className="w-5 h-5 text-emerald-500" />
-              </div>
-            )}
-            <h2 className="text-lg font-black text-slate-900 tracking-tight leading-tight">
-              {billSettings.headerText}
-            </h2>
-            <p className="text-[10px] text-slate-450 font-bold uppercase tracking-wide mt-1">
-              {billSettings.subHeaderText}
-            </p>
-            <p className="text-[10px] text-slate-500 font-semibold mt-1.5 max-w-[240px] leading-snug">{billSettings.address}</p>
-            <p className="text-[9px] text-slate-400 font-semibold mt-0.5">Phone: {billSettings.contactPhone} · Email: {billSettings.contactEmail}</p>
-            {billSettings.showGst && billSettings.gstNumber && (
-              <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">GSTIN: {billSettings.gstNumber}</p>
-            )}
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-20">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-slate-900"></div>
+            <p className="text-slate-500 text-xs mt-3 font-semibold uppercase tracking-wider">Loading invoice...</p>
           </div>
-          <div className="text-right flex-shrink-0">
-            <p className="text-xs font-mono font-bold text-slate-850 bg-slate-50 border border-slate-200 px-2.5 py-1.5 rounded-xl inline-block leading-none">
-              {orderId}
-            </p>
-            <p className="text-[10px] text-slate-400 font-bold mt-1.5">
-              Date: {new Date(orderDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
-            </p>
-          </div>
-        </div>
-
-        {/* Customer & Billing Summary */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-5 border-b border-slate-100">
-          <div>
-            <h3 className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1">
-              <User className="w-3.5 h-3.5" /> Customer Details
-            </h3>
-            <div className="text-xs font-semibold text-slate-650 space-y-1">
-              <p className="font-bold text-slate-900 text-sm">{customer.firstName || customer.first_name || ''} {customer.lastName || customer.last_name || ''}</p>
-              <p>Phone: {customer.phone}</p>
-              {customer.email && <p>Email: {customer.email}</p>}
-              {customer.address && <p>Address: {customer.address}, {customer.city}</p>}
-            </div>
-          </div>
-
-          <div className="md:text-right">
-            <h3 className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-2 md:justify-end flex items-center gap-1">
-              Payment Method
-            </h3>
-            <div className="text-xs font-semibold text-slate-655 space-y-1">
-              <p className="font-bold text-slate-900">Paid via: <span style={{ color: billSettings.themeColor }} className="font-black">{paymentInfo?.method || 'Cash'}</span></p>
-              {paymentInfo?.method === 'UPI' && paymentInfo?.upiId && (
-                <p className="font-mono">Ref ID: {paymentInfo.upiId}</p>
-              )}
-              <p>Outstanding Balance: ₹{remainingAmount.toLocaleString('en-IN')}</p>
-              <p>Receipt Status: <span style={{ backgroundColor: `${billSettings.themeColor}10`, color: billSettings.themeColor, borderColor: `${billSettings.themeColor}30` }} className="inline-flex px-1.5 py-0.5 rounded font-extrabold border text-[10px] leading-none">Paid</span></p>
-            </div>
-          </div>
-        </div>
-
-        {/* Prescription Summary */}
-        {billSettings.showPrescription && hasPrescription ? (
-          <div className="bg-slate-50/70 border border-slate-150 rounded-2xl p-4 sm:p-5">
-            <h3 className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
-              <Eye className="w-3.5 h-3.5 text-purple-500" /> Lens & Prescription Details
-            </h3>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs mb-3 font-semibold text-slate-655">
-              {prescription.lensType && <div>Lens Type: <span className="text-slate-900 font-bold">{prescription.lensType}</span></div>}
-              {prescription.framePreference && <div>Frame Pref: <span className="text-slate-900 font-bold">{prescription.framePreference}</span></div>}
-              {prescription.doctorName && <div>Doctor Name: <span className="text-slate-900 font-bold">{prescription.doctorName}</span></div>}
-            </div>
-
-            {/* Matrix details */}
-            {(prescription.rightEye?.sph !== '' || prescription.leftEye?.sph !== '') && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
-                {prescription.rightEye?.sph !== '' && (
-                  <div className="bg-white rounded-xl p-3 border border-slate-150 shadow-sm">
-                    <p className="text-[9px] font-extrabold text-blue-600 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-blue-500" /> Right Eye (OD)
-                    </p>
-                    <div className="grid grid-cols-3 gap-2 text-[10px] font-semibold text-slate-500">
-                      <div>SPH: <span className="font-bold text-slate-850">{prescription.rightEye.sph ?? '—'}</span></div>
-                      <div>CYL: <span className="font-bold text-slate-850">{prescription.rightEye.cyl ?? '—'}</span></div>
-                      <div>AXIS: <span className="font-bold text-slate-850">{prescription.rightEye.axis ?? '—'}</span></div>
-                    </div>
+        ) : billHtml ? (
+          <div dangerouslySetInnerHTML={{ __html: billHtml }} />
+        ) : (
+          <>
+            {/* Receipt Header */}
+            <div className="flex justify-between items-start gap-4 border-b border-slate-100 pb-5">
+              <div className="min-w-0">
+                {billSettings.logo ? (
+                  <img src={billSettings.logo} alt="Logo" className="max-h-12 mb-2 object-contain" />
+                ) : (
+                  <div className="h-9 w-9 rounded-lg bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center mb-2">
+                    <Sparkles className="w-5 h-5 text-emerald-500" />
                   </div>
                 )}
-                {prescription.leftEye?.sph !== '' && (
-                  <div className="bg-white rounded-xl p-3 border border-slate-150 shadow-sm">
-                    <p className="text-[9px] font-extrabold text-emerald-600 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Left Eye (OS)
-                    </p>
-                    <div className="grid grid-cols-3 gap-2 text-[10px] font-semibold text-slate-500">
-                      <div>SPH: <span className="font-bold text-slate-850">{prescription.leftEye.sph ?? '—'}</span></div>
-                      <div>CYL: <span className="font-bold text-slate-850">{prescription.leftEye.cyl ?? '—'}</span></div>
-                      <div>AXIS: <span className="font-bold text-slate-850">{prescription.leftEye.axis ?? '—'}</span></div>
-                    </div>
-                  </div>
+                <h2 className="text-lg font-black text-slate-900 tracking-tight leading-tight">
+                  {billSettings.headerText}
+                </h2>
+                <p className="text-[10px] text-slate-450 font-bold uppercase tracking-wide mt-1">
+                  {billSettings.subHeaderText}
+                </p>
+                <p className="text-[10px] text-slate-500 font-semibold mt-1.5 max-w-[240px] leading-snug">{billSettings.address}</p>
+                <p className="text-[9px] text-slate-400 font-semibold mt-0.5">Phone: {billSettings.contactPhone} · Email: {billSettings.contactEmail}</p>
+                {billSettings.showGst && billSettings.gstNumber && (
+                  <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">GSTIN: {billSettings.gstNumber}</p>
                 )}
               </div>
-            )}
-          </div>
-        ) : null}
+              <div className="text-right flex-shrink-0">
+                <p className="text-xs font-mono font-bold text-slate-850 bg-slate-50 border border-slate-200 px-2.5 py-1.5 rounded-xl inline-block leading-none">
+                  {orderId}
+                </p>
+                <p className="text-[10px] text-slate-400 font-bold mt-1.5">
+                  Date: {new Date(orderDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                </p>
+              </div>
+            </div>
 
-        {/* Invoice Items table */}
-        <div className="space-y-3">
-          <h3 className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest flex items-center gap-1">
-            <ShoppingBag className="w-3.5 h-3.5" /> Items Particulars
-          </h3>
-          <div className="border border-slate-100 rounded-2xl overflow-hidden">
-            <table className="w-full text-xs text-left">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 font-bold uppercase tracking-wider">
-                  <th className="px-4 py-3">Product description</th>
-                  <th className="px-4 py-3 text-center">Qty</th>
-                  <th className="px-4 py-3 text-right">Unit Price</th>
-                  <th className="px-4 py-3 text-right">Total</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50 font-semibold text-slate-700">
-                {cart.map((item, idx) => {
-                  return (
-                    <tr key={idx} className="hover:bg-slate-50/50">
-                      <td className="px-4 py-3.5">
-                        <p className="font-bold text-slate-900">{item.product.product_name}</p>
-                        <p className="text-[10px] text-slate-400 font-semibold mt-0.5">
-                          {item.product.brand} {item.selectedColor && `· Color: ${item.selectedColor}`} {item.selectedSize && `· Size: ${item.selectedSize}`}
+            {/* Customer & Billing Summary */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-5 border-b border-slate-100">
+              <div>
+                <h3 className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1">
+                  <User className="w-3.5 h-3.5" /> Customer Details
+                </h3>
+                <div className="text-xs font-semibold text-slate-655 space-y-1">
+                  <p className="font-bold text-slate-900 text-sm">{customer.firstName || customer.first_name || ''} {customer.lastName || customer.last_name || ''}</p>
+                  <p>Phone: {customer.phone}</p>
+                  {customer.email && <p>Email: {customer.email}</p>}
+                  {customer.address && <p>Address: {customer.address}, {customer.city}</p>}
+                </div>
+              </div>
+
+              <div className="md:text-right">
+                <h3 className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-2 md:justify-end flex items-center gap-1">
+                  Payment Method
+                </h3>
+                <div className="text-xs font-semibold text-slate-655 space-y-1">
+                  <p className="font-bold text-slate-900">Paid via: <span style={{ color: billSettings.themeColor }} className="font-black">{paymentInfo?.method || 'Cash'}</span></p>
+                  {paymentInfo?.method === 'UPI' && paymentInfo?.upiId && (
+                    <p className="font-mono">Ref ID: {paymentInfo.upiId}</p>
+                  )}
+                  <p>Outstanding Balance: ₹{remainingAmount.toLocaleString('en-IN')}</p>
+                  <p>Receipt Status: <span style={{ backgroundColor: `${billSettings.themeColor}10`, color: billSettings.themeColor, borderColor: `${billSettings.themeColor}30` }} className="inline-flex px-1.5 py-0.5 rounded font-extrabold border text-[10px] leading-none">Paid</span></p>
+                </div>
+              </div>
+            </div>
+
+            {/* Prescription Summary */}
+            {billSettings.showPrescription && hasPrescription ? (
+              <div className="bg-slate-50/70 border border-slate-150 rounded-2xl p-4 sm:p-5">
+                <h3 className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+                  <Eye className="w-3.5 h-3.5 text-purple-500" /> Lens & Prescription Details
+                </h3>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs mb-3 font-semibold text-slate-655">
+                  {prescription.lensType && <div>Lens Type: <span className="text-slate-900 font-bold">{prescription.lensType}</span></div>}
+                  {prescription.framePreference && <div>Frame Pref: <span className="text-slate-900 font-bold">{prescription.framePreference}</span></div>}
+                  {prescription.doctorName && <div>Doctor Name: <span className="text-slate-950 font-bold">{prescription.doctorName}</span></div>}
+                </div>
+
+                {/* Matrix details */}
+                {(prescription.rightEye?.sph !== '' || prescription.leftEye?.sph !== '') && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+                    {prescription.rightEye?.sph !== '' && (
+                      <div className="bg-white rounded-xl p-3 border border-slate-150 shadow-sm">
+                        <p className="text-[9px] font-extrabold text-blue-600 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-blue-500" /> Right Eye (OD)
                         </p>
-                      </td>
-                      <td className="px-4 py-3.5 text-center font-mono">{item.quantity}</td>
-                      <td className="px-4 py-3.5 text-right font-mono">₹{item.product.selling_price.toLocaleString('en-IN')}</td>
-                      <td className="px-4 py-3.5 text-right font-bold text-slate-900 font-mono">₹{(item.product.selling_price * item.quantity).toLocaleString('en-IN')}</td>
+                        <div className="grid grid-cols-3 gap-2 text-[10px] font-semibold text-slate-500">
+                          <div>SPH: <span className="font-bold text-slate-850">{prescription.rightEye.sph ?? '—'}</span></div>
+                          <div>CYL: <span className="font-bold text-slate-850">{prescription.rightEye.cyl ?? '—'}</span></div>
+                          <div>AXIS: <span className="font-bold text-slate-850">{prescription.rightEye.axis ?? '—'}</span></div>
+                        </div>
+                      </div>
+                    )}
+                    {prescription.leftEye?.sph !== '' && (
+                      <div className="bg-white rounded-xl p-3 border border-slate-150 shadow-sm">
+                        <p className="text-[9px] font-extrabold text-emerald-600 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Left Eye (OS)
+                        </p>
+                        <div className="grid grid-cols-3 gap-2 text-[10px] font-semibold text-slate-500">
+                          <div>SPH: <span className="font-bold text-slate-850">{prescription.leftEye.sph ?? '—'}</span></div>
+                          <div>CYL: <span className="font-bold text-slate-850">{prescription.leftEye.cyl ?? '—'}</span></div>
+                          <div>AXIS: <span className="font-bold text-slate-850">{prescription.leftEye.axis ?? '—'}</span></div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : null}
+
+            {/* Invoice Items table */}
+            <div className="space-y-3">
+              <h3 className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                <ShoppingBag className="w-3.5 h-3.5" /> Items Particulars
+              </h3>
+              <div className="border border-slate-100 rounded-2xl overflow-hidden">
+                <table className="w-full text-xs text-left">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 font-bold uppercase tracking-wider">
+                      <th className="px-4 py-3">Product description</th>
+                      <th className="px-4 py-3 text-center">Qty</th>
+                      <th className="px-4 py-3 text-right">Unit Price</th>
+                      <th className="px-4 py-3 text-right">Total</th>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Pricing calculations & QR Code */}
-        <div className="flex flex-col sm:flex-row gap-5 items-end justify-between">
-          {/* Payment QR Code */}
-          {billSettings.qrCode ? (
-            <div className="text-left bg-white border border-slate-150 p-3 rounded-2xl flex flex-col items-center shadow-sm w-32 shrink-0">
-              <img src={billSettings.qrCode} alt="Scan to pay" className="w-24 h-24 object-contain" />
-              <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest block text-center mt-1.5">Scan to Pay</span>
-            </div>
-          ) : (
-            <div />
-          )}
-
-          <div className="bg-slate-50/80 border border-slate-100 rounded-2xl p-4 sm:p-5 flex flex-col gap-2.5 max-w-md ml-auto flex-1 w-full">
-            <div className="flex justify-between items-center text-xs text-slate-500 font-bold">
-              <span>Subtotal</span>
-              <span className="font-mono">₹{totalAmount.toLocaleString('en-IN')}</span>
-            </div>
-            {discount > 0 && (
-              <div className="flex justify-between items-center text-xs text-red-500 font-bold">
-                <span>Discounts Applied</span>
-                <span className="font-mono">- ₹{discount.toLocaleString('en-IN')}</span>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50 font-semibold text-slate-700">
+                    {cart.map((item, idx) => {
+                      return (
+                        <tr key={idx} className="hover:bg-slate-50/50">
+                          <td className="px-4 py-3.5">
+                            <p className="font-bold text-slate-900">{item.product.product_name}</p>
+                            <p className="text-[10px] text-slate-400 font-semibold mt-0.5">
+                              {item.product.brand} {item.selectedColor && `· Color: ${item.selectedColor}`} {item.selectedSize && `· Size: ${item.selectedSize}`}
+                            </p>
+                          </td>
+                          <td className="px-4 py-3.5 text-center font-mono">{item.quantity}</td>
+                          <td className="px-4 py-3.5 text-right font-mono">₹{item.product.selling_price.toLocaleString('en-IN')}</td>
+                          <td className="px-4 py-3.5 text-right font-bold text-slate-900 font-mono">₹{(item.product.selling_price * item.quantity).toLocaleString('en-IN')}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
-            )}
-            {loyaltyDiscount > 0 && (
-              <div className="flex justify-between items-center text-xs text-emerald-600 font-bold">
-                <span>Loyalty Points Discount</span>
-                <span className="font-mono">- ₹{loyaltyDiscount.toLocaleString('en-IN')}</span>
-              </div>
-            )}
-            <div className="flex justify-between items-center text-xs text-slate-800 font-extrabold border-t border-slate-200/60 pt-2">
-              <span>Final Total</span>
-              <span className="text-sm font-black text-slate-950 font-mono">₹{finalAmount.toLocaleString('en-IN')}</span>
             </div>
-            <div className="flex justify-between items-center text-xs text-emerald-600 font-extrabold pt-1">
-              <span>Amount Received</span>
-              <span className="font-mono">₹{receivedAmount.toLocaleString('en-IN')}</span>
-            </div>
-            {remainingAmount > 0 && (
-              <div className="flex justify-between items-center text-xs text-amber-600 font-extrabold">
-                <span>Balance Due</span>
-                <span className="font-mono">₹{remainingAmount.toLocaleString('en-IN')}</span>
+
+            {/* Pricing calculations & QR Code */}
+            <div className="flex flex-col sm:flex-row gap-5 items-end justify-between">
+              {/* Payment QR Code */}
+              {billSettings.qrCode ? (
+                <div className="text-left bg-white border border-slate-150 p-3 rounded-2xl flex flex-col items-center shadow-sm w-32 shrink-0">
+                  <img src={billSettings.qrCode} alt="Scan to pay" className="w-24 h-24 object-contain" />
+                  <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest block text-center mt-1.5">Scan to Pay</span>
+                </div>
+              ) : (
+                <div />
+              )}
+
+              <div className="bg-slate-50/80 border border-slate-100 rounded-2xl p-4 sm:p-5 flex flex-col gap-2.5 max-w-md ml-auto flex-1 w-full">
+                <div className="flex justify-between items-center text-xs text-slate-500 font-bold">
+                  <span>Subtotal</span>
+                  <span className="font-mono">₹{totalAmount.toLocaleString('en-IN')}</span>
+                </div>
+                {discount > 0 && (
+                  <div className="flex justify-between items-center text-xs text-red-500 font-bold">
+                    <span>Discounts Applied</span>
+                    <span className="font-mono">- ₹{discount.toLocaleString('en-IN')}</span>
+                  </div>
+                )}
+                {loyaltyDiscount > 0 && (
+                  <div className="flex justify-between items-center text-xs text-emerald-600 font-bold">
+                    <span>Loyalty Points Discount</span>
+                    <span className="font-mono">- ₹{loyaltyDiscount.toLocaleString('en-IN')}</span>
+                  </div>
+                )}
+                <div className="flex justify-between items-center text-xs text-slate-800 font-extrabold border-t border-slate-200/60 pt-2">
+                  <span>Final Total</span>
+                  <span className="text-sm font-black text-slate-950 font-mono">₹{finalAmount.toLocaleString('en-IN')}</span>
+                </div>
+                <div className="flex justify-between items-center text-xs text-emerald-600 font-extrabold pt-1">
+                  <span>Amount Received</span>
+                  <span className="font-mono">₹{receivedAmount.toLocaleString('en-IN')}</span>
+                </div>
+                {remainingAmount > 0 && (
+                  <div className="flex justify-between items-center text-xs text-amber-600 font-extrabold">
+                    <span>Balance Due</span>
+                    <span className="font-mono">₹{remainingAmount.toLocaleString('en-IN')}</span>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-        </div>
+            </div>
 
-        {/* Footer Notes */}
-        <div className="text-center text-[10px] font-bold text-slate-450 border-t border-slate-50 pt-4 italic">
-          {billSettings.footerText}
-        </div>
-
+            {/* Footer Notes */}
+            <div className="text-center text-[10px] font-bold text-slate-450 border-t border-slate-50 pt-4 italic">
+              {billSettings.footerText}
+            </div>
+          </>
+        )}
       </div>
 
       {/* ── Buttons Section ── */}

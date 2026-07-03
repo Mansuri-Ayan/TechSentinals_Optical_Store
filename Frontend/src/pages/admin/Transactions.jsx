@@ -288,7 +288,7 @@ const NewTransactionModal = ({
     e.preventDefault();
     if (!validate()) return;
 
-    let payload = {};
+    let payload;
     const type = form.type;
 
     if (type === 'Inventory Transfer') {
@@ -327,7 +327,8 @@ const NewTransactionModal = ({
       });
       setForm(EMPTY_FORM);
       setErrors({});
-    } catch {
+    } catch (err) {
+      console.error('Submit transaction failed', err);
     }
   };
 

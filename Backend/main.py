@@ -2,6 +2,10 @@
 import logging
 logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 
+import os
+from alembic.config import Config
+from alembic import command
+
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware

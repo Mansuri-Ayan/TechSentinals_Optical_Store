@@ -75,9 +75,9 @@ const ProductSelectionStep = ({
 
   const products = useMemo(() => {
     return (kpiItems || []).map((item) => {
-      let availableColors = [];
-      let availableSizes = [];
-      let features = [];
+      let availableColors;
+      let availableSizes;
+      let features;
 
       if (item.category_name === 'Frames') {
         const fp = item.frame_product;

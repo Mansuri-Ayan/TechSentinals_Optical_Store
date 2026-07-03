@@ -1,7 +1,7 @@
 /** @format */
 
 import { useState, useMemo, useEffect, useRef } from "react";
-import { useParams, useSearchParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { toast } from "react-toastify";
 import {
   Search,

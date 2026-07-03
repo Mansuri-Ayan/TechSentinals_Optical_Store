@@ -364,3 +364,54 @@ async def get_sale_endpoint(
             staff_map[(StaffType.OPTICIAN, sale.sold_by_id)] = o
 
     return _sale_to_read(sale, include_nested=True, staff_map=staff_map)
+
+
+@router.get(
+    "/{sale_id}/bill",
+    summary="Get sale bill HTML",
+    description="Get the generated HTML bill for the sale.",
+)
+async def get_sale_bill_endpoint(
+    sale_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user = Depends(require_permission("sales", "read")),
+):
+    sale = await get_sale(db, sale_id)
+    if not sale:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Sale not found",
+        )
+        
+    if isinstance(current_user, Admin):
+        allowed = sale.admin_id == current_user.id
+    else:
+        allowed = sale.store_id == current_user.store_id
+        
+    if not allowed:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Sale not found",
+        )
+
+    from models.bill import Bill
+    stmt = select(Bill).where(Bill.sale_id == sale_id)
+    res = await db.execute(stmt)
+    bill = res.scalar_one_or_none()
+    
+    if not bill:
+        from services.bill_service import update_bill_for_sale
+        bill = await update_bill_for_sale(db, sale_id)
+        if not bill:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Sale bill not found",
+            )
+            
+    return {
+        "id": bill.id,
+        "sale_id": bill.sale_id,
+        "bill_number": bill.bill_number,
+        "html_content": bill.html_content
+    }
+

@@ -256,6 +256,13 @@ class Sale(Base):
         cascade="all, delete-orphan",
         lazy="selectin",
     )
+    bill = relationship(
+        "Bill",
+        back_populates="sale",
+        uselist=False,
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
     repairs = relationship(
         "Repair",
         back_populates="sale",

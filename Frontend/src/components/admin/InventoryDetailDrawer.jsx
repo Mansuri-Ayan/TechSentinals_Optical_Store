@@ -12,6 +12,7 @@ import { useBillSettings } from '../../hooks/useBillSettings';
 import { defaultSettings } from '../../utils/billSettings';
 import { addSalePaymentApi } from '../../api/customer/customer.api';
 import { toast } from 'react-toastify';
+import { getSaleBillApi } from '../../api/sales/sales.api';
 
 const statusConfig = {
   'in_stock': { label: 'In Stock', color: 'text-emerald-700 bg-emerald-50 border-emerald-200', dot: 'bg-emerald-500', icon: CheckCircle },
@@ -155,6 +156,26 @@ const InventoryDetailDrawer = ({ item, onClose, onEdit, onApprove, onReject, isA
   const [isLabModalOpen, setIsLabModalOpen] = useState(false);
   const [labSearchTerm, setLabSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState('details');
+  const [billHtml, setBillHtml] = useState('');
+  const [loadingBill, setLoadingBill] = useState(false);
+
+  useEffect(() => {
+    if (item && item.type === 'sales' && activeTab === 'bill') {
+      setLoadingBill(true);
+      getSaleBillApi(item.id)
+        .then((res) => {
+          setBillHtml(res.html_content);
+        })
+        .catch((err) => {
+          console.error("Failed to fetch bill HTML for drawer:", err);
+        })
+        .finally(() => {
+          setLoadingBill(false);
+        });
+    } else {
+      setBillHtml('');
+    }
+  }, [item, activeTab]);
 
   useEffect(() => {
     if (item) {
@@ -355,15 +376,6 @@ const InventoryDetailDrawer = ({ item, onClose, onEdit, onApprove, onReject, isA
 
           {/* Footer Actions */}
           <div className="px-5 py-4 bg-white border-t border-slate-100 flex-shrink-0 space-y-2">
-            {nextStatus && onUpdateStatus && canUpdateStatus && (
-              <button
-                onClick={() => onUpdateStatus(item.id, nextStatus)}
-                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-semibold text-sm transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-1.5"
-              >
-                <RefreshCw className="w-4 h-4" />
-                Advance to "{nextStatus}"
-              </button>
-            )}
             <button onClick={onClose}
               className="w-full py-2.5 bg-slate-900 text-white rounded-xl font-semibold text-sm hover:bg-slate-700 transition-all shadow-md hover:shadow-lg">
               Close
@@ -379,6 +391,13 @@ const InventoryDetailDrawer = ({ item, onClose, onEdit, onApprove, onReject, isA
   if (item.type === 'lab_order') {
     const fmt = (n) => n != null ? `₹${Number(n).toLocaleString('en-IN')}` : '—';
     const fmtDate = formatDate;
+
+    const nextStatuses = {
+      'Confirmed': 'Sent To Lab',
+      'Sent To Lab': 'Ready For Pickup',
+      'Ready For Pickup': 'Delivered'
+    };
+    const nextStatus = nextStatuses[item.status];
 
     // Timeline steps
     const timelineSteps = [
@@ -1165,206 +1184,215 @@ const InventoryDetailDrawer = ({ item, onClose, onEdit, onApprove, onReject, isA
             {activeTab === 'bill' && (
               <div
                 id="print-drawer-bill"
-                style={{ borderTop: `5px solid ${billSettings.themeColor}` }}
-                className="bg-white rounded-2xl border border-slate-200/80 p-5 space-y-5 text-slate-800 shadow-sm font-sans animate-fade-in"
+                style={!billHtml ? { borderTop: `5px solid ${billSettings.themeColor}` } : {}}
+                className={!billHtml ? "bg-white rounded-2xl border border-slate-200/80 p-5 space-y-5 text-slate-800 shadow-sm font-sans animate-fade-in" : ""}
               >
-                
-                {/* Invoice Header */}
-                <div className="flex justify-between items-start gap-4 border-b border-slate-100 pb-4">
-                  <div className="min-w-0">
-                    {billSettings.logo ? (
-                      <img src={billSettings.logo} alt="Logo" className="max-h-10 mb-2 object-contain" />
-                    ) : (
-                      <div className="h-8 w-8 rounded-lg bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center mb-2">
-                        <Sparkles className="w-4 h-4 text-emerald-500" />
-                      </div>
-                    )}
-                    <h2 className="text-sm font-black text-slate-900 tracking-tight leading-tight">
-                      {billSettings.headerText}
-                    </h2>
-                    <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wide mt-0.5">{billSettings.subHeaderText}</p>
-                    <p className="text-[9px] text-slate-500 font-semibold mt-1 leading-snug max-w-[200px]">{billSettings.address}</p>
-                    <p className="text-[8px] text-slate-405 font-semibold mt-0.5">Phone: {billSettings.contactPhone} · Email: {billSettings.contactEmail}</p>
-                    {billSettings.showGst && billSettings.gstNumber && (
-                      <p className="text-[8px] text-slate-450 font-bold uppercase tracking-wider mt-0.5">GSTIN: {billSettings.gstNumber}</p>
-                    )}
+                {loadingBill ? (
+                  <div className="flex flex-col items-center justify-center py-20">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-slate-900"></div>
+                    <p className="text-slate-500 text-xs mt-3 font-semibold uppercase tracking-wider">Loading invoice...</p>
                   </div>
-                  <div className="text-right flex-shrink-0">
-                    <p className="text-[10px] font-mono font-bold text-slate-800 bg-slate-50 border border-slate-200 px-2 py-1 rounded-lg inline-block leading-none">
-                      {item.orderId}
-                    </p>
-                    <p className="text-[9px] text-slate-400 font-bold mt-1">
-                      Date: {new Date(item.orderDate || item.sale_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Billing Summary */}
-                <div className="grid grid-cols-2 gap-4 pb-4 border-b border-slate-100 text-xs">
-                  <div>
-                    <h3 className="text-[9px] font-extrabold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1">
-                      <User className="w-3.5 h-3.5" /> Customer Details
-                    </h3>
-                    <div className="font-semibold text-slate-500 space-y-0.5 leading-tight">
-                      <p className="font-bold text-slate-900">{item.customerName}</p>
-                      <p>Phone: {item.customerPhone || '—'}</p>
-                      {item.customerAddress && <p className="truncate max-w-[170px]" title={item.customerAddress}>Address: {item.customerAddress}</p>}
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <h3 className="text-[9px] font-extrabold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1 justify-end">
-                      Payment Details
-                    </h3>
-                    <div className="font-semibold text-slate-500 space-y-0.5 leading-tight">
-                      <p className="font-bold text-slate-900">Paid via: <span style={{ color: billSettings.themeColor }} className="font-black">{item.paymentMethod || 'Cash'}</span></p>
-                      <p>Outstanding: ₹{Number(item.dueAmount || 0).toLocaleString('en-IN')}</p>
-                      <p>Status: <span style={{ backgroundColor: `${billSettings.themeColor}10`, color: billSettings.themeColor, borderColor: `${billSettings.themeColor}30` }} className="inline-flex px-1.5 py-0.5 rounded font-extrabold border text-[9px] leading-none">{item.paymentStatus}</span></p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Prescription Specifications */}
-                {billSettings.showPrescription ? (
-                  customerDetails?.prescription ? (
-                    <div className="bg-slate-50 border border-slate-150 rounded-xl p-3 text-xs space-y-2">
-                      <h3 className="text-[9px] font-extrabold text-slate-400 uppercase tracking-widest flex items-center gap-1">
-                        <Eye className="w-3.5 h-3.5 text-purple-500" /> Lens & Prescription Specs
-                      </h3>
-                      <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[10px] font-semibold text-slate-500">
-                        {customerDetails.prescription.lensType && <div>Lens Type: <span className="text-slate-950 font-bold">{customerDetails.prescription.lensType}</span></div>}
-                        {customerDetails.prescription.framePreference && <div>Frame Pref: <span className="text-slate-950 font-bold">{customerDetails.prescription.framePreference}</span></div>}
-                        {customerDetails.prescription.doctorName && <div>Doctor Name: <span className="text-slate-950 font-bold">{customerDetails.prescription.doctorName}</span></div>}
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2 mt-1 pt-1.5 border-t border-slate-200/40">
-                        {customerDetails.prescription.rightEye && (
-                          <div className="bg-white rounded-lg p-2 border border-slate-100">
-                            <p className="text-[8px] font-black text-blue-600 uppercase tracking-wider mb-1 flex items-center gap-1">
-                              <span className="w-1.5 h-1.5 rounded-full bg-blue-500" /> OD (Right)
-                            </p>
-                            <div className="grid grid-cols-3 gap-1 text-[9px] font-bold text-slate-400">
-                              <div>SPH: <span className="text-slate-800 font-black">{customerDetails.prescription.rightEye.sph ?? '—'}</span></div>
-                              <div>CYL: <span className="text-slate-800 font-black">{customerDetails.prescription.rightEye.cyl ?? '—'}</span></div>
-                              <div>AXIS: <span className="text-slate-800 font-black">{customerDetails.prescription.rightEye.axis ?? '—'}</span></div>
-                            </div>
-                          </div>
-                        )}
-                        {customerDetails.prescription.leftEye && (
-                          <div className="bg-white rounded-lg p-2 border border-slate-100">
-                            <p className="text-[8px] font-black text-emerald-600 uppercase tracking-wider mb-1 flex items-center gap-1">
-                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> OS (Left)
-                            </p>
-                            <div className="grid grid-cols-3 gap-1 text-[9px] font-bold text-slate-400">
-                              <div>SPH: <span className="text-slate-800 font-black">{customerDetails.prescription.leftEye.sph ?? '—'}</span></div>
-                              <div>CYL: <span className="text-slate-800 font-black">{customerDetails.prescription.leftEye.cyl ?? '—'}</span></div>
-                              <div>AXIS: <span className="text-slate-800 font-black">{customerDetails.prescription.leftEye.axis ?? '—'}</span></div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="bg-slate-50 border border-dashed border-slate-200 rounded-xl p-3 text-center text-[10px] font-semibold text-slate-400">
-                      No prescription details attached
-                    </div>
-                  )
-                ) : null}
-
-                {/* Particulars Items Table */}
-                <div className="space-y-2">
-                  <h3 className="text-[9px] font-extrabold text-slate-455 uppercase tracking-widest flex items-center gap-1">
-                    <ShoppingCart className="w-3.5 h-3.5" /> Particulars Items
-                  </h3>
-                  <div className="border border-slate-100 rounded-xl overflow-hidden text-xs">
-                    <table className="w-full text-left">
-                      <thead>
-                        <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 font-bold uppercase text-[9px] tracking-wider">
-                          <th className="px-3 py-2">Product Description</th>
-                          <th className="px-2 py-2 text-center">Qty</th>
-                          <th className="px-3 py-2 text-right">Price</th>
-                          <th className="px-3 py-2 text-right">Total</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-50 font-semibold text-slate-700">
-                        {item.items && item.items.length > 0 ? (
-                          item.items.map((saleItem, idx) => (
-                            <tr key={idx} className="hover:bg-slate-50/50">
-                              <td className="px-3 py-2">
-                                <p className="font-bold text-slate-900">{saleItem.product_name || item.productName || 'Optical Product'}</p>
-                                {saleItem.notes && <p className="text-[9px] text-slate-400 font-semibold mt-0.5">{saleItem.notes}</p>}
-                              </td>
-                              <td className="px-2 py-2 text-center font-mono font-bold text-slate-800">{saleItem.quantity}</td>
-                              <td className="px-3 py-2 text-right font-mono font-bold text-slate-800">₹{Number(saleItem.unit_price).toLocaleString('en-IN')}</td>
-                              <td className="px-3 py-2 text-right font-mono font-black text-slate-950">₹{Number(saleItem.line_total).toLocaleString('en-IN')}</td>
-                            </tr>
-                          ))
+                ) : billHtml ? (
+                  <div dangerouslySetInnerHTML={{ __html: billHtml }} />
+                ) : (
+                  <>
+                    {/* Invoice Header */}
+                    <div className="flex justify-between items-start gap-4 border-b border-slate-100 pb-4">
+                      <div className="min-w-0">
+                        {billSettings.logo ? (
+                          <img src={billSettings.logo} alt="Logo" className="max-h-10 mb-2 object-contain" />
                         ) : (
-                          <tr className="hover:bg-slate-50/50">
-                            <td className="px-3 py-2">
-                              <p className="font-bold text-slate-900">{item.productName || 'Optical Product'}</p>
-                            </td>
-                            <td className="px-2 py-2 text-center font-mono font-bold text-slate-800">{item.productQuantity || 1}</td>
-                            <td className="px-3 py-2 text-right font-mono font-bold text-slate-800">₹{Number(item.productPrice || item.totalAmount || 0).toLocaleString('en-IN')}</td>
-                            <td className="px-3 py-2 text-right font-mono font-black text-slate-950">₹{Number(item.totalAmount || 0).toLocaleString('en-IN')}</td>
-                          </tr>
+                          <div className="h-8 w-8 rounded-lg bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center mb-2">
+                            <Sparkles className="w-4 h-4 text-emerald-500" />
+                          </div>
                         )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-
-                {/* Calculations and QR Code layout */}
-                <div className="flex gap-4 justify-between items-end border-t border-slate-100 pt-3">
-                  {/* Payment QR Code */}
-                  {billSettings.qrCode ? (
-                    <div className="text-left bg-white border border-slate-150 p-2 text-slate-400 rounded-xl flex flex-col items-center shadow-sm w-20 shrink-0">
-                      <img src={billSettings.qrCode} alt="Scan to pay" className="w-16 h-16 object-contain" />
-                      <span className="text-[6px] font-black text-slate-405 uppercase tracking-widest block text-center mt-0.5">Scan to Pay</span>
-                    </div>
-                  ) : (
-                    <div />
-                  )}
-
-                  {/* Calculations */}
-                  <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 flex flex-col gap-1.5 max-w-[240px] ml-auto text-xs font-semibold flex-1 w-full">
-                    <div className="flex justify-between items-center text-slate-500">
-                      <span>Subtotal</span>
-                      <span className="font-mono font-bold">₹{Number(item.subtotal || item.totalAmount || 0).toLocaleString('en-IN')}</span>
-                    </div>
-                    {Number(item.discount_amount || 0) > 0 && (
-                      <div className="flex justify-between items-center text-red-500">
-                        <span>Discount</span>
-                        <span className="font-mono font-bold">- ₹{Number(item.discount_amount).toLocaleString('en-IN')}</span>
+                        <h2 className="text-sm font-black text-slate-900 tracking-tight leading-tight">
+                          {billSettings.headerText}
+                        </h2>
+                        <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wide mt-0.5">{billSettings.subHeaderText}</p>
+                        <p className="text-[9px] text-slate-500 font-semibold mt-1 leading-snug max-w-[200px]">{billSettings.address}</p>
+                        <p className="text-[8px] text-slate-405 font-semibold mt-0.5">Phone: {billSettings.contactPhone} · Email: {billSettings.contactEmail}</p>
+                        {billSettings.showGst && billSettings.gstNumber && (
+                          <p className="text-[8px] text-slate-450 font-bold uppercase tracking-wider mt-0.5">GSTIN: {billSettings.gstNumber}</p>
+                        )}
                       </div>
-                    )}
-                    {billSettings.showGst && Number(item.tax_amount || 0) > 0 && (
-                      <div className="flex justify-between items-center text-slate-500">
-                        <span>GST (Tax)</span>
-                        <span className="font-mono font-bold">+ ₹{Number(item.tax_amount).toLocaleString('en-IN')}</span>
+                      <div className="text-right flex-shrink-0">
+                        <p className="text-[10px] font-mono font-bold text-slate-800 bg-slate-50 border border-slate-200 px-2 py-1 rounded-lg inline-block leading-none">
+                          {item.orderId}
+                        </p>
+                        <p className="text-[9px] text-slate-400 font-bold mt-1">
+                          Date: {new Date(item.orderDate || item.sale_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                        </p>
                       </div>
-                    )}
-                    <div className="flex justify-between items-center text-slate-800 font-extrabold border-t border-slate-200/50 pt-1.5 mt-0.5">
-                      <span>Final Total</span>
-                      <span className="font-mono font-black text-slate-950">₹{Number(item.totalAmount).toLocaleString('en-IN')}</span>
                     </div>
-                    <div className="flex justify-between items-center text-emerald-600 font-extrabold">
-                      <span>Amount Paid</span>
-                      <span className="font-mono font-bold">₹{Number(item.paidAmount || item.totalAmount || 0).toLocaleString('en-IN')}</span>
-                    </div>
-                    {Number(item.dueAmount || 0) > 0 && (
-                      <div className="flex justify-between items-center text-amber-600 font-extrabold">
-                        <span>Balance Due</span>
-                        <span className="font-mono font-bold">₹{Number(item.dueAmount).toLocaleString('en-IN')}</span>
+
+                    {/* Billing Summary */}
+                    <div className="grid grid-cols-2 gap-4 pb-4 border-b border-slate-100 text-xs">
+                      <div>
+                        <h3 className="text-[9px] font-extrabold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1">
+                          <User className="w-3.5 h-3.5" /> Customer Details
+                        </h3>
+                        <div className="font-semibold text-slate-500 space-y-0.5 leading-tight">
+                          <p className="font-bold text-slate-900">{item.customerName}</p>
+                          <p>Phone: {item.customerPhone || '—'}</p>
+                          {item.customerAddress && <p className="truncate max-w-[170px]" title={item.customerAddress}>Address: {item.customerAddress}</p>}
+                        </div>
                       </div>
-                    )}
-                  </div>
-                </div>
+                      <div className="text-right">
+                        <h3 className="text-[9px] font-extrabold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1 justify-end">
+                          Payment Details
+                        </h3>
+                        <div className="font-semibold text-slate-500 space-y-0.5 leading-tight">
+                          <p className="font-bold text-slate-900">Paid via: <span style={{ color: billSettings.themeColor }} className="font-black">{item.paymentMethod || 'Cash'}</span></p>
+                          <p>Outstanding: ₹{Number(item.dueAmount || 0).toLocaleString('en-IN')}</p>
+                          <p>Status: <span style={{ backgroundColor: `${billSettings.themeColor}10`, color: billSettings.themeColor, borderColor: `${billSettings.themeColor}30` }} className="inline-flex px-1.5 py-0.5 rounded font-extrabold border text-[9px] leading-none">{item.paymentStatus}</span></p>
+                        </div>
+                      </div>
+                    </div>
 
-                {/* Footer Notes */}
-                <div className="text-center text-[9px] font-bold text-slate-400 border-t border-slate-50 pt-3 italic tracking-wide">
-                  {billSettings.footerText}
-                </div>
+                    {/* Prescription Specifications */}
+                    {billSettings.showPrescription ? (
+                      customerDetails?.prescription ? (
+                        <div className="bg-slate-50 border border-slate-150 rounded-xl p-3 text-xs space-y-2">
+                          <h3 className="text-[9px] font-extrabold text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                            <Eye className="w-3.5 h-3.5 text-purple-500" /> Lens & Prescription Specs
+                          </h3>
+                          <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[10px] font-semibold text-slate-500">
+                            {customerDetails.prescription.lensType && <div>Lens Type: <span className="text-slate-950 font-bold">{customerDetails.prescription.lensType}</span></div>}
+                            {customerDetails.prescription.framePreference && <div>Frame Pref: <span className="text-slate-950 font-bold">{customerDetails.prescription.framePreference}</span></div>}
+                            {customerDetails.prescription.doctorName && <div>Doctor Name: <span className="text-slate-950 font-bold">{customerDetails.prescription.doctorName}</span></div>}
+                          </div>
 
+                          <div className="grid grid-cols-2 gap-2 mt-1 pt-1.5 border-t border-slate-200/40">
+                            {customerDetails.prescription.rightEye && (
+                              <div className="bg-white rounded-lg p-2 border border-slate-100">
+                                <p className="text-[8px] font-black text-blue-600 uppercase tracking-wider mb-1 flex items-center gap-1">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500" /> OD (Right)
+                                </p>
+                                <div className="grid grid-cols-3 gap-1 text-[9px] font-bold text-slate-400">
+                                  <div>SPH: <span className="text-slate-800 font-black">{customerDetails.prescription.rightEye.sph ?? '—'}</span></div>
+                                  <div>CYL: <span className="text-slate-800 font-black">{customerDetails.prescription.rightEye.cyl ?? '—'}</span></div>
+                                  <div>AXIS: <span className="text-slate-800 font-black">{customerDetails.prescription.rightEye.axis ?? '—'}</span></div>
+                                </div>
+                              </div>
+                            )}
+                            {customerDetails.prescription.leftEye && (
+                              <div className="bg-white rounded-lg p-2 border border-slate-100">
+                                <p className="text-[8px] font-black text-emerald-600 uppercase tracking-wider mb-1 flex items-center gap-1">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> OS (Left)
+                                </p>
+                                <div className="grid grid-cols-3 gap-1 text-[9px] font-bold text-slate-400">
+                                  <div>SPH: <span className="text-slate-800 font-black">{customerDetails.prescription.leftEye.sph ?? '—'}</span></div>
+                                  <div>CYL: <span className="text-slate-800 font-black">{customerDetails.prescription.leftEye.cyl ?? '—'}</span></div>
+                                  <div>AXIS: <span className="text-slate-800 font-black">{customerDetails.prescription.leftEye.axis ?? '—'}</span></div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="bg-slate-50 border border-dashed border-slate-200 rounded-xl p-3 text-center text-[10px] font-semibold text-slate-400">
+                          No prescription details attached
+                        </div>
+                      )
+                    ) : null}
+
+                    {/* Particulars Items Table */}
+                    <div className="space-y-2">
+                      <h3 className="text-[9px] font-extrabold text-slate-455 uppercase tracking-widest flex items-center gap-1">
+                        <ShoppingCart className="w-3.5 h-3.5" /> Particulars Items
+                      </h3>
+                      <div className="border border-slate-100 rounded-xl overflow-hidden text-xs">
+                        <table className="w-full text-left">
+                          <thead>
+                            <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 font-bold uppercase text-[9px] tracking-wider">
+                              <th className="px-3 py-2">Product Description</th>
+                              <th className="px-2 py-2 text-center">Qty</th>
+                              <th className="px-3 py-2 text-right">Price</th>
+                              <th className="px-3 py-2 text-right">Total</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-50 font-semibold text-slate-700">
+                            {item.items && item.items.length > 0 ? (
+                              item.items.map((saleItem, idx) => (
+                                <tr key={idx} className="hover:bg-slate-50/50">
+                                  <td className="px-3 py-2">
+                                    <p className="font-bold text-slate-900">{saleItem.product_name || item.productName || 'Optical Product'}</p>
+                                    {saleItem.notes && <p className="text-[9px] text-slate-400 font-semibold mt-0.5">{saleItem.notes}</p>}
+                                  </td>
+                                  <td className="px-2 py-2 text-center font-mono font-bold text-slate-800">{saleItem.quantity}</td>
+                                  <td className="px-3 py-2 text-right font-mono font-bold text-slate-800">₹{Number(saleItem.unit_price).toLocaleString('en-IN')}</td>
+                                  <td className="px-3 py-2 text-right font-mono font-black text-slate-950">₹{Number(saleItem.line_total).toLocaleString('en-IN')}</td>
+                                </tr>
+                              ))
+                            ) : (
+                              <tr className="hover:bg-slate-50/50">
+                                <td className="px-3 py-2">
+                                  <p className="font-bold text-slate-900">{item.productName || 'Optical Product'}</p>
+                                </td>
+                                <td className="px-2 py-2 text-center font-mono font-bold text-slate-800">{item.productQuantity || 1}</td>
+                                <td className="px-3 py-2 text-right font-mono font-bold text-slate-800">₹{Number(item.productPrice || item.totalAmount || 0).toLocaleString('en-IN')}</td>
+                                <td className="px-3 py-2 text-right font-mono font-black text-slate-950">₹{Number(item.totalAmount || 0).toLocaleString('en-IN')}</td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    {/* Calculations and QR Code layout */}
+                    <div className="flex gap-4 justify-between items-end border-t border-slate-100 pt-3">
+                      {/* Payment QR Code */}
+                      {billSettings.qrCode ? (
+                        <div className="text-left bg-white border border-slate-150 p-2 text-slate-400 rounded-xl flex flex-col items-center shadow-sm w-20 shrink-0">
+                          <img src={billSettings.qrCode} alt="Scan to pay" className="w-16 h-16 object-contain" />
+                          <span className="text-[6px] font-black text-slate-405 uppercase tracking-widest block text-center mt-0.5">Scan to Pay</span>
+                        </div>
+                      ) : (
+                        <div />
+                      )}
+
+                      {/* Calculations */}
+                      <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 flex flex-col gap-1.5 max-w-[240px] ml-auto text-xs font-semibold flex-1 w-full">
+                        <div className="flex justify-between items-center text-slate-500">
+                          <span>Subtotal</span>
+                          <span className="font-mono font-bold">₹{Number(item.subtotal || item.totalAmount || 0).toLocaleString('en-IN')}</span>
+                        </div>
+                        {Number(item.discount_amount || 0) > 0 && (
+                          <div className="flex justify-between items-center text-red-500">
+                            <span>Discount</span>
+                            <span className="font-mono font-bold">- ₹{Number(item.discount_amount).toLocaleString('en-IN')}</span>
+                          </div>
+                        )}
+                        {billSettings.showGst && Number(item.tax_amount || 0) > 0 && (
+                          <div className="flex justify-between items-center text-slate-500">
+                            <span>GST (Tax)</span>
+                            <span className="font-mono font-bold">+ ₹{Number(item.tax_amount).toLocaleString('en-IN')}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between items-center text-slate-800 font-extrabold border-t border-slate-200/50 pt-1.5 mt-0.5">
+                          <span>Final Total</span>
+                          <span className="font-mono font-black text-slate-950">₹{Number(item.totalAmount).toLocaleString('en-IN')}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-emerald-600 font-extrabold">
+                          <span>Amount Paid</span>
+                          <span className="font-mono font-bold">₹{Number(item.paidAmount || item.totalAmount || 0).toLocaleString('en-IN')}</span>
+                        </div>
+                        {Number(item.dueAmount || 0) > 0 && (
+                          <div className="flex justify-between items-center text-amber-600 font-extrabold">
+                            <span>Balance Due</span>
+                            <span className="font-mono font-bold">₹{Number(item.dueAmount).toLocaleString('en-IN')}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Footer Notes */}
+                    <div className="text-center text-[9px] font-bold text-slate-400 border-t border-slate-50 pt-3 italic tracking-wide">
+                      {billSettings.footerText}
+                    </div>
+                  </>
+                )}
               </div>
             )}          </div>
 

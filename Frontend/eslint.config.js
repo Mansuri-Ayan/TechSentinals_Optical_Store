@@ -19,6 +19,9 @@ export default defineConfig([
     },
     rules: {
       'no-unused-vars': 'warn',
+      'no-useless-assignment': 'off',
+      'no-empty': 'warn',
+      'react-hooks/preserve-manual-memoization': 'off',
       'react-hooks/set-state-in-effect': 'off',
       'react-hooks/immutability': 'off',
       'react-hooks/incompatible-library': 'off',

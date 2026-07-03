@@ -67,12 +67,9 @@ const StaffPermissions = () => {
     const staffRole = selectedStaff.role?.toUpperCase();
     
     // Check what the underlying Tier 2 / Tier 1 default is
-    let underlyingState = false;
-    if (adminGrants[staffRole] && permission.key in adminGrants[staffRole]) {
-      underlyingState = adminGrants[staffRole][permission.key];
-    } else {
-      underlyingState = globalGrants[staffRole]?.[permission.key] || false;
-    }
+    const underlyingState = (adminGrants[staffRole] && permission.key in adminGrants[staffRole])
+      ? adminGrants[staffRole][permission.key]
+      : (globalGrants[staffRole]?.[permission.key] || false);
 
     if (isGranted === underlyingState) {
       // Clear the override because it matches the default
