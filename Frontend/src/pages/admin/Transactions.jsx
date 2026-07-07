@@ -10,6 +10,7 @@ import {
   RefreshCw, Trash2, Eye, IndianRupee, FileText,
 } from 'lucide-react';
 import Pagination from '../../components/shared/Pagination';
+import ManagerNewTransactionModal from '../../components/shopkeeper/ManagerNewTransactionModal';
 import { useStoreStore, useAuthStore } from '../../store/store';
 import { useInventory } from '../../hooks/useInventory';
 import { useTransactions } from '../../hooks/useTransactions';
@@ -159,24 +160,28 @@ const NewTransactionModal = ({
   const [form, setForm] = useState(EMPTY_FORM);
   const [errors, setErrors] = useState({});
 
-  const isSingleStore = stores.length <= 1;
+  const isAdminOrAccountant = user?.role === 'admin' || user?.role === 'super_admin' || user?.role === 'accountant';
+  const isSenderLocked = stores.length <= 1 || !isAdminOrAccountant;
+
+  const myStore = useMemo(() => {
+    if (!user) return stores[0] || {};
+    if (isAdminOrAccountant) return currentStore || stores[0] || {};
+    return stores.find(s => String(s.id) === String(user.store_id)) || stores[0] || {};
+  }, [user, stores, isAdminOrAccountant, currentStore]);
 
   const transactionTypeOptions = useMemo(() => {
-    if (isSingleStore) {
+    if (stores.length <= 1) {
       return TRANSACTION_TYPE_OPTIONS.filter(opt => opt.value !== 'Inventory Transfer');
     }
     return TRANSACTION_TYPE_OPTIONS;
-  }, [isSingleStore]);
+  }, [stores.length]);
 
   const storeOptions = useMemo(() => {
-    if (isSingleStore) {
-      return stores.map(st => ({ id: String(st.id), name: st.store_name || st.name || `Store #${st.id}` }));
-    }
     return [
       { id: 'admin', name: 'All Store' },
       ...stores.map(st => ({ id: String(st.id), name: st.store_name || st.name || `Store #${st.id}` }))
     ];
-  }, [stores, isSingleStore]);
+  }, [stores]);
 
   const { categories } = useCategories(null, { limit: 100 });
 
@@ -205,12 +210,12 @@ const NewTransactionModal = ({
     if (isOpen) {
       setForm({
         ...EMPTY_FORM,
-        sender: isSingleStore ? (stores[0]?.id ? String(stores[0].id) : '') : (currentStore?.id ? String(currentStore.id) : ''),
-        type: isSingleStore ? 'Purchase' : 'Inventory Transfer',
+        sender: isSenderLocked ? (myStore?.id ? String(myStore.id) : '') : (currentStore?.id ? String(currentStore.id) : ''),
+        type: stores.length <= 1 ? 'Purchase' : 'Inventory Transfer',
       });
       setErrors({});
     }
-  }, [isOpen, currentStore, stores, isSingleStore]);
+  }, [isOpen, currentStore, stores, isSenderLocked, myStore]);
 
   if (!isOpen) return null;
 
@@ -224,7 +229,7 @@ const NewTransactionModal = ({
           quantity: '', 
           purchasePrice: '', 
           receiver: '',
-          sender: isSingleStore ? (stores[0]?.id ? String(stores[0].id) : '') : ''
+          sender: isSenderLocked ? (myStore?.id ? String(myStore.id) : '') : ''
         } : {}),
         ...(key === 'sender' ? { product: '', quantity: '', receiver: prev.receiver === val ? '' : prev.receiver } : {}),
         ...(key === 'categoryId' ? { product: '' } : {}),
@@ -388,9 +393,9 @@ const NewTransactionModal = ({
                   <label className="text-xs font-semibold text-slate-600 mb-1.5 block">
                     {form.type === 'Inventory Transfer' ? 'Sender Store' : 'Affected Store/Owner'} <span className="text-red-500">*</span>
                   </label>
-                  {isSingleStore ? (
+                  {isSenderLocked ? (
                     <input
-                      value={stores[0]?.store_name || stores[0]?.name || ''}
+                      value={myStore?.store_name || myStore?.name || ''}
                       disabled
                       className={`${inputCls('sender')} disabled:bg-slate-50 disabled:text-slate-500`}
                     />
@@ -555,7 +560,14 @@ const NewTransactionModal = ({
 ───────────────────────────────────────────────────────── */
 const Transactions = () => {
   const { storeId, buildPath, showStoreSwitcher, isPathAdmin } = useRoleContext();
-  const { selectedStore, setSelectedStore, stores } = useStoreStore();
+  const { user } = useAuthStore();
+  const { selectedStore, setSelectedStore, stores: globalStores } = useStoreStore();
+  
+  const stores = globalStores.length > 0 ? globalStores : (
+    user?.store_id ? [{ id: user.store_id, name: user.store_name || `Store #${user.store_id}`, store_name: user.store_name || `Store #${user.store_id}` }] : []
+  );
+  const effectiveCurrentStore = selectedStore || (stores.length > 0 ? stores[0] : null);
+
   const [searchParams, setSearchParams] = useSearchParams();
   const [inPageStoreId, setInPageStoreId] = useState(storeId);
   const perms = usePagePermissions('transactions');
@@ -606,6 +618,12 @@ const Transactions = () => {
     rejectTransactionAsync,
     isApprovingTransaction,
     isRejectingTransaction,
+    createManagerRequestAsync,
+    isCreatingManagerRequest,
+    createManagerPushAsync,
+    isCreatingManagerPush,
+    createManagerPurchaseAsync,
+    isCreatingManagerPurchase,
   } = useTransactions(inPageStoreId, {
     page: currentPage,
     limit: ITEMS_PER_PAGE,
@@ -721,6 +739,23 @@ const Transactions = () => {
     });
     setShowNewModal(false);
   };
+
+  const handleNewRequest = async (data) => {
+    await createManagerRequestAsync(data);
+    setShowNewModal(false);
+  };
+
+  const handleNewPush = async (data) => {
+    await createManagerPushAsync(data);
+    setShowNewModal(false);
+  };
+
+  const handleNewPurchase = async (data) => {
+    await createManagerPurchaseAsync(data);
+    setShowNewModal(false);
+  };
+
+  const isAdminOrAccountant = user?.role === 'admin' || user?.role === 'super_admin' || user?.role === 'accountant';
 
   const selectCls = 'px-3 py-2 text-sm font-medium border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 bg-white text-slate-700 transition-all';
 
@@ -1112,14 +1147,27 @@ const Transactions = () => {
       )}
 
       {/* ── Modals ── */}
-      <NewTransactionModal
-        isOpen={showNewModal}
-        onClose={() => setShowNewModal(false)}
-        onSubmit={handleNewTransaction}
-        currentStore={selectedStore}
-        stores={stores}
-        isSubmitting={isCreatingTransaction}
-      />
+      {isAdminOrAccountant ? (
+        <NewTransactionModal
+          isOpen={showNewModal}
+          onClose={() => setShowNewModal(false)}
+          onSubmit={handleNewTransaction}
+          currentStore={effectiveCurrentStore}
+          stores={stores}
+          isSubmitting={isCreatingTransaction}
+        />
+      ) : (
+        <ManagerNewTransactionModal
+          isOpen={showNewModal}
+          onClose={() => setShowNewModal(false)}
+          onRequest={handleNewRequest}
+          onPush={handleNewPush}
+          onPurchase={handleNewPurchase}
+          currentUser={user}
+          stores={stores}
+          isSubmitting={isCreatingTransaction || isCreatingManagerRequest || isCreatingManagerPush || isCreatingManagerPurchase}
+        />
+      )}
       <TransactionDetailModal
         isOpen={!!viewTx}
         transaction={viewTx}
