@@ -217,6 +217,7 @@ def _customer_to_list(c) -> CustomerListRead:
 async def list_customers_endpoint(
     search: str | None = Query(default=None),
     store_id: int | None = Query(default=None, description="Filter by store ID"),
+    global_search: bool = Query(False, description="Search across all stores for this admin"),
     active_only: bool = Query(True),
     limit: int = Query(500, ge=1, le=1000),
     offset: int = Query(0, ge=0),
@@ -225,9 +226,12 @@ async def list_customers_endpoint(
 ) -> list[CustomerListRead]:
     admin_id = _get_user_admin_id(current_user)
 
-    # Scoping: if user is not Admin, restrict queries to their store
+    # Scoping: if user is not Admin, restrict queries to their store unless global_search is true
     if not isinstance(current_user, Admin):
-        store_id = current_user.store_id
+        if not global_search:
+            store_id = current_user.store_id
+        else:
+            store_id = None
 
     customers = await list_customers(
         db,

@@ -130,7 +130,7 @@ async def adjust_loyalty_points_admin(
 async def adjust_loyalty_points_shopkeeper(
     payload: LoyaltyAdjustRequest,
     db: AsyncSession = Depends(get_db),
-    current_user = Depends(require_permission('loyalty', 'write')),
+    current_user = Depends(require_permission('loyalty', 'update')),
 ) -> LoyaltyCustomerStats:
     return await _adjust_loyalty_points(
         db,

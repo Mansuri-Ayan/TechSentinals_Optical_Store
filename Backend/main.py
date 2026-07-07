@@ -1,14 +1,17 @@
 # Main module: main.py
 import logging
-logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 
 import os
 from alembic.config import Config
 from alembic import command
 
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+import os
+import time
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from alembic import command
+from alembic.config import Config
 from routes.authrouter import auth_router
 from routes.store_router import store_router
 from routes.worker_router import worker_router
@@ -44,21 +47,9 @@ from apis.bill_settings.operations import router as bill_settings_router
 from db.session import engine
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    try:
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        alembic_cfg = Config(os.path.join(current_dir, "alembic.ini"))
-        alembic_cfg.set_main_option("script_location", os.path.join(current_dir, "migrations"))
-        try:
-            command.upgrade(alembic_cfg, "head")
-            print("Alembic migrations completed successfully.")
-        except Exception as upgrade_err:
-            print(f"Alembic upgrade failed, attempting to stamp head: {upgrade_err}")
-            command.stamp(alembic_cfg, "head")
-            print("Alembic database stamped to head successfully.")
-    except Exception as e:
-        print(f"Error running Alembic migrations: {e}")
-            
+    # Application startup
     yield
+    # Application shutdown
     await engine.dispose()
 app = FastAPI(
     title="TechSentinals Optical Store API",

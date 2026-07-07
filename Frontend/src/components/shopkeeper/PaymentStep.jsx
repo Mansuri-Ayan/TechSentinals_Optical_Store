@@ -4,6 +4,7 @@ import OrderSummary from './OrderSummary';
 import PaymentForm from './PaymentForm';
 import { useLoyaltyConfig } from '../../hooks/useLoyalty';
 import { loyaltyApi } from '../../api/loyalty/loyalty.api';
+import LoyaltyCustomerSearch from './LoyaltyCustomerSearch';
 
 const PaymentStep = ({ customer, cart, prescription, onBack, onComplete }) => {
   const subtotal = cart.reduce(
@@ -31,13 +32,15 @@ const PaymentStep = ({ customer, cart, prescription, onBack, onComplete }) => {
   const [preview, setPreview] = useState(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState(null);
+  const [loyaltyCustomer, setLoyaltyCustomer] = useState(null);
 
   // Fetch store loyalty config
   const { data: loyaltyConfig } = useLoyaltyConfig(null, 'shopkeeper');
   const isLoyaltyEnabled = loyaltyConfig?.is_enabled ?? false;
 
   // Compute values for redemption calculations
-  const availablePoints = preview?.customer_current_points ?? customer?.current_points ?? 0;
+  const redeemableCustomer = loyaltyCustomer || customer;
+  const availablePoints = preview?.customer_current_points ?? redeemableCustomer?.current_points ?? 0;
   const pointsPerRupee = loyaltyConfig?.points_per_rupee || 50;
   const minPoints = loyaltyConfig?.min_redemption_points || 0;
   const maxRedemptionPercentage = loyaltyConfig?.max_redemption_percentage ?? 100;
@@ -111,6 +114,7 @@ const PaymentStep = ({ customer, cart, prescription, onBack, onComplete }) => {
       const previewFinalAmount = Math.max(0, subtotal - discount);
       const result = await loyaltyApi.calculateLoyaltyPreview({
         customer_id: customer.id,
+        loyalty_redeem_customer_id: loyaltyCustomer?.id,
         sale_items: saleItemsForPreview,
         final_amount: previewFinalAmount,
         points_to_redeem: pointsToRedeem,
@@ -129,7 +133,7 @@ const PaymentStep = ({ customer, cart, prescription, onBack, onComplete }) => {
     } finally {
       setPreviewLoading(false);
     }
-  }, [isLoyaltyEnabled, customer?.id, saleItemsForPreview, subtotal, discount, pointsToRedeem, customPoints, categoryPointsEnabled, pricePointsEnabled, enabledCategoryIds]);
+  }, [isLoyaltyEnabled, customer?.id, loyaltyCustomer?.id, saleItemsForPreview, subtotal, discount, pointsToRedeem, customPoints, categoryPointsEnabled, pricePointsEnabled, enabledCategoryIds]);
 
   // Debounced preview fetch
   useEffect(() => {
@@ -169,6 +173,7 @@ const PaymentStep = ({ customer, cart, prescription, onBack, onComplete }) => {
 
     // Pass loyalty data along with payment and discount
     onComplete(payment, discount, {
+      loyalty_redeem_customer_id: loyaltyCustomer?.id,
       pointsToRedeem,
       customPoints,
       categoryPointsEnabled,
@@ -196,24 +201,36 @@ const PaymentStep = ({ customer, cart, prescription, onBack, onComplete }) => {
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start font-sans animate-fade-in">
-      {/* Left Column: Order Summary */}
-      <div className="lg:col-span-6 xl:col-span-7">
-        <OrderSummary
-          customer={customer}
-          cart={cart}
-          prescription={prescription}
-          subtotal={subtotal}
-          discount={discount + loyaltyDiscount}
-          finalAmount={finalAmount}
-        />
-      </div>
+    <div className="space-y-6 animate-fade-in">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start font-sans">
+        {/* Left Column: Order Summary + Payment Form */}
+        <div className="lg:col-span-6 xl:col-span-7 space-y-6">
+          <OrderSummary
+            customer={customer}
+            cart={cart}
+            prescription={prescription}
+            subtotal={subtotal}
+            discount={discount + loyaltyDiscount}
+            finalAmount={finalAmount}
+          />
+          {/* Payment Form */}
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 sm:p-6">
+            <PaymentForm
+              subtotal={subtotal}
+              discount={discount}
+              onDiscountChange={setDiscount}
+              payment={payment}
+              onPaymentChange={setPayment}
+              loyaltyDiscount={loyaltyDiscount}
+            />
+          </div>
+        </div>
 
-      {/* Right Column: Loyalty + Payment & Billing Form */}
-      <div className="lg:col-span-6 xl:col-span-5 space-y-6">
+        {/* Right Column: Loyalty */}
+        <div className="lg:col-span-6 xl:col-span-5 space-y-6">
 
-        {/* Loyalty Section */}
-        {isLoyaltyEnabled && customer?.id && (
+          {/* Loyalty Section */}
+          {isLoyaltyEnabled && customer?.id && (
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
             {/* Header */}
             <button
@@ -335,6 +352,23 @@ const PaymentStep = ({ customer, cart, prescription, onBack, onComplete }) => {
                   <h4 className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
                     <Gift className="w-3 h-3 text-emerald-500" /> Points Redemption
                   </h4>
+
+                  <div className="pt-1 pb-2">
+                    <p className="text-[10px] text-slate-500 font-semibold mb-2">Want to use family member's points?</p>
+                    <LoyaltyCustomerSearch 
+                      selectedCustomer={loyaltyCustomer} 
+                      onSelectCustomer={(c) => {
+                        setLoyaltyCustomer(c);
+                        setPointsToRedeem(0);
+                        setIsRedeeming(false);
+                      }} 
+                      onClear={() => { 
+                        setLoyaltyCustomer(null); 
+                        setPointsToRedeem(0); 
+                        setIsRedeeming(false); 
+                      }} 
+                    />
+                  </div>
 
                   {!hasMinPoints ? (
                     <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-500 text-[11px] font-medium flex items-center gap-2">
@@ -468,22 +502,12 @@ const PaymentStep = ({ customer, cart, prescription, onBack, onComplete }) => {
             )}
           </div>
         )}
-
-        {/* Payment Form */}
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 sm:p-6">
-          <PaymentForm
-            subtotal={subtotal}
-            discount={discount}
-            onDiscountChange={setDiscount}
-            payment={payment}
-            onPaymentChange={setPayment}
-            loyaltyDiscount={loyaltyDiscount}
-          />
         </div>
+      </div>
 
-        {/* Footer actions */}
-        <div className="flex items-center justify-between pt-2">
-          <button
+      {/* Footer actions */}
+      <div className="flex items-center justify-between pt-2">
+        <button
             type="button"
             onClick={onBack}
             className="flex items-center gap-2 px-5 py-2.5 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300 rounded-xl text-xs font-bold transition-all shadow-sm hover:shadow-md"
@@ -502,7 +526,6 @@ const PaymentStep = ({ customer, cart, prescription, onBack, onComplete }) => {
             Complete Order
           </button>
         </div>
-      </div>
     </div>
   );
 };

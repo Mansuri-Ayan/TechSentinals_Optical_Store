@@ -64,6 +64,7 @@ PERMISSION_CATALOG = [
     ("accountants", "delete", "Delete accountants", True),
     # ── Loyalty ───────────────────────────────────────────────
     ("loyalty", "read", "View loyalty", False),
+    ("loyalty", "update", "Update loyalty points", False),
     ("loyalty", "manage", "Manage loyalty settings", True),
     # ── Inventory ─────────────────────────────────────────────
     ("inventory", "create", "Create inventory", False),
@@ -147,65 +148,12 @@ def _build_role_grants(all_keys: list[str]) -> dict:
 
     admin_granted = list(all_keys)
 
-    manager_granted = [
-        "customers:create", "customers:read", "customers:update", "customers:delete",
-        "prescriptions:create", "prescriptions:read", "prescriptions:update", "prescriptions:delete",
-        "inventory:create", "inventory:read", "inventory:update", "inventory:delete", "inventory:transfer",
-        "brands:create", "brands:read", "brands:update", "brands:delete",
-        "categories:create", "categories:read", "categories:update", "categories:delete",
-        "products:create", "products:read", "products:update", "products:delete",
-        "sales:create", "sales:read", "sales:update", "sales:refund", # no sales:delete
-        "transactions:create", "transactions:read", "transactions:update", "transactions:approve",
-        "repairs:create", "repairs:read", "repairs:update", "repairs:delete",
-        "suppliers:create", "suppliers:read", "suppliers:update", "suppliers:delete",
-        "purchase_orders:create", "purchase_orders:read", "purchase_orders:update", "purchase_orders:delete", "purchase_orders:approve",
-        "expenses:create", "expenses:read", "expenses:update", "expenses:delete", # no expenses:approve
-        "loyalty:read", "loyalty:manage",
-        "bill_settings:read", "bill_settings:update",
-        "reports:read",
-        "workers:create", "workers:read", "workers:update", "workers:delete",
-        "opticians:create", "opticians:read", "opticians:update", "opticians:delete",
-        "accountants:read",
-    ]
-
-    worker_granted = [
-        "customers:create", "customers:read", "customers:update",
-        "prescriptions:create", "prescriptions:read", "prescriptions:update",
-        "inventory:read",
-        "sales:create", "sales:read",
-        "transactions:create", "transactions:read",
-        "repairs:create", "repairs:read", "repairs:update",
-        "brands:read", "categories:read", "products:read",
-        "loyalty:read", "bill_settings:read",
-    ]
-
-    optician_granted = [
-        "customers:create", "customers:read", "customers:update",
-        "prescriptions:create", "prescriptions:read", "prescriptions:update", "prescriptions:delete",
-        "sales:read",
-        "transactions:read",
-        "inventory:read",
-        "repairs:create", "repairs:read", "repairs:update", "repairs:delete",
-        "brands:read", "categories:read", "products:read",
-        "loyalty:read",
-    ]
-
-    accountant_granted = [
-        "sales:read",
-        "transactions:read",
-        "expenses:read", "expenses:create", "expenses:update", "expenses:approve",
-        "reports:read",
-        "suppliers:read",
-        "customers:read",
-        "purchase_orders:read",
-    ]
-
     return {
-        PermissionRoleType.ADMIN:      admin_granted,
-        PermissionRoleType.MANAGER:    manager_granted,
-        PermissionRoleType.WORKER:     worker_granted,
-        PermissionRoleType.OPTICIAN:   optician_granted,
-        PermissionRoleType.ACCOUNTANT: accountant_granted,
+        PermissionRoleType.ADMIN:      list(all_keys),
+        PermissionRoleType.MANAGER:    list(all_keys),
+        PermissionRoleType.WORKER:     list(all_keys),
+        PermissionRoleType.OPTICIAN:   list(all_keys),
+        PermissionRoleType.ACCOUNTANT: list(all_keys),
     }
 
 

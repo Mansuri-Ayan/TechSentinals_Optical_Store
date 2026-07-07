@@ -137,6 +137,10 @@ class SaleCreate(BaseModel):
         default=None,
         description="FK → customers.id — NULL if new customer or walk-in",
     )
+    loyalty_redeem_customer_id: int | None = Field(
+        default=None,
+        description="FK → customers.id — The customer from whom points are redeemed",
+    )
     new_customer_details: Optional[NewCustomerDetails] = Field(
         default=None,
         description="Details for creating a new customer during the sale if customer_id is NULL"

@@ -40,6 +40,9 @@ const LoyaltyCustomerDetail = () => {
         activity: t.note || t.category_name || t.type,
         balance: null,
         rupeeValue: t.rupee_value,
+        redeemedBy: t.redeemed_by_id ? { id: t.redeemed_by_id, name: t.redeemed_by_name } : null,
+        pointsOwner: t.points_owner_id ? { id: t.points_owner_id, name: t.points_owner_name } : null,
+        isOwner: t.points_owner_id ? t.points_owner_id === raw.customer_id : true,
       })),
       timeline: (raw.transactions || []).slice(0, 5).map((t) => {
         let eventName = 'Earned Points';
@@ -100,7 +103,11 @@ const LoyaltyCustomerDetail = () => {
       </div>
 
       {/* Profile Header */}
-      <LoyaltyCustomerCard customer={customer} backPath={buildPath('loyalty')} />
+      <LoyaltyCustomerCard 
+        customer={customer} 
+        backPath={buildPath('loyalty')} 
+        customerDetailPath={buildPath(`customers/${customer.id}`)}
+      />
 
       {/* Summary KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-6 sm:mb-8">

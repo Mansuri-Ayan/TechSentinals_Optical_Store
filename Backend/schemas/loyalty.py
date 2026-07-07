@@ -100,8 +100,35 @@ class LoyaltyTransactionRead(LoyaltyTransactionCreate):
     customer_name: Optional[str] = None
     store_name: Optional[str] = None
     category_name: Optional[str] = None
+    redeemed_by_id: Optional[int] = None
+    redeemed_by_name: Optional[str] = None
+    points_owner_id: Optional[int] = None
+    points_owner_name: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+    @model_validator(mode='before')
+    @classmethod
+    def extract_redeemed_by(cls, values):
+        if hasattr(values, 'sale') and values.sale is not None and values.type == LoyaltyTransactionType.REDEEMED:
+            if hasattr(values.sale, 'customer') and values.sale.customer is not None:
+                if values.sale.customer_id != values.customer_id:
+                    object.__setattr__(values, '_redeemed_by_id_injected', values.sale.customer_id)
+                    object.__setattr__(values, '_redeemed_by_name_injected', f"{values.sale.customer.first_name} {values.sale.customer.last_name or ''}".strip())
+        return values
+
+    @classmethod
+    def model_validate(cls, obj, **kwargs):
+        instance = super().model_validate(obj, **kwargs)
+        if hasattr(obj, 'sale') and obj.sale is not None and obj.type == LoyaltyTransactionType.REDEEMED:
+            if hasattr(obj.sale, 'customer') and obj.sale.customer is not None:
+                if obj.sale.customer_id != obj.customer_id:
+                    instance.redeemed_by_id = obj.sale.customer_id
+                    instance.redeemed_by_name = f"{obj.sale.customer.first_name} {obj.sale.customer.last_name or ''}".strip()
+                    if hasattr(obj, 'customer') and obj.customer is not None:
+                        instance.points_owner_id = obj.customer_id
+                        instance.points_owner_name = f"{obj.customer.first_name} {obj.customer.last_name or ''}".strip()
+        return instance
 
 # Loyalty Customer Stats
 class LoyaltyCustomerStats(BaseModel):
@@ -150,6 +177,7 @@ class LoyaltyTierDistribution(BaseModel):
 
 class LoyaltyCalculatePreviewRequest(BaseModel):
     customer_id: int
+    loyalty_redeem_customer_id: Optional[int] = None
     sale_items: List[Dict]
     final_amount: Decimal
     points_to_redeem: int

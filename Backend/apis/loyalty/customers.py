@@ -128,10 +128,18 @@ async def _get_loyalty_customer_detail(
     lifetime_spend = lifetime_spend or 0.0
 
     # 3. Load transactions with category for EARNED_CATEGORY
-    transactions_query = select(LoyaltyTransaction).where(
-        LoyaltyTransaction.customer_id == customer_id
+    from sqlalchemy import or_
+    transactions_query = select(LoyaltyTransaction).outerjoin(
+        Sale, LoyaltyTransaction.sale_id == Sale.id
+    ).where(
+        or_(
+            LoyaltyTransaction.customer_id == customer_id,
+            Sale.customer_id == customer_id
+        )
     ).options(
-        joinedload(LoyaltyTransaction.category)
+        joinedload(LoyaltyTransaction.category),
+        joinedload(LoyaltyTransaction.sale).joinedload(Sale.customer),
+        joinedload(LoyaltyTransaction.customer)
     ).order_by(desc(LoyaltyTransaction.created_at))
     
     tx_result = await db.execute(transactions_query)
@@ -140,6 +148,7 @@ async def _get_loyalty_customer_detail(
     last_tx_date = transactions[0].created_at if transactions else None
 
     # Map to detail read
+    from schemas.loyalty import LoyaltyTransactionRead
     return LoyaltyCustomerDetailRead(
         customer_id=customer.id,
         customer_name=f"{customer.first_name} {customer.last_name or ''}".strip(),
@@ -153,7 +162,7 @@ async def _get_loyalty_customer_detail(
         join_date=customer.created_at.isoformat() if customer.created_at else None,
         lifetime_orders=lifetime_orders,
         lifetime_spend=lifetime_spend,
-        transactions=transactions
+        transactions=[LoyaltyTransactionRead.model_validate(tx) for tx in transactions]
     )
 
 # --- Admin Endpoints ---

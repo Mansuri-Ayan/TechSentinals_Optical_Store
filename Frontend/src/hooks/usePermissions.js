@@ -46,8 +46,20 @@ export const usePagePermissions = (permissionMap) => {
   const { user } = useAuthStore();
   const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
   
+  let mapToUse = permissionMap;
+  if (typeof permissionMap === 'string') {
+    mapToUse = {
+      canRead: `${permissionMap}:read`,
+      canCreate: `${permissionMap}:create`,
+      canUpdate: `${permissionMap}:update`,
+      canDelete: `${permissionMap}:delete`,
+      canApprove: `${permissionMap}:approve`,
+      canManage: `${permissionMap}:manage`
+    };
+  }
+
   const result = {};
-  for (const [key, permKey] of Object.entries(permissionMap)) {
+  for (const [key, permKey] of Object.entries(mapToUse)) {
     if (isAdmin) {
       result[key] = true;
       continue;

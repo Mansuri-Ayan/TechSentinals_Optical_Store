@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import {
   ChevronLeft, ChevronRight, User, Mail, Phone, MapPin,
   ShoppingBag, Calendar, Eye, Clock, AlertTriangle,
-  CheckCircle, TrendingUp, Info, FileText, History, Plus, Wrench, X
+  CheckCircle, TrendingUp, Info, FileText, History, Plus, Wrench, X, Award
 } from 'lucide-react';
 import { useCustomer, useCustomerMutations } from '../../hooks/useCustomers';
 import { useStoreStaff } from '../../hooks/useStaff';
@@ -317,6 +317,15 @@ const CustomerDetail = () => {
             >
               <Eye className="w-4 h-4" />
               Add Optical Information
+            </button>
+          </PermissionGuard>
+          <PermissionGuard permission="loyalty:read">
+            <button
+              onClick={() => navigate(buildPath(`loyalty/customer/${c.id}`))}
+              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-xs sm:text-sm font-bold transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 whitespace-nowrap cursor-pointer"
+            >
+              <Award className="w-4 h-4" />
+              Loyalty Program
             </button>
           </PermissionGuard>
           <PermissionGuard permission="transactions:create">

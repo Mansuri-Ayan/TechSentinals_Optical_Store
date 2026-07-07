@@ -85,9 +85,20 @@ async def calculate_loyalty_preview(
 
     total_points_to_earn = earned_points_calc["total_points"]
 
-    # Validate redemption
+    # Validate redemption using redeem customer
+    redeem_customer_id = payload.loyalty_redeem_customer_id or payload.customer_id
+    if redeem_customer_id != customer.id:
+        redeem_customer_stmt = select(Customer).where(Customer.id == redeem_customer_id)
+        redeem_customer_result = await db.execute(redeem_customer_stmt)
+        redeem_customer = redeem_customer_result.scalar_one_or_none()
+        if not redeem_customer:
+            raise HTTPException(status_code=404, detail="Redeem customer not found")
+        redeem_customer_current_points = redeem_customer.current_points
+    else:
+        redeem_customer_current_points = customer_current_points
+
     redemption_calc = await validate_redemption(
-        customer_current_points=customer_current_points,
+        customer_current_points=redeem_customer_current_points,
         points_to_redeem=payload.points_to_redeem,
         sale_total=payload.final_amount,
         config=loyalty_config
@@ -98,12 +109,12 @@ async def calculate_loyalty_preview(
     rupee_discount = redemption_calc["rupee_discount"]
     redemption_error = redemption_calc["error"]
 
-    # Calculate points after transaction
-    points_after_transaction = customer_current_points + total_points_to_earn - points_redeemed
+    # Calculate points after transaction (for the earning customer)
+    points_after_transaction = customer_current_points + total_points_to_earn
     tier_after_transaction = get_tier(points_after_transaction, loyalty_config)
 
     return LoyaltyCalculatePreviewResponse(
-        customer_current_points=customer_current_points,
+        customer_current_points=redeem_customer_current_points, # Show redeem customer's points available
         category_points=earned_points_calc["category_points"],
         price_points=earned_points_calc["price_points"],
         custom_points=earned_points_calc["custom_points"],

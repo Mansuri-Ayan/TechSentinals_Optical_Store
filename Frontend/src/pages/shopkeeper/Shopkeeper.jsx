@@ -326,6 +326,7 @@ const Shopkeeper = () => {
         payments: payments,
         discount_amount: discountAmt,
         // Loyalty fields
+        loyalty_redeem_customer_id: loyaltyData.loyalty_redeem_customer_id || null,
         points_to_redeem: loyaltyData.pointsToRedeem || 0,
         custom_points: loyaltyData.customPoints || 0,
         category_points_enabled_override: loyaltyData.categoryPointsEnabled !== false,

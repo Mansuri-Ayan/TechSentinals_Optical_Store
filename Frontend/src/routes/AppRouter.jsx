@@ -326,7 +326,7 @@ function AppRouter() {
         {/* Loyalty Program */}
         <Route path="loyalty" element={<LoyaltyRouteRedirect />} />
         <Route path="store/:storeId/loyalty" element={<AdminLoyalty />} />
-        <Route path="loyalty/customer/:id" element={<AdminLoyaltyCustomerDetail />} />
+        <Route path="store/:storeId/loyalty/customer/:id" element={<AdminLoyaltyCustomerDetail />} />
 
         {/* Customers */}
         <Route

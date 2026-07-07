@@ -296,7 +296,7 @@ const EditInventoryModal = ({ isOpen, onClose, inventoryItem, onSubmit: onSubmit
                     <select
                       {...register('category_id', { required: 'Category is required' })}
                       className={inputCls(!!errors.category_id)}
-                      disabled={true}
+                      disabled={isPending}
                     >
                       <option value="">Select Category</option>
                       {categories.map((cat) => (

@@ -139,7 +139,7 @@ async def update_loyalty_category_shopkeeper(
     payload: StoreCategoryLoyaltyUpdate,
     category_id: int = Path(..., description="The ID of the category"),
     db: AsyncSession = Depends(get_db),
-    current_user = Depends(require_permission('loyalty', 'configure')),
+    current_user = Depends(require_permission('loyalty', 'manage')),
 ) -> StoreCategoryLoyaltyRead:
     store_id = current_user.store_id
     scl_stmt = select(StoreCategoryLoyalty).options(

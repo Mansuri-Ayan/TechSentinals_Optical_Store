@@ -159,7 +159,7 @@ async def get_loyalty_config_shopkeeper(
 async def update_loyalty_config_shopkeeper(
     payload: LoyaltyConfigUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user = Depends(require_permission('loyalty', 'configure')),
+    current_user = Depends(require_permission('loyalty', 'manage')),
 ) -> LoyaltyConfigRead:
     store_id = current_user.store_id
     config_stmt = select(LoyaltyConfig).where(

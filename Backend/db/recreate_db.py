@@ -20,9 +20,11 @@ from models import (
     PurchaseOrder, PurchaseOrderItem, SupplierPayment,
     Customer, Sale, SaleItem, SalePayment,
     Expense, ExpenseCategory, Notification, Repair,
-    LoyaltyConfig, StoreCategoryLoyalty, LoyaltyTransaction, Lab, BillSettings
+    LoyaltyConfig, StoreCategoryLoyalty, LoyaltyTransaction, Lab, BillSettings,
+    Accountant
 )
 from db.seed_data import seed
+from seed_permissions import seed_permissions
 
 async def recreate_db():
     print("=" * 60)
@@ -55,6 +57,8 @@ async def recreate_db():
 
     print("  [OK] Database stamped successfully. Running seeds...")
     await seed()
+    print("  [OK] Data seeded. Seeding permissions...")
+    await seed_permissions()
 
 if __name__ == "__main__":
     asyncio.run(recreate_db())

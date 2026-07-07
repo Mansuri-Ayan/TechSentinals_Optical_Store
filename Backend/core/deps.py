@@ -247,7 +247,7 @@ def require_permission(*permissions: str):
 
         actor_admin_id = get_user_admin_id(current_user)
 
-        if actor_type in ("SUPER_ADMIN", "ADMIN"):
+        if actor_type in ("SUPER_ADMIN", "ADMIN", "ACCOUNTANT"):
             return current_user
 
         has_any = False

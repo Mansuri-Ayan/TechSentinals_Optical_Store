@@ -1,12 +1,15 @@
 import { useState, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { Coins, PlusCircle, MinusCircle, ArrowDown, ArrowUp } from 'lucide-react';
 import Pagination from '../shared/Pagination';
+import { useRoleContext } from '../../hooks/useRoleContext';
 
 const ITEMS_PER_PAGE = 5;
 
 const LoyaltyHistoryTable = ({ history }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const [filterType, setFilterType] = useState('all');
+  const { buildPath } = useRoleContext();
 
   const filteredHistory = useMemo(() => {
     return history.filter(h => {
@@ -55,9 +58,38 @@ const LoyaltyHistoryTable = ({ history }) => {
                 <td className="px-5 py-3.5 text-xs font-semibold text-slate-550">
                   {new Date(row.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
                 </td>
-                <td className="px-5 py-3.5 text-sm font-bold text-slate-800">{row.activity}</td>
+                <td className="px-5 py-3.5 text-sm font-bold text-slate-800">
+                  {row.type === 'redeemed' && row.activity === 'REDEEMED' ? (
+                    !row.isOwner && row.pointsOwner ? (
+                      <div className="flex flex-col">
+                        <span>REDEEMED</span>
+                        <span className="text-[10px] text-slate-500 font-semibold mt-0.5">
+                          points of <Link to={buildPath(`customers/${row.pointsOwner.id}`)} className="text-blue-600 hover:underline">{row.pointsOwner.name}</Link>
+                        </span>
+                      </div>
+                    ) : row.redeemedBy ? (
+                      <div className="flex flex-col">
+                        <span>REDEEMED</span>
+                        <span className="text-[10px] text-slate-500 font-semibold mt-0.5">
+                          by <Link to={buildPath(`customers/${row.redeemedBy.id}`)} className="text-blue-600 hover:underline">{row.redeemedBy.name}</Link>
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col">
+                        <span>REDEEMED</span>
+                        <span className="text-[10px] text-slate-500 font-semibold mt-0.5">by you</span>
+                      </div>
+                    )
+                  ) : (
+                    row.activity
+                  )}
+                </td>
                 <td className="px-5 py-3.5 text-center">
-                  {row.type === 'earned' ? (
+                  {!row.isOwner ? (
+                    <span className="inline-flex items-center gap-1 text-xs font-extrabold text-slate-500 bg-slate-50 px-2 py-0.5 rounded border border-slate-200">
+                      -{row.points}
+                    </span>
+                  ) : row.type === 'earned' ? (
                     <span className="inline-flex items-center gap-1 text-xs font-extrabold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">
                       <PlusCircle className="w-3.5 h-3.5" />
                       +{row.points}

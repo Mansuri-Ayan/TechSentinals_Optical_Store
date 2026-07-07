@@ -286,8 +286,16 @@ async def create_sale(
             # Step 1: Redemption
             rupee_discount = Decimal("0.00")
             if payload.points_to_redeem > 0:
+                redeem_customer_id = payload.loyalty_redeem_customer_id or customer_id_for_sale
+                if redeem_customer_id != customer.id:
+                    redeem_customer = await db.scalar(select(Customer).where(Customer.id == redeem_customer_id))
+                    if not redeem_customer:
+                        raise HTTPException(status_code=404, detail="Loyalty redeem customer not found")
+                else:
+                    redeem_customer = customer
+
                 redemption_res = await loyalty_service.validate_redemption(
-                    customer_current_points=customer.current_points,
+                    customer_current_points=redeem_customer.current_points,
                     points_to_redeem=payload.points_to_redeem,
                     sale_total=total_amount,
                     config=config
@@ -299,7 +307,7 @@ async def create_sale(
                 rupee_discount = redemption_res["rupee_discount"]
 
                 txn = LoyaltyTransaction(
-                    customer_id=customer.id,
+                    customer_id=redeem_customer.id,
                     store_id=payload.store_id,
                     sale_id=sale.id,
                     type=LoyaltyTransactionType.REDEEMED,
@@ -308,8 +316,11 @@ async def create_sale(
                 )
                 db.add(txn)
                 
-                customer.current_points -= points_redeemed
-                customer.loyalty_points_redeemed += points_redeemed
+                redeem_customer.current_points -= points_redeemed
+                redeem_customer.loyalty_points_redeemed += points_redeemed
+                if redeem_customer_id != customer.id:
+                    db.add(redeem_customer)
+
                 sale.loyalty_points_redeemed = points_redeemed
 
                 # Adjust sale totals for redemption discount

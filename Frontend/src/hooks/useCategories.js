@@ -80,7 +80,7 @@ export const useCategories = (storeId = null, filters = {}) => {
 
   return {
     categoriesQuery: query,
-    categories: query.data?.items || [],
+    categories: Array.isArray(query.data) ? query.data : (query.data?.items || []),
     total: query.data?.total || 0,
     pages: query.data?.pages || 1,
     currentPage: query.data?.page || 1,
@@ -158,7 +158,7 @@ export const useSubcategories = (categoryId, storeId = null, filters = {}) => {
 
   return {
     subcategoriesQuery: query,
-    subcategories: query.data?.items || [],
+    subcategories: Array.isArray(query.data) ? query.data : (query.data?.items || []),
     totalSubcategories: query.data?.total || 0,
     subcategoryPages: query.data?.pages || 1,
     subcategoryPage: query.data?.page || 1,

@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, Shield, ShieldCheck, Award, Calendar, DollarSign, Coins } from 'lucide-react';
+import { ChevronLeft, Shield, ShieldCheck, Award, Calendar, DollarSign, Coins, User } from 'lucide-react';
 import { getLoyaltyTier } from '../../data/loyaltyData';
+import PermissionGuard from '../shared/PermissionGuard';
 
 const TierBadge = ({ tier }) => {
   let styles = 'text-slate-700 bg-slate-50 border-slate-200';
@@ -22,7 +23,7 @@ const TierBadge = ({ tier }) => {
   );
 };
 
-const LoyaltyCustomerCard = ({ customer, backPath }) => {
+const LoyaltyCustomerCard = ({ customer, backPath, customerDetailPath }) => {
   const navigate = useNavigate();
   const tier = getLoyaltyTier(customer.points);
   const initials = customer.name ? customer.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) : 'C';
@@ -80,6 +81,18 @@ const LoyaltyCustomerCard = ({ customer, backPath }) => {
             <p className="font-bold text-slate-800 text-xs">{new Date(customer.joinDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
           </div>
         </div>
+
+        {customerDetailPath && (
+          <PermissionGuard permission="customers:read">
+            <button
+              onClick={() => navigate(customerDetailPath)}
+              className="flex items-center gap-2 bg-[#0A0F1F] hover:bg-slate-800 transition-colors text-white px-4 py-2 rounded-xl h-full shadow-sm cursor-pointer"
+            >
+              <User className="w-4 h-4 flex-shrink-0" />
+              <span className="text-xs font-bold whitespace-nowrap">View Profile</span>
+            </button>
+          </PermissionGuard>
+        )}
       </div>
     </div>
   );
