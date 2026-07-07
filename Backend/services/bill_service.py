@@ -24,17 +24,17 @@ async def generate_bill_html(sale: Sale, db: AsyncSession) -> str:
         store_address = f"{store.address}, {store.city}, {store.state} - {store.pincode}"
     store_gst = store.gst_number if store else ""
 
-    header_text = (settings.header_text if settings and settings.header_text) or store_name
-    sub_header_text = (settings.sub_header_text if settings and settings.sub_header_text) or "Tax Invoice / Receipt"
-    address = (settings.address if settings and settings.address) or store_address
-    contact_email = (settings.contact_email if settings and settings.contact_email) or store_email
-    contact_phone = (settings.contact_phone if settings and settings.contact_phone) or store_phone
-    gst_number = (settings.gst_number if settings and settings.gst_number) or store_gst
+    header_text = (settings.header_text if settings and settings.header_text else None) or store_name
+    sub_header_text = (settings.sub_header_text if settings and settings.sub_header_text else None) or "Tax Invoice / Receipt"
+    address = (settings.address if settings and settings.address else None) or store_address
+    contact_email = (settings.contact_email if settings and settings.contact_email else None) or store_email
+    contact_phone = (settings.contact_phone if settings and settings.contact_phone else None) or store_phone
+    gst_number = (settings.gst_number if settings and settings.gst_number else None) or store_gst
     
     show_prescription = settings.show_prescription if settings is not None else True
     show_gst = settings.show_gst if settings is not None else True
-    theme_color = (settings.theme_color if settings and settings.theme_color) or "#0A0F1F"
-    footer_text = (settings.footer_text if settings and settings.footer_text) or "Thank you for your business!"
+    theme_color = (settings.theme_color if settings and settings.theme_color else None) or "#0A0F1F"
+    footer_text = (settings.footer_text if settings and settings.footer_text else None) or "Thank you for your business!"
     logo = settings.logo if settings else None
     qr_code = settings.qr_code if settings else None
 
