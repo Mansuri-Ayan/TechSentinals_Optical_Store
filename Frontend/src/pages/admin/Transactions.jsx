@@ -680,6 +680,7 @@ const Transactions = () => {
       isRequest: tx.is_request,
       rejectionReason: tx.rejection_reason,
       remarks: tx.remarks || '',
+      raw: tx,
     };
   };
 
@@ -1182,7 +1183,15 @@ const Transactions = () => {
         }}
         isApproving={isApprovingTransaction}
         isRejecting={isRejectingTransaction}
-        canApprove={viewTx?.status === 'Pending' && perms.canUpdate}
+        canApprove={
+          viewTx?.status === 'Pending' &&
+          perms.canUpdate &&
+          (isAdminOrAccountant || (
+            viewTx?.isRequest
+              ? String(viewTx?.raw?.send_store_id) === String(user?.store_id)
+              : String(viewTx?.raw?.receive_store_id) === String(user?.store_id)
+          ))
+        }
       />
     </div>
   );

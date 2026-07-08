@@ -45,6 +45,7 @@ export const useCategories = (storeId = null, filters = {}) => {
     paginate: filters.paginate !== undefined ? filters.paginate : true,
     ...(storeId ? { store_id: storeId } : {}),
     ...(filters.search ? { search: filters.search } : {}),
+    ...(filters.all_tenant !== undefined ? { all_tenant: filters.all_tenant } : {}),
   };
 
   const query = useQuery({

@@ -2,8 +2,9 @@ import { useEffect, useState, useCallback } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { LayoutDashboard, LogOut, Glasses, X, Users, Store, Package, ShoppingCart, ChevronLeft, ChevronRight, Wrench, BarChart3, Tag, Layers, Award, ArrowRightLeft, Clock, Warehouse, FileText, Receipt } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
-import { useAuthStore } from '../../store/store';
+import { useAuthStore, useStoreStore } from '../../store/store';
 import { useHasPermission } from '../../hooks/usePermissions';
+import { useStores } from '../../hooks/useStores';
 
 const ShopkeeperSidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) => {
   const [width, setWidth] = useState(() => {
@@ -55,12 +56,24 @@ const ShopkeeperSidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) =
     return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
   };
 
-  // Auto-close mobile sidebar on route change
   useEffect(() => {
     if (onClose) {
       onClose();
     }
   }, [location.pathname, onClose]);
+
+  const { setStores } = useStoreStore();
+  const { stores: fetchedStores } = useStores({ page: 1, limit: 100 });
+
+  useEffect(() => {
+    if (fetchedStores) {
+      const allStores = [
+        { id: "admin", store_name: "Admin Warehouse" },
+        ...fetchedStores,
+      ];
+      setStores(allStores);
+    }
+  }, [fetchedStores, setStores]);
 
   const hasInventoryRead = useHasPermission('inventory:read');
   const hasSalesRead = useHasPermission('sales:read');

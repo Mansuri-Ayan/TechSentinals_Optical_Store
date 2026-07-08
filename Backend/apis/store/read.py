@@ -62,9 +62,8 @@ async def list_stores(
         paginate=paginate,
     )
     
-    if not has_read_all:
-        stores = [s for s in stores if s.id == own_store_id]
-        total = len(stores)
+    # No longer filtering stores if they don't have has_read_all, 
+    # to allow managers to see other stores for stock transfers.
         
     pages = (total + page_size - 1) // page_size if page_size > 0 else 1
     return PaginatedResponse[StoreRead](

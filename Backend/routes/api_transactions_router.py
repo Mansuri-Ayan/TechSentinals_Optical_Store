@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, Query, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.deps import get_current_admin, get_current_user
+from core.deps import get_current_admin, get_current_user, require_permission
 from db.session import get_db
 from models.admin import Admin
 from schemas.inventory_transaction import TransactionRead, TransferRequest
@@ -255,9 +255,9 @@ async def create_admin_transfer_request(
 async def approve_pending_transaction(
     id: int,
     db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_user),
+    current_user = Depends(require_permission('transactions', 'approve')),
 ):
-    """Approve a pending transaction (Admin or correct Manager)."""
+    """Approve a pending transaction (Admin or authorized Store Staff)."""
     txn, sibling = await approve_transaction_service(
         db=db,
         txn_id=id,
@@ -274,9 +274,9 @@ async def reject_pending_transaction(
     id: int,
     payload: RejectionPayload,
     db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_user),
+    current_user = Depends(require_permission('transactions', 'approve')),
 ):
-    """Reject a pending transaction (Admin or correct Manager)."""
+    """Reject a pending transaction (Admin or authorized Store Staff)."""
     txn, sibling = await reject_transaction_service(
         db=db,
         txn_id=id,

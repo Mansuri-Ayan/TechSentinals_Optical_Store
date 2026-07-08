@@ -156,6 +156,7 @@ async def list_inventories(
     page: int = Query(default=1, ge=1, description="Page number"),
     limit: int = Query(default=20, ge=1, le=100, description="Page size"),
     paginate: bool = Query(default=True, description="Enable pagination"),
+    warehouse_only: bool = Query(default=False, description="If true and owner_type is ADMIN, only returns warehouse inventory (no stores)"),
     db: AsyncSession = Depends(get_db),
     current_user = Depends(require_permission('inventory', 'read')),
 ) -> InventoryResponse:
@@ -211,6 +212,7 @@ async def list_inventories(
         page=page,
         limit=limit,
         paginate=paginate,
+        warehouse_only=warehouse_only,
     )
     
     await _populate_other_stocks(

@@ -764,32 +764,28 @@ async def approve_transaction_service(
         user_role = getattr(user, "role", None)
         role_name = getattr(user_role, "role", None) if user_role else None
         
-        # Fallback if roles relation is simple string (check core/deps.py style)
         from models.admin import Admin
-        from models.manager import Manager
         
         is_admin = isinstance(user, Admin)
-        is_manager = isinstance(user, Manager)
         
         if is_admin:
             approver_store_id = None
-        elif is_manager:
+        else:
+            # Store staff (Manager, Optician, Worker, etc.)
             # Rule 4 & 5: Store -> Store transfers
             if txn.transfer_direction != TransferDirection.BRANCH_TO_BRANCH:
-                raise HTTPException(status_code=403, detail="Manager can only approve store-to-store transfers")
+                raise HTTPException(status_code=403, detail="Store staff can only approve store-to-store transfers")
             
             # Authorization check based on sender (Rule 4) or receiver (Rule 5)
             if txn.is_request:
-                # Rule 4 (Manager requests from another store's manager) -> sender store manager must approve
+                # Rule 4 (Store requests from another store) -> sender store staff must approve
                 if txn.send_store_id != user.store_id:
-                    raise HTTPException(status_code=403, detail="You are not authorized to approve this request (must be the sending store manager)")
+                    raise HTTPException(status_code=403, detail="You are not authorized to approve this request (must be the sending store staff)")
             else:
-                # Rule 5 (Manager pushes stock without request) -> receiving store manager must approve
+                # Rule 5 (Store pushes stock without request) -> receiving store staff must approve
                 if txn.receive_store_id != user.store_id:
-                    raise HTTPException(status_code=403, detail="You are not authorized to approve this push (must be the receiving store manager)")
+                    raise HTTPException(status_code=403, detail="You are not authorized to approve this push (must be the receiving store staff)")
             approver_store_id = user.store_id
-        else:
-            raise HTTPException(status_code=403, detail="Role not authorized to approve transactions")
 
         # Load names for notifications
         snap = txn.product_snapshot
@@ -970,18 +966,15 @@ async def reject_transaction_service(
             sib_stmt = select(InventoryTransaction).where(InventoryTransaction.id == txn.reference_id)
             sibling = (await db.execute(sib_stmt)).scalar_one_or_none()
 
-        # Determine user role and authorize
         from models.admin import Admin
-        from models.manager import Manager
         
         is_admin = isinstance(user, Admin)
-        is_manager = isinstance(user, Manager)
         
         if is_admin:
             pass
-        elif is_manager:
+        else:
             if txn.transfer_direction != TransferDirection.BRANCH_TO_BRANCH:
-                raise HTTPException(status_code=403, detail="Manager can only reject store-to-store transfers")
+                raise HTTPException(status_code=403, detail="Store staff can only reject store-to-store transfers")
             
             if txn.is_request:
                 if txn.send_store_id != user.store_id:
@@ -989,8 +982,6 @@ async def reject_transaction_service(
             else:
                 if txn.receive_store_id != user.store_id:
                     raise HTTPException(status_code=403, detail="You are not authorized to reject this push")
-        else:
-            raise HTTPException(status_code=403, detail="Role not authorized to reject transactions")
 
         snap = txn.product_snapshot
         product_name = snap.name if snap else (txn.product.name if txn.product else "Product")

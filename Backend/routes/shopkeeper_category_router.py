@@ -26,6 +26,7 @@ shopkeeper_category_router = APIRouter(
 async def list_categories(
     active_only: bool = Query(False, description="Only return active categories"),
     search: str | None = Query(None),
+    all_tenant: bool = Query(False, description="If true, bypasses store-specific inventory filtering"),
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
     paginate: bool = Query(True),
@@ -37,7 +38,7 @@ async def list_categories(
         store_id = None
     else:
         admin_id = current_user.store.admin_id
-        store_id = current_user.store_id
+        store_id = None if all_tenant else current_user.store_id
 
     items, total = await get_categories_by_admin(
         db,

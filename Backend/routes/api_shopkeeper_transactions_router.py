@@ -5,7 +5,8 @@ from fastapi import APIRouter, Depends, Query, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.deps import get_current_user, get_user_admin_id
+from core.deps import get_current_user, get_user_admin_id, require_permission
+from models.admin import Admin
 from db.session import get_db
 from models.manager import Manager
 from schemas.inventory_transaction import TransactionRead
@@ -66,13 +67,13 @@ async def list_manager_transactions(
     page: int = Query(1, ge=1),
     limit: int = Query(50, ge=1, le=1000),
     db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_user),
+    current_user = Depends(require_permission('transactions', 'read')),
 ):
-    """List transactions for the manager's store only."""
-    if not isinstance(current_user, Manager):
+    """List transactions for the store staff's store only."""
+    if isinstance(current_user, Admin):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Forbidden — Manager role required",
+            detail="Forbidden — This endpoint is for store staff",
         )
     
     admin_id = get_user_admin_id(current_user)
@@ -107,13 +108,13 @@ async def list_manager_transactions(
 async def create_manager_transfer_request(
     payload: ManagerRequestPayload,
     db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_user),
+    current_user = Depends(require_permission('transactions', 'create')),
 ):
-    """Create a transfer request (pull request) as Manager (Rule 3 or Rule 4)."""
-    if not isinstance(current_user, Manager):
+    """Create a transfer request (pull request) as Store Staff."""
+    if isinstance(current_user, Admin):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Forbidden — Manager role required",
+            detail="Forbidden — This endpoint is for store staff",
         )
 
     txn_out, txn_in = await create_pending_request_service(
@@ -133,13 +134,13 @@ async def create_manager_transfer_request(
 async def create_manager_transfer_push(
     payload: ManagerPushPayload,
     db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_user),
+    current_user = Depends(require_permission('transactions', 'create')),
 ):
     """Create a stock push transfer to another store (Rule 5) or send back to Admin (Rule 6)."""
-    if not isinstance(current_user, Manager):
+    if isinstance(current_user, Admin):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Forbidden — Manager role required",
+            detail="Forbidden — This endpoint is for store staff",
         )
 
     # Note: manager sending stock back to Admin (Rule 6) can be triggered if to_store_id is 0 or matches Admin
@@ -184,13 +185,13 @@ class ManagerPurchasePayload(BaseModel):
 async def create_manager_purchase(
     payload: ManagerPurchasePayload,
     db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_user),
+    current_user = Depends(require_permission('transactions', 'create')),
 ):
     """Record a supplier purchase directly into the manager's own store inventory."""
-    if not isinstance(current_user, Manager):
+    if isinstance(current_user, Admin):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Forbidden — Manager role required",
+            detail="Forbidden — This endpoint is for store staff",
         )
 
     admin_id = get_user_admin_id(current_user)

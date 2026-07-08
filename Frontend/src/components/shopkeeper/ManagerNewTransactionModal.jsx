@@ -7,7 +7,7 @@ import { getInventoryApi } from '../../api/inventory/inventory.api';
 
 const MANAGER_EMPTY_FORM = {
   mode: 'request', // 'request' (pull), 'send' (push), or 'purchase'
-  targetStore: '', // admin warehouse or another store ID
+  targetStore: 'admin', // admin warehouse or another store ID
   categoryId: '',
   product: '',
   quantity: '',
@@ -28,7 +28,7 @@ const ManagerNewTransactionModal = ({
   const [form, setForm] = useState(MANAGER_EMPTY_FORM);
   const [errors, setErrors] = useState({});
 
-  const { categories } = useCategories(null, { limit: 100 });
+  const { categories } = useCategories(null, { limit: 100, all_tenant: true });
 
   // If mode is 'send', we show OUR store's inventory
   const { data: ownInventoryData, isLoading: isLoadingOwnInventory } = useQuery({
@@ -51,6 +51,7 @@ const ManagerNewTransactionModal = ({
     queryFn: () => getInventoryApi({
       owner_type: sourceOwnerType,
       owner_id: sourceOwnerId,
+      warehouse_only: sourceOwnerType === 'ADMIN',
       paginate: false
     }),
     enabled: isOpen && form.mode === 'request' && !!form.targetStore,
@@ -77,7 +78,7 @@ const ManagerNewTransactionModal = ({
     setForm(prev => ({
       ...prev,
       [key]: val,
-      ...(key === 'mode' ? { product: '', quantity: '', targetStore: '', purchasePrice: '' } : {}),
+      ...(key === 'mode' ? { product: '', quantity: '', targetStore: val === 'request' ? 'admin' : '', purchasePrice: '' } : {}),
       ...(key === 'categoryId' ? { product: '' } : {}),
       ...(key === 'targetStore' ? { product: '' } : {}),
     }));
