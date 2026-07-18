@@ -49,6 +49,13 @@ from db.session import engine
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Application startup
+    from sqlalchemy import text
+    try:
+        async with engine.begin() as conn:
+            await conn.execute(text("ALTER TABLE inventories ADD COLUMN IF NOT EXISTS selling_price NUMERIC(10, 2) DEFAULT NULL;"))
+            print("Successfully added selling_price to inventories!")
+    except Exception as e:
+        print(f"Skipped schema alter: {e}")
     yield
     # Application shutdown
     await engine.dispose()

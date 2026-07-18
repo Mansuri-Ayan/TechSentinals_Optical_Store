@@ -26,6 +26,146 @@ from models.store import Store
 from models.product import Product
 from services.inventory_service import get_or_create_inventory
 from services.snapshot_service import capture_product_snapshot
+from decimal import Decimal
+
+
+# ── FIFO Stock Helpers ──────────────────────────────────────────
+
+async def _consume_stock_fifo(
+    db: AsyncSession,
+    owner_type: str,
+    owner_id: int,
+    product_id: int,
+    quantity: int,
+    label: str = "inventory",
+) -> tuple[Decimal, list[dict]]:
+    """
+    Consume stock from the oldest active rows (FIFO).
+    Decrements quantity and available_quantity in place.
+    Returns (total_purchase_cost, consumed_batches_list).
+    """
+    if quantity <= 0:
+        return Decimal("0.00"), []
+
+    # Get active inventory rows sorted by id
+    stmt = (
+        select(Inventory)
+        .where(
+            Inventory.product_id == product_id,
+            Inventory.owner_type == owner_type,
+            Inventory.owner_id == owner_id,
+            Inventory.available_quantity > 0,
+            Inventory.is_active.is_(True)
+        )
+        .order_by(Inventory.id.asc())
+    )
+    res = await db.execute(stmt)
+    batches = list(res.scalars().all())
+
+    total_avail = sum(b.available_quantity for b in batches)
+    if total_avail < quantity:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Insufficient stock in {label}: "
+                f"available={total_avail}, requested={quantity}"
+            ),
+        )
+
+    qty_to_consume = quantity
+    consumed_list = []
+    tot_cost = Decimal("0.00")
+
+    for batch in batches:
+        if qty_to_consume <= 0:
+            break
+        taken = min(batch.available_quantity, qty_to_consume)
+        batch.quantity -= taken
+        batch.available_quantity -= taken
+        batch.last_stock_out_at = datetime.now(timezone.utc)
+        if batch.available_quantity == 0:
+            batch.is_active = False
+
+        # Build metadata copy
+        consumed_list.append({
+            "inventory_id": batch.id,
+            "quantity": taken,
+            "purchase_cost": float(batch.purchase_cost),
+            "selling_price": float(batch.selling_price) if batch.selling_price is not None else None,
+            "purchase_date": batch.purchase_date.isoformat() if batch.purchase_date else None,
+            "supplier_id": batch.supplier_id,
+            "purchase_order_id": batch.purchase_order_id,
+            "purchase_order_item_id": batch.purchase_order_item_id,
+        })
+        tot_cost += Decimal(taken) * batch.purchase_cost
+        qty_to_consume -= taken
+
+    return tot_cost, consumed_list
+
+
+async def _receive_stock_batches(
+    db: AsyncSession,
+    owner_type: str,
+    owner_id: int,
+    product_id: int,
+    consumed_batches: list[dict],
+) -> int:
+    """
+    Create corresponding batch rows at the destination store,
+    inheriting batch attributes from the source consumed batches.
+    Returns the inventory_id of the first batch created.
+    """
+    if not consumed_batches:
+        return 0
+
+    # Fetch existing reorder level if any
+    existing_reorder_level = 0
+    stmt_reorder = select(Inventory.reorder_level).where(
+        Inventory.product_id == product_id,
+        Inventory.owner_type == owner_type,
+        Inventory.owner_id == owner_id
+    ).limit(1)
+    reorder_res = await db.execute(stmt_reorder)
+    row_reorder = reorder_res.scalar()
+    if row_reorder is not None:
+        existing_reorder_level = row_reorder
+
+    first_inv_id = None
+
+    for batch_meta in consumed_batches:
+        qty = batch_meta["quantity"]
+        p_cost = Decimal(str(batch_meta["purchase_cost"]))
+        p_date_str = batch_meta.get("purchase_date")
+        if p_date_str:
+            p_date = datetime.fromisoformat(p_date_str)
+        else:
+            p_date = datetime.now(timezone.utc)
+
+        # Create new batch row at destination
+        new_inv = Inventory(
+            owner_type=owner_type,
+            owner_id=owner_id,
+            product_id=product_id,
+            quantity=qty,
+            available_quantity=qty,
+            reserved_quantity=0,
+            reorder_level=existing_reorder_level,
+            last_purchase_price=p_cost,
+            last_stock_in_at=datetime.now(timezone.utc),
+            purchase_date=datetime.now(timezone.utc),
+            initial_quantity=qty,
+            purchase_cost=p_cost,
+            selling_price=batch_meta.get("selling_price"),
+            supplier_id=batch_meta.get("supplier_id"),
+            purchase_order_id=batch_meta.get("purchase_order_id"),
+            purchase_order_item_id=batch_meta.get("purchase_order_item_id"),
+        )
+        db.add(new_inv)
+        await db.flush()
+        if first_inv_id is None:
+            first_inv_id = new_inv.id
+
+    return first_inv_id
 
 
 # ── Helpers ────────────────────────────────────────────────────
@@ -51,6 +191,8 @@ async def _decrease_stock(
     inventory.quantity -= quantity
     inventory.available_quantity -= quantity
     inventory.last_stock_out_at = _now()
+    if inventory.available_quantity == 0:
+        inventory.is_active = False
 
 
 async def _increase_stock(inventory: Inventory, quantity: int) -> None:
@@ -58,6 +200,8 @@ async def _increase_stock(inventory: Inventory, quantity: int) -> None:
     inventory.quantity += quantity
     inventory.available_quantity += quantity
     inventory.last_stock_in_at = _now()
+    if inventory.available_quantity > 0:
+        inventory.is_active = True
 
 
 # ── Notifications Helpers ─────────────────────────────────────
@@ -150,21 +294,52 @@ async def purchase_stock(
     oid = owner_id if owner_id else admin_id
 
     async with db.begin_nested():
-        inventory = await get_or_create_inventory(
-            db,
-            owner_type=ot,
-            owner_id=oid,
-            product_id=product_id,
-        )
+        # Fetch existing reorder level for this product and owner if any
+        existing_reorder_level = 0
+        stmt_reorder = select(Inventory.reorder_level).where(
+            Inventory.product_id == product_id,
+            Inventory.owner_type == ot,
+            Inventory.owner_id == oid
+        ).limit(1)
+        reorder_res = await db.execute(stmt_reorder)
+        row_reorder = reorder_res.scalar()
+        if row_reorder is not None:
+            existing_reorder_level = row_reorder
 
-        await _increase_stock(inventory, quantity)
-        inventory.last_purchase_price = purchase_price
-
-        # If purchasing into a store, set receive_store_id for display
-        receive_store = oid if ot == OwnerType.STORE else None
+        # Get primary supplier for the product if available
+        from models.supplier_product import SupplierProduct
+        stmt_sp = select(SupplierProduct.supplier_id).where(
+            SupplierProduct.product_id == product_id,
+            SupplierProduct.is_active.is_(True)
+        ).limit(1)
+        sp_res = await db.execute(stmt_sp)
+        supplier_id = sp_res.scalar()
 
         # Capture snapshot of product at purchase time
         prod = await db.scalar(select(Product).where(Product.id == product_id))
+        selling_price = prod.selling_price if prod else 0.00
+
+        # Create a new inventory row (batch) for this purchase
+        inventory = Inventory(
+            owner_type=ot,
+            owner_id=oid,
+            product_id=product_id,
+            quantity=quantity,
+            available_quantity=quantity,
+            reserved_quantity=0,
+            reorder_level=existing_reorder_level,
+            last_purchase_price=purchase_price,
+            last_stock_in_at=datetime.now(timezone.utc),
+            purchase_date=datetime.now(timezone.utc),
+            initial_quantity=quantity,
+            purchase_cost=purchase_price,
+            selling_price=selling_price,
+            supplier_id=supplier_id,
+        )
+        db.add(inventory)
+        await db.flush()
+        
+        receive_store = oid if ot == OwnerType.STORE else None
         snapshot = await capture_product_snapshot(db, prod) if prod else None
 
         txn = InventoryTransaction(
@@ -210,21 +385,19 @@ async def admin_to_store_transfer(
     store_name = (await db.execute(store_stmt)).scalar() or "Store"
 
     async with db.begin_nested():
-        # Source: admin warehouse
-        admin_inv = await get_or_create_inventory(
-            db, OwnerType.ADMIN, admin_id, product_id,
+        # Source: admin warehouse (FIFO consume)
+        _, consumed_batches = await _consume_stock_fifo(
+            db, OwnerType.ADMIN, admin_id, product_id, quantity, label="admin warehouse"
         )
-        await _decrease_stock(admin_inv, quantity, label="admin warehouse")
 
-        # Destination: store
-        store_inv = await get_or_create_inventory(
-            db, OwnerType.STORE, store_id, product_id,
+        # Destination: store (batch rows creation)
+        dest_inv_id = await _receive_stock_batches(
+            db, OwnerType.STORE, store_id, product_id, consumed_batches
         )
-        await _increase_stock(store_inv, quantity)
 
         # Transaction: OUT from admin
         txn_out = InventoryTransaction(
-            inventory_id=admin_inv.id,
+            inventory_id=consumed_batches[0]["inventory_id"],
             product_id=product_id,
             transaction_type=TransactionType.ADMIN_TRANSFER_OUT,
             quantity=quantity,
@@ -234,13 +407,14 @@ async def admin_to_store_transfer(
             status=TransactionStatus.COMPLETED,
             transfer_direction=TransferDirection.ADMIN_TO_BRANCH,
             is_request=False,
+            consumed_batches=consumed_batches,
         )
         db.add(txn_out)
         await db.flush()  # get txn_out.id
 
         # Transaction: IN to store
         txn_in = InventoryTransaction(
-            inventory_id=store_inv.id,
+            inventory_id=dest_inv_id,
             product_id=product_id,
             transaction_type=TransactionType.ADMIN_TRANSFER_IN,
             quantity=quantity,
@@ -251,6 +425,7 @@ async def admin_to_store_transfer(
             transfer_direction=TransferDirection.ADMIN_TO_BRANCH,
             reference_id=txn_out.id,
             is_request=False,
+            consumed_batches=consumed_batches,
         )
         db.add(txn_in)
         await db.flush()
@@ -301,20 +476,18 @@ async def store_to_admin_transfer(
     store_name = (await db.execute(store_stmt)).scalar() or "Store"
 
     async with db.begin_nested():
-        # Source: store
-        store_inv = await get_or_create_inventory(
-            db, OwnerType.STORE, store_id, product_id,
+        # Source: store (FIFO consume)
+        _, consumed_batches = await _consume_stock_fifo(
+            db, OwnerType.STORE, store_id, product_id, quantity, label="store"
         )
-        await _decrease_stock(store_inv, quantity, label="store")
 
-        # Destination: admin warehouse
-        admin_inv = await get_or_create_inventory(
-            db, OwnerType.ADMIN, admin_id, product_id,
+        # Destination: admin warehouse (batch rows creation)
+        dest_inv_id = await _receive_stock_batches(
+            db, OwnerType.ADMIN, admin_id, product_id, consumed_batches
         )
-        await _increase_stock(admin_inv, quantity)
 
         txn_out = InventoryTransaction(
-            inventory_id=store_inv.id,
+            inventory_id=consumed_batches[0]["inventory_id"],
             product_id=product_id,
             transaction_type=TransactionType.STORE_TRANSFER_OUT,
             quantity=quantity,
@@ -324,12 +497,13 @@ async def store_to_admin_transfer(
             status=TransactionStatus.COMPLETED,
             transfer_direction=TransferDirection.BRANCH_TO_ADMIN,
             is_request=False,
+            consumed_batches=consumed_batches,
         )
         db.add(txn_out)
         await db.flush()
 
         txn_in = InventoryTransaction(
-            inventory_id=admin_inv.id,
+            inventory_id=dest_inv_id,
             product_id=product_id,
             transaction_type=TransactionType.ADMIN_TRANSFER_IN,
             quantity=quantity,
@@ -340,6 +514,7 @@ async def store_to_admin_transfer(
             transfer_direction=TransferDirection.BRANCH_TO_ADMIN,
             reference_id=txn_out.id,
             is_request=False,
+            consumed_batches=consumed_batches,
         )
         db.add(txn_in)
         await db.flush()
@@ -408,20 +583,18 @@ async def store_to_store_transfer(
     admin_id = store_from_obj.admin_id
 
     async with db.begin_nested():
-        # Source store
-        from_inv = await get_or_create_inventory(
-            db, OwnerType.STORE, from_store_id, product_id,
+        # Source store (FIFO consume)
+        _, consumed_batches = await _consume_stock_fifo(
+            db, OwnerType.STORE, from_store_id, product_id, quantity, label="source store"
         )
-        await _decrease_stock(from_inv, quantity, label="source store")
 
-        # Destination store
-        to_inv = await get_or_create_inventory(
-            db, OwnerType.STORE, to_store_id, product_id,
+        # Destination store (batch rows creation)
+        dest_inv_id = await _receive_stock_batches(
+            db, OwnerType.STORE, to_store_id, product_id, consumed_batches
         )
-        await _increase_stock(to_inv, quantity)
 
         txn_out = InventoryTransaction(
-            inventory_id=from_inv.id,
+            inventory_id=consumed_batches[0]["inventory_id"],
             product_id=product_id,
             transaction_type=TransactionType.STORE_TRANSFER_OUT,
             quantity=quantity,
@@ -432,12 +605,13 @@ async def store_to_store_transfer(
             status=TransactionStatus.COMPLETED,
             transfer_direction=TransferDirection.BRANCH_TO_BRANCH,
             is_request=False,
+            consumed_batches=consumed_batches,
         )
         db.add(txn_out)
         await db.flush()
 
         txn_in = InventoryTransaction(
-            inventory_id=to_inv.id,
+            inventory_id=dest_inv_id,
             product_id=product_id,
             transaction_type=TransactionType.STORE_TRANSFER_IN,
             quantity=quantity,
@@ -449,6 +623,7 @@ async def store_to_store_transfer(
             transfer_direction=TransferDirection.BRANCH_TO_BRANCH,
             reference_id=txn_out.id,
             is_request=False,
+            consumed_batches=consumed_batches,
         )
         db.add(txn_in)
         await db.flush()
@@ -794,26 +969,34 @@ async def approve_transaction_service(
         receive_store_name = txn.receive_store.store_name if txn.receive_store else "Admin Warehouse"
         admin_id = txn.product.admin_id if txn.product else user.id
 
-        # Stock validation and mutation
+        # Stock validation and mutation using FIFO
         # SENDER is Admin (Rule 3)
         if txn.send_store_id is None:
-            admin_inv = await get_or_create_inventory(db, OwnerType.ADMIN, admin_id, txn.product_id)
-            await _decrease_stock(admin_inv, txn.quantity, label="admin warehouse")
+            _, consumed_batches = await _consume_stock_fifo(db, OwnerType.ADMIN, admin_id, txn.product_id, txn.quantity, label="admin warehouse")
+            dest_inv_id = await _receive_stock_batches(db, OwnerType.STORE, txn.receive_store_id, txn.product_id, consumed_batches)
             
-            store_inv = await get_or_create_inventory(db, OwnerType.STORE, txn.receive_store_id, txn.product_id)
-            await _increase_stock(store_inv, txn.quantity)
+            # Update txn inventory links and metadata
+            txn.inventory_id = consumed_batches[0]["inventory_id"]
+            txn.consumed_batches = consumed_batches
+            if sibling:
+                sibling.inventory_id = dest_inv_id
+                sibling.consumed_batches = consumed_batches
         else:
             # SENDER is a Store (Rule 4 and 5)
-            send_store_inv = await get_or_create_inventory(db, OwnerType.STORE, txn.send_store_id, txn.product_id)
-            await _decrease_stock(send_store_inv, txn.quantity, label=f"store {send_store_name}")
+            _, consumed_batches = await _consume_stock_fifo(db, OwnerType.STORE, txn.send_store_id, txn.product_id, txn.quantity, label=f"store {send_store_name}")
             
             if txn.receive_store_id is None:
-                # Stock returning to admin (not typical for pending, but handled just in case)
-                admin_inv = await get_or_create_inventory(db, OwnerType.ADMIN, admin_id, txn.product_id)
-                await _increase_stock(admin_inv, txn.quantity)
+                # Stock returning to admin
+                dest_inv_id = await _receive_stock_batches(db, OwnerType.ADMIN, admin_id, txn.product_id, consumed_batches)
             else:
-                receive_store_inv = await get_or_create_inventory(db, OwnerType.STORE, txn.receive_store_id, txn.product_id)
-                await _increase_stock(receive_store_inv, txn.quantity)
+                dest_inv_id = await _receive_stock_batches(db, OwnerType.STORE, txn.receive_store_id, txn.product_id, consumed_batches)
+
+            # Update txn inventory links and metadata
+            txn.inventory_id = consumed_batches[0]["inventory_id"]
+            txn.consumed_batches = consumed_batches
+            if sibling:
+                sibling.inventory_id = dest_inv_id
+                sibling.consumed_batches = consumed_batches
 
         # Update statuses
         now_ts = _now()
@@ -1121,29 +1304,68 @@ async def record_stock_action(
     """
     async with db.begin_nested():
         owner_type = owner_type.upper()
-        inventory = await get_or_create_inventory(
-            db, owner_type, owner_id, product_id,
-        )
+        prod = await db.scalar(select(Product).where(Product.id == product_id))
+        snapshot = await capture_product_snapshot(db, prod) if prod else None
+        unit_price_val = float(prod.selling_price) if prod else None
+        store_id = owner_id if owner_type == OwnerType.STORE else None
 
         if action in (TransactionType.DAMAGE, TransactionType.LOSS, TransactionType.SALE):
-            await _decrease_stock(inventory, quantity, label=f"{owner_type}:{owner_id}")
+            _, consumed_batches = await _consume_stock_fifo(
+                db, owner_type, owner_id, product_id, quantity, label=f"{owner_type}:{owner_id}"
+            )
+            inv_id = consumed_batches[0]["inventory_id"]
         elif action == TransactionType.RETURN:
-            await _increase_stock(inventory, quantity)
+            # Fetch existing reorder level if any
+            existing_reorder_level = 0
+            stmt_reorder = select(Inventory.reorder_level).where(
+                Inventory.product_id == product_id,
+                Inventory.owner_type == owner_type,
+                Inventory.owner_id == owner_id
+            ).limit(1)
+            reorder_res = await db.execute(stmt_reorder)
+            row_reorder = reorder_res.scalar()
+            if row_reorder is not None:
+                existing_reorder_level = row_reorder
+
+            cost = prod.cost_price if prod else Decimal("0.00")
+            
+            # Get primary supplier for the product if available
+            from models.supplier_product import SupplierProduct
+            stmt_sp = select(SupplierProduct.supplier_id).where(
+                SupplierProduct.product_id == product_id,
+                SupplierProduct.is_active.is_(True)
+            ).limit(1)
+            sp_res = await db.execute(stmt_sp)
+            supplier_id = sp_res.scalar()
+            
+            # Create a new inventory batch for returned stock
+            inventory = Inventory(
+                owner_type=owner_type,
+                owner_id=owner_id,
+                product_id=product_id,
+                quantity=quantity,
+                available_quantity=quantity,
+                reserved_quantity=0,
+                reorder_level=existing_reorder_level,
+                last_purchase_price=cost,
+                last_stock_in_at=datetime.now(timezone.utc),
+                purchase_date=datetime.now(timezone.utc),
+                initial_quantity=quantity,
+                purchase_cost=cost,
+                supplier_id=supplier_id,
+            )
+            db.add(inventory)
+            await db.flush()
+            inv_id = inventory.id
+            consumed_batches = None
         else:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Unsupported stock action: {action}",
             )
 
-        store_id = owner_id if owner_type == OwnerType.STORE else None
-
-        # Capture snapshot and price for value reporting
-        prod = await db.scalar(select(Product).where(Product.id == product_id))
-        snapshot = await capture_product_snapshot(db, prod) if prod else None
-        unit_price_val = float(prod.selling_price) if prod else None
-
         txn = InventoryTransaction(
-            inventory_id=inventory.id,
+            inventory_id=inv_id,
             product_id=product_id,
             product_snapshot_id=snapshot.id if snapshot else None,
             unit_price=unit_price_val,
@@ -1155,6 +1377,7 @@ async def record_stock_action(
             remarks=remarks,
             created_by=created_by,
             status=TransactionStatus.COMPLETED,
+            consumed_batches=consumed_batches,
         )
         db.add(txn)
 

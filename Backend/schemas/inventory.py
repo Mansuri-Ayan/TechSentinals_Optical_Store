@@ -28,6 +28,9 @@ class InventoryCreate(BaseModel):
     reorder_level: int = Field(
         default=0, ge=0, description="Low-stock threshold",
     )
+    selling_price: Decimal | None = Field(
+        default=None, description="Selling price per unit for this batch",
+    )
 
 
 class InventoryUpdate(BaseModel):

@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect, useRef } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
+
 import { toast } from "react-toastify";
 import {
   Search,
@@ -158,7 +159,7 @@ const StatusBadge = ({ status }) => {
 /* ─────────────────────────────────────────────────────────
    PRODUCT CARD
    ───────────────────────────────────────────────────────── */
-const ProductCard = ({ item, onViewDetails, onDelete, onEdit, onRequestStock, onRestockSupplier }) => {
+const ProductCard = ({ item, onViewDetails, onDelete, onEdit, onRequestStock, onRestockSupplier, onAddStock }) => {
   const { stores } = useStoreStore();
   const actualStoresCount = stores.filter(s => s.store_name !== 'All Store' && s.name !== 'All Store').length;
 
@@ -212,6 +213,15 @@ const ProductCard = ({ item, onViewDetails, onDelete, onEdit, onRequestStock, on
           >
             {(!perms || perms.canUpdate) && (
               <button
+                onClick={() => onAddStock(item)}
+                className="w-7 h-7 bg-emerald-50 border border-emerald-200 rounded-lg flex items-center justify-center text-emerald-600 hover:bg-emerald-100 transition-colors"
+                title="Add stock of this product to a store"
+              >
+                <Plus className="w-3.5 h-3.5" />
+              </button>
+            )}
+            {(!perms || perms.canUpdate) && (
+              <button
                 onClick={() => onEdit(item)}
                 className="w-7 h-7 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-center text-blue-605 hover:bg-blue-100 transition-colors"
                 title="Edit item"
@@ -234,13 +244,12 @@ const ProductCard = ({ item, onViewDetails, onDelete, onEdit, onRequestStock, on
         {/* Qty badge */}
         <div className="absolute bottom-3 right-3">
           <span
-            className={`px-2 py-0.5 rounded-lg text-xs font-bold shadow-sm border border-white/50 ${
-              status === "out_of_stock"
+            className={`px-2 py-0.5 rounded-lg text-xs font-bold shadow-sm border border-white/50 ${status === "out_of_stock"
                 ? "bg-red-100 text-red-700"
                 : status === "low_stock"
                   ? "bg-amber-100 text-amber-700"
                   : "bg-white/90 text-slate-700"
-            }`}
+              }`}
           >
             Qty: {item.quantity}
           </span>
@@ -282,13 +291,19 @@ const ProductCard = ({ item, onViewDetails, onDelete, onEdit, onRequestStock, on
         </p>
 
         {/* Price */}
-        <div className="border-t border-slate-50 mt-auto pt-2 flex items-center justify-between">
-          <span className="text-sm font-bold text-slate-900">
-            ₹{Number(item.selling_price).toLocaleString()}
-          </span>
-          <span className="text-xs text-slate-400 truncate max-w-[90px]">
-            {item.supplier}
-          </span>
+        <div className="border-t border-slate-50 mt-auto pt-2 flex flex-col gap-1 w-full">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-bold text-slate-900">
+              ₹{Number(item.selling_price).toLocaleString()}
+            </span>
+            <span className="text-xs text-slate-400 truncate max-w-[90px]">
+              {item.supplier}
+            </span>
+          </div>
+          <div className="flex justify-between items-center text-[10px] font-semibold text-slate-500">
+            <span>Current Cost:</span>
+            <span>₹{item.cost_price ? Number(item.cost_price).toLocaleString() : 'N/A'}</span>
+          </div>
         </div>
 
         {(status === "low_stock" || status === "out_of_stock") && (
@@ -300,24 +315,23 @@ const ProductCard = ({ item, onViewDetails, onDelete, onEdit, onRequestStock, on
                   const whStock = item.other_stocks?.find((s) => s.owner_type === "ADMIN");
                   const source = whStock
                     ? {
-                        store_id: "admin",
-                        store_name: "Admin Warehouse",
-                        owner_type: "ADMIN",
-                        available_quantity: whStock.available_quantity,
-                      }
+                      store_id: "admin",
+                      store_name: "Admin Warehouse",
+                      owner_type: "ADMIN",
+                      available_quantity: whStock.available_quantity,
+                    }
                     : {
-                        store_id: "admin",
-                        store_name: "Admin Warehouse",
-                        owner_type: "ADMIN",
-                        available_quantity: 0,
-                      };
+                      store_id: "admin",
+                      store_name: "Admin Warehouse",
+                      owner_type: "ADMIN",
+                      available_quantity: 0,
+                    };
                   onRequestStock(item, source);
                 }}
-                className={`w-full flex items-center justify-center gap-1.5 py-2.5 text-white rounded-xl text-xs font-bold transition-all shadow-sm ${
-                  isBranchView
+                className={`w-full flex items-center justify-center gap-1.5 py-2.5 text-white rounded-xl text-xs font-bold transition-all shadow-sm ${isBranchView
                     ? "bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700"
                     : "bg-gradient-to-r from-blue-600 to-indigo-650 hover:from-blue-700 hover:to-indigo-750"
-                }`}
+                  }`}
               >
                 <ArrowRightLeft className="w-3.5 h-3.5" />
                 Request Stock
@@ -379,7 +393,7 @@ const ProductCard = ({ item, onViewDetails, onDelete, onEdit, onRequestStock, on
 
 const SearchSuggestions = ({ items, searchTerm, onSelectProduct }) => {
   if (!searchTerm || items.length === 0) return null;
-  
+
   return (
     <div className="absolute top-full left-0 right-0 mt-2 bg-white/95 backdrop-blur-md border border-slate-200 rounded-2xl shadow-xl z-[1000] overflow-hidden divide-y divide-slate-100 animate-fade-in max-h-72 overflow-y-auto">
       <div className="px-4 py-2 bg-slate-50 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
@@ -401,7 +415,7 @@ const SearchSuggestions = ({ items, searchTerm, onSelectProduct }) => {
             }
           });
         }
-        
+
         return (
           <div
             key={item.id ? `inv-${item.id}` : `prod-${item.product_id || item.id}`}
@@ -478,6 +492,7 @@ const Inventory = () => {
 
   /* Modal/drawer state */
   const [showAddModal, setShowAddModal] = useState(false);
+  const [preselectedProduct, setPreselectedProduct] = useState(null);
   const [detailItem, setDetailItem] = useState(null);
   const [viewProductItem, setViewProductItem] = useState(null);
   const [orderItem, setOrderItem] = useState(null);
@@ -747,37 +762,42 @@ const Inventory = () => {
     const items = Array.isArray(itemsData) ? itemsData : [itemsData];
 
     for (const data of items) {
-      // 1. Create the Product
-      const productPayload = {
-        category_id: data.category_id,
-        subcategory_id: data.subcategory_id,
-        brand_id: data.brand_id,
-        sku: data.sku,
-        name: data.product_name,
-        cost_price: Number(data.cost_price),
-        selling_price: Number(data.selling_price),
-        discount_percent: Number(data.discount_percent || 0),
-        warranty_months: Number(data.warranty_months || 0),
-        image_url: data.image || null,
-        description: data.description || null,
-        frame_details: data.frame_details || null,
-        lens_details: data.lens_details || null,
-        accessory_details: data.accessory_details || null,
-      };
+      let productId = data.product_id;
 
-      const product = await createProductApi(productPayload);
+      if (!productId) {
+        // 1. Create the Product
+        const productPayload = {
+          category_id: data.category_id,
+          subcategory_id: data.subcategory_id,
+          brand_id: data.brand_id,
+          sku: data.sku,
+          name: data.product_name,
+          cost_price: Number(data.cost_price),
+          selling_price: Number(data.selling_price),
+          discount_percent: Number(data.discount_percent || 0),
+          warranty_months: Number(data.warranty_months || 0),
+          image_url: data.image || null,
+          description: data.description || null,
+          frame_details: data.frame_details || null,
+          lens_details: data.lens_details || null,
+          accessory_details: data.accessory_details || null,
+        };
 
-      // Link to supplier if supplier_id is provided
-      if (data.supplier_id) {
-        try {
-          await addSupplierProductApi(Number(data.supplier_id), {
-            product_id: product.id,
-            unit_price: Number(data.cost_price),
-            minimum_order_quantity: 1,
-            lead_time_days: 0,
-          });
-        } catch (err) {
-          console.error("Failed to link supplier to product:", err);
+        const product = await createProductApi(productPayload);
+        productId = product.id;
+
+        // Link to supplier if supplier_id is provided
+        if (data.supplier_id) {
+          try {
+            await addSupplierProductApi(Number(data.supplier_id), {
+              product_id: productId,
+              unit_price: Number(data.cost_price),
+              minimum_order_quantity: 1,
+              lead_time_days: 0,
+            });
+          } catch (err) {
+            console.error("Failed to link supplier to product:", err);
+          }
         }
       }
 
@@ -790,7 +810,7 @@ const Inventory = () => {
       await createInventoryAsync({
         owner_type: resolvedOwnerType,
         owner_id: resolvedOwnerId,
-        product_id: product.id,
+        product_id: productId,
         quantity: Number(data.quantity),
         reorder_level: Number(data.reorder_level),
       });
@@ -991,7 +1011,7 @@ const Inventory = () => {
                   onChange={(e) => setInPageStoreId(e.target.value)}
                   className="pl-9 pr-10 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-sm font-semibold focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 shadow-sm appearance-none cursor-pointer"
                 >
-                  <option value="admin">All Store</option>
+                  <option value="admin">Admin Warehouse</option>
                   {stores.filter(s => s.id !== 'admin' && s.store_name !== 'All Store' && s.name !== 'All Store').map(s => (
                     <option key={s.id} value={s.id}>{s.store_name}</option>
                   ))}
@@ -1022,8 +1042,8 @@ const Inventory = () => {
               key={kpi.label}
               onClick={() => handleStatusFilter(kpi.status)}
               className={`text-left p-4 sm:p-5 rounded-2xl border shadow-sm hover:shadow-md transition-all group relative overflow-hidden cursor-pointer focus:outline-none ${isActive
-                  ? `${kpi.activeBorder} ${kpi.activeBg} shadow-md`
-                  : `bg-white ${kpi.border} hover:${kpi.activeBorder}`
+                ? `${kpi.activeBorder} ${kpi.activeBg} shadow-md`
+                : `bg-white ${kpi.border} hover:${kpi.activeBorder}`
                 }`}
             >
               <div
@@ -1109,11 +1129,10 @@ const Inventory = () => {
       <div className="flex items-center gap-2 mb-3 overflow-x-auto hide-scrollbar pb-1">
         <button
           onClick={() => handleCategoryChange("all")}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all whitespace-nowrap flex-shrink-0 ${
-            activeCategory === "all"
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all whitespace-nowrap flex-shrink-0 ${activeCategory === "all"
               ? "bg-slate-900 text-white shadow-md"
               : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50"
-          }`}
+            }`}
         >
           <Layers className="w-4 h-4" />
           All Items
@@ -1172,11 +1191,10 @@ const Inventory = () => {
               <button
                 key={sub.id}
                 onClick={() => handleSubcategoryChange(sub.id)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap flex-shrink-0 ${
-                  isActive
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap flex-shrink-0 ${isActive
                     ? "bg-slate-900 text-white shadow-sm"
                     : "bg-white text-slate-600 border border-slate-200 hover:border-slate-300 hover:bg-slate-50"
-                }`}
+                  }`}
               >
                 <span
                   className={`w-1.5 h-1.5 rounded-full ${isActive ? "bg-white" : dotColor} flex-shrink-0`}
@@ -1319,6 +1337,10 @@ const Inventory = () => {
                     setPreselectedSupplierId(product.supplier_id || null);
                     setShowRecordPurchase(true);
                   }}
+                  onAddStock={(product) => {
+                    setPreselectedProduct(product);
+                    setShowAddModal(true);
+                  }}
                 />
               ))}
             </div>
@@ -1336,8 +1358,12 @@ const Inventory = () => {
       {/* Modals */}
       <AddInventoryModal
         isOpen={showAddModal}
-        onClose={() => setShowAddModal(false)}
+        onClose={() => {
+          setShowAddModal(false);
+          setPreselectedProduct(null);
+        }}
         onSubmit={handleAddItem}
+        preselectedProduct={preselectedProduct}
       />
 
       <InventoryDetailDrawer
@@ -1347,6 +1373,16 @@ const Inventory = () => {
           setDetailItem(null);
           setEditItem(item);
         }}
+        onRestockSupplier={
+          (inPageStoreId === 'all' || inPageStoreId === 'admin')
+            ? (item) => {
+                setDetailItem(null);
+                setPreselectedProductId(item.product_id || item.id);
+                setPreselectedSupplierId(item.supplier_id || null);
+                setShowRecordPurchase(true);
+              }
+            : undefined
+        }
       />
 
       <ProductViewModal

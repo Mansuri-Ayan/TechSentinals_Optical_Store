@@ -16,7 +16,7 @@ router = APIRouter()
 
 def _inventory_to_read(inv, store_map: dict | None = None) -> InventoryRead:
     product = inv.product
-    selling_price = product.selling_price if product else None
+    selling_price = inv.selling_price if inv.selling_price is not None else (product.selling_price if product else None)
     owner_name = None
     ot_str = inv.owner_type.value if hasattr(inv.owner_type, "value") else str(inv.owner_type)
     if "ADMIN" in ot_str:
@@ -32,30 +32,31 @@ def _inventory_to_read(inv, store_map: dict | None = None) -> InventoryRead:
             supplier_id = active_sps[0].supplier_id
             supplier_name = active_sps[0].supplier.company_name
 
-    return InventoryRead(
-        **{c.key: getattr(inv, c.key) for c in inv.__table__.columns},
-        owner_name=owner_name,
-        product_name=product.name if product else None,
-        product_sku=product.sku if product else None,
-        category_id=product.category_id if product else None,
-        category_name=product.category.name if product and product.category else None,
-        subcategory_id=product.subcategory_id if product else None,
-        subcategory_name=product.subcategory.name if product and product.subcategory else None,
-        brand_id=product.brand_id if product else None,
-        brand_name=product.brand.name if product and product.brand else None,
-        cost_price=product.cost_price if product else None,
-        selling_price=selling_price,
-        price=selling_price,
-        image_url=product.image_url if product else None,
-        discount_percent=product.discount_percent if product else 0.00,
-        warranty_months=product.warranty_months if product else 0,
-        frame_product=product.frame_product if product else None,
-        lens_product=product.lens_product if product else None,
-        accessory_product=product.accessory_product if product else None,
-        other_stocks=getattr(inv, "other_stocks", []),
-        supplier_id=supplier_id,
-        supplier_name=supplier_name,
-    )
+    data = {c.key: getattr(inv, c.key) for c in inv.__table__.columns}
+    data.update({
+        "owner_name": owner_name,
+        "product_name": product.name if product else None,
+        "product_sku": product.sku if product else None,
+        "category_id": product.category_id if product else None,
+        "category_name": product.category.name if product and product.category else None,
+        "subcategory_id": product.subcategory_id if product else None,
+        "subcategory_name": product.subcategory.name if product and product.subcategory else None,
+        "brand_id": product.brand_id if product else None,
+        "brand_name": product.brand.name if product and product.brand else None,
+        "cost_price": inv.last_purchase_price if inv.last_purchase_price is not None else (product.cost_price if product else None),
+        "selling_price": selling_price,
+        "price": selling_price,
+        "image_url": product.image_url if product else None,
+        "discount_percent": product.discount_percent if product else 0.00,
+        "warranty_months": product.warranty_months if product else 0,
+        "frame_product": product.frame_product if product else None,
+        "lens_product": product.lens_product if product else None,
+        "accessory_product": product.accessory_product if product else None,
+        "other_stocks": getattr(inv, "other_stocks", []),
+        "supplier_id": inv.supplier_id if getattr(inv, "supplier_id", None) is not None else supplier_id,
+        "supplier_name": getattr(inv, "supplier_name", None) or supplier_name,
+    })
+    return InventoryRead(**data)
 
 
 async def _populate_other_stocks(
@@ -95,26 +96,27 @@ async def _populate_other_stocks(
     inv_res = await db.execute(inv_stmt)
     all_inventories = inv_res.scalars().all()
 
-    # Group inventories by product_id
+    # Group inventories by (product_id, owner_type, owner_id) and sum them
     from collections import defaultdict
-    inv_by_product = defaultdict(list)
+    inv_totals = defaultdict(lambda: {"qty": 0, "avail": 0})
     for inv in all_inventories:
-        inv_by_product[inv.product_id].append(inv)
+        ot_str = inv.owner_type.value if hasattr(inv.owner_type, "value") else str(inv.owner_type)
+        key = (inv.product_id, ot_str, inv.owner_id)
+        inv_totals[key]["qty"] += inv.quantity
+        inv_totals[key]["avail"] += inv.available_quantity
 
     for item in inventories:
-        p_invs = inv_by_product[item.product_id]
-        
         other_stocks = []
         # 1. Admin Warehouse
         if not (resolved_owner_type == "ADMIN" and resolved_owner_id == admin_id):
-            admin_inv = next((inv for inv in p_invs if inv.owner_type == "ADMIN" and inv.owner_id == admin_id), None)
+            admin_totals = inv_totals.get((item.product_id, "ADMIN", admin_id), {"qty": 0, "avail": 0})
             other_stocks.append(
                 StoreStockRead(
                     store_id=admin_id,
                     store_name="Admin Warehouse",
                     owner_type="ADMIN",
-                    quantity=admin_inv.quantity if admin_inv else 0,
-                    available_quantity=admin_inv.available_quantity if admin_inv else 0
+                    quantity=admin_totals["qty"],
+                    available_quantity=admin_totals["avail"]
                 )
             )
         # 2. Store Branches
@@ -122,14 +124,14 @@ async def _populate_other_stocks(
             if resolved_owner_type == "STORE" and resolved_owner_id == s_id:
                 continue
             
-            store_inv = next((inv for inv in p_invs if inv.owner_type == "STORE" and inv.owner_id == s_id), None)
+            store_totals = inv_totals.get((item.product_id, "STORE", s_id), {"qty": 0, "avail": 0})
             other_stocks.append(
                 StoreStockRead(
                     store_id=s_id,
                     store_name=s_name,
                     owner_type="STORE",
-                    quantity=store_inv.quantity if store_inv else 0,
-                    available_quantity=store_inv.available_quantity if store_inv else 0
+                    quantity=store_totals["qty"],
+                    available_quantity=store_totals["avail"]
                 )
             )
         item.other_stocks = other_stocks
@@ -704,5 +706,120 @@ async def get_inventory_endpoint(
                 detail="Access denied to this inventory record",
             )
     return _inventory_to_read(inv, store_map)
+
+
+@router.get(
+    "/{inventory_id}/batches",
+    summary="Get batches for an inventory item",
+    description="Returns all inventory rows (purchase batches) for the product and owner of the given inventory_id.",
+)
+async def get_inventory_batches_endpoint(
+    inventory_id: int,
+    product_id: int | None = None,
+    owner_type: str | None = None,
+    owner_id: int | None = None,
+    warehouse_only: bool = False,
+    db: AsyncSession = Depends(get_db),
+    current_user = Depends(require_permission('inventory', 'read')),
+):
+    from models.inventory import Inventory, OwnerType
+    from models.store import Store
+    from sqlalchemy import select, and_, or_
+    from core.deps import get_user_admin_id
+    
+    # 1. Resolve admin_id
+    if isinstance(current_user, Admin):
+        admin_id = current_user.id
+    else:
+        admin_id = get_user_admin_id(current_user)
+
+    if product_id is not None and owner_type is not None and owner_id is not None:
+        resolved_owner_type = OwnerType[owner_type.upper()]
+        resolved_owner_id = owner_id
+        resolved_product_id = product_id
+    else:
+        # Fallback to fetching reference inventory row
+        inv_stmt = select(Inventory).where(Inventory.id == inventory_id)
+        inv_res = await db.execute(inv_stmt)
+        inv = inv_res.scalar_one_or_none()
+        if inv is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Inventory record not found",
+            )
+        resolved_owner_type = inv.owner_type
+        resolved_owner_id = inv.owner_id
+        resolved_product_id = inv.product_id
+
+    # 2. Check permissions
+    ot_str = resolved_owner_type.value if hasattr(resolved_owner_type, "value") else str(resolved_owner_type)
+    if not isinstance(current_user, Admin):
+        is_own_store = ot_str == "STORE" and resolved_owner_id == current_user.store_id
+        is_warehouse = ot_str == "ADMIN" and resolved_owner_id == admin_id
+        if not (is_own_store or is_warehouse):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied to this inventory record",
+            )
+
+    # 3. Query all batches for this product and owner (sorted by id ASC, only those with available stock)
+    batches_stmt = (
+        select(Inventory)
+        .where(
+            Inventory.product_id == resolved_product_id,
+            Inventory.owner_type == resolved_owner_type,
+            Inventory.owner_id == resolved_owner_id,
+            Inventory.is_active.is_(True),
+            Inventory.available_quantity > 0,
+        )
+        .order_by(Inventory.id.asc())
+    )
+
+    batches_res = await db.execute(batches_stmt)
+    batches = list(batches_res.scalars().all())
+
+    # Fetch store name mapping
+    stores_stmt = select(Store.id, Store.store_name).where(Store.admin_id == admin_id)
+    stores_res = await db.execute(stores_stmt)
+    store_map = {row[0]: row[1] for row in stores_res.fetchall()}
+
+    # 4. Resolve status for each batch
+    resolved_batches = []
+    active_idx = 0
+
+    for b in batches:
+        if b.available_quantity > 0 and b.is_active:
+            if active_idx == 0:
+                status_str = "Current"
+            elif active_idx == 1:
+                status_str = "Next"
+            else:
+                status_str = "Upcoming"
+            active_idx += 1
+        else:
+            status_str = "Consumed"
+
+        supplier_company = b.supplier.company_name if b.supplier else "N/A"
+        
+        b_ot_str = b.owner_type.value if hasattr(b.owner_type, "value") else str(b.owner_type)
+        if b_ot_str == "ADMIN":
+            store_name = "Admin Warehouse"
+        else:
+            store_name = store_map.get(b.owner_id, "Unknown Store")
+
+        resolved_batches.append({
+            "id": b.id,
+            "purchase_date": b.purchase_date.isoformat() if b.purchase_date else None,
+            "purchase_cost": float(b.purchase_cost),
+            "selling_price": float(b.selling_price) if b.selling_price is not None else float(b.product.selling_price if b.product else 0.00),
+            "initial_quantity": b.initial_quantity,
+            "available_quantity": b.available_quantity,
+            "supplier_name": supplier_company,
+            "store_name": store_name,
+            "status": status_str,
+        })
+
+    return resolved_batches
+
 
 

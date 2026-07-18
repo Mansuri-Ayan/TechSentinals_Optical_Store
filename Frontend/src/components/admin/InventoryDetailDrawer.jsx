@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { createPortal as portal } from 'react-dom';
 import {
-  X, Package, Tag, Truck, BarChart3, DollarSign,
+  X, Package, Tag, Truck, BarChart3, DollarSign, Plus,
   Store, CheckCircle, AlertTriangle, XCircle, Image as ImageIcon, Sliders,
   User, Users, CreditCard, UserCheck, Calendar, IndianRupee, ShoppingCart,
   Receipt, FileText, RefreshCw, Shield, ThumbsUp, ThumbsDown,
@@ -13,6 +13,7 @@ import { defaultSettings } from '../../utils/billSettings';
 import { addSalePaymentApi } from '../../api/customer/customer.api';
 import { toast } from 'react-toastify';
 import { getSaleBillApi } from '../../api/sales/sales.api';
+import { getInventoryBatchesApi } from '../../api/inventory/inventory.api';
 
 const statusConfig = {
   'in_stock': { label: 'In Stock', color: 'text-emerald-700 bg-emerald-50 border-emerald-200', dot: 'bg-emerald-500', icon: CheckCircle },
@@ -99,8 +100,8 @@ const RejectReasonPrompt = ({ onConfirm, onCancel }) => {
           onChange={e => { setReason(e.target.value); setError(''); }}
           placeholder="Provide a reason for rejecting this expense..."
           className={`w-full px-3 py-2.5 text-sm font-medium border rounded-xl focus:outline-none focus:ring-4 resize-none transition-all bg-white ${error
-              ? 'border-red-400 focus:ring-red-100 focus:border-red-500'
-              : 'border-slate-200 focus:ring-red-500/10 focus:border-red-500'
+            ? 'border-red-400 focus:ring-red-100 focus:border-red-500'
+            : 'border-slate-200 focus:ring-red-500/10 focus:border-red-500'
             }`}
         />
         {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
@@ -127,7 +128,7 @@ const RejectReasonPrompt = ({ onConfirm, onCancel }) => {
    MAIN DRAWER COMPONENT
    Props: item, onClose, onApprove, onReject, isApproving, isRejecting, isLoading, canApprove, canUpdateStatus
 ───────────────────────────────────────────────────────── */
-const InventoryDetailDrawer = ({ item, onClose, onEdit, onApprove, onReject, isApproving, isRejecting, isLoading, onUpdateStatus, labs = [], canApprove = true, canUpdateStatus = true }) => {
+const InventoryDetailDrawer = ({ item, onClose, onEdit, onRestockSupplier, onApprove, onReject, isApproving, isRejecting, isLoading, onUpdateStatus, labs = [], canApprove = true, canUpdateStatus = true }) => {
   const storeId = item?.store_id || item?.storeId;
   const { settings: fetchedSettings } = useBillSettings(storeId);
   const billSettings = fetchedSettings ? {
@@ -177,6 +178,9 @@ const InventoryDetailDrawer = ({ item, onClose, onEdit, onApprove, onReject, isA
     }
   }, [item, activeTab]);
 
+  const [batches, setBatches] = useState([]);
+  const [loadingBatches, setLoadingBatches] = useState(false);
+
   useEffect(() => {
     if (item) {
       setActiveTab(item.initialTab || 'details');
@@ -184,11 +188,36 @@ const InventoryDetailDrawer = ({ item, onClose, onEdit, onApprove, onReject, isA
       setSelectedLabName(item.labName || '');
       setIsLabModalOpen(false);
       setLabSearchTerm('');
+
+      // Fetch batches if it's an inventory record
+      if (item.product_name && item.id && item.type !== 'staff' && item.type !== 'expenses' && item.type !== 'sales') {
+        setLoadingBatches(true);
+        const params = {};
+        if (item.product_id) params.product_id = item.product_id;
+        if (item.owner_type) params.owner_type = item.owner_type;
+        if (item.owner_id) params.owner_id = item.owner_id;
+        if (item.store === "Central Warehouse") params.warehouse_only = true;
+
+        getInventoryBatchesApi(item.id, params)
+          .then(data => {
+            setBatches(data);
+          })
+          .catch(err => {
+            console.error("Failed to load batches:", err);
+            setBatches([]);
+          })
+          .finally(() => {
+            setLoadingBatches(false);
+          });
+      } else {
+        setBatches([]);
+      }
     } else {
       setSelectedLabId('');
       setSelectedLabName('');
       setIsLabModalOpen(false);
       setLabSearchTerm('');
+      setBatches([]);
     }
   }, [item]);
 
@@ -528,12 +557,12 @@ const InventoryDetailDrawer = ({ item, onClose, onEdit, onApprove, onReject, isA
                     </thead>
                     <tbody className="divide-y divide-slate-50 font-medium text-slate-700">
                       {item.items && item.items.map((subItem, idx) => {
-                        const discountStr = subItem.discount_percent > 0 
+                        const discountStr = subItem.discount_percent > 0
                           ? `${Number(subItem.discount_percent).toLocaleString('en-IN')}%`
                           : '₹0.00';
                         const unitDiscount = (Number(subItem.unit_price) * Number(subItem.discount_percent || 0)) / 100;
                         const finalUnitPrice = Number(subItem.unit_price) - unitDiscount;
-                        
+
                         return (
                           <tr key={subItem.id || idx} className="hover:bg-slate-50/50 transition-colors">
                             <td className="py-2.5 pr-4 font-semibold text-slate-900">
@@ -595,8 +624,8 @@ const InventoryDetailDrawer = ({ item, onClose, onEdit, onApprove, onReject, isA
                 <DetailRow label="Due Amount" value={fmtPrice(item.dueAmount)} />
                 <DetailRow label="Payment Status" value={
                   <span className={`inline-flex px-2 py-0.5 rounded text-[11px] font-bold ${item.paymentStatus === 'Paid' ? 'bg-emerald-50 text-emerald-700' :
-                      item.paymentStatus === 'Partially Paid' ? 'bg-amber-50 text-amber-700' :
-                        'bg-red-50 text-red-700'
+                    item.paymentStatus === 'Partially Paid' ? 'bg-amber-50 text-amber-700' :
+                      'bg-red-50 text-red-700'
                     }`}>
                     {item.paymentStatus}
                   </span>
@@ -666,7 +695,7 @@ const InventoryDetailDrawer = ({ item, onClose, onEdit, onApprove, onReject, isA
             <div className="px-5 py-4 bg-white border-t border-slate-100 flex-shrink-0 space-y-4">
               {onUpdateStatus && (
                 <div className="space-y-3">
-                  
+
                   {/* Confirmed -> Sent To Lab: must show Lab Partner Selection */}
                   {item.status === 'Confirmed' && (
                     <div className="bg-slate-50 border border-slate-100 rounded-2xl p-3 mb-2 animate-fade-in">
@@ -692,7 +721,7 @@ const InventoryDetailDrawer = ({ item, onClose, onEdit, onApprove, onReject, isA
                       'Sent To Lab': { key: 'Ready For Pickup', label: 'Mark Ready For Pickup', color: 'bg-blue-600 hover:bg-blue-700 text-white shadow-md' },
                       'Ready For Pickup': { key: 'Delivered', label: 'Deliver & Complete Order', color: 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-md' }
                     };
-                    
+
                     const next = nextStatuses[item.status];
                     if (!next) return null; // No status updates if already Delivered or others
 
@@ -742,7 +771,7 @@ const InventoryDetailDrawer = ({ item, onClose, onEdit, onApprove, onReject, isA
         {isLabModalOpen && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 animate-fade-in font-sans">
             <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-100 animate-scale-in relative">
-              
+
               {/* Header */}
               <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
                 <div>
@@ -784,7 +813,7 @@ const InventoryDetailDrawer = ({ item, onClose, onEdit, onApprove, onReject, isA
               {/* Lab List Content */}
               <div className="p-6 pt-2 max-h-80 overflow-y-auto space-y-2.5">
                 {(() => {
-                  const filteredLabs = labs.filter(lab => 
+                  const filteredLabs = labs.filter(lab =>
                     lab.name.toLowerCase().includes(labSearchTerm.toLowerCase()) ||
                     (lab.contact_number && lab.contact_number.includes(labSearchTerm))
                   );
@@ -809,16 +838,14 @@ const InventoryDetailDrawer = ({ item, onClose, onEdit, onApprove, onReject, isA
                           setSelectedLabName(lab.name);
                           setIsLabModalOpen(false);
                         }}
-                        className={`p-4 rounded-2xl border text-left transition-all duration-200 cursor-pointer flex items-center justify-between gap-4 group ${
-                          isSelected
-                            ? 'bg-blue-50/50 border-blue-200 text-blue-900 shadow-sm'
-                            : 'bg-white border-slate-100 hover:bg-slate-50/80 hover:border-slate-200 text-slate-800'
-                        }`}
+                        className={`p-4 rounded-2xl border text-left transition-all duration-200 cursor-pointer flex items-center justify-between gap-4 group ${isSelected
+                          ? 'bg-blue-50/50 border-blue-200 text-blue-900 shadow-sm'
+                          : 'bg-white border-slate-100 hover:bg-slate-50/80 hover:border-slate-200 text-slate-800'
+                          }`}
                       >
                         <div className="flex items-start gap-3 min-w-0">
-                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors ${
-                            isSelected ? 'bg-blue-100 text-blue-600' : 'bg-slate-100 text-slate-500 group-hover:bg-slate-200'
-                          }`}>
+                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors ${isSelected ? 'bg-blue-100 text-blue-600' : 'bg-slate-100 text-slate-500 group-hover:bg-slate-200'
+                            }`}>
                             <Store className="w-4.5 h-4.5" />
                           </div>
                           <div className="min-w-0">
@@ -830,10 +857,9 @@ const InventoryDetailDrawer = ({ item, onClose, onEdit, onApprove, onReject, isA
                             </p>
                           </div>
                         </div>
-                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all shrink-0 ${
-                          isSelected ? 'border-blue-500 bg-blue-500 text-white' : 'border-slate-200 group-hover:border-slate-300 bg-white'
-                        }`}>
-                          {isSelected && <svg className="w-3 h-3 fill-current stroke-[3px]" viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>}
+                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all shrink-0 ${isSelected ? 'border-blue-500 bg-blue-500 text-white' : 'border-slate-200 group-hover:border-slate-300 bg-white'
+                          }`}>
+                          {isSelected && <svg className="w-3 h-3 fill-current stroke-[3px]" viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" /></svg>}
                         </div>
                       </div>
                     );
@@ -962,7 +988,7 @@ const InventoryDetailDrawer = ({ item, onClose, onEdit, onApprove, onReject, isA
     return portal(
       <div id="sales-detail-drawer-overlay" className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[2000] flex justify-end animate-fade-in font-sans">
         <div className="absolute inset-0" onClick={onClose} aria-hidden />
-        
+
         {/* CSS style injection to optimize browser printing of the drawer bill */}
         <style>{`
           @media print {
@@ -1030,21 +1056,19 @@ const InventoryDetailDrawer = ({ item, onClose, onEdit, onApprove, onReject, isA
           <div className="flex bg-white px-5 border-b border-slate-100 flex-shrink-0 no-print">
             <button
               onClick={() => setActiveTab('details')}
-              className={`flex-1 py-3.5 text-xs font-bold text-center border-b-2 transition-all cursor-pointer ${
-                activeTab === 'details'
-                  ? 'border-slate-900 text-slate-900 font-black'
-                  : 'border-transparent text-slate-400 hover:text-slate-700'
-              }`}
+              className={`flex-1 py-3.5 text-xs font-bold text-center border-b-2 transition-all cursor-pointer ${activeTab === 'details'
+                ? 'border-slate-900 text-slate-900 font-black'
+                : 'border-transparent text-slate-400 hover:text-slate-700'
+                }`}
             >
               Details Info
             </button>
             <button
               onClick={() => setActiveTab('bill')}
-              className={`flex-1 py-3.5 text-xs font-bold text-center border-b-2 transition-all cursor-pointer ${
-                activeTab === 'bill'
-                  ? 'border-slate-900 text-slate-900 font-black'
-                  : 'border-transparent text-slate-400 hover:text-slate-700'
-              }`}
+              className={`flex-1 py-3.5 text-xs font-bold text-center border-b-2 transition-all cursor-pointer ${activeTab === 'bill'
+                ? 'border-slate-900 text-slate-900 font-black'
+                : 'border-transparent text-slate-400 hover:text-slate-700'
+                }`}
             >
               Printable Bill
             </button>
@@ -1080,7 +1104,7 @@ const InventoryDetailDrawer = ({ item, onClose, onEdit, onApprove, onReject, isA
 
           {/* Scrollable content */}
           <div className="flex-1 overflow-y-auto hide-scrollbar px-4 py-4">
-            
+
             {/* ── DETAILS TAB CONTENT ── */}
             {activeTab === 'details' && (
               <div className="space-y-3 animate-fade-in no-print">
@@ -1097,8 +1121,8 @@ const InventoryDetailDrawer = ({ item, onClose, onEdit, onApprove, onReject, isA
                   <DetailRow label="Due Amount" value={fmtPrice(item.dueAmount)} />
                   <DetailRow label="Payment Status" value={
                     <span className={`inline-flex px-2 py-0.5 rounded text-[11px] font-bold ${item.paymentStatus === 'Paid' ? 'bg-emerald-50 text-emerald-700' :
-                        item.paymentStatus === 'Partially Paid' ? 'bg-amber-50 text-amber-700' :
-                          'bg-red-50 text-red-700'
+                      item.paymentStatus === 'Partially Paid' ? 'bg-amber-50 text-amber-700' :
+                        'bg-red-50 text-red-700'
                       }`}>
                       {item.paymentStatus}
                     </span>
@@ -1142,12 +1166,12 @@ const InventoryDetailDrawer = ({ item, onClose, onEdit, onApprove, onReject, isA
                       </thead>
                       <tbody className="divide-y divide-slate-50 font-medium text-slate-700">
                         {item.items && item.items.map((subItem, idx) => {
-                          const discountStr = subItem.discount_percent > 0 
+                          const discountStr = subItem.discount_percent > 0
                             ? `${Number(subItem.discount_percent).toLocaleString('en-IN')}%`
                             : '₹0.00';
                           const unitDiscount = (Number(subItem.unit_price) * Number(subItem.discount_percent || 0)) / 100;
                           const finalUnitPrice = Number(subItem.unit_price) - unitDiscount;
-                          
+
                           return (
                             <tr key={subItem.id || idx} className="hover:bg-slate-50/50 transition-colors">
                               <td className="py-2.5 pr-4 font-semibold text-slate-900">
@@ -1746,6 +1770,59 @@ const InventoryDetailDrawer = ({ item, onClose, onEdit, onApprove, onReject, isA
             <DetailRow label="Status" value={sc.label} />
           </Section>
 
+          <Section icon={Clock} title="Purchase Batches (FIFO)" color="violet">
+            {loadingBatches ? (
+              <p className="text-xs font-semibold text-slate-500 py-3 text-center">Loading batches...</p>
+            ) : batches.length === 0 ? (
+              <p className="text-xs font-semibold text-slate-400 py-3 text-center">No batches found</p>
+            ) : (
+              <div className="space-y-3 py-2">
+                {batches.map((batch) => {
+                  const statusColors = {
+                    Current: "text-emerald-700 bg-emerald-50 border-emerald-200",
+                    Next: "text-blue-700 bg-blue-50 border-blue-200",
+                    Upcoming: "text-slate-700 bg-slate-100 border-slate-200",
+                    Consumed: "text-slate-400 bg-slate-50 border-slate-100 line-through opacity-70"
+                  };
+                  return (
+                    <div key={batch.id} className="p-3 border border-slate-150 rounded-xl bg-slate-50/50 flex flex-col gap-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-700">Batch #{batch.id}</span>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${statusColors[batch.status] || 'bg-slate-100 text-slate-700'}`}>
+                          {batch.status}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
+                        <div className="flex justify-between">
+                          <span className="text-slate-500 font-medium">Purchased:</span>
+                          <span className="font-semibold text-slate-800">{formatDate(batch.purchase_date)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-slate-500 font-medium">Cost / Sell:</span>
+                          <span className="font-bold text-slate-800">₹{Number(batch.purchase_cost).toLocaleString()} / ₹{Number(batch.selling_price || 0).toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between col-span-2 border-t border-slate-100 pt-1.5 mt-0.5">
+                          <span className="text-slate-500 font-medium">Available Qty:</span>
+                          <span className="font-semibold text-slate-800">{batch.available_quantity} / {batch.initial_quantity}</span>
+                        </div>
+                        {batch.store_name && (
+                          <div className="flex justify-between col-span-2">
+                            <span className="text-slate-500 font-medium">Location:</span>
+                            <span className="font-bold text-slate-800 truncate">{batch.store_name}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between col-span-2">
+                          <span className="text-slate-500 font-medium">Supplier:</span>
+                          <span className="font-semibold text-slate-800 truncate max-w-[180px]">{batch.supplier_name}</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </Section>
+
           <Section icon={DollarSign} title="Pricing & Warranty Details" color="rose">
             <DetailRow label="Cost Price" value={item.cost_price ? `₹${Number(item.cost_price).toLocaleString()}` : null} />
             <DetailRow label="Selling Price" value={item.selling_price ? `₹${Number(item.selling_price).toLocaleString()}` : null} />
@@ -1766,7 +1843,15 @@ const InventoryDetailDrawer = ({ item, onClose, onEdit, onApprove, onReject, isA
           )}
         </div>
 
-        <div className="px-5 py-4 bg-white border-t border-slate-100 flex-shrink-0">
+        <div className="px-5 py-4 bg-white border-t border-slate-100 flex-shrink-0 space-y-3">
+          {onRestockSupplier && (
+            <button
+              onClick={() => onRestockSupplier(item)}
+              className="w-full flex items-center justify-center gap-2 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold transition-all text-sm shadow-md hover:shadow-lg hover:-translate-y-0.5"
+            >
+              <Plus className="w-4 h-4" /> Add Stock
+            </button>
+          )}
           {onEdit ? (
             <div className="flex gap-3">
               <button

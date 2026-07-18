@@ -1375,6 +1375,7 @@ async def seed() -> None:
                     admin_invs.append(existing.id)
                 else:
                     wh_qty = warehouse_quantities[i % len(warehouse_quantities)]
+                    cost = PRODUCTS[i % len(PRODUCTS)]["cost_price"]
                     inv = Inventory(
                         owner_type=OwnerType.ADMIN,
                         owner_id=admin_id,
@@ -1383,7 +1384,9 @@ async def seed() -> None:
                         available_quantity=wh_qty,
                         reserved_quantity=0,
                         reorder_level=10,
-                        last_purchase_price=PRODUCTS[i % len(PRODUCTS)]["cost_price"],
+                        last_purchase_price=cost,
+                        initial_quantity=wh_qty,
+                        purchase_cost=cost,
                     )
                     session.add(inv)
                     await session.flush()
@@ -1401,6 +1404,7 @@ async def seed() -> None:
                     store_invs.append(existing.id)
                 else:
                     st_qty = store_quantities[i % len(store_quantities)]
+                    cost = PRODUCTS[i % len(PRODUCTS)]["cost_price"]
                     inv = Inventory(
                         owner_type=OwnerType.STORE,
                         owner_id=store_id,
@@ -1409,6 +1413,9 @@ async def seed() -> None:
                         available_quantity=st_qty,
                         reserved_quantity=0,
                         reorder_level=10,
+                        last_purchase_price=cost,
+                        initial_quantity=st_qty,
+                        purchase_cost=cost,
                     )
                     session.add(inv)
                     await session.flush()
@@ -2257,8 +2264,8 @@ async def seed() -> None:
             role_defaults = {
                 "ADMIN": True,
                 "MANAGER": p[0] in ["inventory", "sales", "customers", "loyalty", "products", "brands", "categories", "prescriptions", "repairs", "reports", "expenses", "suppliers", "purchase_orders"] or (p[0] in ["workers", "opticians"] and p[1] in ["read", "create", "update"]),
-                "WORKER": p[0] in ["sales", "customers", "loyalty", "prescriptions", "products", "brands", "categories"] and p[1] in ["read", "create", "update", "write", "configure"],
-                "OPTICIAN": p[0] in ["customers", "prescriptions", "products", "brands", "categories", "loyalty"] and p[1] in ["read", "create", "update", "write", "configure"],
+                "WORKER": (p[0] in ["sales", "customers", "loyalty", "prescriptions", "products", "brands", "categories"] and p[1] in ["read", "create", "update", "write", "configure"]) or (p[0] == "inventory" and p[1] == "read"),
+                "OPTICIAN": (p[0] in ["customers", "prescriptions", "products", "brands", "categories", "loyalty"] and p[1] in ["read", "create", "update", "write", "configure"]) or (p[0] == "inventory" and p[1] == "read"),
                 "ACCOUNTANT": p[0] in ["sales", "reports", "expenses"] and p[1] == "read"
             }
             
@@ -2278,6 +2285,32 @@ async def seed() -> None:
                     session.add(gp)
         
         print("  [OK] seeded permissions and SuperAdmin")
+
+        # ── 23. Post-process Inventories ──────────────────────
+        print("\n" + "=" * 60)
+        print("  Post-processing Inventories with initial_quantity, purchase_cost, and supplier_id")
+        print("=" * 60)
+        from sqlalchemy.orm import selectinload
+        inv_stmt = select(Inventory).options(selectinload(Inventory.product))
+        inv_res = await session.execute(inv_stmt)
+        all_invs = inv_res.scalars().all()
+        
+        supplier_stmt = select(Supplier)
+        supplier_res = await session.execute(supplier_stmt)
+        suppliers = supplier_res.scalars().all()
+        admin_suppliers = {}
+        for s in suppliers:
+            if s.admin_id not in admin_suppliers:
+                admin_suppliers[s.admin_id] = s.id
+                
+        for inv in all_invs:
+            if inv.initial_quantity == 0:
+                inv.initial_quantity = inv.quantity
+            if inv.purchase_cost == 0:
+                inv.purchase_cost = inv.product.cost_price if inv.product else 0.00
+            if not inv.supplier_id:
+                inv.supplier_id = admin_suppliers.get(inv.owner_id if inv.owner_type == OwnerType.ADMIN else inv.product.admin_id if inv.product else None)
+        print("  [OK] inventories post-processed successfully")
 
         await session.commit()
 

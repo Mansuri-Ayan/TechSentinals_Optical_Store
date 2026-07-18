@@ -73,7 +73,7 @@ async def get_store_report(
     # 3. Total Cost
     cost_data = await db.execute(
         select(
-            func.sum(func.coalesce(SaleItem.unit_cost, 0) * SaleItem.quantity).label("total_cost")
+            func.sum(func.coalesce(SaleItem.total_purchase_cost, func.coalesce(SaleItem.unit_cost, 0) * SaleItem.quantity)).label("total_cost")
         ).join(Sale, Sale.id == SaleItem.sale_id).where(
             Sale.store_id == store_id,
             Sale.sale_date.between(start_date, end_date),
@@ -100,7 +100,7 @@ async def get_store_report(
         Product.sku.label("sku"),
         func.sum(SaleItem.quantity).label("quantity_sold"),
         func.sum(SaleItem.line_total).label("total_revenue"),
-        func.sum(SaleItem.line_total - func.coalesce(SaleItem.unit_cost, 0) * SaleItem.quantity).label("total_profit")
+        func.sum(SaleItem.line_total - func.coalesce(SaleItem.total_purchase_cost, func.coalesce(SaleItem.unit_cost, 0) * SaleItem.quantity)).label("total_profit")
     ).join(SaleItem, SaleItem.product_id == Product.id) \
      .join(Sale, Sale.id == SaleItem.sale_id) \
      .where(
@@ -227,7 +227,7 @@ async def get_staff_report(
         Product.sku.label("sku"),
         func.sum(SaleItem.quantity).label("quantity_sold"),
         func.sum(SaleItem.line_total).label("total_revenue"),
-        func.sum(SaleItem.line_total - func.coalesce(SaleItem.unit_cost, 0) * SaleItem.quantity).label("total_profit")
+        func.sum(SaleItem.line_total - func.coalesce(SaleItem.total_purchase_cost, func.coalesce(SaleItem.unit_cost, 0) * SaleItem.quantity)).label("total_profit")
     ).join(SaleItem, SaleItem.product_id == Product.id) \
      .join(Sale, Sale.id == SaleItem.sale_id) \
      .where(
@@ -789,7 +789,7 @@ async def get_analyses_report(
     orders_count = len(all_sales)
 
     # Profit (calculated as Revenue - Costs from SaleItem)
-    profit_stmt = select(func.sum(func.coalesce(SaleItem.unit_cost, 0) * SaleItem.quantity).label("cost"))\
+    profit_stmt = select(func.sum(func.coalesce(SaleItem.total_purchase_cost, func.coalesce(SaleItem.unit_cost, 0) * SaleItem.quantity).label("cost")))\
         .join(Sale, Sale.id == SaleItem.sale_id)\
         .where(Sale.admin_id == admin_id, Sale.sale_date.between(start_date, end_date))
     if store_id:

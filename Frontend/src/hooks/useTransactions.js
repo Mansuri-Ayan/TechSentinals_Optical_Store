@@ -44,7 +44,7 @@ export const useTransactions = (storeId, filters = {}, isManager = false) => {
     },
     enabled: isManager ? true : Boolean(storeId),
     retry: false,
-    staleTime: 1000 * 60 * 2,
+    staleTime: 0,
   });
 
   const createTransactionMutation = useMutation({

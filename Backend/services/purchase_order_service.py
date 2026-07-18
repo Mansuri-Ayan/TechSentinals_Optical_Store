@@ -309,30 +309,50 @@ async def receive_goods(
 
         po_item.quantity_received = new_received
 
-        # Determine target inventory (store or admin warehouse)
-        if po_item.inventory_id:
-            inv_stmt = select(Inventory).where(Inventory.id == po_item.inventory_id)
-            inv_result = await db.execute(inv_stmt)
-            inventory = inv_result.scalar_one_or_none()
-            if not inventory:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Inventory {po_item.inventory_id} not found",
-                )
-        else:
-            # Default to admin warehouse inventory
-            owner_type = "STORE" if po.store_id else "ADMIN"
-            owner_id = po.store_id if po.store_id else po.admin_id
-            inventory = await get_or_create_inventory(
-                db, owner_type, owner_id, po_item.product_id,
-            )
-            po_item.inventory_id = inventory.id
+        # Determine target inventory (store or admin warehouse) and create new batch
+        owner_type = "STORE" if po.store_id else "ADMIN"
+        owner_id = po.store_id if po.store_id else po.admin_id
 
-        # Update inventory quantities
-        inventory.quantity += grn_item.quantity_received
-        inventory.available_quantity += grn_item.quantity_received
-        inventory.last_purchase_price = po_item.unit_price
-        inventory.last_stock_in_at = _now()
+        # Fetch existing reorder level for this product and owner if any
+        existing_reorder_level = 0
+        stmt_reorder = select(Inventory.reorder_level).where(
+            Inventory.product_id == po_item.product_id,
+            Inventory.owner_type == owner_type,
+            Inventory.owner_id == owner_id
+        ).limit(1)
+        reorder_res = await db.execute(stmt_reorder)
+        row_reorder = reorder_res.scalar()
+        if row_reorder is not None:
+            existing_reorder_level = row_reorder
+
+        # Get product's current selling price
+        from models.product import Product
+        stmt_prod = select(Product.selling_price).where(Product.id == po_item.product_id)
+        prod_res = await db.execute(stmt_prod)
+        product_selling_price = prod_res.scalar() or Decimal("0.00")
+
+        # Create a new inventory row (batch) for this receipt
+        inventory = Inventory(
+            owner_type=owner_type,
+            owner_id=owner_id,
+            product_id=po_item.product_id,
+            quantity=grn_item.quantity_received,
+            available_quantity=grn_item.quantity_received,
+            reserved_quantity=0,
+            reorder_level=existing_reorder_level,
+            last_purchase_price=po_item.unit_price,
+            last_stock_in_at=_now(),
+            purchase_order_id=po.id,
+            purchase_order_item_id=po_item.id,
+            supplier_id=po.supplier_id,
+            purchase_date=po.order_date or _now(),
+            initial_quantity=grn_item.quantity_received,
+            purchase_cost=po_item.unit_price,
+            selling_price=product_selling_price,
+        )
+        db.add(inventory)
+        await db.flush()
+        po_item.inventory_id = inventory.id
 
         # Create inventory transaction with snapshot from PO item
         txn = InventoryTransaction(

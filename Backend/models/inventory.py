@@ -23,12 +23,6 @@ class OwnerType(str, enum.Enum):
 
 class Inventory(Base):
     __tablename__ = "inventories"
-    __table_args__ = (
-        UniqueConstraint(
-            "owner_type", "owner_id", "product_id",
-            name="uq_inventory_owner_product",
-        ),
-    )
 
     id = Column(
         BigInteger,
@@ -108,6 +102,56 @@ class Inventory(Base):
         comment="Timestamp of the last stock outflow",
     )
 
+    purchase_order_id = Column(
+        BigInteger,
+        ForeignKey("purchase_orders.id", ondelete="SET NULL"),
+        nullable=True,
+        comment="FK → purchase_orders.id",
+    )
+
+    purchase_order_item_id = Column(
+        BigInteger,
+        ForeignKey("purchase_order_items.id", ondelete="SET NULL"),
+        nullable=True,
+        comment="FK → purchase_order_items.id",
+    )
+
+    supplier_id = Column(
+        BigInteger,
+        ForeignKey("suppliers.id", ondelete="SET NULL"),
+        nullable=True,
+        comment="FK → suppliers.id",
+    )
+
+    purchase_date = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        comment="Date when this batch was purchased",
+    )
+
+    initial_quantity = Column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+        comment="Initial quantity of the purchase batch",
+    )
+
+    purchase_cost = Column(
+        Numeric(10, 2),
+        nullable=False,
+        default=0.00,
+        server_default="0.00",
+        comment="Cost price per unit for this batch",
+    )
+
+    selling_price = Column(
+        Numeric(10, 2),
+        nullable=True,
+        comment="Selling price per unit for this batch",
+    )
+
     is_active = Column(
         Boolean,
         nullable=False,
@@ -140,6 +184,14 @@ class Inventory(Base):
         "InventoryTransaction",
         back_populates="inventory",
         lazy="noload",
+    )
+    purchase_order = relationship(
+        "PurchaseOrder",
+        lazy="selectin",
+    )
+    supplier = relationship(
+        "Supplier",
+        lazy="selectin",
     )
 
     def __repr__(self) -> str:

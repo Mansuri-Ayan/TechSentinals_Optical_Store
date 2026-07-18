@@ -144,6 +144,7 @@ class PurchaseOrderItem(Base):
     inventory = relationship(
         "Inventory",
         lazy="selectin",
+        foreign_keys="[PurchaseOrderItem.inventory_id]"
     )
 
     def __repr__(self) -> str:

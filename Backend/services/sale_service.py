@@ -384,41 +384,64 @@ async def create_sale(
             customer.membership_tier = loyalty_service.get_tier(customer.current_points, config)
             db.add(customer)
 
-    # Decrement inventory for each item
+    # Decrement inventory for each item using FIFO
     for sale_item, product, snapshot in sale_items:
-        if sale_item.inventory_id:
-            inv_stmt = select(Inventory).where(Inventory.id == sale_item.inventory_id)
-            inv_result = await db.execute(inv_stmt)
-            inventory = inv_result.scalar_one_or_none()
-        else:
-            # Default to store inventory
-            inventory = await get_or_create_inventory(
-                db, "STORE", payload.store_id, sale_item.product_id,
-            )
-            sale_item.inventory_id = inventory.id
-
-        if inventory is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Inventory not found for product {sale_item.product_id}",
-            )
-
-        if inventory.available_quantity < sale_item.quantity:
+        owner_type = "STORE"
+        owner_id = payload.store_id
+        
+        # Query active inventory rows sorted by id
+        inv_stmt = select(Inventory).where(
+            Inventory.product_id == sale_item.product_id,
+            Inventory.owner_type == owner_type,
+            Inventory.owner_id == owner_id,
+            Inventory.available_quantity > 0,
+            Inventory.is_active.is_(True)
+        ).order_by(Inventory.id.asc())
+        
+        inv_result = await db.execute(inv_stmt)
+        batches = list(inv_result.scalars().all())
+        
+        total_available = sum(b.available_quantity for b in batches)
+        if total_available < sale_item.quantity:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=(
                     f"Insufficient stock for product {sale_item.product_id}: "
-                    f"available={inventory.available_quantity}, "
+                    f"available={total_available}, "
                     f"requested={sale_item.quantity}"
                 ),
             )
-
-        inventory.quantity -= sale_item.quantity
-        inventory.available_quantity -= sale_item.quantity
-        inventory.last_stock_out_at = _now()
-
+            
+        qty_to_consume = sale_item.quantity
+        consumed_list = []
+        tot_purchase_cost = Decimal("0.00")
+        
+        for batch in batches:
+            if qty_to_consume <= 0:
+                break
+            taken = min(batch.available_quantity, qty_to_consume)
+            batch.quantity -= taken
+            batch.available_quantity -= taken
+            batch.last_stock_out_at = _now()
+            if batch.available_quantity == 0:
+                batch.is_active = False
+            
+            consumed_list.append({
+                "inventory_id": batch.id,
+                "quantity": taken,
+                "purchase_cost": float(batch.purchase_cost)
+            })
+            tot_purchase_cost += Decimal(taken) * batch.purchase_cost
+            qty_to_consume -= taken
+            
+        sale_item.inventory_id = consumed_list[0]["inventory_id"]
+        sale_item.unit_cost = Decimal(consumed_list[0]["purchase_cost"])
+        sale_item.total_purchase_cost = tot_purchase_cost
+        sale_item.consumed_batches = consumed_list
+        
+        # Add inventory transaction
         txn = InventoryTransaction(
-            inventory_id=inventory.id,
+            inventory_id=sale_item.inventory_id,
             product_id=sale_item.product_id,
             product_snapshot_id=snapshot.id,
             unit_price=sale_item.unit_price,
@@ -428,6 +451,7 @@ async def create_sale(
             reference_id=sale.id,
             remarks=f"Sale {invoice_number}",
             created_by=payload.sold_by_id,
+            consumed_batches=consumed_list,
         )
         db.add(txn)
 
@@ -633,9 +657,38 @@ async def cancel_sale(
         if sale_with_items:
             sale = sale_with_items
 
-    # Reverse inventory for each item
+    # Reverse inventory for each item using batch metadata
     for item in sale.items:
-        if item.inventory_id:
+        if item.consumed_batches:
+            for batch_meta in item.consumed_batches:
+                batch_id = batch_meta["inventory_id"]
+                qty_to_restore = batch_meta["quantity"]
+                
+                inv_stmt = select(Inventory).where(Inventory.id == batch_id)
+                inv_result = await db.execute(inv_stmt)
+                inventory = inv_result.scalar_one_or_none()
+                if inventory:
+                    inventory.quantity += qty_to_restore
+                    inventory.available_quantity += qty_to_restore
+                    inventory.last_stock_in_at = _now()
+                    inventory.is_active = True
+
+                    txn = InventoryTransaction(
+                        inventory_id=inventory.id,
+                        product_id=item.product_id,
+                        product_snapshot_id=item.product_snapshot_id,
+                        unit_price=item.unit_price,
+                        total_value=item.unit_price * qty_to_restore,
+                        transaction_type=TransactionType.RETURN,
+                        quantity=qty_to_restore,
+                        reference_id=sale.id,
+                        remarks=f"Cancellation of sale {sale.invoice_number} (batch restore)",
+                        created_by=cancelled_by,
+                        consumed_batches=[batch_meta]
+                    )
+                    db.add(txn)
+        elif item.inventory_id:
+            # Fallback for legacy sales without batch metadata
             inv_stmt = select(Inventory).where(Inventory.id == item.inventory_id)
             inv_result = await db.execute(inv_stmt)
             inventory = inv_result.scalar_one_or_none()
@@ -643,6 +696,7 @@ async def cancel_sale(
                 inventory.quantity += item.quantity
                 inventory.available_quantity += item.quantity
                 inventory.last_stock_in_at = _now()
+                inventory.is_active = True
 
                 txn = InventoryTransaction(
                     inventory_id=inventory.id,
@@ -653,7 +707,7 @@ async def cancel_sale(
                     transaction_type=TransactionType.RETURN,
                     quantity=item.quantity,
                     reference_id=sale.id,
-                    remarks=f"Cancellation of sale {sale.invoice_number}",
+                    remarks=f"Cancellation of sale {sale.invoice_number} (fallback restore)",
                     created_by=cancelled_by,
                 )
                 db.add(txn)
@@ -775,16 +829,19 @@ async def check_and_update_sales_loss(db: AsyncSession, sale_id: int):
         # Final unit selling price after all discounts
         final_selling_price = unit_price - (total_item_discount / quantity)
         
-        # Loss formula: (Cost Price - Final Selling Price) * Quantity
-        item_loss = (unit_cost - final_selling_price) * quantity
+        # Determine total cost for this item
+        total_cost = item.total_purchase_cost if item.total_purchase_cost is not None else (unit_cost * quantity)
+        
+        # Loss formula: Total Cost Price - Final Selling Price Total
+        item_loss = total_cost - (final_selling_price * quantity)
         
         if item_loss > 0:
             total_loss += item_loss
             prod_name = item.product.name if item.product else f"Product #{item.product_id}"
             sku = item.product.sku if item.product else "N/A"
             loss_details.append(
-                f"- {prod_name} (SKU: {sku}): Qty={quantity}, Cost=₹{unit_cost:.2f}, "
-                f"Selling (after disc)=₹{final_selling_price:.2f}, Loss=₹{item_loss:.2f}"
+                f"- {prod_name} (SKU: {sku}): Qty={quantity}, Total Cost=₹{total_cost:.2f}, "
+                f"Selling (after disc)=₹{(final_selling_price * quantity):.2f}, Loss=₹{item_loss:.2f}"
             )
 
     # 5. Handle creation or deletion based on loss amount

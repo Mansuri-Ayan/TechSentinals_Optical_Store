@@ -95,7 +95,11 @@ async def transfer_endpoint(
     from_type = payload.from_owner_type.upper()
     to_type = payload.to_owner_type.upper()
 
-    if from_type == to_type and payload.from_owner_id == payload.to_owner_id:
+    # Resolve actual owner IDs to avoid frontend user ID vs admin ID confusion
+    resolved_from_id = admin_id if from_type == "ADMIN" else payload.from_owner_id
+    resolved_to_id = admin_id if to_type == "ADMIN" else payload.to_owner_id
+
+    if from_type == to_type and resolved_from_id == resolved_to_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Source and destination must be different",
@@ -104,8 +108,8 @@ async def transfer_endpoint(
     if from_type == "ADMIN" and to_type == "STORE":
         txn_out, txn_in = await admin_to_store_transfer(
             db,
-            admin_id=payload.from_owner_id,
-            store_id=payload.to_owner_id,
+            admin_id=resolved_from_id,
+            store_id=resolved_to_id,
             product_id=payload.product_id,
             quantity=payload.quantity,
             created_by=current_user.id,
@@ -114,8 +118,8 @@ async def transfer_endpoint(
     elif from_type == "STORE" and to_type == "ADMIN":
         txn_out, txn_in = await store_to_admin_transfer(
             db,
-            admin_id=payload.to_owner_id,
-            store_id=payload.from_owner_id,
+            admin_id=resolved_to_id,
+            store_id=resolved_from_id,
             product_id=payload.product_id,
             quantity=payload.quantity,
             created_by=current_user.id,
@@ -124,8 +128,8 @@ async def transfer_endpoint(
     elif from_type == "STORE" and to_type == "STORE":
         txn_out, txn_in = await store_to_store_transfer(
             db,
-            from_store_id=payload.from_owner_id,
-            to_store_id=payload.to_owner_id,
+            from_store_id=resolved_from_id,
+            to_store_id=resolved_to_id,
             product_id=payload.product_id,
             quantity=payload.quantity,
             created_by=current_user.id,

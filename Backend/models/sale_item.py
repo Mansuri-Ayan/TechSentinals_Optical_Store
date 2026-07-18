@@ -12,6 +12,7 @@ from sqlalchemy import (
     Integer,
     Numeric,
     Text,
+    JSON,
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -80,6 +81,18 @@ class SaleItem(Base):
         Numeric(10, 2),
         nullable=True,
         comment="Cost price per unit at time of sale (for margin reporting)",
+    )
+
+    total_purchase_cost = Column(
+        Numeric(12, 2),
+        nullable=True,
+        comment="Total purchase cost of the batches consumed by this line item",
+    )
+
+    consumed_batches = Column(
+        JSON,
+        nullable=True,
+        comment="JSON metadata of consumed batches: [{'inventory_id': int, 'quantity': int, 'purchase_cost': float}]",
     )
 
     discount_percent = Column(

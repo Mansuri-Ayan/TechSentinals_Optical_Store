@@ -40,7 +40,7 @@ export const useInventory = (storeId, filters = {}) => {
     queryKey: [inventoryQueryKey, storeId, params, filters.universal],
     queryFn: () => filters.universal ? getUniversalInventoryApi(params) : (isWarehouse ? getWarehouseInventoryApi(params) : getInventoryApi(params)),
     enabled: !!storeId && ((isWarehouse || isLocAdmin) ? !!user?.id : true),
-    staleTime: 1000 * 60 * 2,
+    staleTime: 0,
     retry: false,
     placeholderData: (previousData) => previousData,
   });
@@ -63,7 +63,7 @@ export const useInventory = (storeId, filters = {}) => {
       return [];
     },
     enabled: !!storeId && ((isWarehouse || isLocAdmin) ? !!user?.id : true),
-    staleTime: 1000 * 60 * 2,
+    staleTime: 0,
     retry: false,
   });
 

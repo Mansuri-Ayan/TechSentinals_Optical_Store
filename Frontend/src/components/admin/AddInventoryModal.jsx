@@ -33,53 +33,105 @@ const SectionHeading = ({ num, label }) => (
   </h3>
 );
 
-const getDefaultItemValues = (storeId = '') => ({
-  product_name: '',
-  sku: '',
-  category_id: '',
-  subcategory_id: '',
-  brand: '',
-  supplier: '',
-  supplier_id: '',
-  quantity: '',
-  reorder_level: '',
-  cost_price: '',
-  selling_price: '',
-  discount_percent: '0.00',
-  warranty_months: '0',
-  description: '',
-  is_active: true,
-  store_id: storeId,
-  image: null,
-  frame_details: {
-    frame_type: '',
-    shape: '',
-    material: '',
-    color: '',
-    lens_width: '',
-    bridge_width: '',
-    temple_length: '',
-    gender: '',
-    age_group: '',
-  },
-  lens_details: {
-    lens_type: '',
-    material: '',
-    index_value: '',
-    coating: '',
-    tint_color: '',
-    uv_protection: '',
-    blue_cut: '',
-    photochromic: '',
-    polarized: '',
-  },
-  accessory_details: {
-    accessory_type: '',
-    material: '',
-    color: '',
-    size: '',
-  },
-});
+const getDefaultItemValues = (storeId = '', preselectedProduct = null) => {
+  if (preselectedProduct) {
+    return {
+      product_id: preselectedProduct.product_id || preselectedProduct.id,
+      product_name: preselectedProduct.product_name || preselectedProduct.name || '',
+      sku: preselectedProduct.sku || preselectedProduct.product_sku || '',
+      category_id: preselectedProduct.category_id ? String(preselectedProduct.category_id) : '',
+      subcategory_id: preselectedProduct.subcategory_id ? String(preselectedProduct.subcategory_id) : '',
+      brand: preselectedProduct.brand_name || preselectedProduct.brand || '',
+      supplier: preselectedProduct.supplier_name || preselectedProduct.supplier || '',
+      supplier_id: preselectedProduct.supplier_id ? String(preselectedProduct.supplier_id) : '',
+      quantity: '',
+      reorder_level: preselectedProduct.reorder_level !== undefined ? String(preselectedProduct.reorder_level) : '',
+      cost_price: preselectedProduct.cost_price !== undefined ? String(preselectedProduct.cost_price) : '',
+      selling_price: preselectedProduct.selling_price !== undefined ? String(preselectedProduct.selling_price) : '',
+      discount_percent: preselectedProduct.discount_percent !== undefined ? String(preselectedProduct.discount_percent) : '0.00',
+      warranty_months: preselectedProduct.warranty_months !== undefined ? String(preselectedProduct.warranty_months) : '0',
+      description: preselectedProduct.description || '',
+      is_active: true,
+      store_id: storeId === 'admin' ? '' : storeId,
+      image: preselectedProduct.image || preselectedProduct.image_url || null,
+      frame_details: {
+        frame_type: preselectedProduct.frame_product?.frame_type || '',
+        shape: preselectedProduct.frame_product?.shape || '',
+        material: preselectedProduct.frame_product?.material || '',
+        color: preselectedProduct.frame_product?.color || '',
+        lens_width: preselectedProduct.frame_product?.lens_width || '',
+        bridge_width: preselectedProduct.frame_product?.bridge_width || '',
+        temple_length: preselectedProduct.frame_product?.temple_length || '',
+        gender: preselectedProduct.frame_product?.gender || '',
+        age_group: preselectedProduct.frame_product?.age_group || '',
+      },
+      lens_details: {
+        lens_type: preselectedProduct.lens_product?.lens_type || '',
+        material: preselectedProduct.lens_product?.material || '',
+        index_value: preselectedProduct.lens_product?.index_value || '',
+        coating: preselectedProduct.lens_product?.coating || '',
+        tint_color: preselectedProduct.lens_product?.tint_color || '',
+        uv_protection: preselectedProduct.lens_product?.uv_protection || '',
+        blue_cut: preselectedProduct.lens_product?.blue_cut || '',
+        photochromic: preselectedProduct.lens_product?.photochromic || '',
+        polarized: preselectedProduct.lens_product?.polarized || '',
+      },
+      accessory_details: {
+        accessory_type: preselectedProduct.accessory_product?.accessory_type || '',
+        material: preselectedProduct.accessory_product?.material || '',
+        color: preselectedProduct.accessory_product?.color || '',
+        size: preselectedProduct.accessory_product?.size || '',
+      },
+    };
+  }
+  return {
+    product_name: '',
+    sku: '',
+    category_id: '',
+    subcategory_id: '',
+    brand: '',
+    supplier: '',
+    supplier_id: '',
+    quantity: '',
+    reorder_level: '',
+    cost_price: '',
+    selling_price: '',
+    discount_percent: '0.00',
+    warranty_months: '0',
+    description: '',
+    is_active: true,
+    store_id: storeId === 'admin' ? '' : storeId,
+    image: null,
+    frame_details: {
+      frame_type: '',
+      shape: '',
+      material: '',
+      color: '',
+      lens_width: '',
+      bridge_width: '',
+      temple_length: '',
+      gender: '',
+      age_group: '',
+    },
+    lens_details: {
+      lens_type: '',
+      material: '',
+      index_value: '',
+      coating: '',
+      tint_color: '',
+      uv_protection: '',
+      blue_cut: '',
+      photochromic: '',
+      polarized: '',
+    },
+    accessory_details: {
+      accessory_type: '',
+      material: '',
+      color: '',
+      size: '',
+    },
+  };
+};
 
 /* ─── dynamic form item component ─────────────────── */
 const InventoryItemForm = ({
@@ -97,6 +149,9 @@ const InventoryItemForm = ({
   onRemove,
   showRemove,
 }) => {
+  const watchedProductId = watch(`items.${index}.product_id`);
+  const isProductPreselected = !!watchedProductId;
+
   const watchedCategoryId = watch(`items.${index}.category_id`);
   const watchedImage = watch(`items.${index}.image`);
 
@@ -112,10 +167,28 @@ const InventoryItemForm = ({
   const isLens = categoryName === 'lenses';
   const isAccessory = !!watchedCategoryId && !isFrame && !isLens;
 
-  // Auto-reset subcategory field when category changes
+  // Keep category_id in sync after categories load
   useEffect(() => {
-    setValue(`items.${index}.subcategory_id`, '');
-  }, [watchedCategoryId, index, setValue]);
+    const defaultCatId = watch(`items.${index}.category_id`);
+    if (defaultCatId && categories?.length > 0) {
+      setValue(`items.${index}.category_id`, String(defaultCatId));
+    }
+  }, [categories, index, setValue, watch]);
+
+  // Keep subcategory_id in sync after subcategories load
+  useEffect(() => {
+    const defaultSubcatId = watch(`items.${index}.subcategory_id`);
+    if (defaultSubcatId && subcategories?.length > 0) {
+      setValue(`items.${index}.subcategory_id`, String(defaultSubcatId));
+    }
+  }, [subcategories, index, setValue, watch]);
+
+  // Auto-reset subcategory field when category changes (only if product is NOT preselected)
+  useEffect(() => {
+    if (!watchedProductId) {
+      setValue(`items.${index}.subcategory_id`, '');
+    }
+  }, [watchedCategoryId, watchedProductId, index, setValue]);
 
   const handleImageChange = (e) => {
     const file = e.target.files[0];
@@ -625,8 +698,7 @@ const InventoryItemForm = ({
   );
 };
 
-/* ─── main modal component ────────────────────────── */
-const AddInventoryModal = ({ isOpen, onClose, onSubmit: onSubmitProp }) => {
+const AddInventoryModal = ({ isOpen, onClose, onSubmit: onSubmitProp, preselectedProduct = null }) => {
   const { selectedStore, stores } = useStoreStore();
   const { categories, isLoadingCategories } = useCategories();
   const { brands, createBrandAsync } = useBrands();
@@ -642,7 +714,7 @@ const AddInventoryModal = ({ isOpen, onClose, onSubmit: onSubmitProp }) => {
     formState: { errors },
   } = useForm({
     defaultValues: {
-      items: [getDefaultItemValues(selectedStore?.id ? String(selectedStore.id) : '')],
+      items: [getDefaultItemValues(selectedStore?.id ? String(selectedStore.id) : '', preselectedProduct)],
     },
   });
 
@@ -651,19 +723,21 @@ const AddInventoryModal = ({ isOpen, onClose, onSubmit: onSubmitProp }) => {
     name: 'items',
   });
 
-  // Keep store ID updated when selectedStore changes and we open the modal
+  // Keep store ID and preselectedProduct updated when selectedStore changes and we open the modal
   useEffect(() => {
-    if (isOpen && selectedStore?.id && fields.length === 1) {
-      setValue('items.0.store_id', String(selectedStore.id));
+    if (isOpen) {
+      reset({
+        items: [getDefaultItemValues(selectedStore?.id ? String(selectedStore.id) : '', preselectedProduct)],
+      });
     }
-  }, [isOpen, selectedStore, setValue, fields.length]);
+  }, [isOpen, selectedStore, preselectedProduct, reset]);
 
   if (!isOpen) return null;
 
   const handleCancel = () => {
     if (isPending) return;
     reset({
-      items: [getDefaultItemValues(selectedStore?.id ? String(selectedStore.id) : '')],
+      items: [getDefaultItemValues(selectedStore?.id ? String(selectedStore.id) : '', preselectedProduct)],
     });
     onClose();
   };
@@ -674,22 +748,25 @@ const AddInventoryModal = ({ isOpen, onClose, onSubmit: onSubmitProp }) => {
       const payloadItems = [];
 
       for (const item of data.items) {
-        const typedBrandName = (item.brand || '').trim();
         let brandId = null;
 
-        if (typedBrandName) {
-          // Find if brand already exists (case-insensitive check)
-          const brandObj = brands.find(
-            (b) => b.name.toLowerCase() === typedBrandName.toLowerCase()
-          );
+        // Only handle brand creation/lookup if product is not preselected
+        if (!preselectedProduct) {
+          const typedBrandName = (item.brand || '').trim();
+          if (typedBrandName) {
+            const brandObj = brands.find(
+              (b) => b.name.toLowerCase() === typedBrandName.toLowerCase()
+            );
 
-          if (brandObj) {
-            brandId = brandObj.id;
-          } else {
-            // Create new brand dynamically
-            const newBrand = await createBrandAsync({ name: typedBrandName });
-            brandId = newBrand.id;
+            if (brandObj) {
+              brandId = brandObj.id;
+            } else {
+              const newBrand = await createBrandAsync({ name: typedBrandName });
+              brandId = newBrand.id;
+            }
           }
+        } else {
+          brandId = preselectedProduct.brand_id;
         }
 
         // Clean spec data blocks
@@ -718,12 +795,14 @@ const AddInventoryModal = ({ isOpen, onClose, onSubmit: onSubmitProp }) => {
         const isLens = categoryName === 'lenses';
         const isAccessory = !!item.category_id && !isFrame && !isLens;
 
-        if (isFrame) {
-          frame_details = cleanObj(item.frame_details);
-        } else if (isLens) {
-          lens_details = cleanObj(item.lens_details);
-        } else if (isAccessory) {
-          accessory_details = cleanObj(item.accessory_details);
+        if (!preselectedProduct) {
+          if (isFrame) {
+            frame_details = cleanObj(item.frame_details);
+          } else if (isLens) {
+            lens_details = cleanObj(item.lens_details);
+          } else if (isAccessory) {
+            accessory_details = cleanObj(item.accessory_details);
+          }
         }
 
         payloadItems.push({
@@ -732,9 +811,9 @@ const AddInventoryModal = ({ isOpen, onClose, onSubmit: onSubmitProp }) => {
           subcategory_id: item.subcategory_id ? Number(item.subcategory_id) : null,
           brand_id: brandId,
           image: item.image || null,
-          frame_details,
-          lens_details,
-          accessory_details,
+          frame_details: preselectedProduct ? preselectedProduct.frame_product : frame_details,
+          lens_details: preselectedProduct ? preselectedProduct.lens_product : lens_details,
+          accessory_details: preselectedProduct ? preselectedProduct.accessory_product : accessory_details,
         });
       }
 
@@ -743,7 +822,7 @@ const AddInventoryModal = ({ isOpen, onClose, onSubmit: onSubmitProp }) => {
 
       // Clear, reset form, and close modal only on success
       reset({
-        items: [getDefaultItemValues(selectedStore?.id ? String(selectedStore.id) : '')],
+        items: [getDefaultItemValues(selectedStore?.id ? String(selectedStore.id) : '', preselectedProduct)],
       });
       onClose();
       toast.success(
@@ -770,10 +849,16 @@ const AddInventoryModal = ({ isOpen, onClose, onSubmit: onSubmitProp }) => {
             </div>
             <div className="min-w-0">
               <h2 className="text-lg sm:text-xl font-bold text-slate-900 truncate">
-                {fields.length > 1 ? 'Add Bulk Inventory Items' : 'Add Inventory Item'}
+                {preselectedProduct
+                  ? `Add Stock for "${preselectedProduct.product_name || preselectedProduct.name}"`
+                  : fields.length > 1
+                  ? 'Add Bulk Inventory Items'
+                  : 'Add Inventory Item'}
               </h2>
               <p className="text-xs text-slate-500 mt-0.5 hidden sm:block">
-                Fill in all required fields to add products to inventory.
+                {preselectedProduct
+                  ? 'Specify store location and stock quantity for this product.'
+                  : 'Fill in all required fields to add products to inventory.'}
               </p>
             </div>
           </div>
@@ -824,14 +909,16 @@ const AddInventoryModal = ({ isOpen, onClose, onSubmit: onSubmitProp }) => {
             </button>
           </div>
           <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-3 w-full sm:w-auto">
-            <button
-              type="button"
-              onClick={() => append(getDefaultItemValues(selectedStore?.id ? String(selectedStore.id) : ''))}
-              disabled={isPending}
-              className="w-full sm:w-auto px-5 py-2.5 bg-blue-50 border border-blue-200 text-blue-700 hover:bg-blue-100 hover:text-blue-800 rounded-xl font-bold transition-all text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
-            >
-              Add New
-            </button>
+            {!preselectedProduct && (
+              <button
+                type="button"
+                onClick={() => append(getDefaultItemValues(selectedStore?.id ? String(selectedStore.id) : ''))}
+                disabled={isPending}
+                className="w-full sm:w-auto px-5 py-2.5 bg-blue-50 border border-blue-200 text-blue-700 hover:bg-blue-100 hover:text-blue-800 rounded-xl font-bold transition-all text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+              >
+                Add New
+              </button>
+            )}
             <button
               type="button"
               onClick={handleSubmit(onSubmit)}

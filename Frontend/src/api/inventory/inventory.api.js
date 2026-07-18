@@ -42,3 +42,8 @@ export const updateInventoryApi = async (id, payload) => {
   const response = await api.put(`/inventory/${id}`, payload);
   return response.data;
 };
+
+export const getInventoryBatchesApi = async (inventoryId, params = {}) => {
+  const response = await api.get(`/inventory/${inventoryId}/batches`, { params });
+  return response.data;
+};

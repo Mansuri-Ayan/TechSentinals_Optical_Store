@@ -111,6 +111,20 @@ const EditInventoryModal = ({ isOpen, onClose, inventoryItem, onSubmit: onSubmit
     { paginate: false }
   );
 
+  // Keep category_id in sync after categories load
+  useEffect(() => {
+    if (inventoryItem?.category_id && categories?.length > 0) {
+      setValue('category_id', String(inventoryItem.category_id));
+    }
+  }, [categories, inventoryItem, setValue]);
+
+  // Keep subcategory_id in sync after subcategories load
+  useEffect(() => {
+    if (inventoryItem?.subcategory_id && subcategories?.length > 0) {
+      setValue('subcategory_id', String(inventoryItem.subcategory_id));
+    }
+  }, [subcategories, inventoryItem, setValue]);
+
   const selectedCategoryObj = categories?.find(
     (c) => c.id === Number(watchedCategoryId)
   );

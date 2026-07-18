@@ -10,6 +10,7 @@ from sqlalchemy import (
     Integer,
     Numeric,
     Text,
+    JSON,
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -134,6 +135,12 @@ class InventoryTransaction(Base):
         Text,
         nullable=True,
         comment="Optional notes / reason for the transaction",
+    )
+
+    consumed_batches = Column(
+        JSON,
+        nullable=True,
+        comment="JSON metadata of consumed batches: [{'inventory_id': int, 'quantity': int, 'purchase_cost': float}]",
     )
 
     created_by = Column(

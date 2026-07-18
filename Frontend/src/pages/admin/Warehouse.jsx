@@ -914,6 +914,15 @@ const Warehouse = () => {
           setTransferTargetProduct(item);
           setShowTransferModal(true);
         }}
+        onRestockSupplier={
+          isBranchView
+            ? undefined
+            : (item) => {
+                setDetailItem(null);
+                setPreselectedProductId(item.product_id || item.id);
+                setShowRecordPurchase(true);
+              }
+        }
       />
 
       <AddTransactionModal
