@@ -27,6 +27,7 @@ import {
   FileText,
   Beaker,
   Shield,
+  RefreshCw,
 } from "lucide-react";
 import { useAuth } from "../../hooks/useAuth";
 import { useAuthStore, useStoreStore } from "../../store/store";
@@ -113,6 +114,8 @@ const Sidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) => {
   const hasLoyaltyRead = useHasPermission('loyalty:read');
   const hasPermissionsRead = useHasPermission('permissions:read');
   const hasAnalysesRead = useHasPermission('reports:read');
+  const hasExchangesRead = useHasPermission('exchanges:read');
+  const hasLabsRead = useHasPermission('labs:read');
 
   useEffect(() => {
     if (fetchedStores) {
@@ -202,6 +205,9 @@ const Sidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) => {
     : "/admin/dashboard";
   const labsRoute = currentStore
     ? `/admin/store/${currentStore.id}/labs`
+    : "/admin/dashboard";
+  const exchangesRoute = currentStore
+    ? `/admin/store/${currentStore.id}/exchanges`
     : "/admin/dashboard";
 
   const handleStoreSelect = (store) => {
@@ -294,6 +300,15 @@ const Sidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) => {
         navigate("/admin/dashboard");
       } else {
         navigate(`/admin/store/${store.id}/bill-template`);
+      }
+    } else if (
+      location.pathname.startsWith("/admin/store/") &&
+      location.pathname.includes("/exchanges")
+    ) {
+      if (store.id === "admin") {
+        navigate("/admin/dashboard");
+      } else {
+        navigate(`/admin/store/${store.id}/exchanges`);
       }
     } else {
       // Default fallback
@@ -525,71 +540,6 @@ const Sidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) => {
           )}
 
 
-          <NavLink
-            to={suppliersRoute}
-            title={isCollapsed ? "Suppliers" : undefined}
-            className={({ isActive }) =>
-              `flex items-center ${isCollapsed ? "justify-center px-0" : "px-4"} py-2.5 rounded-xl transition-all duration-200 group ${
-                isActive
-                  ? "bg-emerald-500/10 text-emerald-400 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_0_10px_rgba(16,185,129,0.1)] border border-emerald-500/20"
-                  : "text-slate-400 hover:bg-white/5 hover:text-slate-202 border border-transparent"
-              }`
-            }
-          >
-            <Truck
-              className={`w-5 h-5 transition-transform group-hover:scale-110 flex-shrink-0 ${isCollapsed ? "" : "mr-3"}`}
-            />
-            {!isCollapsed && (
-              <span className="font-medium text-sm">Suppliers</span>
-            )}
-          </NavLink>
-
-          <NavLink
-            to={labsRoute}
-            title={isCollapsed ? "Labs" : undefined}
-            className={({ isActive }) =>
-              `flex items-center ${isCollapsed ? "justify-center px-0" : "px-4"} py-2.5 rounded-xl transition-all duration-200 group ${
-                isActive || location.pathname.includes("/labs")
-                  ? "bg-emerald-500/10 text-emerald-400 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_0_10px_rgba(16,185,129,0.1)] border border-emerald-500/20"
-                  : "text-slate-400 hover:bg-white/5 hover:text-slate-202 border border-transparent"
-              }`
-            }
-          >
-            <Beaker
-              className={`w-5 h-5 transition-transform group-hover:scale-110 flex-shrink-0 ${isCollapsed ? "" : "mr-3"}`}
-            />
-            {!isCollapsed && (
-              <span className="font-medium text-sm">Labs</span>
-            )}
-          </NavLink>
-
-          <NavLink
-            to="/admin/expenses"
-            end
-            title={isCollapsed ? "Expenses" : undefined}
-            className={({ isActive }) => {
-              const isExpensesActive =
-                isActive || location.pathname.includes("/expenses");
-              return `flex items-center ${isCollapsed ? "justify-center px-0" : "px-4"} py-2.5 rounded-xl transition-all duration-200 group ${
-                isExpensesActive
-                  ? "bg-emerald-500/10 text-emerald-400 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_0_10px_rgba(16,185,129,0.1)] border border-emerald-500/20"
-                  : "text-slate-400 hover:bg-white/5 hover:text-slate-202 border border-transparent"
-              }`;
-            }}
-            onClick={(e) => {
-              if (currentStore) {
-                e.preventDefault();
-                navigate(expensesRoute);
-              }
-            }}
-          >
-            <Receipt
-              className={`w-5 h-5 transition-transform group-hover:scale-110 flex-shrink-0 ${isCollapsed ? "" : "mr-3"}`}
-            />
-            {!isCollapsed && (
-              <span className="font-medium text-sm">Expenses</span>
-            )}
-          </NavLink>
 
           {hasStaffRead && (
             <NavLink
@@ -700,6 +650,25 @@ const Sidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) => {
             </NavLink>
           )}
 
+          {hasExchangesRead && (
+            <NavLink
+              to={exchangesRoute}
+              title={isCollapsed ? "Exchanges" : undefined}
+              className={({ isActive }) =>
+                `flex items-center ${isCollapsed ? "justify-center px-0" : "px-4"} py-2.5 rounded-xl transition-all duration-200 group ${
+                  isActive || location.pathname.includes("/exchanges")
+                    ? "bg-emerald-500/10 text-emerald-400 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_0_10px_rgba(16,185,129,0.1)] border border-emerald-500/20"
+                    : "text-slate-400 hover:bg-white/5 hover:text-slate-202 border border-transparent"
+                }`
+              }
+            >
+              <RefreshCw
+                className={`w-5 h-5 transition-transform group-hover:rotate-180 duration-500 flex-shrink-0 ${isCollapsed ? "" : "mr-3"}`}
+              />
+              {!isCollapsed && <span className="font-medium text-sm">Exchanges</span>}
+            </NavLink>
+          )}
+
           {hasOrdersRead && (
             <NavLink
               to={labOrdersRoute}
@@ -717,6 +686,27 @@ const Sidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) => {
               />
               {!isCollapsed && (
                 <span className="font-medium text-sm">Orders</span>
+              )}
+            </NavLink>
+          )}
+
+          {hasLabsRead && (
+            <NavLink
+              to={labsRoute}
+              title={isCollapsed ? "Labs" : undefined}
+              className={({ isActive }) =>
+                `flex items-center ${isCollapsed ? "justify-center px-0" : "px-4"} py-2.5 rounded-xl transition-all duration-200 group ${
+                  isActive || location.pathname.includes("/labs")
+                    ? "bg-emerald-500/10 text-emerald-400 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_0_10px_rgba(16,185,129,0.1)] border border-emerald-500/20"
+                    : "text-slate-400 hover:bg-white/5 hover:text-slate-202 border border-transparent"
+                }`
+              }
+            >
+              <Beaker
+                className={`w-5 h-5 transition-transform group-hover:scale-110 flex-shrink-0 ${isCollapsed ? "" : "mr-3"}`}
+              />
+              {!isCollapsed && (
+                <span className="font-medium text-sm">Labs</span>
               )}
             </NavLink>
           )}

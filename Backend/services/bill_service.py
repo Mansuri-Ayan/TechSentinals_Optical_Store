@@ -309,6 +309,224 @@ async def generate_bill_html(sale: Sale, db: AsyncSession) -> str:
 """
     return html
 
+async def generate_exchange_bill_html(exchange, db: AsyncSession) -> str:
+    # 1. Fetch store's BillSettings
+    stmt = select(BillSettings).where(BillSettings.store_id == exchange.store_id)
+    res = await db.execute(stmt)
+    settings = res.scalar_one_or_none()
+    
+    # Resolve fallback default settings using Store details if available
+    store = exchange.store
+    store_name = store.store_name if store else "Optical Store"
+    store_email = store.email if store else ""
+    store_phone = store.phone if store else ""
+    store_address = ""
+    if store:
+        store_address = f"{store.address}, {store.city}, {store.state} - {store.pincode}"
+    store_gst = store.gst_number if store else ""
+
+    header_text = (settings.header_text if settings and settings.header_text else None) or store_name
+    sub_header_text = "Inventory Exchange Receipt"
+    address = (settings.address if settings and settings.address else None) or store_address
+    contact_email = (settings.contact_email if settings and settings.contact_email else None) or store_email
+    contact_phone = (settings.contact_phone if settings and settings.contact_phone else None) or store_phone
+    gst_number = (settings.gst_number if settings and settings.gst_number else None) or store_gst
+    
+    theme_color = (settings.theme_color if settings and settings.theme_color else None) or "#3b82f6"  # blue/indigo for exchanges
+    footer_text = (settings.footer_text if settings and settings.footer_text else None) or "Thank you for shopping with us!"
+    logo = settings.logo if settings else None
+
+    # 2. Get customer details
+    cust_name = "Walk-in Customer"
+    cust_phone = "—"
+    cust_address = "—"
+    cust_email = ""
+    if exchange.customer:
+        cust_name = f"{exchange.customer.first_name} {exchange.customer.last_name or ''}".strip()
+        cust_phone = exchange.customer.phone or "—"
+        parts = [exchange.customer.address, exchange.customer.city]
+        cust_address = ", ".join([p for p in parts if p]).strip() or "—"
+        cust_email = exchange.customer.email or ""
+
+    # Original returned item details
+    orig_item = exchange.original_sale_item
+    orig_snap = orig_item.product_snapshot if orig_item else None
+    orig_prod_name = orig_snap.name if orig_snap else (orig_item.product.name if (orig_item and orig_item.product) else "Optical Item")
+    orig_prod_sku = orig_snap.sku if orig_snap else (orig_item.product.sku if (orig_item and orig_item.product) else "N/A")
+    orig_invoice = exchange.original_sale.invoice_number if exchange.original_sale else "N/A"
+    orig_value = exchange.original_item_value
+
+    # Build new replacement items rows
+    item_rows = ""
+    new_sale = exchange.new_sale
+    if new_sale and new_sale.items:
+        for item in new_sale.items:
+            snap = item.product_snapshot
+            p_name = snap.name if snap else (item.product.name if item.product else "Optical Item")
+            p_brand = snap.brand_name if snap else (item.product.brand.name if (item.product and item.product.brand) else "—")
+            selected_color = getattr(item, "selected_color", "") or ""
+            selected_size = getattr(item, "selected_size", "") or ""
+            
+            color_size_str = ""
+            if p_brand != "—":
+                color_size_str += f"{p_brand}"
+            if selected_color:
+                color_size_str += f" · Color: {selected_color}"
+            if selected_size:
+                color_size_str += f" · Size: {selected_size}"
+                
+            item_rows += f"""
+            <tr style="border-bottom: 1px solid #f1f5f9;">
+                <td style="padding: 10px 12px; text-align: left; vertical-align: top;">
+                    <p style="font-weight: 700; color: #0f172a; margin: 0; font-size: 11px;">{p_name}</p>
+                    <p style="font-size: 9px; color: #94a3b8; margin: 2px 0 0 0; font-weight: 600;">{color_size_str}</p>
+                </td>
+                <td style="padding: 10px 12px; text-align: center; font-family: monospace; font-weight: 600; vertical-align: top; font-size: 11px;">{item.quantity}</td>
+                <td style="padding: 10px 12px; text-align: right; font-family: monospace; font-weight: 600; vertical-align: top; font-size: 11px;">₹{item.unit_price:,.2f}</td>
+                <td style="padding: 10px 12px; text-align: right; font-family: monospace; font-weight: 700; color: #0f172a; vertical-align: top; font-size: 11px;">₹{item.line_total:,.2f}</td>
+            </tr>
+            """
+
+    # Logo section
+    logo_html = ""
+    if logo:
+        logo_html = f'<img src="{logo}" alt="Logo" style="max-height: 40px; max-width: 180px; margin-bottom: 6px; object-fit: contain; display: block;" />'
+    else:
+        logo_html = """
+        <div style="height: 28px; width: 28px; border-radius: 6px; background-color: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.25); display: flex; align-items: center; justify-content: center; margin-bottom: 6px;">
+            <svg style="width: 14px; height: 14px; color: #3b82f6; fill: none; stroke: currentColor; stroke-width: 2;" viewBox="0 0 24 24">
+                <path d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
+            </svg>
+        </div>
+        """
+
+    # GST details
+    gst_section = ""
+    if gst_number:
+        gst_section = f'<p style="font-size: 8px; color: #94a3b8; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; margin: 2px 0 0 0;">GSTIN: {gst_number}</p>'
+
+    date_str = exchange.exchange_date.strftime("%d %b %Y") if isinstance(exchange.exchange_date, datetime) or hasattr(exchange.exchange_date, "strftime") else str(exchange.exchange_date)
+
+    # Main inner layout styled matching exchange receipt style
+    html = f"""
+<div class="bill-content-inner" style="font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #ffffff; border-radius: 20px; border: 1px solid #e2e8f0; border-top: 6px solid {theme_color}; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -4px rgba(0, 0, 0, 0.05); padding: 24px; max-width: 100%; box-sizing: border-box;">
+    <!-- Header -->
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; border-bottom: 1px solid #e2e8f0; padding-bottom: 16px; flex-wrap: wrap;">
+        <div style="flex: 1; min-width: 200px;">
+            {logo_html}
+            <h2 style="font-size: 15px; font-weight: 900; color: #0f172a; margin: 0; tracking: -0.02em; line-height: 1.2;">{header_text}</h2>
+            <p style="font-size: 8px; color: #94a3b8; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; margin: 3px 0 0 0;">{sub_header_text}</p>
+            <p style="font-size: 9px; color: #64748b; font-weight: 600; margin: 6px 0 0 0; line-height: 1.3; max-w: 240px;">{address}</p>
+            <p style="font-size: 8px; color: #94a3b8; font-weight: 600; margin: 4px 0 0 0;">Phone: {contact_phone} &middot; Email: {contact_email}</p>
+            {gst_section}
+        </div>
+        <div style="text-align: right; flex-shrink: 0;">
+            <p style="font-size: 10px; font-family: monospace; font-weight: 700; color: #1e293b; background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 6px 10px; border-radius: 8px; display: inline-block; margin: 0; line-height: 1;">
+                {exchange.exchange_number}
+            </p>
+            <p style="font-size: 9px; color: #94a3b8; font-weight: 700; margin: 6px 0 0 0;">
+                Date: {date_str}
+            </p>
+        </div>
+    </div>
+
+    <!-- Customer Details -->
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; border-bottom: 1px solid #e2e8f0; padding: 16px 0;">
+        <div>
+            <h3 style="font-size: 8px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 6px 0;">
+                Customer Details
+            </h3>
+            <div style="font-size: 10px; font-weight: 600; color: #475569; line-height: 1.4;">
+                <p style="font-weight: 700; color: #0f172a; font-size: 11px; margin: 0 0 2px 0;">{cust_name}</p>
+                <p style="margin: 0 0 2px 0;">Phone: {cust_phone}</p>
+                {f'<p style="margin: 0 0 2px 0;">Email: {cust_email}</p>' if cust_email else ''}
+                <p style="margin: 0;">Address: {cust_address}</p>
+            </div>
+        </div>
+        <div style="text-align: right; display: flex; flex-direction: column; align-items: flex-end;">
+            <h3 style="font-size: 8px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 6px 0; width: 100%;">
+                Exchange Reference
+            </h3>
+            <div style="font-size: 10px; font-weight: 600; color: #475569; line-height: 1.4; width: 100%;">
+                <p style="margin: 0 0 2px 0;">Original Invoice: <span style="font-weight: 700; color: #0f172a;">{orig_invoice}</span></p>
+                <p style="margin: 0 0 2px 0;">Replacement Invoice: <span style="font-weight: 700; color: #0f172a;">{new_sale.invoice_number if new_sale else '—'}</span></p>
+                <p style="margin: 0;">Status: <span style="background-color: {theme_color}10; color: {theme_color}; border: 1px solid {theme_color}30; padding: 2px 6px; border-radius: 4px; font-size: 8px; font-weight: 800; display: inline-block;">{exchange.status.value}</span></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Original Returned Item Panel -->
+    <div style="background-color: #fef2f2; border: 1px solid #fee2e2; border-radius: 12px; padding: 12px; margin-top: 16px;">
+        <h3 style="font-size: 8px; font-weight: 800; color: #ef4444; text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 6px 0; display: flex; align-items: center; gap: 4px;">
+            <span style="width: 6px; height: 6px; border-radius: 50%; background-color: #ef4444; display: inline-block;"></span> Returned Item (From Original Purchase)
+        </h3>
+        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 10px; font-weight: 600; color: #475569;">
+            <div>
+                <p style="font-weight: 700; color: #0f172a; margin: 0;">{orig_prod_name}</p>
+                <p style="font-size: 8px; color: #94a3b8; margin: 2px 0 0 0;">SKU: {orig_prod_sku}</p>
+            </div>
+            <div style="text-align: right;">
+                <p style="font-size: 8px; color: #94a3b8; margin: 0 0 2px 0;">Exchange Credit Value</p>
+                <p style="font-family: monospace; font-weight: 800; color: #ef4444; margin: 0; font-size: 11px;">₹{orig_value:,.2f}</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Replacement Items Particulars -->
+    <div style="padding-top: 16px;">
+        <h3 style="font-size: 8px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 8px 0;">Replacement Items Particulars</h3>
+        <div style="border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 10px;">
+                <thead>
+                    <tr style="background-color: #f8fafc; border-bottom: 1px solid #e2e8f0; color: #64748b; font-weight: 700; text-transform: uppercase; font-size: 8px;">
+                        <th style="padding: 8px 12px; text-align: left;">Product Description</th>
+                        <th style="padding: 8px 12px; text-align: center; width: 40px;">Qty</th>
+                        <th style="padding: 8px 12px; text-align: right; width: 80px;">Price</th>
+                        <th style="padding: 8px 12px; text-align: right; width: 80px;">Total</th>
+                    </tr>
+                </thead>
+                <tbody style="color: #334155;">
+                    {item_rows}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Totals -->
+    <div style="display: flex; justify-content: flex-end; margin-top: 16px;">
+        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 4px; width: 100%; max-width: 240px; font-size: 10px; font-weight: 600; box-sizing: border-box;">
+            <div style="display: flex; justify-content: space-between; align-items: center; color: #64748b; margin-bottom: 4px;">
+                <span>New Items Subtotal</span>
+                <span style="font-family: monospace; font-weight: 700;">₹{exchange.new_items_total:,.2f}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; color: #ef4444; margin-bottom: 4px;">
+                <span>Exchange Credit</span>
+                <span style="font-family: monospace; font-weight: 700;">- ₹{exchange.exchange_credit:,.2f}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; color: #0f172a; font-weight: 800; border-top: 1px solid #e2e8f0; padding-top: 6px; margin-top: 2px;">
+                <span>Additional Paid</span>
+                <span style="font-family: monospace; font-size: 11px; font-weight: 900; color: #0f172a;">₹{exchange.additional_payment:,.2f}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; color: #10b981; font-weight: 800;">
+                <span>Amount Paid</span>
+                <span style="font-family: monospace; font-weight: 700;">₹{exchange.additional_payment:,.2f}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; color: #64748b; font-weight: 800;">
+                <span>Balance Due</span>
+                <span style="font-family: monospace; font-weight: 700;">₹0.00</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <div style="text-align: center; font-size: 8px; font-weight: 700; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 12px; margin-top: 16px; font-style: italic; letter-spacing: 0.02em;">
+        {footer_text}
+    </div>
+</div>
+"""
+    return html
+
+
 async def update_bill_for_sale(db: AsyncSession, sale_id: int) -> Bill:
     stmt = (
         select(Sale)

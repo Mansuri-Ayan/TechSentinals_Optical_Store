@@ -8,6 +8,7 @@ supporting Manager, Worker, and Optician roles.
 import enum
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     Column,
     Date,
     DateTime,
@@ -214,6 +215,14 @@ class Sale(Base):
         comment="Expected delivery date from lab",
     )
 
+    is_exchanged = Column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="FALSE",
+        comment="Indicates if any items from this sale have been exchanged",
+    )
+
     created_at = Column(
         DateTime(timezone=True),
         nullable=False,
@@ -275,6 +284,13 @@ class Sale(Base):
     lab = relationship(
         "Lab",
         back_populates="lab_orders",
+        lazy="selectin",
+    )
+    exchange_record = relationship(
+        "Exchange",
+        primaryjoin="Sale.id == Exchange.new_sale_id",
+        uselist=False,
+        viewonly=True,
         lazy="selectin",
     )
     # NOTE: loyalty_transactions relationship will be added

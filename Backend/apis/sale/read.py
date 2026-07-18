@@ -131,9 +131,11 @@ def _sale_to_read(sale, include_nested: bool = True, staff_map: dict = None) -> 
 
     sale_data = {c.key: getattr(sale, c.key) for c in sale.__table__.columns}
     sale_data["status"] = status_display
+    is_exchange_sale = getattr(sale, "exchange_record", None) is not None
 
     return SaleRead(
         **sale_data,
+        is_exchange_sale=is_exchange_sale,
         items=items,
         payments=payments,
         store_name=sale.store.store_name if sale.store else None,

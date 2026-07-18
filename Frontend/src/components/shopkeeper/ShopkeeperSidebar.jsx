@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { LayoutDashboard, LogOut, Glasses, X, Users, Store, Package, ShoppingCart, ChevronLeft, ChevronRight, Wrench, BarChart3, Tag, Layers, Award, ArrowRightLeft, Clock, Warehouse, FileText, Receipt } from 'lucide-react';
+import { LayoutDashboard, LogOut, Glasses, X, Users, Store, Package, ShoppingCart, ChevronLeft, ChevronRight, Wrench, BarChart3, Tag, Layers, Award, ArrowRightLeft, Clock, Warehouse, FileText, Receipt, RefreshCw, Beaker } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { useAuthStore, useStoreStore } from '../../store/store';
 import { useHasPermission } from '../../hooks/usePermissions';
@@ -95,6 +95,8 @@ const ShopkeeperSidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) =
   const hasExpensesRead = useHasPermission('expenses:read');
   const hasRepairsRead = useHasPermission('repairs:read');
   const hasBillSettingsRead = useHasPermission('bill_settings:read');
+  const hasExchangesRead = useHasPermission('exchanges:read');
+  const hasLabsRead = useHasPermission('labs:read');
 
   return (
     <>
@@ -380,6 +382,40 @@ const ShopkeeperSidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) =
                 {!isCollapsed && <span className="font-medium text-sm truncate animate-fade-in">Orders</span>}
               </NavLink>
             </>
+          )}
+
+          {hasExchangesRead && (
+            <NavLink
+              to="/shopkeeper/exchanges"
+              title={isCollapsed ? "Exchanges" : undefined}
+              className={({ isActive }) => {
+                const isExchangesActive = isActive || location.pathname.startsWith('/shopkeeper/exchanges');
+                return `flex items-center ${isCollapsed ? 'justify-center px-0' : 'px-4'} py-2.5 rounded-xl transition-all duration-200 group ${isExchangesActive
+                  ? 'bg-emerald-500/10 text-emerald-400 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_0_10px_rgba(16,185,129,0.1)] border border-emerald-500/20'
+                  : 'text-slate-400 hover:bg-white/5 hover:text-slate-205 border border-transparent'
+                }`;
+              }}
+            >
+              <RefreshCw className={`w-5 h-5 transition-transform group-hover:rotate-180 duration-500 flex-shrink-0 ${isCollapsed ? '' : 'mr-3'}`} />
+              {!isCollapsed && <span className="font-medium text-sm truncate animate-fade-in">Exchanges</span>}
+            </NavLink>
+          )}
+
+          {hasLabsRead && (
+            <NavLink
+              to="/shopkeeper/labs"
+              title={isCollapsed ? "Labs" : undefined}
+              className={({ isActive }) => {
+                const isLabsActive = isActive || location.pathname.startsWith('/shopkeeper/labs');
+                return `flex items-center ${isCollapsed ? 'justify-center px-0' : 'px-4'} py-2.5 rounded-xl transition-all duration-200 group ${isLabsActive
+                  ? 'bg-emerald-500/10 text-emerald-400 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_0_10px_rgba(16,185,129,0.1)] border border-emerald-500/20'
+                  : 'text-slate-400 hover:bg-white/5 hover:text-slate-205 border border-transparent'
+                }`;
+              }}
+            >
+              <Beaker className={`w-5 h-5 transition-transform group-hover:scale-110 flex-shrink-0 ${isCollapsed ? '' : 'mr-3'}`} />
+              {!isCollapsed && <span className="font-medium text-sm truncate animate-fade-in">Labs</span>}
+            </NavLink>
           )}
 
           {hasTransactionsRead && (

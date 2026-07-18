@@ -352,7 +352,16 @@ const LabOrders = () => {
                     {activeTab === 'pending' ? (
                       // Lab columns
                       <>
-                        <td className="px-5 py-4 text-xs font-mono font-bold text-slate-700 whitespace-nowrap">{order.orderId}</td>
+                        <td className="px-5 py-4 text-xs font-mono font-bold text-slate-700 whitespace-nowrap">
+                          <div className="flex flex-col gap-0.5">
+                            <span>{order.orderId}</span>
+                            {order.is_exchange_sale && (
+                              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[8px] font-extrabold text-blue-700 bg-blue-50 border border-blue-200 uppercase tracking-wider self-start">
+                                Exchange
+                              </span>
+                            )}
+                          </div>
+                        </td>
                         <td className="px-5 py-4 font-bold text-slate-900">{order.customerName}</td>
                         <td className="px-5 py-4 font-medium text-slate-600 max-w-[150px] truncate">{order.productName}</td>
                         <td className="px-5 py-4 font-semibold text-slate-700">{order.labName || '—'}</td>
@@ -365,7 +374,16 @@ const LabOrders = () => {
                     ) : (
                       // Queue and Ready columns
                       <>
-                        <td className="px-5 py-4 text-xs font-mono font-bold text-slate-700 whitespace-nowrap">{order.orderId}</td>
+                        <td className="px-5 py-4 text-xs font-mono font-bold text-slate-700 whitespace-nowrap">
+                          <div className="flex flex-col gap-0.5">
+                            <span>{order.orderId}</span>
+                            {order.is_exchange_sale && (
+                              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[8px] font-extrabold text-blue-700 bg-blue-50 border border-blue-200 uppercase tracking-wider self-start">
+                                Exchange
+                              </span>
+                            )}
+                          </div>
+                        </td>
                         <td className="px-5 py-4 font-bold text-slate-900">{order.customerName}</td>
                         <td className="px-5 py-4 text-xs font-semibold text-slate-500 whitespace-nowrap">{order.customerPhone}</td>
                         <td className="px-5 py-4 font-medium text-slate-600 max-w-[150px] truncate">{order.productName}</td>
@@ -395,7 +413,14 @@ const LabOrders = () => {
               >
                 <div className="flex justify-between items-start">
                   <div>
-                    <span className="text-[10px] font-mono font-bold text-slate-400">{order.orderId}</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] font-mono font-bold text-slate-400">{order.orderId}</span>
+                      {order.is_exchange_sale && (
+                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[8px] font-extrabold text-blue-700 bg-blue-50 border border-blue-200 uppercase tracking-wider">
+                          Exchange
+                        </span>
+                      )}
+                    </div>
                     <h3 className="font-bold text-slate-950 text-sm mt-0.5">{order.customerName}</h3>
                   </div>
                   <StatusBadge status={order.status} />

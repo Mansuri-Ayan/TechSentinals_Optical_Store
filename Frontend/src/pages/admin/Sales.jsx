@@ -289,12 +289,12 @@ const Sales = () => {
         <div className="space-y-4">
           
           {/* Desktop Table View */}
-          <div className="hidden lg:block border border-slate-100 rounded-2xl overflow-hidden shadow-sm bg-white">
-            <table className="w-full text-sm">
+          <div className="hidden lg:block border border-slate-100 rounded-2xl shadow-sm bg-white overflow-x-auto">
+            <table className="w-full text-sm min-w-[900px]">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-100">
-                  {['Order ID', 'Customer Name', 'Product Name', 'Branch', 'Staff', 'Order Date', 'Amount', 'Status', 'Actions'].map(col => (
-                    <th key={col} className={`px-5 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap ${col === 'Actions' ? 'text-right' : 'text-left'}`}>
+                  {['Order ID', 'Customer', 'Product', 'Branch', 'Staff', 'Date', 'Amount', 'Status', ''].map(col => (
+                    <th key={col} className={`px-3 py-3 text-[11px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap ${col === '' ? 'text-right w-12' : 'text-left'}`}>
                       {col}
                     </th>
                   ))}
@@ -307,27 +307,39 @@ const Sales = () => {
                     onClick={() => setSelectedSale(sale)}
                     className="hover:bg-blue-50/40 transition-colors cursor-pointer"
                   >
-                    <td className="px-5 py-4 text-xs font-mono font-bold text-slate-700 whitespace-nowrap">{sale.orderId}</td>
-                    <td className="px-5 py-4 font-bold text-slate-900">{sale.customerName}</td>
-                    <td className="px-5 py-4 font-medium text-slate-600 max-w-[200px] truncate">{sale.productName || '—'}</td>
-                    <td className="px-5 py-4 text-xs font-semibold text-slate-500 whitespace-nowrap">
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-50 border border-slate-100 rounded-lg">
-                        <Store className="w-3.5 h-3.5 text-slate-400" />
+                    <td className="px-3 py-3 text-[11px] font-mono font-bold text-slate-700 whitespace-nowrap">{sale.orderId}</td>
+                    <td className="px-3 py-3 text-xs font-bold text-slate-900 max-w-[140px] truncate">{sale.customerName}</td>
+                    <td className="px-3 py-3 text-xs font-medium text-slate-600 max-w-[160px] truncate">{sale.productName || '—'}</td>
+                    <td className="px-3 py-3 whitespace-nowrap">
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-slate-50 border border-slate-100 rounded text-[10px] font-semibold text-slate-500">
+                        <Store className="w-3 h-3 text-slate-400" />
                         {sale.branchName || '—'}
                       </span>
                     </td>
-                    <td className="px-5 py-4 text-xs font-semibold text-slate-600 whitespace-nowrap">
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-50 border border-slate-100 rounded-lg">
-                        <Users className="w-3.5 h-3.5 text-slate-400" />
+                    <td className="px-3 py-3 whitespace-nowrap">
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-slate-50 border border-slate-100 rounded text-[10px] font-semibold text-slate-600">
+                        <Users className="w-3 h-3 text-slate-400" />
                         {sale.staffName || '—'}
                       </span>
                     </td>
-                    <td className="px-5 py-4 text-xs font-semibold text-slate-500 whitespace-nowrap">{fmtDate(sale.orderDate)}</td>
-                    <td className="px-5 py-4 text-sm font-black text-slate-900">{fmt(sale.total_amount)}</td>
-                    <td className="px-5 py-4">
-                      <StatusBadge status={sale.status} />
+                    <td className="px-3 py-3 text-[11px] font-semibold text-slate-500 whitespace-nowrap">{fmtDate(sale.orderDate)}</td>
+                    <td className="px-3 py-3 text-xs font-black text-slate-900 whitespace-nowrap">{fmt(sale.total_amount)}</td>
+                    <td className="px-3 py-3">
+                      <div className="flex flex-col gap-0.5 items-start">
+                        <StatusBadge status={sale.status} />
+                        {sale.is_exchanged && (
+                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[8px] font-extrabold text-orange-700 bg-orange-50 border border-orange-200 uppercase tracking-wider">
+                            Exchanged
+                          </span>
+                        )}
+                        {sale.is_exchange_sale && (
+                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[8px] font-extrabold text-blue-700 bg-blue-50 border border-blue-200 uppercase tracking-wider">
+                            Exchange
+                          </span>
+                        )}
+                      </div>
                     </td>
-                    <td className="px-5 py-4 text-right">
+                    <td className="px-3 py-3 text-right">
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -358,7 +370,7 @@ const Sales = () => {
                     <span className="text-[10px] font-mono font-bold text-slate-400">{sale.orderId}</span>
                     <h3 className="font-bold text-slate-950 text-sm mt-0.5">{sale.customerName}</h3>
                   </div>
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1.5 flex-wrap justify-end">
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -370,6 +382,16 @@ const Sales = () => {
                       <Printer className="w-3.5 h-3.5" />
                     </button>
                     <StatusBadge status={sale.status} />
+                    {sale.is_exchanged && (
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-extrabold text-orange-700 bg-orange-55 border border-orange-200 uppercase tracking-wider">
+                        Exchanged
+                      </span>
+                    )}
+                    {sale.is_exchange_sale && (
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-extrabold text-blue-700 bg-blue-55 border border-blue-200 uppercase tracking-wider">
+                        Exchange
+                      </span>
+                    )}
                   </div>
                 </div>
                 

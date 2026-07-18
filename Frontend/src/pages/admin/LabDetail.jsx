@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useRoleContext } from '../../hooks/useRoleContext';
 import { 
   ArrowLeft, Beaker, Phone, Mail, Calendar, ChevronRight, 
   Package, Search, X, Loader2, RefreshCw
@@ -15,7 +16,8 @@ import { toast } from 'react-toastify';
 const ITEMS_PER_PAGE = 6;
 
 const LabDetail = () => {
-  const { id, storeId } = useParams();
+  const { id } = useParams();
+  const { storeId, buildPath, isPathAdmin } = useRoleContext();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
@@ -97,7 +99,7 @@ const LabDetail = () => {
       {/* Breadcrumb + Back Action */}
       <div className="mb-6">
         <div className="flex items-center text-sm text-slate-500 font-medium mb-4 space-x-2">
-          <Link to="/admin/stores" className="hover:text-slate-800 transition-colors">Dashboard</Link>
+          <Link to={buildPath('dashboard')} className="hover:text-slate-800 transition-colors">Dashboard</Link>
           <ChevronRight className="w-4 h-4" />
           <button onClick={() => navigate(-1)} className="hover:text-slate-800 transition-colors">Labs</button>
           <ChevronRight className="w-4 h-4" />

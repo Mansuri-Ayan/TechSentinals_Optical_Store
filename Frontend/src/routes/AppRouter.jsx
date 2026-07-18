@@ -30,6 +30,7 @@ import StaffDetail from "../pages/admin/StaffDetail";
 import BillTemplate from "../pages/admin/BillTemplate";
 import Permissions from "../pages/admin/Permissions";
 import PermissionRoute from "../components/shared/PermissionRoute";
+import Exchanges from "../pages/admin/Exchanges";
 
 // Shopkeeper imports
 import ShopKeeperLayout from "../layouts/ShopKeeperLayout";
@@ -287,6 +288,8 @@ function AppRouter() {
           element={<SupplierDetail />}
         />
         <Route path="sales" element={<Sales />} />
+        <Route path="exchanges" element={<StoreRouteRedirect path="exchanges" />} />
+        <Route path="store/:storeId/exchanges" element={<Exchanges />} />
         <Route
           path="lab-orders"
           element={<StoreRouteRedirect path="lab-orders" />}
@@ -350,6 +353,7 @@ function AppRouter() {
         <Route path="customers/:customerId" element={<PermissionRoute permission="customers:read"><AdminCustomerDetail /></PermissionRoute>} />
         <Route path="inventory" element={<PermissionRoute permission="inventory:read"><Inventory /></PermissionRoute>} />
         <Route path="sales" element={<PermissionRoute permission="sales:read"><Sales /></PermissionRoute>} />
+        <Route path="exchanges" element={<PermissionRoute permission="exchanges:read"><Exchanges /></PermissionRoute>} />
         <Route path="bill-template" element={<PermissionRoute permission="bill_settings:read"><BillTemplate /></PermissionRoute>} />
         <Route path="lab-orders" element={<PermissionRoute permission="prescriptions:read"><LabOrders /></PermissionRoute>} />
         <Route path="staff" element={<PermissionRoute permission="workers:read"><Staff /></PermissionRoute>} />
@@ -363,6 +367,8 @@ function AppRouter() {
         <Route path="warehouse" element={<PermissionRoute permission="inventory:read"><Warehouse /></PermissionRoute>} />
         <Route path="suppliers" element={<PermissionRoute permission="suppliers:read"><Suppliers /></PermissionRoute>} />
         <Route path="suppliers/:id" element={<PermissionRoute permission="suppliers:read"><SupplierDetail /></PermissionRoute>} />
+        <Route path="labs" element={<PermissionRoute permission="labs:read"><Labs /></PermissionRoute>} />
+        <Route path="labs/:id" element={<PermissionRoute permission="labs:read"><LabDetail /></PermissionRoute>} />
       </Route>
 
       {/* Accountant Routes */}

@@ -480,10 +480,17 @@ const InventoryDetailDrawer = ({ item, onClose, onEdit, onApprove, onReject, isA
 
             {/* Status strip */}
             <div className="px-5 py-3 bg-white border-b border-slate-100 flex-shrink-0 flex items-center justify-between">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border border-emerald-250 text-emerald-700 bg-emerald-50">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                {item.status}
-              </span>
+              <div className="flex flex-col gap-1 items-start">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border border-emerald-250 text-emerald-700 bg-emerald-50">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                  {item.status}
+                </span>
+                {item.is_exchange_sale && (
+                  <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[8px] font-extrabold text-blue-700 bg-blue-50 border border-blue-200 uppercase tracking-wider">
+                    Exchange
+                  </span>
+                )}
+              </div>
               <span className="text-xs text-slate-400 font-semibold">Order Date: {fmtDate(item.orderDate)}</span>
             </div>
 
@@ -1046,20 +1053,27 @@ const InventoryDetailDrawer = ({ item, onClose, onEdit, onApprove, onReject, isA
           {/* Status badge strip (only for Details tab) */}
           {activeTab === 'details' && (
             <div className="px-5 py-3 bg-white border-b border-slate-100 flex-shrink-0 flex items-center justify-between no-print animate-fade-in">
-              <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${
-                item.status === 'Completed' ? 'text-emerald-700 bg-emerald-50 border-emerald-200' :
-                item.status === 'Cancelled' ? 'text-slate-600 bg-slate-100 border-slate-200' :
-                item.status === 'Returned'  ? 'text-red-700 bg-red-50 border-red-200' :
-                'text-amber-700 bg-amber-50 border-amber-200'
-              }`}>
-                <span className={`w-1.5 h-1.5 rounded-full ${
-                  item.status === 'Completed' ? 'bg-emerald-500' :
-                  item.status === 'Cancelled' ? 'bg-slate-400' :
-                  item.status === 'Returned'  ? 'bg-red-500' :
-                  'bg-amber-500'
-                }`} />
-                {item.status}
-              </span>
+              <div className="flex flex-col gap-1 items-start">
+                <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${
+                  item.status === 'Completed' ? 'text-emerald-700 bg-emerald-50 border-emerald-200' :
+                  item.status === 'Cancelled' ? 'text-slate-600 bg-slate-100 border-slate-200' :
+                  item.status === 'Returned'  ? 'text-red-700 bg-red-50 border-red-200' :
+                  'text-amber-700 bg-amber-50 border-amber-200'
+                }`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${
+                    item.status === 'Completed' ? 'bg-emerald-500' :
+                    item.status === 'Cancelled' ? 'bg-slate-400' :
+                    item.status === 'Returned'  ? 'bg-red-500' :
+                    'bg-amber-500'
+                  }`} />
+                  {item.status}
+                </span>
+                {item.is_exchange_sale && (
+                  <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[8px] font-extrabold text-blue-700 bg-blue-50 border border-blue-200 uppercase tracking-wider">
+                    Exchange
+                  </span>
+                )}
+              </div>
               <span className="text-xs text-slate-400 font-semibold">Order Date: {item.orderDate}</span>
             </div>
           )}

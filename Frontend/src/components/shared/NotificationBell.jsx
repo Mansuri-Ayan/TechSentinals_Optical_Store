@@ -20,10 +20,23 @@ const timeAgo = (dateString) => {
 
 export default function NotificationBell({ role = 'admin' }) {
   const [isOpen, setIsOpen] = useState(false);
+  const [isVisible, setIsVisible] = useState(true);
   const dropdownRef = useRef(null);
   const navigate = useNavigate();
   const { selectedStore } = useStoreStore();
   const { notifications, unreadCount, markReadAsync, markAllReadAsync } = useNotifications();
+
+  // Handle visibility events
+  useEffect(() => {
+    const handleHide = () => setIsVisible(false);
+    const handleShow = () => setIsVisible(true);
+    window.addEventListener('hide-notification-bell', handleHide);
+    window.addEventListener('show-notification-bell', handleShow);
+    return () => {
+      window.removeEventListener('hide-notification-bell', handleHide);
+      window.removeEventListener('show-notification-bell', handleShow);
+    };
+  }, []);
 
   // Close dropdown if clicked outside
   useEffect(() => {
@@ -34,6 +47,13 @@ export default function NotificationBell({ role = 'admin' }) {
     }
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Close dropdown if right sidebar or details drawer opens
+  useEffect(() => {
+    const handleClose = () => setIsOpen(false);
+    window.addEventListener('close-notifications', handleClose);
+    return () => window.removeEventListener('close-notifications', handleClose);
   }, []);
 
   const handleNotificationClick = async (notif) => {
@@ -61,6 +81,8 @@ export default function NotificationBell({ role = 'admin' }) {
       }
     }
   };
+
+  if (!isVisible) return null;
 
   return (
     <div className="relative" ref={dropdownRef}>

@@ -1,7 +1,7 @@
 # API: lab/update.py
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from core.deps import get_current_admin
+from core.deps import require_permission, get_user_admin_id
 from db.session import get_db
 from models.admin import Admin
 from schemas.lab import LabUpdate, LabRead
@@ -19,10 +19,11 @@ async def update_lab_endpoint(
     lab_id: int,
     payload: LabUpdate,
     db: AsyncSession = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin),
+    current_user = Depends(require_permission("labs", "update")),
 ) -> LabRead:
+    admin_id = get_user_admin_id(current_user)
     lab = await get_lab(db, lab_id)
-    if lab is None or lab.admin_id != current_admin.id:
+    if lab is None or lab.admin_id != admin_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Lab partner not found",

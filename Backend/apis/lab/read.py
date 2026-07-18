@@ -22,7 +22,7 @@ async def list_labs(
     limit: int = Query(10, ge=1, le=100),
     paginate: bool = Query(True),
     db: AsyncSession = Depends(get_db),
-    current_user = Depends(require_permission("sales:read", "sales:create", "sales:update", "inventory:create", "inventory:update")),
+    current_user = Depends(require_permission("labs", "read")),
 ):
     if isinstance(current_user, Admin):
         admin_id = current_user.id
@@ -63,7 +63,7 @@ async def list_labs(
 async def get_lab_endpoint(
     lab_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user = Depends(require_permission("sales:read", "sales:create", "sales:update")),
+    current_user = Depends(require_permission("labs", "read")),
 ) -> LabRead:
     if isinstance(current_user, Admin):
         admin_id = current_user.id
@@ -103,7 +103,7 @@ async def get_lab_orders_endpoint(
     page: int = Query(1, ge=1),
     limit: int = Query(10, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
-    current_user = Depends(require_permission("sales:read", "sales:create", "sales:update")),
+    current_user = Depends(require_permission("labs", "read")),
 ) -> LabOrdersResponse:
     if isinstance(current_user, Admin):
         admin_id = current_user.id

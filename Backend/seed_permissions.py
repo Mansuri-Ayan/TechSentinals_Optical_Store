@@ -137,6 +137,16 @@ PERMISSION_CATALOG = [
     # ── Notifications ─────────────────────────────────────────
     ("notifications", "read", "View notifications", False),
     ("notifications", "manage", "Manage notifications", False),
+    # ── Exchanges ─────────────────────────────────────────────
+    ("exchanges", "create", "Create exchanges", False),
+    ("exchanges", "read", "View exchanges", False),
+    ("exchanges", "update", "Update exchanges", False),
+    ("exchanges", "delete", "Cancel exchanges", True),
+    # ── Labs ──────────────────────────────────────────────────
+    ("labs", "create", "Create labs", False),
+    ("labs", "read", "View labs", False),
+    ("labs", "update", "Update labs", False),
+    ("labs", "delete", "Delete labs", True),
 ]
 
 

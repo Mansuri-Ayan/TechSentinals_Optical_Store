@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useRoleContext } from '../../hooks/useRoleContext';
 import { 
   Search, Plus, Beaker, ChevronRight, Edit2, Trash2, Loader2, Info,
   Users, UserCheck, UserMinus
@@ -15,7 +16,7 @@ import { useLabs } from '../../hooks/useLabs';
 const ITEMS_PER_PAGE = 8;
 
 const Labs = () => {
-  const { storeId } = useParams();
+  const { storeId, buildPath, isPathAdmin } = useRoleContext();
   const { stores } = useStoreStore();
   const navigate = useNavigate();
 
@@ -101,8 +102,8 @@ const Labs = () => {
   }, []);
 
   const handleRowClick = useCallback((row) => {
-    navigate(storeId ? `/admin/store/${storeId}/labs/${row.id}` : `/admin/labs/${row.id}`);
-  }, [navigate, storeId]);
+    navigate(isPathAdmin ? (storeId && storeId !== 'admin' ? `/admin/store/${storeId}/labs/${row.id}` : `/admin/labs/${row.id}`) : `/shopkeeper/labs/${row.id}`);
+  }, [navigate, storeId, isPathAdmin]);
 
   // Columns definition for DataTable component
   const columns = useMemo(() => [
@@ -211,7 +212,7 @@ const Labs = () => {
       {/* Breadcrumb + Header */}
       <div className="mb-6 sm:mb-8">
         <div className="flex items-center text-sm text-slate-500 font-medium mb-3 space-x-2">
-          <Link to="/admin/dashboard" className="hover:text-slate-800 transition-colors">Dashboard</Link>
+          <Link to={buildPath('dashboard')} className="hover:text-slate-800 transition-colors">Dashboard</Link>
           <ChevronRight className="w-4 h-4 flex-shrink-0" />
           <span className="text-slate-900 font-semibold">Labs</span>
         </div>

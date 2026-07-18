@@ -1,7 +1,7 @@
 # API: lab/create.py
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from core.deps import get_current_admin
+from core.deps import require_permission, get_user_admin_id
 from db.session import get_db
 from models.admin import Admin
 from schemas.lab import LabCreate, LabRead
@@ -19,7 +19,8 @@ router = APIRouter()
 async def create_lab_endpoint(
     payload: LabCreate,
     db: AsyncSession = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin),
+    current_user = Depends(require_permission("labs", "create")),
 ) -> LabRead:
-    lab = await create_lab(db, admin_id=current_admin.id, payload=payload)
+    admin_id = get_user_admin_id(current_user)
+    lab = await create_lab(db, admin_id=admin_id, payload=payload)
     return LabRead.model_validate(lab)

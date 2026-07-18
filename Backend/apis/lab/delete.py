@@ -1,7 +1,7 @@
 # API: lab/delete.py
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from core.deps import get_current_admin
+from core.deps import require_permission, get_user_admin_id
 from db.session import get_db
 from models.admin import Admin
 from services.lab_service import get_lab, delete_lab
@@ -17,10 +17,11 @@ router = APIRouter()
 async def delete_lab_endpoint(
     lab_id: int,
     db: AsyncSession = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin),
+    current_user = Depends(require_permission("labs", "delete")),
 ):
+    admin_id = get_user_admin_id(current_user)
     lab = await get_lab(db, lab_id)
-    if lab is None or lab.admin_id != current_admin.id:
+    if lab is None or lab.admin_id != admin_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Lab partner not found",

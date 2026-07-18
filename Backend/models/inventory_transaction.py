@@ -27,6 +27,8 @@ class TransactionType(str, enum.Enum):
     LOSS = "LOSS"
     AUDIT_ADJUSTMENT = "AUDIT_ADJUSTMENT"
     RETURN = "RETURN"
+    EXCHANGE_IN = "EXCHANGE_IN"
+    EXCHANGE_OUT = "EXCHANGE_OUT"
 
 
 class TransactionStatus(str, enum.Enum):

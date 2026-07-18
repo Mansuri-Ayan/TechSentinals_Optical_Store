@@ -33,6 +33,8 @@ const TRANSACTION_TYPES = [
   { value: 'Return', icon: RotateCcw, color: 'text-amber-600 bg-amber-50 border-amber-200' },
   { value: 'Damage', icon: Trash2, color: 'text-red-600 bg-red-50 border-red-200' },
   { value: 'Loss', icon: Trash2, color: 'text-rose-600 bg-rose-50 border-rose-200' },
+  { value: 'Exchange Return', icon: RotateCcw, color: 'text-teal-600 bg-teal-50 border-teal-200' },
+  { value: 'Exchange Issue', icon: RefreshCw, color: 'text-sky-600 bg-sky-50 border-sky-200' },
 ];
 
 const STATUS_CONFIG = {
@@ -671,7 +673,9 @@ const Transactions = () => {
              tx.transaction_type === 'STORE_TRANSFER_IN' || 
              tx.transaction_type === 'TRANSFER')
               ? 'Inventory Transfer'
-              : tx.transaction_type.charAt(0).toUpperCase() + tx.transaction_type.slice(1).toLowerCase(),
+              : tx.transaction_type === 'EXCHANGE_IN' ? 'Exchange Return' :
+                tx.transaction_type === 'EXCHANGE_OUT' ? 'Exchange Issue' :
+                tx.transaction_type.charAt(0).toUpperCase() + tx.transaction_type.slice(1).toLowerCase(),
       status: tx.status === 'COMPLETED' ? 'Completed' :
               tx.status === 'APPROVED' ? 'Approved' :
               tx.status === 'PENDING' ? 'Pending' :

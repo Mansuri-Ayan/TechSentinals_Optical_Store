@@ -213,6 +213,8 @@ class SaleRead(BaseModel):
     lab_name: str | None = None
     sent_to_lab_date: date | None = None
     expected_delivery_date: date | None = None
+    is_exchanged: bool = False
+    is_exchange_sale: bool = False
     created_at: datetime
     updated_at: datetime
 
