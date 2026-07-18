@@ -30,8 +30,34 @@ def upgrade() -> None:
     sa.ForeignKeyConstraint(['sale_id'], ['sales.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id')
     )
+    
+    op.create_table('customer_links',
+    sa.Column('id', sa.BigInteger(), autoincrement=True, nullable=False),
+    sa.Column('admin_id', sa.BigInteger(), nullable=False),
+    sa.Column('store_id', sa.BigInteger(), nullable=False),
+    sa.Column('from_customer_id', sa.BigInteger(), nullable=False),
+    sa.Column('to_customer_id', sa.BigInteger(), nullable=False),
+    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+    sa.ForeignKeyConstraint(['admin_id'], ['admins.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['store_id'], ['stores.id'], ondelete='RESTRICT'),
+    sa.ForeignKeyConstraint(['from_customer_id'], ['customers.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['to_customer_id'], ['customers.id'], ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index('ix_customer_links_unique', 'customer_links', ['from_customer_id', 'to_customer_id'], unique=True)
+
     op.create_index(op.f('ix_bills_bill_number'), 'bills', ['bill_number'], unique=True)
     op.create_index(op.f('ix_bills_sale_id'), 'bills', ['sale_id'], unique=True)
+    
+    op.add_column('sales', sa.Column('billing_account_customer_id', sa.BigInteger(), nullable=True, comment='FK -> customers.id — the billing account holder. NULL means same as customer_id (normal sale). When set, sale shows in both customers histories.'))
+    op.add_column('sales', sa.Column('loyalty_awarded_to_customer_id', sa.BigInteger(), nullable=True, comment='FK -> customers.id — who receives loyalty points. NULL means points go to customer_id (the buyer). '))
+    op.add_column('sales', sa.Column('loyalty_redeemed_from_customer_id', sa.BigInteger(), nullable=True, comment='FK -> customers.id — whose points were redeemed. NULL means no redemption or same as customer_id.'))
+    op.create_index(op.f('ix_sales_billing_account_customer_id'), 'sales', ['billing_account_customer_id'], unique=False)
+    op.create_index(op.f('ix_sales_loyalty_awarded_to_customer_id'), 'sales', ['loyalty_awarded_to_customer_id'], unique=False)
+    op.create_index(op.f('ix_sales_loyalty_redeemed_from_customer_id'), 'sales', ['loyalty_redeemed_from_customer_id'], unique=False)
+    op.create_foreign_key('fk_sales_billing_account_customer_id', 'sales', 'customers', ['billing_account_customer_id'], ['id'], ondelete='SET NULL')
+    op.create_foreign_key('fk_sales_loyalty_awarded_to_customer_id', 'sales', 'customers', ['loyalty_awarded_to_customer_id'], ['id'], ondelete='SET NULL')
+    op.create_foreign_key('fk_sales_loyalty_redeemed_from_customer_id', 'sales', 'customers', ['loyalty_redeemed_from_customer_id'], ['id'], ondelete='SET NULL')
     # ### end Alembic commands ###
 
 
@@ -41,4 +67,17 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_bills_sale_id'), table_name='bills')
     op.drop_index(op.f('ix_bills_bill_number'), table_name='bills')
     op.drop_table('bills')
+    
+    op.drop_index('ix_customer_links_unique', table_name='customer_links')
+    op.drop_table('customer_links')
+
+    op.drop_constraint('fk_sales_loyalty_redeemed_from_customer_id', 'sales', type_='foreignkey')
+    op.drop_constraint('fk_sales_loyalty_awarded_to_customer_id', 'sales', type_='foreignkey')
+    op.drop_constraint('fk_sales_billing_account_customer_id', 'sales', type_='foreignkey')
+    op.drop_index(op.f('ix_sales_loyalty_redeemed_from_customer_id'), table_name='sales')
+    op.drop_index(op.f('ix_sales_loyalty_awarded_to_customer_id'), table_name='sales')
+    op.drop_index(op.f('ix_sales_billing_account_customer_id'), table_name='sales')
+    op.drop_column('sales', 'loyalty_redeemed_from_customer_id')
+    op.drop_column('sales', 'loyalty_awarded_to_customer_id')
+    op.drop_column('sales', 'billing_account_customer_id')
     # ### end Alembic commands ###

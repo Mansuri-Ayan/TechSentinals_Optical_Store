@@ -217,6 +217,7 @@ class Customer(Base):
     )
     sales = relationship(
         "Sale",
+        foreign_keys="[Sale.customer_id]",
         back_populates="customer",
         lazy="noload",
     )

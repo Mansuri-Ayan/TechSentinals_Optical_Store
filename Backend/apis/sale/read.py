@@ -45,6 +45,7 @@ def _sale_to_read(sale, include_nested: bool = True, staff_map: dict = None) -> 
     customer_name = "Walk-in Customer"
     customer_phone = "—"
     customer_address = "—"
+    
     if sale.customer:
         customer_name = f"{sale.customer.first_name} {sale.customer.last_name or ''}".strip()
         customer_phone = sale.customer.phone or "—"
@@ -133,6 +134,16 @@ def _sale_to_read(sale, include_nested: bool = True, staff_map: dict = None) -> 
     sale_data["status"] = status_display
     is_exchange_sale = getattr(sale, "exchange_record", None) is not None
 
+    def _cust_dict(c):
+        if not c: return None
+        return {
+            "id": c.id,
+            "name": f"{c.first_name} {c.last_name or ''}".strip(),
+            "phone": c.phone,
+            "email": c.email or None,
+            "address": ", ".join([p for p in [c.address, c.city] if p]) or None,
+        }
+
     return SaleRead(
         **sale_data,
         is_exchange_sale=is_exchange_sale,
@@ -145,13 +156,17 @@ def _sale_to_read(sale, include_nested: bool = True, staff_map: dict = None) -> 
         staff_name=staff_name,
         staff_code=staff_code,
         staff_role=staff_role,
+        prescriptionDetails=prescription_details,
+        lensDetails=lens_details,
         product_name=product_name,
         product_category=product_category,
         product_subcategory=product_subcategory,
         product_quantity=product_quantity,
         product_price=product_price,
-        prescriptionDetails=prescription_details,
-        lensDetails=lens_details,
+        billed_on_account_of=_cust_dict(getattr(sale, "billing_account_customer", None)),
+        bought_by=_cust_dict(sale.customer),
+        loyalty_awarded_to=_cust_dict(getattr(sale, "loyalty_awarded_to_customer", None)),
+        loyalty_redeemed_from=_cust_dict(getattr(sale, "loyalty_redeemed_from_customer", None)),
     )
 
 

@@ -178,6 +178,7 @@ class LoyaltyTierDistribution(BaseModel):
 class LoyaltyCalculatePreviewRequest(BaseModel):
     customer_id: int
     loyalty_redeem_customer_id: Optional[int] = None
+    loyalty_awarded_to_customer_id: Optional[int] = None
     sale_items: List[Dict]
     final_amount: Decimal
     points_to_redeem: int

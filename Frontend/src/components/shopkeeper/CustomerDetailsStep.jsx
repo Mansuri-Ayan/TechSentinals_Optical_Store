@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Search, User, Mail, Phone, MapPin, Calendar, ArrowLeft, ArrowRight, UserCheck, Edit3, UserPlus, ShoppingBag, Eye } from 'lucide-react';
+import { Search, User, Mail, Phone, MapPin, Calendar, ArrowLeft, ArrowRight, UserCheck, Edit3, UserPlus, ShoppingBag, Eye, Award } from 'lucide-react';
 import { getCustomersApi, getCustomerApi } from '../../api/customer/customer.api';
 import { useAuthStore, useStoreStore } from '../../store/store';
 
@@ -295,10 +295,27 @@ const CustomerDetailsStep = ({ formState, onSaveState, onBack, onNext }) => {
                   <ShoppingBag className="w-3.5 h-3.5" /> Previous Orders
                 </p>
                 {selectedResult.orders && selectedResult.orders.length > 0 ? (
-                  <p className="text-slate-700 font-semibold bg-slate-50 p-2 rounded-lg border border-slate-100">
+                  <div className="text-slate-700 font-semibold bg-slate-50 p-2 rounded-lg border border-slate-100">
                     Last Order: <span className="font-bold text-slate-800">{selectedResult.orders[0].id}</span> &middot;
                     ₹{selectedResult.orders[0].amount.toLocaleString('en-IN')} ({selectedResult.orders[0].status})
-                  </p>
+                    <div className="flex flex-wrap gap-1 mt-1.5">
+                      {selectedResult.orders[0].bought_by && (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-[4px] bg-blue-50 text-blue-600 text-[9px] font-bold border border-blue-100">
+                          <User className="w-2 h-2" /> Bought by {selectedResult.orders[0].bought_by}
+                        </span>
+                      )}
+                      {selectedResult.orders[0].billed_on_account_of && (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-[4px] bg-indigo-50 text-indigo-600 text-[9px] font-bold border border-indigo-100">
+                          <User className="w-2 h-2" /> Billed to {selectedResult.orders[0].billed_on_account_of}
+                        </span>
+                      )}
+                      {selectedResult.orders[0].loyalty_awarded_to && (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-[4px] bg-amber-50 text-amber-600 text-[9px] font-bold border border-amber-100">
+                          <Award className="w-2 h-2" /> Points to {selectedResult.orders[0].loyalty_awarded_to}
+                        </span>
+                      )}
+                    </div>
+                  </div>
                 ) : (
                   <p className="text-slate-455 italic">No previous orders</p>
                 )}

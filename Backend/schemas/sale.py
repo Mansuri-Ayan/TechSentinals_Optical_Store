@@ -137,9 +137,17 @@ class SaleCreate(BaseModel):
         default=None,
         description="FK → customers.id — NULL if new customer or walk-in",
     )
+    billing_account_customer_id: int | None = Field(
+        default=None,
+        description="FK → customers.id — The customer who should be billed (defaults to customer_id if NULL)",
+    )
+    loyalty_awarded_to_customer_id: int | None = Field(
+        default=None,
+        description="FK → customers.id — The customer who receives loyalty points (defaults to customer_id if NULL)",
+    )
     loyalty_redeem_customer_id: int | None = Field(
         default=None,
-        description="FK → customers.id — The customer from whom points are redeemed",
+        description="FK → customers.id — The customer from whom points are redeemed (defaults to customer_id if NULL)",
     )
     new_customer_details: Optional[NewCustomerDetails] = Field(
         default=None,
@@ -194,6 +202,9 @@ class SaleRead(BaseModel):
     admin_id: int
     store_id: int
     customer_id: int | None = None
+    billing_account_customer_id: int | None = None
+    loyalty_awarded_to_customer_id: int | None = None
+    loyalty_redeemed_from_customer_id: int | None = None
     sold_by_type: StaffTypeEnum
     sold_by_id: int
     sale_date: date
@@ -232,6 +243,12 @@ class SaleRead(BaseModel):
     staff_role: str | None = None
     prescriptionDetails: dict | None = None
     lensDetails: dict | None = None
+    
+    # Contextual multi-person info
+    billed_on_account_of: dict | None = None
+    bought_by: dict | None = None
+    loyalty_awarded_to: dict | None = None
+    loyalty_redeemed_from: dict | None = None
 
     # Product summary fields
     product_name: str | None = None

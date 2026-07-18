@@ -334,7 +334,7 @@ const LabOrders = () => {
                     ))
                   ) : (
                     // Queue & Ready headers
-                    ['Order ID', 'Customer Name', 'Mobile Number', 'Product Name', 'Store', 'Order Date', 'Total', 'Paid', 'Due', 'Status'].map(col => (
+                    ['Order ID', 'Customer Name', 'Mobile Number', 'Billing Account', 'Product Name', 'Store', 'Order Date', 'Total', 'Paid', 'Due', 'Status'].map(col => (
                       <th key={col} className="px-5 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">
                         {col}
                       </th>
@@ -384,8 +384,23 @@ const LabOrders = () => {
                             )}
                           </div>
                         </td>
-                        <td className="px-5 py-4 font-bold text-slate-900">{order.customerName}</td>
-                        <td className="px-5 py-4 text-xs font-semibold text-slate-500 whitespace-nowrap">{order.customerPhone}</td>
+                        <td className="px-5 py-4">
+                          <div className="font-bold text-slate-900">{order.customerName}</div>
+                        </td>
+                        <td className="px-5 py-4 text-xs font-semibold text-slate-500 whitespace-nowrap">
+                          <div>{order.customerPhone}</div>
+                        </td>
+                        <td className="px-5 py-4">
+                          {order.billedOnAccountOf ? (
+                            <div className="font-bold text-slate-900 whitespace-nowrap">
+                              {order.billedOnAccountOf.name}
+                            </div>
+                          ) : (
+                            <div className="font-bold text-slate-900 whitespace-nowrap">
+                              —
+                            </div>
+                          )}
+                        </td>
                         <td className="px-5 py-4 font-medium text-slate-600 max-w-[150px] truncate">{order.productName}</td>
                         <td className="px-5 py-4 text-xs font-semibold text-slate-500 whitespace-nowrap">{order.branchName || order.storeName}</td>
                         <td className="px-5 py-4 text-xs font-semibold text-slate-500 whitespace-nowrap">{fmtDate(order.orderDate)}</td>
@@ -422,6 +437,11 @@ const LabOrders = () => {
                       )}
                     </div>
                     <h3 className="font-bold text-slate-950 text-sm mt-0.5">{order.customerName}</h3>
+                    {order.billedOnAccountOf && (
+                      <p className="text-[10px] font-semibold text-slate-500 mt-0.5">
+                        Billed to: {order.billedOnAccountOf.name}
+                      </p>
+                    )}
                   </div>
                   <StatusBadge status={order.status} />
                 </div>

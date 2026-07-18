@@ -531,6 +531,14 @@ const InventoryDetailDrawer = ({ item, onClose, onEdit, onRestockSupplier, onApp
                 <DetailRow label="Customer Name" value={item.customerName} />
                 <DetailRow label="Phone Number" value={item.customerPhone} />
                 <DetailRow label="Address" value={item.customerAddress} />
+                {item.billedOnAccountOf && (
+                  <div className="mt-3 pt-3 border-t border-slate-100">
+                    <h3 className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-2">Billing Account</h3>
+                    <DetailRow label="Billed To" value={item.billedOnAccountOf.name} />
+                    <DetailRow label="Billing Phone" value={item.billedOnAccountOf.phone} />
+                    {item.billedOnAccountOf.address && <DetailRow label="Billing Address" value={item.billedOnAccountOf.address} />}
+                  </div>
+                )}
               </Section>
 
               {/* Order Information */}
@@ -1112,6 +1120,15 @@ const InventoryDetailDrawer = ({ item, onClose, onEdit, onRestockSupplier, onApp
                   <DetailRow label="Customer Name" value={item.customerName} />
                   <DetailRow label="Phone Number" value={item.customerPhone} />
                   <DetailRow label="Address" value={item.customerAddress} />
+                  {item.billedOnAccountOf && (
+                    <div className="mt-3 pt-3 border-t border-slate-100">
+                      <h3 className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-2">Billing Account</h3>
+                      <DetailRow label="Billed To" value={item.billedOnAccountOf.name} />
+                      <DetailRow label="Billing Phone" value={item.billedOnAccountOf.phone} />
+                      {item.billedOnAccountOf.email && <DetailRow label="Billing Email" value={item.billedOnAccountOf.email} />}
+                      {item.billedOnAccountOf.address && <DetailRow label="Billing Address" value={item.billedOnAccountOf.address} />}
+                    </div>
+                  )}
                 </Section>
                 <Section icon={CreditCard} title="Payment Information" color="rose">
                   <DetailRow label="Subtotal" value={fmtPrice(item.subtotal)} />
@@ -1271,9 +1288,9 @@ const InventoryDetailDrawer = ({ item, onClose, onEdit, onRestockSupplier, onApp
                           <User className="w-3.5 h-3.5" /> Customer Details
                         </h3>
                         <div className="font-semibold text-slate-500 space-y-0.5 leading-tight">
-                          <p className="font-bold text-slate-900">{item.customerName}</p>
-                          <p>Phone: {item.customerPhone || '—'}</p>
-                          {item.customerAddress && <p className="truncate max-w-[170px]" title={item.customerAddress}>Address: {item.customerAddress}</p>}
+                          <p className="font-bold text-slate-900">{item.billedOnAccountOf ? item.billedOnAccountOf.name : item.customerName}</p>
+                          <p>Phone: {item.billedOnAccountOf ? item.billedOnAccountOf.phone : (item.customerPhone || '—')}</p>
+                          {(item.billedOnAccountOf?.address || item.customerAddress) && <p className="truncate max-w-[170px]" title={item.billedOnAccountOf?.address || item.customerAddress}>Address: {item.billedOnAccountOf?.address || item.customerAddress}</p>}
                         </div>
                       </div>
                       <div className="text-right">

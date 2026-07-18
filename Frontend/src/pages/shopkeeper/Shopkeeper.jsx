@@ -325,7 +325,9 @@ const Shopkeeper = () => {
         items: saleItems,
         payments: payments,
         discount_amount: discountAmt,
-        // Loyalty fields
+        // Loyalty & Billing overrides
+        billing_account_customer_id: loyaltyData.billing_account_customer_id || null,
+        loyalty_awarded_to_customer_id: loyaltyData.loyalty_awarded_to_customer_id || null,
         loyalty_redeem_customer_id: loyaltyData.loyalty_redeem_customer_id || null,
         points_to_redeem: loyaltyData.pointsToRedeem || 0,
         custom_points: loyaltyData.customPoints || 0,
@@ -337,9 +339,10 @@ const Shopkeeper = () => {
       const saleResult = await createSaleApi(salePayload);
 
       // Construct a resultCustomer object matching mock customer response
+      const billCustomer = loyaltyData.billing_account_customer || customer;
       const resultCustomer = {
-        ...customer,
-        id: customerId,
+        ...billCustomer,
+        id: billCustomer.id || customerId,
         orders: [
           {
             id: saleResult.invoice_number,

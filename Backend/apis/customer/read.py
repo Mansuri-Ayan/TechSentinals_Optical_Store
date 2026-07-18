@@ -133,6 +133,13 @@ def sale_to_frontend_order(s) -> dict:
         "receivedAmount": paid,
         "remainingAmount": due,
         "upiId": s.payments[0].reference_number if s.payments and len(s.payments) > 0 and s.payments[0].payment_method.value == "UPI" else "",
+        
+        "billed_on_account_of": getattr(s.billing_account_customer, "first_name", None) if getattr(s, "billing_account_customer", None) else None,
+        "bought_by": getattr(s.customer, "first_name", None) if getattr(s, "customer", None) else None,
+        "loyalty_awarded_to": getattr(s.loyalty_awarded_to_customer, "first_name", None) if getattr(s, "loyalty_awarded_to_customer", None) else None,
+        "loyalty_redeemed_from": getattr(s.loyalty_redeemed_from_customer, "first_name", None) if getattr(s, "loyalty_redeemed_from_customer", None) else None,
+        "points_redeemed": getattr(s, "loyalty_points_redeemed", 0),
+        "points_awarded": getattr(s, "loyalty_points_earned", 0),
     }
 
 

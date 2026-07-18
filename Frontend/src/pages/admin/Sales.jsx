@@ -293,7 +293,7 @@ const Sales = () => {
             <table className="w-full text-sm min-w-[900px]">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-100">
-                  {['Order ID', 'Customer', 'Product', 'Branch', 'Staff', 'Date', 'Amount', 'Status', ''].map(col => (
+                  {['Order ID', 'Customer', 'Billing Account', 'Product', 'Branch', 'Staff', 'Date', 'Amount', 'Status', ''].map(col => (
                     <th key={col} className={`px-3 py-3 text-[11px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap ${col === '' ? 'text-right w-12' : 'text-left'}`}>
                       {col}
                     </th>
@@ -309,6 +309,13 @@ const Sales = () => {
                   >
                     <td className="px-3 py-3 text-[11px] font-mono font-bold text-slate-700 whitespace-nowrap">{sale.orderId}</td>
                     <td className="px-3 py-3 text-xs font-bold text-slate-900 max-w-[140px] truncate">{sale.customerName}</td>
+                    <td className="px-3 py-3 text-xs max-w-[140px] truncate">
+                      {sale.billedOnAccountOf ? (
+                        <span className="font-bold text-slate-900">{sale.billedOnAccountOf.name}</span>
+                      ) : (
+                        <span className="font-semibold text-slate-400">—</span>
+                      )}
+                    </td>
                     <td className="px-3 py-3 text-xs font-medium text-slate-600 max-w-[160px] truncate">{sale.productName || '—'}</td>
                     <td className="px-3 py-3 whitespace-nowrap">
                       <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-slate-50 border border-slate-100 rounded text-[10px] font-semibold text-slate-500">
@@ -369,6 +376,11 @@ const Sales = () => {
                   <div>
                     <span className="text-[10px] font-mono font-bold text-slate-400">{sale.orderId}</span>
                     <h3 className="font-bold text-slate-950 text-sm mt-0.5">{sale.customerName}</h3>
+                    {sale.billedOnAccountOf && (
+                      <p className="text-[10px] font-semibold text-slate-500 mt-0.5">
+                        Billed to: {sale.billedOnAccountOf.name}
+                      </p>
+                    )}
                   </div>
                   <div className="flex items-center gap-1.5 flex-wrap justify-end">
                     <button

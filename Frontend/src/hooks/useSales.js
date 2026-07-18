@@ -48,6 +48,7 @@ export const useSales = (filters = {}) => {
             customerName: item.customer_name,
             customerPhone: item.customer_phone,
             customerAddress: item.customer_address,
+            billedOnAccountOf: item.billed_on_account_of,
             branchName: item.store_name,
             staffName: item.staff_name,
             staffCode: item.staff_code,

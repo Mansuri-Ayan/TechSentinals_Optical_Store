@@ -38,17 +38,18 @@ async def generate_bill_html(sale: Sale, db: AsyncSession) -> str:
     logo = settings.logo if settings else None
     qr_code = settings.qr_code if settings else None
 
-    # 2. Get customer details
+    # 2. Get customer details – bill is addressed to the billing account if set, else the buyer
+    bill_cust = getattr(sale, "billing_account_customer", None) or sale.customer
     cust_name = "Walk-in Customer"
     cust_phone = "—"
     cust_address = "—"
     cust_email = ""
-    if sale.customer:
-        cust_name = f"{sale.customer.first_name} {sale.customer.last_name or ''}".strip()
-        cust_phone = sale.customer.phone or "—"
-        parts = [sale.customer.address, sale.customer.city]
+    if bill_cust:
+        cust_name = f"{bill_cust.first_name} {bill_cust.last_name or ''}".strip()
+        cust_phone = bill_cust.phone or "—"
+        parts = [bill_cust.address, bill_cust.city]
         cust_address = ", ".join([p for p in parts if p]).strip() or "—"
-        cust_email = sale.customer.email or ""
+        cust_email = bill_cust.email or ""
 
     # Get payments details
     payments_list = sale.payments or []
@@ -535,6 +536,7 @@ async def update_bill_for_sale(db: AsyncSession, sale_id: int) -> Bill:
             selectinload(Sale.payments),
             selectinload(Sale.store),
             selectinload(Sale.customer),
+            selectinload(Sale.billing_account_customer),
             selectinload(Sale.prescription),
         )
         .where(Sale.id == sale_id)

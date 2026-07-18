@@ -79,6 +79,41 @@ class Sale(Base):
         comment="FK → customers.id — NULL for walk-in anonymous sales",
     )
 
+    billing_account_customer_id = Column(
+        BigInteger,
+        ForeignKey("customers.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+        comment=(
+            "FK → customers.id — the billing account holder. "
+            "NULL means same as customer_id (normal sale). "
+            "When set, sale shows in both customers' histories."
+        )
+    )
+
+    loyalty_awarded_to_customer_id = Column(
+        BigInteger,
+        ForeignKey("customers.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+        comment=(
+            "FK → customers.id — who receives loyalty points. "
+            "NULL means points go to customer_id (the buyer). "
+        )
+    )
+
+    loyalty_redeemed_from_customer_id = Column(
+        BigInteger,
+        ForeignKey("customers.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+        comment=(
+            "FK → customers.id — whose points were redeemed. "
+            "NULL means no redemption or same as customer_id."
+        )
+    )
+
+
     # Polymorphic staff reference (Manager / Worker / Optician)
     sold_by_type = Column(
         Enum(StaffType, name="staff_type_enum", create_constraint=True),
@@ -250,7 +285,23 @@ class Sale(Base):
     )
     customer = relationship(
         "Customer",
+        foreign_keys=[customer_id],
         back_populates="sales",
+        lazy="selectin",
+    )
+    billing_account_customer = relationship(
+        "Customer",
+        foreign_keys=[billing_account_customer_id],
+        lazy="selectin",
+    )
+    loyalty_awarded_to_customer = relationship(
+        "Customer",
+        foreign_keys=[loyalty_awarded_to_customer_id],
+        lazy="selectin",
+    )
+    loyalty_redeemed_from_customer = relationship(
+        "Customer",
+        foreign_keys=[loyalty_redeemed_from_customer_id],
         lazy="selectin",
     )
     items = relationship(

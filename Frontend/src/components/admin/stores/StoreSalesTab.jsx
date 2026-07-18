@@ -118,7 +118,7 @@ const StoreSalesTab = ({ storeId }) => {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-100">
-                  {['Invoice ID', 'Date & Time', 'Customer', 'Items', 'Total Amount', 'Payment Status', 'Status'].map(col => (
+                  {['Invoice ID', 'Date & Time', 'Customer', 'Billing Account', 'Items', 'Total Amount', 'Payment Status', 'Status'].map(col => (
                     <th key={col} className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">
                       {col}
                     </th>
@@ -149,6 +149,18 @@ const StoreSalesTab = ({ storeId }) => {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <p className="font-bold text-slate-900">{sale.customer?.first_name} {sale.customer?.last_name || 'Walk-in'}</p>
                         <p className="text-[10px] text-slate-400 mt-0.5">{sale.customer?.phone}</p>
+                      </td>
+
+                      {/* Billing Account */}
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {sale.billed_on_account_of ? (
+                          <>
+                            <p className="font-bold text-slate-900">{sale.billed_on_account_of.name}</p>
+                            <p className="text-[10px] text-slate-400 mt-0.5">{sale.billed_on_account_of.phone}</p>
+                          </>
+                        ) : (
+                          <p className="font-semibold text-slate-400">—</p>
+                        )}
                       </td>
 
                       {/* Product details */}

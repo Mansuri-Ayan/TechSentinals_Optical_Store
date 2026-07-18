@@ -28,6 +28,22 @@ export const createCustomerApi = async (payload) => {
 };
 
 /**
+ * Quick create a customer.
+ * @param {Object} payload
+ */
+export const quickCreateCustomerApi = async (payload) => {
+  try {
+    const response = await api.post('/customers/quick-create', payload);
+    return response.data;
+  } catch (error) {
+    if (error.response && error.response.status === 409) {
+      throw { isConflict: true, data: error.response.data };
+    }
+    throw error;
+  }
+};
+
+/**
  * Update customer details.
  * @param {number|string} id - The customer ID.
  * @param {Object} payload

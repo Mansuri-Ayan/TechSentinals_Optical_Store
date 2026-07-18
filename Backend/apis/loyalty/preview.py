@@ -97,6 +97,18 @@ async def calculate_loyalty_preview(
     else:
         redeem_customer_current_points = customer_current_points
 
+    # Validate earning using award customer
+    earn_customer_id = payload.loyalty_awarded_to_customer_id or payload.customer_id
+    if earn_customer_id != customer.id:
+        earn_customer_stmt = select(Customer).where(Customer.id == earn_customer_id)
+        earn_customer_result = await db.execute(earn_customer_stmt)
+        earn_customer = earn_customer_result.scalar_one_or_none()
+        if not earn_customer:
+            raise HTTPException(status_code=404, detail="Award customer not found")
+        earn_customer_current_points = earn_customer.current_points
+    else:
+        earn_customer_current_points = customer_current_points
+
     redemption_calc = await validate_redemption(
         customer_current_points=redeem_customer_current_points,
         points_to_redeem=payload.points_to_redeem,
@@ -110,7 +122,7 @@ async def calculate_loyalty_preview(
     redemption_error = redemption_calc["error"]
 
     # Calculate points after transaction (for the earning customer)
-    points_after_transaction = customer_current_points + total_points_to_earn
+    points_after_transaction = earn_customer_current_points + total_points_to_earn
     tier_after_transaction = get_tier(points_after_transaction, loyalty_config)
 
     return LoyaltyCalculatePreviewResponse(

@@ -497,6 +497,23 @@ const CustomerDetail = () => {
                                 <div>
                                   <p className="font-bold text-slate-900 text-xs sm:text-sm leading-tight">{productName}</p>
                                   <p className="text-[10px] text-slate-400 font-semibold mt-0.5">{order.brand || 'Vision product'}</p>
+                                  <div className="flex flex-wrap gap-1 mt-1.5">
+                                    {order.bought_by && (
+                                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-[4px] bg-blue-50 text-blue-600 text-[9px] font-bold border border-blue-100" title="Who was this purchased for?">
+                                        <User className="w-2.5 h-2.5" /> Bought by {order.bought_by}
+                                      </span>
+                                    )}
+                                    {order.billed_on_account_of && (
+                                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-[4px] bg-indigo-50 text-indigo-600 text-[9px] font-bold border border-indigo-100" title="Who was this billed to?">
+                                        <User className="w-2.5 h-2.5" /> Billed to {order.billed_on_account_of}
+                                      </span>
+                                    )}
+                                    {order.loyalty_awarded_to && (
+                                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-[4px] bg-amber-50 text-amber-600 text-[9px] font-bold border border-amber-100" title="Who received loyalty points for this?">
+                                        <Award className="w-2.5 h-2.5" /> Points to {order.loyalty_awarded_to}
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
                             </td>
@@ -623,9 +640,26 @@ const CustomerDetail = () => {
                               </div>
                             )}
                           </div>
-                          <div className="min-w-0">
+                          <div className="min-w-0 flex-1">
                             <p className="font-bold text-slate-800 text-xs truncate">{productName}</p>
                             <p className="text-[10px] text-slate-400 truncate">{order.brand || 'Vision product'}</p>
+                            <div className="flex flex-wrap gap-1 mt-1.5">
+                              {order.bought_by && (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-[4px] bg-blue-50 text-blue-600 text-[9px] font-bold border border-blue-100">
+                                  <User className="w-2.5 h-2.5" /> Bought by {order.bought_by}
+                                </span>
+                              )}
+                              {order.billed_on_account_of && (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-[4px] bg-indigo-50 text-indigo-600 text-[9px] font-bold border border-indigo-100">
+                                  <User className="w-2.5 h-2.5" /> Billed to {order.billed_on_account_of}
+                                </span>
+                              )}
+                              {order.loyalty_awarded_to && (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-[4px] bg-amber-50 text-amber-600 text-[9px] font-bold border border-amber-100">
+                                  <Award className="w-2.5 h-2.5" /> Points to {order.loyalty_awarded_to}
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
 

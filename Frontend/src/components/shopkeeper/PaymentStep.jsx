@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { ArrowLeft, CheckCircle, Award, Zap, Gift, Star, ChevronDown, ChevronUp, Info } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Award, Zap, Gift, Star, ChevronDown, ChevronUp, Info, Link, UserPlus } from 'lucide-react';
 import OrderSummary from './OrderSummary';
 import PaymentForm from './PaymentForm';
 import { useLoyaltyConfig } from '../../hooks/useLoyalty';
@@ -20,6 +20,10 @@ const PaymentStep = ({ customer, cart, prescription, onBack, onComplete }) => {
     upiId: '',
     status: 'Paid',
   });
+
+  // --- Billing & Overrides State ---
+  const [billingOptionsExpanded, setBillingOptionsExpanded] = useState(false);
+  const [billingAccountCustomer, setBillingAccountCustomer] = useState(null);
 
   // --- Loyalty State ---
   const [loyaltyExpanded, setLoyaltyExpanded] = useState(true);
@@ -115,6 +119,7 @@ const PaymentStep = ({ customer, cart, prescription, onBack, onComplete }) => {
       const result = await loyaltyApi.calculateLoyaltyPreview({
         customer_id: customer.id,
         loyalty_redeem_customer_id: loyaltyCustomer?.id,
+        loyalty_awarded_to_customer_id: billingAccountCustomer?.id,
         sale_items: saleItemsForPreview,
         final_amount: previewFinalAmount,
         points_to_redeem: pointsToRedeem,
@@ -133,7 +138,9 @@ const PaymentStep = ({ customer, cart, prescription, onBack, onComplete }) => {
     } finally {
       setPreviewLoading(false);
     }
-  }, [isLoyaltyEnabled, customer?.id, loyaltyCustomer?.id, saleItemsForPreview, subtotal, discount, pointsToRedeem, customPoints, categoryPointsEnabled, pricePointsEnabled, enabledCategoryIds]);
+  }, [isLoyaltyEnabled, customer?.id, loyaltyCustomer?.id, billingAccountCustomer?.id, saleItemsForPreview, subtotal, discount, pointsToRedeem, customPoints, categoryPointsEnabled, pricePointsEnabled, enabledCategoryIds]);
+
+
 
   // Debounced preview fetch
   useEffect(() => {
@@ -173,6 +180,9 @@ const PaymentStep = ({ customer, cart, prescription, onBack, onComplete }) => {
 
     // Pass loyalty data along with payment and discount
     onComplete(payment, discount, {
+      billing_account_customer: billingAccountCustomer,
+      billing_account_customer_id: billingAccountCustomer?.id,
+      loyalty_awarded_to_customer_id: billingAccountCustomer?.id,
       loyalty_redeem_customer_id: loyaltyCustomer?.id,
       pointsToRedeem,
       customPoints,
@@ -226,8 +236,59 @@ const PaymentStep = ({ customer, cart, prescription, onBack, onComplete }) => {
           </div>
         </div>
 
-        {/* Right Column: Loyalty */}
+        {/* Right Column: Loyalty & Overrides */}
         <div className="lg:col-span-6 xl:col-span-5 space-y-6">
+
+          {/* Billing Account */}
+          {customer?.id && (
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm">
+              <button
+                onClick={() => setBillingOptionsExpanded(!billingOptionsExpanded)}
+                className={`w-full flex items-center justify-between p-5 sm:p-6 cursor-pointer hover:bg-slate-50/50 transition-colors rounded-t-2xl ${!billingOptionsExpanded ? 'rounded-b-2xl' : ''}`}
+                type="button"
+              >
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-sm">
+                    <Link className="w-4 h-4 text-white" />
+                  </div>
+                  <div className="text-left">
+                    <h3 className="text-xs font-extrabold text-slate-800 uppercase tracking-wider">Billing Account</h3>
+                    <p className="text-[10px] text-slate-400 font-semibold mt-0.5">
+                      {billingAccountCustomer ? `Billed to: ${billingAccountCustomer.first_name}` : 'Default: Billed to buyer'}
+                    </p>
+                  </div>
+                </div>
+                {billingOptionsExpanded ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+              </button>
+              
+              {billingOptionsExpanded && (
+                <div className="px-5 sm:px-6 pb-5 sm:pb-6 space-y-5 border-t border-slate-100 pt-5 animate-in fade-in slide-in-from-top-4 rounded-b-2xl">
+                  
+                  {/* Billing Account Override */}
+                  <div className="space-y-3">
+                    <h4 className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                      <UserPlus className="w-3 h-3 text-blue-500" /> Billing Account
+                    </h4>
+                    <p className="text-[10px] text-slate-500 font-medium">
+                      Select if this purchase is being paid by or billed to someone else's account.
+                    </p>
+                    <LoyaltyCustomerSearch 
+                      allowQuickCreateButton={true}
+                      selectedCustomer={billingAccountCustomer} 
+                      onSelectCustomer={(c) => {
+                        setBillingAccountCustomer(c);
+                        setLoyaltyCustomer(c);
+                      }} 
+                      onClear={() => {
+                        setBillingAccountCustomer(null);
+                        setLoyaltyCustomer(null);
+                      }} 
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Loyalty Section */}
           {isLoyaltyEnabled && customer?.id && (
@@ -354,7 +415,7 @@ const PaymentStep = ({ customer, cart, prescription, onBack, onComplete }) => {
                   </h4>
 
                   <div className="pt-1 pb-2">
-                    <p className="text-[10px] text-slate-500 font-semibold mb-2">Want to use family member's points?</p>
+                    <p className="text-[10px] text-slate-500 font-semibold mb-2">Want to use another person's points?</p>
                     <LoyaltyCustomerSearch 
                       selectedCustomer={loyaltyCustomer} 
                       onSelectCustomer={(c) => {

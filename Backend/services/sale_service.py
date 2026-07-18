@@ -22,6 +22,7 @@ from models.store_category_loyalty import StoreCategoryLoyalty # Import StoreCat
 from models.loyalty_transaction import LoyaltyTransaction, LoyaltyTransactionType # Import LoyaltyTransaction and Type
 from services.inventory_service import get_or_create_inventory
 from services import loyalty_service # Import loyalty_service
+from services import customer_link_service # Import customer_link_service
 from services.snapshot_service import capture_product_snapshot
 from models.prescription import Prescription
 
@@ -251,6 +252,9 @@ async def create_sale(
         admin_id=admin_id,
         store_id=payload.store_id,
         customer_id=customer_id_for_sale, # Use the determined customer_id
+        billing_account_customer_id=payload.billing_account_customer_id,
+        loyalty_awarded_to_customer_id=payload.loyalty_awarded_to_customer_id,
+        loyalty_redeemed_from_customer_id=payload.loyalty_redeem_customer_id,
         sold_by_type=payload.sold_by_type,
         sold_by_id=payload.sold_by_id,
         sale_date=payload.sale_date,
@@ -271,6 +275,11 @@ async def create_sale(
     )
     db.add(sale)
     await db.flush()  # Get sale.id before loyalty operations
+
+    if payload.billing_account_customer_id and payload.billing_account_customer_id != customer_id_for_sale:
+        await customer_link_service.get_or_create_link(
+            db, admin_id, payload.store_id, customer_id_for_sale, payload.billing_account_customer_id
+        )
 
     # --- LOYALTY INTEGRATION ---
     if customer_id_for_sale:
@@ -330,6 +339,14 @@ async def create_sale(
                     sale.status = SaleStatus.COMPLETED
 
             # Step 2: Earning
+            earn_customer_id = payload.loyalty_awarded_to_customer_id or customer_id_for_sale
+            if earn_customer_id != customer.id:
+                earn_customer = await db.scalar(select(Customer).where(Customer.id == earn_customer_id))
+                if not earn_customer:
+                    raise HTTPException(status_code=404, detail="Loyalty award customer not found")
+            else:
+                earn_customer = customer
+                
             sale_items_dict = [{"category_id": item.product_id, "quantity": item.quantity} for item, _p, _s in sale_items]
             # Reuse already-fetched products instead of re-querying
             product_map = {p.id: p for _si, p, _s in sale_items}
@@ -351,7 +368,7 @@ async def create_sale(
 
             if earn_res["category_points"] > 0:
                 db.add(LoyaltyTransaction(
-                    customer_id=customer.id,
+                    customer_id=earn_customer.id,
                     store_id=payload.store_id,
                     sale_id=sale.id,
                     type=LoyaltyTransactionType.EARNED_CATEGORY,
@@ -359,7 +376,7 @@ async def create_sale(
                 ))
             if earn_res["price_points"] > 0:
                 db.add(LoyaltyTransaction(
-                    customer_id=customer.id,
+                    customer_id=earn_customer.id,
                     store_id=payload.store_id,
                     sale_id=sale.id,
                     type=LoyaltyTransactionType.EARNED_PRICE,
@@ -367,7 +384,7 @@ async def create_sale(
                 ))
             if earn_res["custom_points"] > 0:
                 db.add(LoyaltyTransaction(
-                    customer_id=customer.id,
+                    customer_id=earn_customer.id,
                     store_id=payload.store_id,
                     sale_id=sale.id,
                     type=LoyaltyTransactionType.EARNED_CUSTOM,
@@ -377,12 +394,15 @@ async def create_sale(
                 ))
 
             total_earned = earn_res["total_points"]
-            customer.current_points += total_earned
-            customer.loyalty_points_earned += total_earned
+            earn_customer.current_points += total_earned
+            earn_customer.loyalty_points_earned += total_earned
             sale.loyalty_points_earned = total_earned
             
-            customer.membership_tier = loyalty_service.get_tier(customer.current_points, config)
-            db.add(customer)
+            earn_customer.membership_tier = loyalty_service.get_tier(earn_customer.current_points, config)
+            if earn_customer_id != customer.id:
+                db.add(earn_customer)
+            else:
+                db.add(customer)
 
     # Decrement inventory for each item using FIFO
     for sale_item, product, snapshot in sale_items:
@@ -520,7 +540,7 @@ async def list_sales(
     if customer_id:
         conditions.append(Sale.customer_id == customer_id)
 
-    if is_lab_order:
+    if is_lab_order is True:
         # A sale is a lab order if it has an associated lab_status
         conditions.append(Sale.lab_status.is_not(None))
         conditions.append(Sale.lab_status != "Delivered")
@@ -535,7 +555,7 @@ async def list_sales(
         
         if lab_status_filter and lab_status_filter != "All":
             conditions.append(Sale.lab_status == lab_status_filter)
-    else:
+    elif is_lab_order is False:
         # For regular sales history: direct sales OR delivered lab orders
         conditions.append(or_(
             Sale.lab_status.is_(None),
@@ -596,6 +616,9 @@ async def list_sales(
             selectinload(Sale.items),
             selectinload(Sale.payments),
             selectinload(Sale.customer),
+            selectinload(Sale.billing_account_customer),
+            selectinload(Sale.loyalty_awarded_to_customer),
+            selectinload(Sale.loyalty_redeemed_from_customer),
             selectinload(Sale.store),
         )
         .where(*conditions)

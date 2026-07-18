@@ -181,10 +181,10 @@ const CompletedStep = ({ customer, cart, prescription, paymentInfo, savedCustome
                   <User className="w-3.5 h-3.5" /> Customer Details
                 </h3>
                 <div className="text-xs font-semibold text-slate-655 space-y-1">
-                  <p className="font-bold text-slate-900 text-sm">{customer.firstName || customer.first_name || ''} {customer.lastName || customer.last_name || ''}</p>
-                  <p>Phone: {customer.phone}</p>
-                  {customer.email && <p>Email: {customer.email}</p>}
-                  {customer.address && <p>Address: {customer.address}, {customer.city}</p>}
+                  <p className="font-bold text-slate-900 text-sm">{savedCustomer?.firstName || savedCustomer?.first_name || customer.firstName || customer.first_name || ''} {savedCustomer?.lastName || savedCustomer?.last_name || customer.lastName || customer.last_name || ''}</p>
+                  <p>Phone: {savedCustomer?.phone || customer.phone}</p>
+                  {(savedCustomer?.email || customer.email) && <p>Email: {savedCustomer?.email || customer.email}</p>}
+                  {(savedCustomer?.address || customer.address) && <p>Address: {savedCustomer?.address || customer.address}{(savedCustomer?.city || customer.city) ? `, ${savedCustomer?.city || customer.city}` : ''}</p>}
                 </div>
               </div>
 
