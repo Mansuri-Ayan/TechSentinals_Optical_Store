@@ -162,6 +162,24 @@ async def _receive_stock_batches(
         )
         db.add(new_inv)
         await db.flush()
+
+        # Phase 1: Transfer ProductUnit to destination owner and batch
+        src_inv_stmt = select(Inventory).where(Inventory.id == batch_meta["inventory_id"])
+        src_inv = (await db.execute(src_inv_stmt)).scalar_one_or_none()
+        
+        if src_inv:
+            from services.product_unit_service import transfer_units
+            await transfer_units(
+                db=db,
+                product_id=product_id,
+                from_owner_type=OwnerType(src_inv.owner_type) if isinstance(src_inv.owner_type, str) else src_inv.owner_type,
+                from_owner_id=src_inv.owner_id,
+                to_owner_type=OwnerType(owner_type) if isinstance(owner_type, str) else owner_type,
+                to_owner_id=owner_id,
+                quantity=qty,
+                new_batch_id=new_inv.id,
+            )
+
         if first_inv_id is None:
             first_inv_id = new_inv.id
 
@@ -1380,6 +1398,15 @@ async def record_stock_action(
             consumed_batches=consumed_batches,
         )
         db.add(txn)
+        await db.flush()
+
+        from services.product_unit_service import mark_units_damaged, mark_units_lost
+        
+        owner_type_enum = OwnerType(owner_type) if isinstance(owner_type, str) else owner_type
+        if action == TransactionType.DAMAGE:
+            await mark_units_damaged(db, product_id, owner_type_enum, owner_id, quantity)
+        elif action == TransactionType.LOSS:
+            await mark_units_lost(db, product_id, owner_type_enum, owner_id, quantity)
 
     await db.commit()
     await db.refresh(txn)

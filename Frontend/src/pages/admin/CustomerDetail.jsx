@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import {
   ChevronLeft, ChevronRight, User, Mail, Phone, MapPin,
   ShoppingBag, Calendar, Eye, Clock, AlertTriangle,
-  CheckCircle, TrendingUp, Info, FileText, History, Plus, Wrench, X, Award
+  CheckCircle, TrendingUp, Info, FileText, History, Plus, Wrench, X, Award, Link as LinkIcon
 } from 'lucide-react';
 import { useCustomer, useCustomerMutations } from '../../hooks/useCustomers';
 import { useStoreStaff } from '../../hooks/useStaff';
@@ -15,6 +15,7 @@ import AddOrderModal from '../../components/shopkeeper/AddOrderModal';
 import PermissionGuard from '../../components/shared/PermissionGuard';
 import { usePagePermissions } from '../../hooks/usePermissions';
 import { useRoleContext } from '../../hooks/useRoleContext';
+import LinkedMembersSection from '../../components/shopkeeper/LinkedMembersSection';
 
 /* ── Helpers ── */
 const fmt = (n) => `₹${Number(n).toLocaleString('en-IN')}`;
@@ -37,6 +38,7 @@ const CUSTOMER_STATUS_CFG = {
 
 const TABS = [
   { id: 'info',         label: 'Info',         icon: Info     },
+  { id: 'links',        label: 'Linked Members', icon: LinkIcon },
   { id: 'orders',       label: 'Orders',       icon: ShoppingBag },
   { id: 'prescription', label: 'Prescription', icon: Eye      },
   { id: 'history',      label: 'History',      icon: History   },
@@ -445,6 +447,13 @@ const CustomerDetail = () => {
               <span>&middot;</span>
               <span>Status: <span className={c.status === 'VIP' ? 'text-amber-600' : c.status === 'Active' ? 'text-emerald-600' : 'text-slate-500'}>{c.status}</span></span>
             </div>
+          </div>
+        )}
+
+        {/* ── LINKS TAB ── */}
+        {activeTab === 'links' && (
+          <div className="space-y-6">
+            <LinkedMembersSection customerId={Number(customerId)} currentCustomer={c} />
           </div>
         )}
 

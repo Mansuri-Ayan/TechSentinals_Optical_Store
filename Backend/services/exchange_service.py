@@ -16,6 +16,8 @@ from models.inventory_transaction import InventoryTransaction, TransactionType
 from services.inventory_service import get_or_create_inventory
 from services.snapshot_service import capture_product_snapshot
 from services.bill_service import update_bill_for_sale
+from services.product_unit_service import restore_units_from_sale_item, assign_units_to_sale_item
+from models.inventory import OwnerType
 from schemas.exchange import ExchangeCreate
 
 
@@ -254,6 +256,10 @@ async def create_exchange(
                 created_by=payload.processed_by_id,
             )
             db.add(exc_in_txn)
+            await db.flush()
+
+            # Restore original units
+            await restore_units_from_sale_item(db=db, sale_item_id=original_item.id)
 
     # ── 5. Create new Sale for replacement items ──
     new_invoice = await _generate_invoice_number(db, admin_id)
@@ -332,6 +338,18 @@ async def create_exchange(
             created_by=payload.processed_by_id,
         )
         db.add(exc_out_txn)
+        await db.flush()
+
+        # Phase 1 fallback FIFO logic for new units
+        await assign_units_to_sale_item(
+            db=db,
+            product_id=sale_item.product_id,
+            owner_type=OwnerType.STORE,
+            owner_id=payload.store_id,
+            quantity=sale_item.quantity,
+            sale_item_id=sale_item.id,
+            specific_unit_skus=None
+        )
 
     # ── 6. Create Exchange mapping records ──
     first_exchange = None

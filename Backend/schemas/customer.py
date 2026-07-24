@@ -95,6 +95,11 @@ class CustomerRead(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class CustomerLinkCreate(BaseModel):
+    customer_id_2: int | None = None
+    new_customer: CustomerCreate | None = None
+
+
 class CustomerListRead(BaseModel):
     """Lighter schema for list views."""
     id: int

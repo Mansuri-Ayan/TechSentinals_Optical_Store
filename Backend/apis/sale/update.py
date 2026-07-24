@@ -4,8 +4,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.deps import require_permission
 from db.session import get_db
 from models.admin import Admin
-from schemas.sale import SaleUpdate, SaleRead, SaleItemRead, SalePaymentRead
-from services.sale_service import get_sale, update_sale, cancel_sale
+from schemas.sale import SaleUpdate, SaleRead, SaleItemRead, SalePaymentRead, SalePartialReturnRequest
+from services.sale_service import get_sale, update_sale, cancel_sale, process_partial_return
 from apis.customer.read import _get_user_admin_id
 
 router = APIRouter()
@@ -18,6 +18,7 @@ def _item_to_read(item) -> SaleItemRead:
         product_snapshot=snap,
         product_name=snap.name if snap else (item.product.name if item.product else None),
         product_sku=snap.sku if snap else (item.product.sku if item.product else None),
+        unit_skus=item.unit_skus,
     )
 
 
@@ -142,3 +143,31 @@ async def cancel_sale_endpoint(
             )
     cancelled = await cancel_sale(db, sale, cancelled_by=current_user.id)
     return _sale_to_read(cancelled)
+
+
+@router.post(
+    "/{sale_id}/partial-return",
+    response_model=SaleRead,
+    summary="Process partial return",
+)
+async def partial_return_sale(
+    sale_id: int,
+    payload: SalePartialReturnRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: Admin = Depends(require_permission("SALES_MANAGE")),
+):
+    admin_id = await _get_user_admin_id(current_user, db)
+    sale = await get_sale(db, sale_id)
+    if not sale:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Sale not found",
+        )
+    if sale.admin_id != admin_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot return items from another admin's sale",
+        )
+
+    updated = await process_partial_return(db, sale_id, payload, processed_by=current_user.id)
+    return _sale_to_read(updated)

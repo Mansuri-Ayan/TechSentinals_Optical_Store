@@ -41,6 +41,7 @@ const ProductSelectionStep = ({
   onAddToCart,
   onRemoveFromCart,
   onUpdateQuantity,
+  onUpdateUnitSkus,
   onBack,
   onNext,
 }) => {
@@ -258,7 +259,9 @@ const ProductSelectionStep = ({
         product.product_name.toLowerCase().includes(q) ||
         product.brand.toLowerCase().includes(q) ||
         product.subcategory.toLowerCase().includes(q) ||
-        product.sku.toLowerCase().includes(q);
+        product.sku.toLowerCase().includes(q) ||
+        q.includes(product.sku.toLowerCase()) ||
+        (product.unit_skus && product.unit_skus.some(u => u.toLowerCase().includes(q)));
 
       return matchesCategory && matchesSubcategory && matchesSearch;
     });
@@ -426,7 +429,12 @@ const ProductSelectionStep = ({
                     product={viewProduct}
                     isSelectionMode={true}
                     onAddToCart={(qty, color, size) => {
-                      onAddToCart(viewProduct, qty, color, size);
+                      const q = searchTerm.trim().toUpperCase();
+                      let searchedUnitSku = null;
+                      if (viewProduct && viewProduct.sku && q.includes(viewProduct.sku.toUpperCase()) && q.includes('-U')) {
+                        searchedUnitSku = q;
+                      }
+                      onAddToCart(viewProduct, qty, color, size, searchedUnitSku);
                       setViewProduct(null);
                     }}
                   />
@@ -473,60 +481,72 @@ const ProductSelectionStep = ({
                 cart.map((item, index) => {
                   const grad = GRAD_PALETTE[item.product.id % GRAD_PALETTE.length];
                   return (
-                    <div key={index} className="flex items-center gap-3 p-3 bg-slate-50 border border-slate-100 rounded-xl">
-                      {/* Product Avatar */}
-                      <div className="w-10 h-10 rounded-lg overflow-hidden border border-slate-200 bg-white flex items-center justify-center flex-shrink-0">
-                        {item.product.image ? (
-                          <img src={item.product.image} alt={item.product.product_name} className="w-full h-full object-cover" />
-                        ) : (
-                          <div className={`w-full h-full bg-gradient-to-br ${grad} flex items-center justify-center text-white font-bold text-[10px]`}>
-                            {item.product.product_name[0]}
-                          </div>
-                        )}
-                      </div>
+                    <div key={index} className="flex flex-col p-3 bg-slate-50 border border-slate-100 rounded-xl">
+                      <div className="flex items-center gap-3">
+                        {/* Product Avatar */}
+                        <div className="w-10 h-10 rounded-lg overflow-hidden border border-slate-200 bg-white flex items-center justify-center flex-shrink-0">
+                          {item.product.image ? (
+                            <img src={item.product.image} alt={item.product.product_name} className="w-full h-full object-cover" />
+                          ) : (
+                            <div className={`w-full h-full bg-gradient-to-br ${grad} flex items-center justify-center text-white font-bold text-[10px]`}>
+                              {item.product.product_name[0]}
+                            </div>
+                          )}
+                        </div>
 
-                      {/* Details */}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-bold text-slate-800 truncate">{item.product.product_name}</p>
-                        <p className="text-[9px] text-slate-400 truncate">
-                          {item.selectedColor && `${item.selectedColor}`} {item.selectedSize && `· Size ${item.selectedSize}`}
-                        </p>
-                        <p className="text-xs font-black text-slate-900 mt-1">₹{item.product.selling_price.toLocaleString('en-IN')}</p>
-                      </div>
+                        {/* Details */}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-bold text-slate-800 truncate">{item.product.product_name}</p>
+                          <p className="text-[9px] text-slate-400 truncate">
+                            {item.selectedColor && `${item.selectedColor}`} {item.selectedSize && `· Size ${item.selectedSize}`}
+                          </p>
+                          <p className="text-xs font-black text-slate-900 mt-1">₹{item.product.selling_price.toLocaleString('en-IN')}</p>
+                        </div>
 
-                      {/* Quantity Editor Inline */}
-                      <div className="flex items-center border border-slate-200 bg-white rounded-lg overflow-hidden">
+                        {/* Quantity Editor Inline */}
+                        <div className="flex items-center border border-slate-200 bg-white rounded-lg overflow-hidden">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (item.quantity > 1) {
+                                onUpdateQuantity(item.product.id, item.selectedColor, item.selectedSize, item.quantity - 1);
+                              } else {
+                                onRemoveFromCart(item.product.id, item.selectedColor, item.selectedSize);
+                              }
+                            }}
+                            className="px-2 py-1 text-slate-500 hover:bg-slate-100 transition-colors"
+                          >
+                            <Minus className="w-3 h-3" />
+                          </button>
+                          <span className="px-2.5 text-xs font-bold text-slate-800">{item.quantity}</span>
+                          <button
+                            type="button"
+                            onClick={() => onUpdateQuantity(item.product.id, item.selectedColor, item.selectedSize, item.quantity + 1)}
+                            className="px-2 py-1 text-slate-500 hover:bg-slate-100 transition-colors"
+                          >
+                            <Plus className="w-3 h-3" />
+                          </button>
+                        </div>
+
+                        {/* Remove Button */}
                         <button
+                          onClick={() => onRemoveFromCart(item.product.id, item.selectedColor, item.selectedSize)}
+                          className="text-slate-400 hover:text-red-500 p-1.5 hover:bg-red-50 rounded-lg transition-all"
                           type="button"
-                          onClick={() => {
-                            if (item.quantity > 1) {
-                              onUpdateQuantity(item.product.id, item.selectedColor, item.selectedSize, item.quantity - 1);
-                            } else {
-                              onRemoveFromCart(item.product.id, item.selectedColor, item.selectedSize);
-                            }
-                          }}
-                          className="px-2 py-1 text-slate-500 hover:bg-slate-100 transition-colors"
                         >
-                          <Minus className="w-3 h-3" />
-                        </button>
-                        <span className="px-2.5 text-xs font-bold text-slate-800">{item.quantity}</span>
-                        <button
-                          type="button"
-                          onClick={() => onUpdateQuantity(item.product.id, item.selectedColor, item.selectedSize, item.quantity + 1)}
-                          className="px-2 py-1 text-slate-500 hover:bg-slate-100 transition-colors"
-                        >
-                          <Plus className="w-3 h-3" />
+                          <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
-
-                      {/* Remove Button */}
-                      <button
-                        onClick={() => onRemoveFromCart(item.product.id, item.selectedColor, item.selectedSize)}
-                        className="text-slate-400 hover:text-red-500 p-1.5 hover:bg-red-50 rounded-lg transition-all"
-                        type="button"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      {/* Unit SKU Input Row */}
+                      <div className="mt-2">
+                        <input
+                          type="text"
+                          placeholder="Unit SKUs (comma separated, optional)"
+                          className="w-full px-2 py-1 text-xs border border-slate-200 rounded-lg outline-none focus:border-indigo-500"
+                          value={item.unit_skus || ''}
+                          onChange={(e) => onUpdateUnitSkus(item.product.id, item.selectedColor, item.selectedSize, e.target.value)}
+                        />
+                      </div>
                     </div>
                   );
                 })

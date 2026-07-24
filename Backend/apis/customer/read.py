@@ -85,14 +85,27 @@ def sale_to_frontend_order(s) -> dict:
     for item in (s.items or []):
         snap = item.product_snapshot
         items.append({
+            "id": item.id,
             "productId": item.product_id,
+            "product_id": item.product_id,
             "productName": snap.name if snap else (item.product.name if item.product else "Optical Product"),
+            "product_name": snap.name if snap else (item.product.name if item.product else "Optical Product"),
             "frameName": snap.name if snap else (item.product.name if item.product else "Optical Product"),
+            "product_sku": snap.sku if snap else (item.product.sku if item.product else "—"),
             "brand": snap.brand_name if snap else (item.product.brand.name if item.product and item.product.brand else "Vision Brand"),
+            "product_brand": snap.brand_name if snap else (item.product.brand.name if item.product and item.product.brand else "—"),
             "category": snap.category_name if snap else (item.product.category.name if item.product and item.product.category else "Optical"),
+            "product_category": snap.category_name if snap else (item.product.category.name if item.product and item.product.category else "—"),
+            "product_subcategory": snap.subcategory_name if snap else (item.product.subcategory.name if item.product and item.product.subcategory else "—"),
             "quantity": item.quantity,
             "price": float(item.unit_price),
+            "unit_price": float(item.unit_price),
+            "unit_cost": float(item.unit_cost) if item.unit_cost is not None else float(item.unit_price),
+            "discount_percent": float(item.discount_percent or 0),
+            "tax_percent": float(item.tax_percent or 0),
             "amount": float(item.line_total),
+            "line_total": float(item.line_total),
+            "unit_skus": item.unit_skus,
         })
         
     payment_method = "UPI"

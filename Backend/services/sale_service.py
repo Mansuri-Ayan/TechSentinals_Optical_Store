@@ -14,7 +14,7 @@ from models.sale import Sale, SaleStatus, StaffType
 from models.sale_item import SaleItem
 from models.sale_payment import SalePayment, SalePaymentMethod
 from models.product import Product
-from models.inventory import Inventory
+from models.inventory import Inventory, OwnerType
 from models.inventory_transaction import InventoryTransaction, TransactionType
 from models.customer import Customer, CustomerMembershipTier # Import CustomerMembershipTier
 from models.loyalty_config import LoyaltyConfig # Import LoyaltyConfig
@@ -24,6 +24,7 @@ from services.inventory_service import get_or_create_inventory
 from services import loyalty_service # Import loyalty_service
 from services import customer_link_service # Import customer_link_service
 from services.snapshot_service import capture_product_snapshot
+from services.product_unit_service import assign_units_to_sale_item, restore_units_from_sale_item
 from models.prescription import Prescription
 
 from schemas.sale import (
@@ -136,7 +137,7 @@ async def create_sale(
             line_total=line_total,
             notes=item_data.notes,
         )
-        sale_items.append((sale_item, product, snapshot))
+        sale_items.append((sale_item, product, snapshot, item_data))
 
     # Validate manual discount amount
     if payload.discount_amount > subtotal:
@@ -150,8 +151,8 @@ async def create_sale(
 
     total_amount = (subtotal - total_discount + total_tax).quantize(Decimal("0.01"))
 
-    # Unpack items tuple — service builds (SaleItem, Product, ProductSnapshot) triples
-    sale_items_unpacked = [si for si, _p, _s in sale_items]
+    # Unpack items tuple — service builds (SaleItem, Product, ProductSnapshot, SaleItemCreate) quads
+    sale_items_unpacked = [si for si, _p, _s, _d in sale_items]
 
     # Build payments
     sale_payments: list[SalePayment] = []
@@ -347,9 +348,9 @@ async def create_sale(
             else:
                 earn_customer = customer
                 
-            sale_items_dict = [{"category_id": item.product_id, "quantity": item.quantity} for item, _p, _s in sale_items]
+            sale_items_dict = [{"category_id": item.product_id, "quantity": item.quantity} for item, _p, _s, _d in sale_items]
             # Reuse already-fetched products instead of re-querying
-            product_map = {p.id: p for _si, p, _s in sale_items}
+            product_map = {p.id: p for _si, p, _s, _d in sale_items}
             for item_dict in sale_items_dict:
                 prod = product_map.get(item_dict["category_id"])
                 item_dict["category_id"] = prod.category_id if prod else item_dict["category_id"]
@@ -405,14 +406,14 @@ async def create_sale(
                 db.add(customer)
 
     # Decrement inventory for each item using FIFO
-    for sale_item, product, snapshot in sale_items:
-        owner_type = "STORE"
+    for sale_item, product, snapshot, item_data in sale_items:
+        owner_type_enum = OwnerType.STORE
         owner_id = payload.store_id
         
         # Query active inventory rows sorted by id
         inv_stmt = select(Inventory).where(
             Inventory.product_id == sale_item.product_id,
-            Inventory.owner_type == owner_type,
+            Inventory.owner_type == owner_type_enum.value,
             Inventory.owner_id == owner_id,
             Inventory.available_quantity > 0,
             Inventory.is_active.is_(True)
@@ -474,6 +475,18 @@ async def create_sale(
             consumed_batches=consumed_list,
         )
         db.add(txn)
+        await db.flush()
+
+        # Phase 1: Assign specific units (if any) or FIFO available units
+        await assign_units_to_sale_item(
+            db=db,
+            product_id=sale_item.product_id,
+            owner_type=owner_type_enum,
+            owner_id=owner_id,
+            quantity=sale_item.quantity,
+            sale_item_id=sale_item.id,
+            specific_unit_skus=getattr(item_data, "unit_skus", None)
+        )
 
     await db.commit()
     from services.bill_service import update_bill_for_sale
@@ -481,7 +494,7 @@ async def create_sale(
     stmt = (
         select(Sale)
         .options(
-            selectinload(Sale.items),
+            selectinload(Sale.items).selectinload(SaleItem.assigned_units),
             selectinload(Sale.payments),
             selectinload(Sale.store),
             selectinload(Sale.customer),
@@ -502,7 +515,7 @@ async def get_sale(
     stmt = (
         select(Sale)
         .options(
-            selectinload(Sale.items),
+            selectinload(Sale.items).selectinload(SaleItem.assigned_units),
             selectinload(Sale.payments),
         )
         .where(Sale.id == sale_id)
@@ -613,7 +626,7 @@ async def list_sales(
     stmt = (
         select(Sale)
         .options(
-            selectinload(Sale.items),
+            selectinload(Sale.items).selectinload(SaleItem.assigned_units),
             selectinload(Sale.payments),
             selectinload(Sale.customer),
             selectinload(Sale.billing_account_customer),
@@ -734,6 +747,9 @@ async def cancel_sale(
                     created_by=cancelled_by,
                 )
                 db.add(txn)
+
+        # Phase 1: Restore assigned ProductUnit rows
+        await restore_units_from_sale_item(db=db, sale_item_id=item.id)
 
     sale.status = SaleStatus.CANCELLED
     await db.commit()
@@ -925,3 +941,150 @@ async def check_and_update_sales_loss(db: AsyncSession, sale_id: int):
         db.add(new_expense)
 
     await db.commit()
+
+
+# ── Partial Return ─────────────────────────────────────────────
+
+async def process_partial_return(
+    db: AsyncSession,
+    sale_id: int,
+    payload: "SalePartialReturnRequest",
+    processed_by: int,
+) -> Sale:
+    """
+    Process partial return of a sale:
+    - Restores inventory batch quantities.
+    - Frees product units.
+    - Adjusts sale totals and item quantities.
+    """
+    from schemas.sale import SalePartialReturnRequest
+
+    sale = await get_sale(db, sale_id)
+    if not sale:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Sale {sale_id} not found"
+        )
+    
+    if sale.status in (SaleStatus.CANCELLED, SaleStatus.REFUNDED):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot partially return a {sale.status.value} sale"
+        )
+
+    # Convert request items to dict
+    return_reqs = {req.sale_item_id: req for req in payload.items}
+
+    for item in sale.items:
+        if item.id not in return_reqs:
+            continue
+        
+        req = return_reqs[item.id]
+        if req.quantity > item.quantity:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Cannot return {req.quantity} of item {item.id}, only {item.quantity} sold"
+            )
+        
+        # 1. Restore ProductUnits (if any)
+        if getattr(req, "unit_skus", None):
+            await restore_units_from_sale_item(db=db, sale_item_id=item.id, specific_unit_skus=req.unit_skus)
+        else:
+            # We don't have a specific subset of unit SKUs to restore, 
+            # so we'll let a service handle restoring 'N' units if needed, 
+            # but currently restore_units_from_sale_item restores all if no SKUs passed. 
+            # Wait, we need a way to restore N units? Yes, for partial return we need to restore exact quantity.
+            # I will just call restore_units_from_sale_item with limit in a custom query if specific_unit_skus is None
+            from models.product_unit import ProductUnit, UnitStatus
+            from sqlalchemy import select
+            
+            stmt = select(ProductUnit).where(ProductUnit.sale_item_id == item.id).limit(req.quantity)
+            res = await db.execute(stmt)
+            units_to_restore = res.scalars().all()
+            for u in units_to_restore:
+                u.status = UnitStatus.AVAILABLE
+                u.sale_item_id = None
+                u.sold_at = None
+
+        # 2. Restore Inventory batches
+        qty_to_restore_batch = req.quantity
+        if item.consumed_batches:
+            # We restore to the most recently consumed batches first
+            # But they are stored in order of consumption (FIFO)
+            # We can reverse the list to restore to the newest batch first
+            for batch_meta in reversed(item.consumed_batches):
+                if qty_to_restore_batch <= 0:
+                    break
+                batch_id = batch_meta["inventory_id"]
+                # We can restore up to the amount that was taken from this batch
+                taken_from_batch = batch_meta["quantity"]
+                restore_amt = min(taken_from_batch, qty_to_restore_batch)
+
+                inv_stmt = select(Inventory).where(Inventory.id == batch_id)
+                inv_result = await db.execute(inv_stmt)
+                inventory = inv_result.scalar_one_or_none()
+                if inventory:
+                    inventory.quantity += restore_amt
+                    inventory.available_quantity += restore_amt
+                    inventory.last_stock_in_at = _now()
+                    inventory.is_active = True
+                
+                    txn = InventoryTransaction(
+                        inventory_id=inventory.id,
+                        product_id=item.product_id,
+                        product_snapshot_id=item.product_snapshot_id,
+                        unit_price=item.unit_price,
+                        total_value=item.unit_price * restore_amt,
+                        transaction_type=TransactionType.RETURN,
+                        quantity=restore_amt,
+                        reference_id=sale.id,
+                        remarks=f"Partial return {req.quantity} on sale {sale.invoice_number}",
+                        created_by=processed_by,
+                    )
+                    db.add(txn)
+                
+                # Update batch metadata to reflect the return
+                batch_meta["quantity"] -= restore_amt
+                qty_to_restore_batch -= restore_amt
+                
+            # Filter out batches that were fully returned
+            item.consumed_batches = [b for b in item.consumed_batches if b["quantity"] > 0]
+        
+        # 3. Update Sale Item totals
+        item.quantity -= req.quantity
+        item.line_total = _compute_line_total(
+            item.quantity,
+            item.unit_price,
+            item.tax_percent,
+            item.discount_percent,
+        )
+
+    # Recalculate Sale totals
+    sale.subtotal = sum(i.unit_price * i.quantity for i in sale.items)
+    sale.tax_amount = sum(
+        ((i.unit_price * i.quantity) - ((i.unit_price * i.quantity) * i.discount_percent / Decimal("100"))) 
+        * i.tax_percent / Decimal("100") 
+        for i in sale.items
+    )
+    # Re-apply proportional manual discount? Or keep manual discount as is?
+    # For now keep sale.discount_amount as is, unless it exceeds new subtotal.
+    if sale.discount_amount > sale.subtotal:
+        sale.discount_amount = sale.subtotal
+        
+    sale.total_amount = (sale.subtotal - sale.discount_amount + sale.tax_amount).quantize(Decimal("0.01"))
+    sale.due_amount = max(Decimal("0"), sale.total_amount - sale.paid_amount)
+    
+    if sale.due_amount <= 0 and sale.total_amount > 0:
+        sale.status = SaleStatus.COMPLETED
+        
+    if sale.total_amount <= 0:
+        sale.status = SaleStatus.REFUNDED
+        
+    await db.commit()
+    await db.refresh(sale)
+    
+    from services.bill_service import update_bill_for_sale
+    await update_bill_for_sale(db, sale.id)
+    await check_and_update_sales_loss(db, sale.id)
+
+    return sale

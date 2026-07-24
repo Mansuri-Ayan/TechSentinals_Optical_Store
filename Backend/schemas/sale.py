@@ -50,6 +50,18 @@ class SaleItemCreate(BaseModel):
     discount_percent: Decimal = Field(default=Decimal("0"), ge=0, le=100, decimal_places=2)
     tax_percent: Decimal = Field(default=Decimal("0"), ge=0, decimal_places=2)
     notes: str | None = None
+    unit_skus: List[str] | None = Field(default=None, description="Optional list of specific unit SKUs assigned")
+
+
+class SaleItemReturnRequest(BaseModel):
+    sale_item_id: int
+    quantity: int = Field(..., ge=1)
+    unit_skus: List[str] | None = Field(default=None, description="Specific unit SKUs being returned (if tracked)")
+
+
+class SalePartialReturnRequest(BaseModel):
+    items: List[SaleItemReturnRequest]
+    reason: str | None = None
 
 
 class SaleItemRead(BaseModel):
@@ -65,6 +77,7 @@ class SaleItemRead(BaseModel):
     tax_percent: Decimal
     line_total: Decimal
     notes: str | None = None
+    unit_skus: List[str] | None = None
     created_at: datetime
     updated_at: datetime
 

@@ -23,7 +23,14 @@ async def calculate_loyalty_preview(
     db: AsyncSession = Depends(get_db),
     current_user = Depends(require_permission('loyalty', 'read')),
 ) -> LoyaltyCalculatePreviewResponse:
-    store_id = current_user.store_id
+    if hasattr(current_user, "store_id"):
+        store_id = current_user.store_id
+    else:
+        from models.store import Store
+        store = await db.scalar(select(Store).where(Store.admin_id == current_user.id))
+        if not store:
+            raise HTTPException(status_code=400, detail="Admin has no stores")
+        store_id = store.id
 
     # Fetch LoyaltyConfig
     config_stmt = select(LoyaltyConfig).where(LoyaltyConfig.store_id == store_id)

@@ -269,8 +269,13 @@ const CompletedStep = ({ customer, cart, prescription, paymentInfo, savedCustome
                           <td className="px-4 py-3.5">
                             <p className="font-bold text-slate-900">{item.product.product_name}</p>
                             <p className="text-[10px] text-slate-400 font-semibold mt-0.5">
-                              {item.product.brand} {item.selectedColor && `· Color: ${item.selectedColor}`} {item.selectedSize && `· Size: ${item.selectedSize}`}
+                              {item.product.brand} {item.selectedColor && `· Color: ${item.selectedColor}`} {item.selectedSize && `· Size: ${item.selectedSize}`} &middot; SKU: {item.product.sku}
                             </p>
+                            {item.unit_skus && (
+                              <p className="text-[10px] font-mono text-indigo-600 font-bold mt-0.5">
+                                Unit SKU: {item.unit_skus}
+                              </p>
+                            )}
                           </td>
                           <td className="px-4 py-3.5 text-center font-mono">{item.quantity}</td>
                           <td className="px-4 py-3.5 text-right font-mono">₹{item.product.selling_price.toLocaleString('en-IN')}</td>

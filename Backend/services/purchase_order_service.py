@@ -19,6 +19,8 @@ from models.inventory_transaction import InventoryTransaction, TransactionType
 from models.product import Product
 from services.inventory_service import get_or_create_inventory
 from services.snapshot_service import capture_product_snapshot
+from services.product_unit_service import create_units_for_batch
+from models.product_unit import UnitSourceType
 from schemas.purchase_order import (
     PurchaseOrderCreate,
     PurchaseOrderUpdate,
@@ -325,11 +327,13 @@ async def receive_goods(
         if row_reorder is not None:
             existing_reorder_level = row_reorder
 
-        # Get product's current selling price
+        # Get product's current selling price and SKU
         from models.product import Product
-        stmt_prod = select(Product.selling_price).where(Product.id == po_item.product_id)
+        stmt_prod = select(Product.selling_price, Product.sku).where(Product.id == po_item.product_id)
         prod_res = await db.execute(stmt_prod)
-        product_selling_price = prod_res.scalar() or Decimal("0.00")
+        prod_row = prod_res.first()
+        product_selling_price = prod_row[0] if prod_row and prod_row[0] is not None else Decimal("0.00")
+        product_sku = prod_row[1] if prod_row and prod_row[1] else f"PROD-{po_item.product_id}"
 
         # Create a new inventory row (batch) for this receipt
         inventory = Inventory(
@@ -368,6 +372,19 @@ async def receive_goods(
             created_by=created_by,
         )
         db.add(txn)
+        await db.flush()
+
+        # ProductUnit integration
+        await create_units_for_batch(
+            db=db,
+            product_id=po_item.product_id,
+            product_sku=product_sku,
+            inventory_batch_id=inventory.id,
+            count=grn_item.quantity_received,
+            owner_type=owner_type,
+            owner_id=owner_id,
+            source_type=UnitSourceType.PURCHASE_ORDER,
+        )
 
     # Auto-transition PO status
     total_ordered = sum(i.quantity_ordered for i in po.items)

@@ -156,6 +156,12 @@ class SaleItem(Base):
         lazy="selectin",
     )
 
+    @property
+    def unit_skus(self) -> list[str]:
+        if hasattr(self, "assigned_units") and self.assigned_units:
+            return [u.unit_sku for u in self.assigned_units]
+        return []
+
     def __repr__(self) -> str:
         return (
             f"<SaleItem(sale_id={self.sale_id!r}, product_id={self.product_id!r}, "

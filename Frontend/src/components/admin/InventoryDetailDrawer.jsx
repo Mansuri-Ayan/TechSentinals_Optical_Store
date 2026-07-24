@@ -576,8 +576,15 @@ const InventoryDetailDrawer = ({ item, onClose, onEdit, onRestockSupplier, onApp
                             <td className="py-2.5 pr-4 font-semibold text-slate-900">
                               <div>{subItem.product_name || 'Optical Item'}</div>
                               <div className="text-[10px] text-slate-450 mt-0.5">
-                                Brand: {subItem.product_brand || '—'} &middot; SKU: {subItem.product_sku || '—'}
+                                Brand: {subItem.product_brand || '—'} &middot; Catalog SKU: {subItem.product_sku || '—'}
                               </div>
+                              {subItem.unit_skus && subItem.unit_skus.length > 0 && (
+                                <div className="mt-1">
+                                  <span className="inline-flex items-center text-[10px] font-mono text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-md font-bold">
+                                    Unit SKU{subItem.unit_skus.length > 1 ? 's' : ''}: {subItem.unit_skus.join(', ')}
+                                  </span>
+                                </div>
+                              )}
                             </td>
                             <td className="py-2.5 px-2 text-slate-550">
                               <div>{subItem.product_category || '—'}</div>
@@ -1194,8 +1201,15 @@ const InventoryDetailDrawer = ({ item, onClose, onEdit, onRestockSupplier, onApp
                               <td className="py-2.5 pr-4 font-semibold text-slate-900">
                                 <div>{subItem.product_name || 'Optical Item'}</div>
                                 <div className="text-[10px] text-slate-450 mt-0.5">
-                                  Brand: {subItem.product_brand || '—'} &middot; SKU: {subItem.product_sku || '—'}
+                                  Brand: {subItem.product_brand || '—'} &middot; Catalog SKU: {subItem.product_sku || '—'}
                                 </div>
+                                {subItem.unit_skus && subItem.unit_skus.length > 0 && (
+                                  <div className="mt-1">
+                                    <span className="inline-flex items-center text-[10px] font-mono text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-md font-bold">
+                                      Unit SKU{subItem.unit_skus.length > 1 ? 's' : ''}: {subItem.unit_skus.join(', ')}
+                                    </span>
+                                  </div>
+                                )}
                               </td>
                               <td className="py-2.5 px-2 text-slate-550">
                                 <div>{subItem.product_category || '—'}</div>

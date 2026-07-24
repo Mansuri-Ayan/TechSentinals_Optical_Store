@@ -1,4 +1,5 @@
 from sqlalchemy import or_, select
+from sqlalchemy.orm import joinedload
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import HTTPException, status
 
@@ -71,5 +72,26 @@ async def list_linked_customers(db: AsyncSession, admin_id: int, customer_id: in
     if not linked_ids:
         return []
 
-    # Fetch those customers
-    return list((await db.execute(select(Customer).filter(Customer.id.in_(linked_ids)))).scalars().all())
+    # Fetch those customers with their store
+    stmt = select(Customer).options(joinedload(Customer.store)).filter(Customer.id.in_(linked_ids))
+    return list((await db.execute(stmt)).scalars().all())
+
+
+async def remove_link(db: AsyncSession, admin_id: int, customer_id: int, linked_id: int) -> bool:
+    # Find the link involving these two customers
+    link = (await db.execute(
+        select(CustomerLink).filter(
+            (CustomerLink.admin_id == admin_id) &
+            (
+                ((CustomerLink.from_customer_id == customer_id) & (CustomerLink.to_customer_id == linked_id)) |
+                ((CustomerLink.from_customer_id == linked_id) & (CustomerLink.to_customer_id == customer_id))
+            )
+        )
+    )).scalar_one_or_none()
+
+    if not link:
+        return False
+
+    await db.delete(link)
+    await db.flush()
+    return True

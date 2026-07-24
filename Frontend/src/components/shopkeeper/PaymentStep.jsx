@@ -5,6 +5,7 @@ import PaymentForm from './PaymentForm';
 import { useLoyaltyConfig } from '../../hooks/useLoyalty';
 import { loyaltyApi } from '../../api/loyalty/loyalty.api';
 import LoyaltyCustomerSearch from './LoyaltyCustomerSearch';
+import { useLinkedMembers } from '../../hooks/useCustomerLinks';
 
 const PaymentStep = ({ customer, cart, prescription, onBack, onComplete }) => {
   const subtotal = cart.reduce(
@@ -41,6 +42,9 @@ const PaymentStep = ({ customer, cart, prescription, onBack, onComplete }) => {
   // Fetch store loyalty config
   const { data: loyaltyConfig } = useLoyaltyConfig(null, 'shopkeeper');
   const isLoyaltyEnabled = loyaltyConfig?.is_enabled ?? false;
+
+  // Fetch linked members for billing suggestions
+  const { data: linkedMembers = [] } = useLinkedMembers(customer?.id);
 
   // Compute values for redemption calculations
   const redeemableCustomer = loyaltyCustomer || customer;
@@ -283,6 +287,7 @@ const PaymentStep = ({ customer, cart, prescription, onBack, onComplete }) => {
                         setBillingAccountCustomer(null);
                         setLoyaltyCustomer(null);
                       }} 
+                      suggestedCustomers={linkedMembers}
                     />
                   </div>
                 </div>

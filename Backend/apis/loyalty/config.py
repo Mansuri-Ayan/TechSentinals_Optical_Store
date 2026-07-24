@@ -135,7 +135,14 @@ async def get_loyalty_config_shopkeeper(
     db: AsyncSession = Depends(get_db),
     current_user = Depends(require_permission('loyalty', 'read')),
 ) -> LoyaltyConfigRead:
-    store_id = current_user.store_id
+    if hasattr(current_user, "store_id"):
+        store_id = current_user.store_id
+    else:
+        from models.store import Store
+        store = await db.scalar(select(Store).where(Store.admin_id == current_user.id))
+        if not store:
+            raise HTTPException(status_code=400, detail="Admin has no stores")
+        store_id = store.id
     config_stmt = select(LoyaltyConfig).where(
         LoyaltyConfig.store_id == store_id
     )
@@ -161,7 +168,14 @@ async def update_loyalty_config_shopkeeper(
     db: AsyncSession = Depends(get_db),
     current_user = Depends(require_permission('loyalty', 'manage')),
 ) -> LoyaltyConfigRead:
-    store_id = current_user.store_id
+    if hasattr(current_user, "store_id"):
+        store_id = current_user.store_id
+    else:
+        from models.store import Store
+        store = await db.scalar(select(Store).where(Store.admin_id == current_user.id))
+        if not store:
+            raise HTTPException(status_code=400, detail="Admin has no stores")
+        store_id = store.id
     config_stmt = select(LoyaltyConfig).where(
         LoyaltyConfig.store_id == store_id
     )

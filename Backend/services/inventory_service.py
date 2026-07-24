@@ -3,6 +3,8 @@ from sqlalchemy import select, and_, or_, func as sa_func
 from sqlalchemy.ext.asyncio import AsyncSession
 from models.inventory import Inventory, OwnerType
 from schemas.inventory import InventoryCreate, InventoryUpdate
+from services.product_unit_service import create_units_for_batch
+from models.product_unit import UnitSourceType
 
 
 async def create_inventory(
@@ -55,6 +57,20 @@ async def create_inventory(
         purchase_date=datetime.now(timezone.utc),
     )   
     db.add(inventory)
+    await db.flush()
+
+    if payload.quantity > 0 and prod:
+        await create_units_for_batch(
+            db=db,
+            product_id=payload.product_id,
+            product_sku=prod.sku,
+            inventory_batch_id=inventory.id,
+            count=payload.quantity,
+            owner_type=payload.owner_type.value,
+            owner_id=payload.owner_id,
+            source_type=UnitSourceType.MANUAL_ADD,
+        )
+
     await db.commit()
     await db.refresh(inventory)
     return inventory

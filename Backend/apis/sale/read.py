@@ -32,6 +32,7 @@ def _item_to_read(item) -> SaleItemRead:
         product_brand=brand_name,
         product_category=cat_name,
         product_subcategory=subcat_name,
+        unit_skus=item.unit_skus,
     )
 
 

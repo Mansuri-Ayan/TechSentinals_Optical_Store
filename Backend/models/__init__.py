@@ -16,6 +16,7 @@ from models.accessory_product import AccessoryProduct
 from models.product_snapshot import ProductSnapshot, ProductType
 from models.inventory import Inventory, OwnerType
 from models.inventory_transaction import InventoryTransaction, TransactionType
+from models.product_unit import ProductUnit, UnitStatus, UnitSourceType
 
 # ── Supplier Management ───────────────────────────────────────
 from models.supplier import Supplier, SupplierStatus

@@ -17,6 +17,7 @@ def _item_to_read(item) -> SaleItemRead:
         product_snapshot=snap,
         product_name=snap.name if snap else (item.product.name if item.product else None),
         product_sku=snap.sku if snap else (item.product.sku if item.product else None),
+        unit_skus=item.unit_skus,
     )
 
 

@@ -3,7 +3,7 @@ import { Search, User, X, Loader2, UserPlus } from 'lucide-react';
 import { getCustomersApi, quickCreateCustomerApi } from '../../api/customer/customer.api';
 import { toast } from 'react-toastify';
 
-const LoyaltyCustomerSearch = ({ selectedCustomer, onSelectCustomer, onClear, allowQuickCreateButton = false }) => {
+const LoyaltyCustomerSearch = ({ selectedCustomer, onSelectCustomer, onClear, allowQuickCreateButton = false, suggestedCustomers = [] }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [results, setResults] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -170,6 +170,44 @@ const LoyaltyCustomerSearch = ({ selectedCustomer, onSelectCustomer, onClear, al
               </button>
             )}
           </div>
+
+          {!searchTerm.trim() && suggestedCustomers.length > 0 && !selectedCustomer && !isQuickCreating && !conflictCustomer && (
+            <div className="mt-2 border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm animate-in fade-in zoom-in-95 duration-200">
+              <div className="px-3 py-2 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+                <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-widest">Linked Members</span>
+              </div>
+              <ul className="py-1">
+                {suggestedCustomers.map((c) => (
+                  <li key={c.id}>
+                    <button
+                      type="button"
+                      onClick={() => handleSelect(c)}
+                      className="w-full px-3 py-2 text-left hover:bg-slate-50 flex items-center justify-between transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center flex-shrink-0">
+                          <User className="w-3.5 h-3.5 text-slate-500" />
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-slate-700">
+                            {c.first_name} {c.last_name || ''}
+                          </p>
+                          <p className="text-[10px] text-slate-500">{c.phone}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="text-right">
+                          <p className="text-[10px] font-bold text-slate-500">{c.membership_tier}</p>
+                          <p className="text-xs font-black text-amber-500">{c.current_points || 0} pts</p>
+                        </div>
+                        <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-lg">Select</span>
+                      </div>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           {isOpen && !isQuickCreating && !conflictCustomer && (results.length > 0 || error || (searchTerm.trim() !== '' && results.length === 0)) && (
             <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">

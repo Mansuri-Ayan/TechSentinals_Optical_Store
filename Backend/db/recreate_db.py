@@ -21,7 +21,7 @@ from models import (
     Customer, Sale, SaleItem, SalePayment,
     Expense, ExpenseCategory, Notification, Repair,
     LoyaltyConfig, StoreCategoryLoyalty, LoyaltyTransaction, Lab, BillSettings,
-    Accountant
+    Accountant, ProductUnit
 )
 from db.seed_data import seed
 from seed_permissions import seed_permissions

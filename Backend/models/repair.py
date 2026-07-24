@@ -95,6 +95,14 @@ class Repair(Base):
         comment="FK → sales.id — original sale for warranty reference",
     )
 
+    product_unit_id = Column(
+        BigInteger,
+        ForeignKey("product_units.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+        comment="FK → product_units.id — physical unit being repaired",
+    )
+
     customer_name = Column(
         String(255),
         nullable=True,

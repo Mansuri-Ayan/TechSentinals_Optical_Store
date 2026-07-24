@@ -69,11 +69,62 @@ def upgrade() -> None:
     op.create_index(op.f('ix_exchanges_original_sale_id'), 'exchanges', ['original_sale_id'], unique=False)
     op.create_index(op.f('ix_exchanges_original_sale_item_id'), 'exchanges', ['original_sale_item_id'], unique=False)
     op.create_index(op.f('ix_exchanges_store_id'), 'exchanges', ['store_id'], unique=False)
+    
+    # Create product_units table
+    op.create_table('product_units',
+    sa.Column('id', sa.BigInteger(), autoincrement=True, nullable=False, comment='Auto-generated BIGINT primary key'),
+    sa.Column('unit_sku', sa.String(length=150), nullable=False, comment='Unique SKU per physical unit (e.g., FRM-RB-001-U0001)'),
+    sa.Column('product_id', sa.BigInteger(), nullable=False, comment='FK → products.id'),
+    sa.Column('inventory_batch_id', sa.BigInteger(), nullable=False, comment='FK → inventories.id — links unit to its cost batch'),
+    sa.Column('status', sa.Enum('AVAILABLE', 'SOLD', 'DAMAGED', 'IN_REPAIR', 'LOST', 'RESERVED', name='unitstatus'), nullable=False, comment='Current physical status of this specific unit'),
+    sa.Column('owner_type', sa.Enum('ADMIN', 'STORE', name='ownertype'), nullable=False, comment='Enum: ADMIN or STORE'),
+    sa.Column('owner_id', sa.BigInteger(), nullable=False, comment='Polymorphic ID matching owner_type (admin.id or store.id)'),
+    sa.Column('source_type', sa.Enum('PURCHASE_ORDER', 'MANUAL_ADD', 'TRANSFER_IN', 'RETURN', 'EXCHANGE_IN', name='unitsourcetype'), nullable=False, comment='How this unit entered the system'),
+    sa.Column('manufacturer_serial', sa.String(length=255), nullable=True, comment='Optional external serial number from manufacturer'),
+    sa.Column('sale_item_id', sa.BigInteger(), nullable=True, comment='FK → sale_items.id — tracks which sale item sold this unit'),
+    sa.Column('repair_id', sa.BigInteger(), nullable=True, comment='FK → repairs.id — tracks if this unit is currently in repair'),
+    sa.Column('sold_at', sa.DateTime(timezone=True), nullable=True, comment='Timestamp when status changed to SOLD'),
+    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False, comment='Timestamp when unit was created'),
+    sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False, comment='Timestamp when unit was last updated'),
+    sa.ForeignKeyConstraint(['inventory_batch_id'], ['inventories.id'], ondelete='RESTRICT'),
+    sa.ForeignKeyConstraint(['product_id'], ['products.id'], ondelete='RESTRICT'),
+    sa.ForeignKeyConstraint(['repair_id'], ['repairs.id'], ondelete='SET NULL'),
+    sa.ForeignKeyConstraint(['sale_item_id'], ['sale_items.id'], ondelete='SET NULL'),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_product_units_inventory_batch_id'), 'product_units', ['inventory_batch_id'], unique=False)
+    op.create_index(op.f('ix_product_units_manufacturer_serial'), 'product_units', ['manufacturer_serial'], unique=False)
+    op.create_index(op.f('ix_product_units_owner_id'), 'product_units', ['owner_id'], unique=False)
+    op.create_index(op.f('ix_product_units_owner_type'), 'product_units', ['owner_type'], unique=False)
+    op.create_index(op.f('ix_product_units_product_id'), 'product_units', ['product_id'], unique=False)
+    op.create_index(op.f('ix_product_units_repair_id'), 'product_units', ['repair_id'], unique=False)
+    op.create_index(op.f('ix_product_units_sale_item_id'), 'product_units', ['sale_item_id'], unique=False)
+    op.create_index(op.f('ix_product_units_status'), 'product_units', ['status'], unique=False)
+    op.create_index(op.f('ix_product_units_unit_sku'), 'product_units', ['unit_sku'], unique=True)
+    
+    # Add product_unit_id to repairs
+    op.add_column('repairs', sa.Column('product_unit_id', sa.BigInteger(), nullable=True, comment='FK → product_units.id — physical unit being repaired'))
+    op.create_index(op.f('ix_repairs_product_unit_id'), 'repairs', ['product_unit_id'], unique=False)
+    op.create_foreign_key(None, 'repairs', 'product_units', ['product_unit_id'], ['id'], ondelete='SET NULL')
     # ### end Alembic commands ###
-
 
 def downgrade() -> None:
     """Downgrade schema."""
+    op.drop_constraint(None, 'repairs', type_='foreignkey')
+    op.drop_index(op.f('ix_repairs_product_unit_id'), table_name='repairs')
+    op.drop_column('repairs', 'product_unit_id')
+    
+    op.drop_index(op.f('ix_product_units_unit_sku'), table_name='product_units')
+    op.drop_index(op.f('ix_product_units_status'), table_name='product_units')
+    op.drop_index(op.f('ix_product_units_sale_item_id'), table_name='product_units')
+    op.drop_index(op.f('ix_product_units_repair_id'), table_name='product_units')
+    op.drop_index(op.f('ix_product_units_product_id'), table_name='product_units')
+    op.drop_index(op.f('ix_product_units_owner_type'), table_name='product_units')
+    op.drop_index(op.f('ix_product_units_owner_id'), table_name='product_units')
+    op.drop_index(op.f('ix_product_units_manufacturer_serial'), table_name='product_units')
+    op.drop_index(op.f('ix_product_units_inventory_batch_id'), table_name='product_units')
+    op.drop_table('product_units')
+    
     # ### commands auto generated by Alembic - please adjust! ###
     op.drop_index(op.f('ix_exchanges_store_id'), table_name='exchanges')
     op.drop_index(op.f('ix_exchanges_original_sale_item_id'), table_name='exchanges')

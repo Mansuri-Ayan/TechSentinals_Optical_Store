@@ -77,7 +77,7 @@ const Shopkeeper = () => {
   useEffect(() => { localStorage.setItem(POS_KEYS.customer, JSON.stringify(customer)); }, [customer]);
   useEffect(() => { localStorage.setItem(POS_KEYS.prescription, JSON.stringify(prescription)); }, [prescription]);
 
-  const handleAddToCart = (product, quantity, color, size) => {
+  const handleAddToCart = (product, quantity, color, size, unitSku = null) => {
     setCart((prev) => {
       const idx = prev.findIndex(
         (item) =>
@@ -88,9 +88,16 @@ const Shopkeeper = () => {
       if (idx > -1) {
         const updated = [...prev];
         updated[idx].quantity += quantity;
+        if (unitSku) {
+          const currentSkus = updated[idx].unit_skus ? updated[idx].unit_skus.split(',').map(s => s.trim()).filter(Boolean) : [];
+          if (!currentSkus.includes(unitSku)) {
+            currentSkus.push(unitSku);
+            updated[idx].unit_skus = currentSkus.join(', ');
+          }
+        }
         return updated;
       }
-      return [...prev, { product, quantity, selectedColor: color, selectedSize: size }];
+      return [...prev, { product, quantity, selectedColor: color, selectedSize: size, unit_skus: unitSku || '' }];
     });
   };
 
@@ -114,6 +121,18 @@ const Shopkeeper = () => {
           item.selectedColor === color &&
           item.selectedSize === size
           ? { ...item, quantity: qty }
+          : item
+      )
+    );
+  };
+
+  const handleUpdateUnitSkus = (productId, color, size, unitSkusStr) => {
+    setCart((prev) =>
+      prev.map((item) =>
+        item.product.id === productId &&
+          item.selectedColor === color &&
+          item.selectedSize === size
+          ? { ...item, unit_skus: unitSkusStr }
           : item
       )
     );
@@ -289,6 +308,7 @@ const Shopkeeper = () => {
           unit_price: Number(item.product.selling_price),
           discount_percent: 0,
           tax_percent: 0,
+          unit_skus: item.unit_skus ? item.unit_skus.split(',').map(s => s.trim()).filter(Boolean) : null,
         };
       });
 
@@ -469,6 +489,7 @@ const Shopkeeper = () => {
             onAddToCart={handleAddToCart}
             onRemoveFromCart={handleRemoveFromCart}
             onUpdateQuantity={handleUpdateQuantity}
+            onUpdateUnitSkus={handleUpdateUnitSkus}
             onBack={() => setActiveStep(2)}
             onNext={() => setActiveStep(4)}
           />

@@ -3,8 +3,9 @@ import { createPortal } from 'react-dom';
 import {
   X, ShoppingCart, Package, Tag, Layers, Star,
   ChevronLeft, ChevronRight, CheckCircle, AlertTriangle, XCircle,
-  Store, Truck, Shield,
+  Store, Truck, Shield, Box, Activity,
 } from 'lucide-react';
+import { useProductUnits } from '../../hooks/useProductUnits';
 
 /* ── gradient palette for placeholder images ── */
 const GRAD_PALETTE = [
@@ -112,6 +113,7 @@ const ProductViewModal = ({ item, onClose, onPlaceOrder }) => {
 
   const status = getStockStatus(item);
   const sc = statusConfig[status] || statusConfig['in_stock'];
+  const { data: units = [], isLoading: loadingUnits } = useProductUnits({ product_id: item.id });
 
   return createPortal(
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[999] p-3 sm:p-4 animate-fade-in">
@@ -223,6 +225,33 @@ const ProductViewModal = ({ item, onClose, onPlaceOrder }) => {
               ))}
             </div>
             <span className="text-xs text-slate-500 font-medium">4.0 · Premium Quality</span>
+          </div>
+
+          {/* Tracked Units */}
+          <div className="pt-4 border-t border-slate-100">
+            <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 mb-3">
+              <Box className="w-4 h-4 text-emerald-600" />
+              Tracked Units ({units.length})
+            </h3>
+            {loadingUnits ? (
+              <p className="text-xs text-slate-400 font-medium animate-pulse">Loading units...</p>
+            ) : units.length > 0 ? (
+              <div className="max-h-48 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
+                {units.map((u) => (
+                  <div key={u.id} className="flex items-center justify-between p-2.5 bg-slate-50 border border-slate-100 rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-2 h-2 rounded-full ${u.status === 'AVAILABLE' ? 'bg-emerald-500' : u.status === 'SOLD' ? 'bg-blue-500' : 'bg-slate-400'}`} />
+                      <span className="text-xs font-mono font-bold text-slate-700">{u.unit_sku}</span>
+                    </div>
+                    <span className="text-[10px] font-bold uppercase text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded-full">
+                      {u.status}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-slate-500">No individual units tracked for this product.</p>
+            )}
           </div>
         </div>
 

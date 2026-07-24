@@ -1392,6 +1392,19 @@ async def seed() -> None:
                     await session.flush()
                     admin_invs.append(inv.id)
 
+                    from services.product_unit_service import create_units_for_batch
+                    from models.product_unit import UnitSourceType
+                    await create_units_for_batch(
+                        db=session,
+                        product_id=pid,
+                        product_sku=PRODUCTS[i % len(PRODUCTS)]["sku"],
+                        inventory_batch_id=inv.id,
+                        count=wh_qty,
+                        owner_type=OwnerType.ADMIN,
+                        owner_id=admin_id,
+                        source_type=UnitSourceType.MANUAL_ADD,
+                    )
+
                 # Store inventory
                 stmt = select(Inventory).where(
                     Inventory.owner_type == OwnerType.STORE,
@@ -1420,6 +1433,19 @@ async def seed() -> None:
                     session.add(inv)
                     await session.flush()
                     store_invs.append(inv.id)
+
+                    from services.product_unit_service import create_units_for_batch
+                    from models.product_unit import UnitSourceType
+                    await create_units_for_batch(
+                        db=session,
+                        product_id=pid,
+                        product_sku=PRODUCTS[i % len(PRODUCTS)]["sku"],
+                        inventory_batch_id=inv.id,
+                        count=st_qty,
+                        owner_type=OwnerType.STORE,
+                        owner_id=store_id,
+                        source_type=UnitSourceType.MANUAL_ADD,
+                    )
 
             admin_inv_map[admin_id] = admin_invs
             store_inv_map[store_id] = store_invs
@@ -1988,6 +2014,17 @@ async def seed() -> None:
                     line_total=sale.total_amount
                 )
                 session.add(sale_item)
+                await session.flush()
+
+                from services.product_unit_service import assign_units_to_sale_item
+                await assign_units_to_sale_item(
+                    db=session,
+                    product_id=p_ids[i],
+                    owner_type=OwnerType.STORE,
+                    owner_id=store_id,
+                    quantity=1,
+                    sale_item_id=sale_item.id,
+                )
                 
                 if sale_paid > 0:
                     payment = SalePayment(
