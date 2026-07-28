@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import Pagination from '../../components/shared/Pagination';
 import AddEditBrandModal from '../../components/admin/AddEditBrandModal';
+import ConfirmationModal from '../../components/shared/ConfirmationModal';
 import { useStoreStore } from '../../store/store';
 import { useBrands } from '../../hooks/useBrands';
 import PermissionGuard from '../../components/shared/PermissionGuard';
@@ -47,6 +48,7 @@ const Brands = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [activeStatusFilter, setActiveStatusFilter] = useState('all');
   const [modalState, setModalState] = useState({ isOpen: false, item: null });
+  const [confirmModal, setConfirmModal] = useState({ isOpen: false, brandId: null });
 
   const perms = usePagePermissions({
     canCreate: 'brands:create',
@@ -105,15 +107,18 @@ const Brands = () => {
     }
   }, [createBrandAsync, updateBrandAsync]);
 
-  const handleDelete = useCallback(async (id) => {
-    if (window.confirm('Are you sure you want to deactivate this brand?')) {
-      try {
-        await deleteBrandAsync(id);
-      } catch {
-        // Error handled by mutation
-      }
+  const handleDelete = useCallback((id) => {
+    setConfirmModal({ isOpen: true, brandId: id });
+  }, []);
+
+  const handleConfirmDelete = useCallback(async () => {
+    if (!confirmModal.brandId) return;
+    try {
+      await deleteBrandAsync(confirmModal.brandId);
+    } catch {
+      // Error handled by mutation
     }
-  }, [deleteBrandAsync]);
+  }, [confirmModal.brandId, deleteBrandAsync]);
 
   const handleViewBrandItems = (brandId) => {
     navigate(buildPath(`inventory?brand_id=${brandId}`));
@@ -338,6 +343,18 @@ const Brands = () => {
         onClose={() => setModalState({ isOpen: false, item: null })}
         onSubmit={handleSaveBrand}
         isSaving={isSaving}
+      />
+
+      {/* Confirm Deactivate Modal */}
+      <ConfirmationModal
+        isOpen={confirmModal.isOpen}
+        onClose={() => setConfirmModal({ isOpen: false, brandId: null })}
+        onConfirm={handleConfirmDelete}
+        type="warning"
+        title="Deactivate Brand?"
+        message="Are you sure you want to deactivate this brand? It will no longer appear as an active brand in inventory."
+        confirmText="Deactivate"
+        cancelText="Cancel"
       />
     </div>
   );

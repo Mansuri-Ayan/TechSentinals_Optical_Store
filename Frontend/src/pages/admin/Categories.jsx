@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import Pagination from '../../components/shared/Pagination';
 import AddEditCategoryModal from '../../components/admin/AddEditCategoryModal';
+import ConfirmationModal from '../../components/shared/ConfirmationModal';
 import { useStoreStore } from '../../store/store';
 import { useCategories, useSubcategories } from '../../hooks/useCategories';
 import PermissionGuard from '../../components/shared/PermissionGuard';
@@ -107,6 +108,7 @@ const Categories = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [catPage, setCatPage] = useState(1);
   const [addEditModal, setAddEditModal] = useState({ isOpen: false, item: null, mode: 'category' });
+  const [confirmModal, setConfirmModal] = useState({ isOpen: false, id: null, type: null });
 
   const perms = usePagePermissions({
     canCreate: 'categories:create',
@@ -200,17 +202,24 @@ const Categories = () => {
     }
   }, [createCategoryAsync, updateCategoryAsync, createSubcategoryAsync, updateSubcategoryAsync]);
 
-  const handleDeleteCategory = useCallback(async (id) => {
-    if (window.confirm('Are you sure you want to deactivate this category?')) {
-      try { await deleteCategoryAsync(id); } catch { /* handled by mutation */ }
-    }
-  }, [deleteCategoryAsync]);
+  const handleDeleteCategory = useCallback((id) => {
+    setConfirmModal({ isOpen: true, id, type: 'category' });
+  }, []);
 
-  const handleDeleteSubcategory = useCallback(async (id) => {
-    if (window.confirm('Are you sure you want to deactivate this subcategory?')) {
-      try { await deleteSubcategoryAsync(id); } catch { /* handled by mutation */ }
-    }
-  }, [deleteSubcategoryAsync]);
+  const handleDeleteSubcategory = useCallback((id) => {
+    setConfirmModal({ isOpen: true, id, type: 'subcategory' });
+  }, []);
+
+  const handleConfirmDelete = useCallback(async () => {
+    if (!confirmModal.id || !confirmModal.type) return;
+    try {
+      if (confirmModal.type === 'category') {
+        await deleteCategoryAsync(confirmModal.id);
+      } else {
+        await deleteSubcategoryAsync(confirmModal.id);
+      }
+    } catch { /* handled by mutation */ }
+  }, [confirmModal.id, confirmModal.type, deleteCategoryAsync, deleteSubcategoryAsync]);
 
   const handleViewCategoryItems = (categoryId) => {
     navigate(buildPath(`inventory?category_id=${categoryId}`));
@@ -554,6 +563,22 @@ const Categories = () => {
         onClose={() => setAddEditModal({ isOpen: false, item: null, mode: 'category' })}
         onSubmit={handleSave}
         isSaving={isSavingCategory || isSavingSubcategory}
+      />
+
+      {/* Confirm Deactivate Modal */}
+      <ConfirmationModal
+        isOpen={confirmModal.isOpen}
+        onClose={() => setConfirmModal({ isOpen: false, id: null, type: null })}
+        onConfirm={handleConfirmDelete}
+        type="warning"
+        title={confirmModal.type === 'category' ? 'Deactivate Category?' : 'Deactivate Subcategory?'}
+        message={
+          confirmModal.type === 'category'
+            ? 'Are you sure you want to deactivate this category? It will be hidden from active category lists.'
+            : 'Are you sure you want to deactivate this subcategory? Products under it will no longer be linked to it.'
+        }
+        confirmText="Deactivate"
+        cancelText="Cancel"
       />
     </div>
   );

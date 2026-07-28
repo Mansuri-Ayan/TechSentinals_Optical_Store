@@ -36,6 +36,7 @@ import AdminDirectTransferModal from "../../components/admin/AdminDirectTransfer
 import AdminRequestStockModal from "../../components/admin/AdminRequestStockModal";
 import AddTransactionModal from "../../components/admin/suppliers/AddTransactionModal";
 import EditInventoryModal from "../../components/admin/EditInventoryModal";
+import ConfirmationModal from "../../components/shared/ConfirmationModal";
 
 import { useStoreStore, useAuthStore } from "../../store/store";
 import { useCategories, useSubcategories } from "../../hooks/useCategories";
@@ -350,42 +351,63 @@ const ProductCard = ({ item, onViewDetails, onDelete, onEdit, onRequestStock, on
           </div>
         )}
 
-        {/* Other stores stock toggle & list */}
-        {item.other_stocks && item.other_stocks.length > 0 && isBranchView && (
-          <div className="mt-3 pt-3 border-t border-slate-100">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowOtherStock(!showOtherStock);
-              }}
-              className="flex items-center justify-between w-full text-[11px] font-bold text-slate-500 hover:text-slate-800 transition-colors"
-            >
-              <span>Other Stores Stock ({item.other_stocks.reduce((acc, s) => acc + s.available_quantity, 0)} units)</span>
-              <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${showOtherStock ? 'rotate-180' : ''}`} />
-            </button>
-            {showOtherStock && (
-              <div className="mt-2 space-y-1.5 max-h-36 overflow-y-auto pr-1">
-                {item.other_stocks.map((stock) => (
-                  <div key={stock.store_id} className="flex items-center justify-between text-[11px] bg-slate-50 px-2.5 py-2 rounded-xl border border-slate-100">
-                    <span className="font-semibold text-slate-600">{stock.store_name}</span>
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-slate-850">{stock.available_quantity} units</span>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onRequestStock(item, stock);
-                        }}
-                        className="px-2 py-0.5 bg-blue-500/10 text-blue-700 hover:bg-blue-600 hover:text-white border border-blue-500/20 rounded-lg font-bold transition-all"
-                      >
-                        Request
-                      </button>
+        {/* Other stores stock toggle & list — shown for branch view OR admin out-of-stock items */}
+        {item.other_stocks && item.other_stocks.length > 0 && (isBranchView || (!isBranchView && status === "out_of_stock")) && (() => {
+          const otherStocksWithQty = item.other_stocks.filter(s => s.available_quantity > 0);
+          const totalOtherQty = otherStocksWithQty.reduce((acc, s) => acc + s.available_quantity, 0);
+          if (otherStocksWithQty.length === 0 && !isBranchView) return null;
+          return (
+            <div className="mt-3 pt-3 border-t border-slate-100">
+              {/* Admin out-of-stock info banner when stock is in branches */}
+              {!isBranchView && status === "out_of_stock" && totalOtherQty > 0 && (
+                <div className="mb-2 px-2.5 py-2 bg-blue-50 border border-blue-100 rounded-xl flex items-center gap-2">
+                  <Store className="w-3.5 h-3.5 text-blue-500 flex-shrink-0" />
+                  <span className="text-[10px] font-bold text-blue-700">
+                    {totalOtherQty} units distributed across {otherStocksWithQty.length} store{otherStocksWithQty.length > 1 ? 's' : ''}
+                  </span>
+                </div>
+              )}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowOtherStock(!showOtherStock);
+                }}
+                className="flex items-center justify-between w-full text-[11px] font-bold text-slate-500 hover:text-slate-800 transition-colors"
+              >
+                <span>
+                  {isBranchView
+                    ? `Other Stores Stock (${item.other_stocks.reduce((acc, s) => acc + s.available_quantity, 0)} units)`
+                    : `View Store Distribution (${totalOtherQty} units in stores)`
+                  }
+                </span>
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${showOtherStock ? 'rotate-180' : ''}`} />
+              </button>
+              {showOtherStock && (
+                <div className="mt-2 space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                  {(isBranchView ? item.other_stocks : otherStocksWithQty).map((stock) => (
+                    <div key={stock.store_id} className="flex items-center justify-between text-[11px] bg-slate-50 px-2.5 py-2 rounded-xl border border-slate-100">
+                      <span className="font-semibold text-slate-600">{stock.store_name}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-slate-850">{stock.available_quantity} units</span>
+                        {isBranchView && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onRequestStock(item, stock);
+                            }}
+                            className="px-2 py-0.5 bg-blue-500/10 text-blue-700 hover:bg-blue-600 hover:text-white border border-blue-500/20 rounded-lg font-bold transition-all"
+                          >
+                            Request
+                          </button>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })()}
       </div>
     </div>
   );
@@ -511,6 +533,7 @@ const Inventory = () => {
   const [preselectedProductId, setPreselectedProductId] = useState(null);
   const [preselectedSupplierId, setPreselectedSupplierId] = useState(null);
   const [editItem, setEditItem] = useState(null);
+  const [confirmDeleteModal, setConfirmDeleteModal] = useState({ isOpen: false, inventoryId: null });
 
   const { suppliers } = useSuppliers("admin");
   const { recordPurchaseAsync } = usePurchaseOrders({
@@ -869,20 +892,19 @@ const Inventory = () => {
     }
   };
 
-  const handleDelete = async (id) => {
-    if (
-      window.confirm(
-        "Deactivate this inventory item? (It will be hidden from active inventory)",
-      )
-    ) {
-      try {
-        await updateInventoryAsync({
-          id,
-          payload: { is_active: false },
-        });
-      } catch (err) {
-        toast.error("Failed to deactivate inventory item.");
-      }
+  const handleDelete = (id) => {
+    setConfirmDeleteModal({ isOpen: true, inventoryId: id });
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!confirmDeleteModal.inventoryId) return;
+    try {
+      await updateInventoryAsync({
+        id: confirmDeleteModal.inventoryId,
+        payload: { is_active: false },
+      });
+    } catch (err) {
+      toast.error("Failed to deactivate inventory item.");
     }
   };
 
@@ -1445,6 +1467,17 @@ const Inventory = () => {
         inventoryItem={editItem}
         onClose={() => setEditItem(null)}
         onSubmit={handleEditItem}
+      />
+
+      <ConfirmationModal
+        isOpen={confirmDeleteModal.isOpen}
+        onClose={() => setConfirmDeleteModal({ isOpen: false, inventoryId: null })}
+        onConfirm={handleConfirmDelete}
+        type="warning"
+        title="Deactivate Inventory Item?"
+        message="This item will be hidden from active inventory. You can reactivate it later if needed."
+        confirmText="Deactivate"
+        cancelText="Cancel"
       />
     </div>
   );

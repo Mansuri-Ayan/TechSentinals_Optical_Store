@@ -10,6 +10,7 @@ import SearchBar from '../../components/shared/SearchBar';
 import DataTable from '../../components/shared/DataTable';
 import StatusBadge from '../../components/shared/StatusBadge';
 import AddEditLabModal from '../../components/admin/AddEditLabModal';
+import ConfirmationModal from '../../components/shared/ConfirmationModal';
 import { useStoreStore } from '../../store/store';
 import { useLabs } from '../../hooks/useLabs';
 
@@ -25,6 +26,7 @@ const Labs = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [activeStatusFilter, setActiveStatusFilter] = useState('all');
   const [modalState, setModalState] = useState({ isOpen: false, item: null });
+  const [confirmModal, setConfirmModal] = useState({ isOpen: false, labId: null });
 
   // Debounce search term to optimize query fetching
   useEffect(() => {
@@ -85,16 +87,19 @@ const Labs = () => {
     }
   }, [createLabAsync, updateLabAsync]);
 
-  const handleDelete = useCallback(async (e, id) => {
+  const handleDelete = useCallback((e, id) => {
     e.stopPropagation(); // Avoid triggering row selection click
-    if (window.confirm('Are you sure you want to delete this lab partner?')) {
-      try {
-        await deleteLabAsync(id);
-      } catch {
-        // Error handled in hook/mutation
-      }
+    setConfirmModal({ isOpen: true, labId: id });
+  }, []);
+
+  const handleConfirmDelete = useCallback(async () => {
+    if (!confirmModal.labId) return;
+    try {
+      await deleteLabAsync(confirmModal.labId);
+    } catch {
+      // Error handled in hook/mutation
     }
-  }, [deleteLabAsync]);
+  }, [confirmModal.labId, deleteLabAsync]);
 
   const handleEditClick = useCallback((e, item) => {
     e.stopPropagation(); // Avoid triggering row selection click
@@ -369,6 +374,18 @@ const Labs = () => {
         onClose={() => setModalState({ isOpen: false, item: null })}
         onSubmit={handleSaveLab}
         isSaving={isSaving}
+      />
+
+      {/* Confirm Delete Modal */}
+      <ConfirmationModal
+        isOpen={confirmModal.isOpen}
+        onClose={() => setConfirmModal({ isOpen: false, labId: null })}
+        onConfirm={handleConfirmDelete}
+        type="danger"
+        title="Delete Lab Partner?"
+        message="Are you sure you want to delete this lab partner? This action cannot be undone."
+        confirmText="Delete"
+        cancelText="Cancel"
       />
 
     </div>
