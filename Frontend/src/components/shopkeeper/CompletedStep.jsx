@@ -312,7 +312,7 @@ const CompletedStep = ({ customer, cart, prescription, paymentInfo, savedCustome
                   </div>
                 )}
                 {loyaltyDiscount > 0 && (
-                  <div className="flex justify-between items-center text-xs text-emerald-600 font-bold">
+                  <div className="flex justify-between items-center text-xs text-red-500 font-bold">
                     <span>Loyalty Points Discount</span>
                     <span className="font-mono">- ₹{loyaltyDiscount.toLocaleString('en-IN')}</span>
                   </div>

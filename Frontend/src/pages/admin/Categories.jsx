@@ -129,7 +129,6 @@ const Categories = () => {
     return () => clearTimeout(timer);
   }, [searchTerm, selectedCategory]);
 
-  // ── Categories query (View 1) ──
   const {
     categories,
     total: totalCategories,
@@ -143,7 +142,8 @@ const Categories = () => {
     isSavingCategory,
   } = useCategories(inPageStoreId, {
     page: catPage,
-    limit: 100, // Load all on the dashboard view for simple display
+    limit: ITEMS_PER_PAGE,
+    paginate: true,
   });
 
   // ── Subcategories query (View 2) ──
@@ -193,14 +193,18 @@ const Categories = () => {
             payload: { name: data.name, description: data.description || null, is_active: data.is_active },
           });
         } else {
-          await createCategoryAsync({ name: data.name, description: data.description || null });
+          await createCategoryAsync({
+            name: data.name,
+            description: data.description || null,
+            store_id: inPageStoreId === 'admin' ? null : Number(inPageStoreId),
+          });
         }
       }
       return true;
     } catch {
       return false;
     }
-  }, [createCategoryAsync, updateCategoryAsync, createSubcategoryAsync, updateSubcategoryAsync]);
+  }, [createCategoryAsync, updateCategoryAsync, createSubcategoryAsync, updateSubcategoryAsync, inPageStoreId]);
 
   const handleDeleteCategory = useCallback((id) => {
     setConfirmModal({ isOpen: true, id, type: 'category' });
@@ -430,6 +434,13 @@ const Categories = () => {
                   );
                 })}
               </div>
+
+              <Pagination
+                totalItems={totalCategories}
+                itemsPerPage={ITEMS_PER_PAGE}
+                currentPage={catPage}
+                onPageChange={setCatPage}
+              />
             </div>
           )}
         </>

@@ -6,6 +6,7 @@ from sqlalchemy.orm import selectinload
 from models.sale import Sale
 from models.bill_settings import BillSettings
 from models.bill import Bill
+from models.loyalty_transaction import LoyaltyTransaction, LoyaltyTransactionType
 from datetime import datetime
 
 async def generate_bill_html(sale: Sale, db: AsyncSession) -> str:
@@ -201,6 +202,28 @@ async def generate_bill_html(sale: Sale, db: AsyncSession) -> str:
         </div>
         """
 
+    # Fetch loyalty discount from LoyaltyTransaction table
+    loyalty_discount = Decimal("0.00")
+    if sale.id:
+        txn_stmt = select(LoyaltyTransaction).where(
+            LoyaltyTransaction.sale_id == sale.id,
+            LoyaltyTransaction.type == LoyaltyTransactionType.REDEEMED
+        )
+        txn_res = await db.execute(txn_stmt)
+        txns = txn_res.scalars().all()
+        for t in txns:
+            if t.rupee_value:
+                loyalty_discount += Decimal(str(t.rupee_value))
+
+    loyalty_discount_row = ""
+    if loyalty_discount > 0:
+        loyalty_discount_row = f"""
+        <div style="display: flex; justify-content: space-between; align-items: center; color: #ef4444; margin-bottom: 4px;">
+            <span>Loyalty Points Discount</span>
+            <span style="font-family: monospace; font-weight: 700;">- ₹{loyalty_discount:,.2f}</span>
+        </div>
+        """
+
     date_str = sale.sale_date.strftime("%d %b %Y") if isinstance(sale.sale_date, datetime) or hasattr(sale.sale_date, "strftime") else str(sale.sale_date)
 
     # Main inner layout styled matching CompletedStep receipt style
@@ -286,6 +309,7 @@ async def generate_bill_html(sale: Sale, db: AsyncSession) -> str:
                 <span style="font-family: monospace; font-weight: 700;">₹{sale.subtotal:,.2f}</span>
             </div>
             {discount_row}
+            {loyalty_discount_row}
             {gst_calc_row}
             <div style="display: flex; justify-content: space-between; align-items: center; color: #0f172a; font-weight: 800; border-top: 1px solid #e2e8f0; padding-top: 6px; margin-top: 2px;">
                 <span>Final Total</span>

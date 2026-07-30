@@ -41,11 +41,11 @@ export const useCategories = (storeId = null, filters = {}) => {
 
   const params = {
     page: filters.page || 1,
-    limit: filters.limit || 20,
-    paginate: filters.paginate !== undefined ? filters.paginate : true,
+    limit: filters.limit || 100,
+    paginate: filters.paginate !== undefined ? filters.paginate : false,
+    all_tenant: filters.all_tenant !== undefined ? filters.all_tenant : (isPathAdmin && !storeId ? true : false),
     ...(storeId ? { store_id: storeId } : {}),
     ...(filters.search ? { search: filters.search } : {}),
-    ...(filters.all_tenant !== undefined ? { all_tenant: filters.all_tenant } : {}),
   };
 
   const query = useQuery({
@@ -118,8 +118,8 @@ export const useSubcategories = (categoryId, storeId = null, filters = {}) => {
 
   const params = {
     page: filters.page || 1,
-    limit: filters.limit || 20,
-    paginate: filters.paginate !== undefined ? filters.paginate : true,
+    limit: filters.limit || 100,
+    paginate: filters.paginate !== undefined ? filters.paginate : false,
     ...(storeId ? { store_id: storeId } : {}),
     ...(filters.search ? { search: filters.search } : {}),
   };

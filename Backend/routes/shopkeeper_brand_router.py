@@ -2,7 +2,7 @@
 import math
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from core.deps import get_current_user
+from core.deps import get_current_user, require_permission, get_user_admin_id
 from db.session import get_db
 from models.admin import Admin
 from schemas.brand import BrandCreate, BrandUpdate, BrandRead
@@ -24,14 +24,10 @@ async def list_brands(
     limit: int = Query(20, ge=1, le=100),
     paginate: bool = Query(True),
     db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_user),
+    current_user = Depends(require_permission('brands', 'read')),
 ):
-    if isinstance(current_user, Admin):
-        admin_id = current_user.id
-        store_id = None
-    else:
-        admin_id = current_user.store.admin_id
-        store_id = current_user.store_id
+    admin_id = get_user_admin_id(current_user)
+    store_id = None if isinstance(current_user, Admin) else getattr(current_user, "store_id", None)
 
     items, total, active_cnt, inactive_cnt = await get_brands_by_admin(
         db,
@@ -67,12 +63,9 @@ async def list_brands(
 async def get_brand_endpoint(
     brand_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_user),
+    current_user = Depends(require_permission('brands', 'read')),
 ) -> BrandRead:
-    if isinstance(current_user, Admin):
-        admin_id = current_user.id
-    else:
-        admin_id = current_user.store.admin_id
+    admin_id = get_user_admin_id(current_user)
 
     brand = await get_brand(db, brand_id)
     if brand is None or brand.admin_id != admin_id:
@@ -91,12 +84,11 @@ async def get_brand_endpoint(
 async def create_brand_endpoint(
     payload: BrandCreate,
     db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_user),
+    current_user = Depends(require_permission('brands', 'create')),
 ) -> BrandRead:
-    if isinstance(current_user, Admin):
-        admin_id = current_user.id
-    else:
-        admin_id = current_user.store.admin_id
+    admin_id = get_user_admin_id(current_user)
+    if not isinstance(current_user, Admin):
+        payload.store_id = current_user.store_id
     brand = await create_brand(db, admin_id=admin_id, payload=payload)
     return BrandRead.model_validate(brand)
 
@@ -109,12 +101,9 @@ async def update_brand_endpoint(
     brand_id: int,
     payload: BrandUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_user),
+    current_user = Depends(require_permission('brands', 'update')),
 ) -> BrandRead:
-    if isinstance(current_user, Admin):
-        admin_id = current_user.id
-    else:
-        admin_id = current_user.store.admin_id
+    admin_id = get_user_admin_id(current_user)
 
     brand = await get_brand(db, brand_id)
     if brand is None or brand.admin_id != admin_id:
@@ -133,12 +122,9 @@ async def update_brand_endpoint(
 async def delete_brand_endpoint(
     brand_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_user),
+    current_user = Depends(require_permission('brands', 'delete')),
 ) -> BrandRead:
-    if isinstance(current_user, Admin):
-        admin_id = current_user.id
-    else:
-        admin_id = current_user.store.admin_id
+    admin_id = get_user_admin_id(current_user)
 
     brand = await get_brand(db, brand_id)
     if brand is None or brand.admin_id != admin_id:

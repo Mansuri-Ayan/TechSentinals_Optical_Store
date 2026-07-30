@@ -31,8 +31,10 @@ const PaymentStep = ({ customer, cart, prescription, onBack, onComplete }) => {
   const [categoryPointsEnabled, setCategoryPointsEnabled] = useState(true);
   const [pricePointsEnabled, setPricePointsEnabled] = useState(true);
   const [customPoints, setCustomPoints] = useState(0);
-  const [pointsToRedeem, setPointsToRedeem] = useState(0);
-  const [isRedeeming, setIsRedeeming] = useState(false);
+  const [pointsToRedeemSelf, setPointsToRedeemSelf] = useState(0);
+  const [isRedeemingSelf, setIsRedeemingSelf] = useState(false);
+  const [pointsToRedeemOther, setPointsToRedeemOther] = useState(0);
+  const [isRedeemingOther, setIsRedeemingOther] = useState(false);
   const [enabledCategoryIds, setEnabledCategoryIds] = useState(null); // null = all
   const [preview, setPreview] = useState(null);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -47,18 +49,26 @@ const PaymentStep = ({ customer, cart, prescription, onBack, onComplete }) => {
   const { data: linkedMembers = [] } = useLinkedMembers(customer?.id);
 
   // Compute values for redemption calculations
-  const redeemableCustomer = loyaltyCustomer || customer;
-  const availablePoints = preview?.customer_current_points ?? redeemableCustomer?.current_points ?? 0;
   const pointsPerRupee = loyaltyConfig?.points_per_rupee || 50;
   const minPoints = loyaltyConfig?.min_redemption_points || 0;
   const maxRedemptionPercentage = loyaltyConfig?.max_redemption_percentage ?? 100;
   
-  // Calculate max points they can redeem
+  // Calculate max points they can redeem combined
   const maxRupeeDiscount = (subtotal - discount) * (maxRedemptionPercentage / 100);
   const maxPointsForDiscount = Math.floor(maxRupeeDiscount * pointsPerRupee);
-  const maxPointsRedeemable = Math.min(availablePoints, maxPointsForDiscount);
-  const maxSavings = Math.floor(maxPointsRedeemable / pointsPerRupee);
-  const hasMinPoints = availablePoints >= minPoints;
+
+  // Main customer (Self) available points
+  const availablePointsSelf = customer?.current_points ?? 0;
+  const maxPointsRedeemableSelf = Math.min(availablePointsSelf, maxPointsForDiscount);
+  const maxSavingsSelf = Math.floor(maxPointsRedeemableSelf / pointsPerRupee);
+  const hasMinPointsSelf = availablePointsSelf >= minPoints;
+
+  // Other customer (Person B) available points
+  const availablePointsOther = loyaltyCustomer?.current_points ?? 0;
+  const remainingLimitForOther = Math.max(0, maxPointsForDiscount - (isRedeemingSelf ? pointsToRedeemSelf : 0));
+  const maxPointsRedeemableOther = Math.min(availablePointsOther, remainingLimitForOther);
+  const maxSavingsOther = Math.floor(maxPointsRedeemableOther / pointsPerRupee);
+  const hasMinPointsOther = availablePointsOther >= minPoints;
 
   // Compute redemption discount from preview
   const loyaltyDiscount = preview?.redemption_valid ? Number(preview.rupee_discount || 0) : 0;
@@ -122,11 +132,13 @@ const PaymentStep = ({ customer, cart, prescription, onBack, onComplete }) => {
       const previewFinalAmount = Math.max(0, subtotal - discount);
       const result = await loyaltyApi.calculateLoyaltyPreview({
         customer_id: customer.id,
-        loyalty_redeem_customer_id: loyaltyCustomer?.id,
+        loyalty_redeem_customer_id: customer.id,
+        loyalty_redeem_other_customer_id: loyaltyCustomer?.id,
         loyalty_awarded_to_customer_id: billingAccountCustomer?.id,
         sale_items: saleItemsForPreview,
         final_amount: previewFinalAmount,
-        points_to_redeem: pointsToRedeem,
+        points_to_redeem_self: pointsToRedeemSelf,
+        points_to_redeem_other: pointsToRedeemOther,
         custom_points: customPoints,
         category_points_override: categoryPointsEnabled,
         price_points_override: pricePointsEnabled,
@@ -142,7 +154,7 @@ const PaymentStep = ({ customer, cart, prescription, onBack, onComplete }) => {
     } finally {
       setPreviewLoading(false);
     }
-  }, [isLoyaltyEnabled, customer?.id, loyaltyCustomer?.id, billingAccountCustomer?.id, saleItemsForPreview, subtotal, discount, pointsToRedeem, customPoints, categoryPointsEnabled, pricePointsEnabled, enabledCategoryIds]);
+  }, [isLoyaltyEnabled, customer?.id, loyaltyCustomer?.id, billingAccountCustomer?.id, saleItemsForPreview, subtotal, discount, pointsToRedeemSelf, pointsToRedeemOther, customPoints, categoryPointsEnabled, pricePointsEnabled, enabledCategoryIds]);
 
 
 
@@ -187,8 +199,10 @@ const PaymentStep = ({ customer, cart, prescription, onBack, onComplete }) => {
       billing_account_customer: billingAccountCustomer,
       billing_account_customer_id: billingAccountCustomer?.id,
       loyalty_awarded_to_customer_id: billingAccountCustomer?.id,
-      loyalty_redeem_customer_id: loyaltyCustomer?.id,
-      pointsToRedeem,
+      loyalty_redeem_customer_id: customer?.id,
+      loyalty_redeem_other_customer_id: loyaltyCustomer?.id,
+      pointsToRedeemSelf,
+      pointsToRedeemOther,
       customPoints,
       categoryPointsEnabled,
       pricePointsEnabled,
@@ -417,106 +431,213 @@ const PaymentStep = ({ customer, cart, prescription, onBack, onComplete }) => {
                 <div className="space-y-3">
                   <h4 className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
                     <Gift className="w-3 h-3 text-emerald-500" /> Points Redemption
-                  </h4>
-
-                  <div className="pt-1 pb-2">
-                    <p className="text-[10px] text-slate-500 font-semibold mb-2">Want to use another person's points?</p>
-                    <LoyaltyCustomerSearch 
-                      selectedCustomer={loyaltyCustomer} 
-                      onSelectCustomer={(c) => {
-                        setLoyaltyCustomer(c);
-                        setPointsToRedeem(0);
-                        setIsRedeeming(false);
-                      }} 
-                      onClear={() => { 
-                        setLoyaltyCustomer(null); 
-                        setPointsToRedeem(0); 
-                        setIsRedeeming(false); 
-                      }} 
-                    />
-                  </div>
-
-                  {!hasMinPoints ? (
-                    <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-500 text-[11px] font-medium flex items-center gap-2">
-                      <Info className="w-4 h-4 text-slate-405 flex-shrink-0" />
-                      <span>
-                        Redemption requires at least <span className="font-extrabold">{minPoints}</span> points. Customer has <span className="font-extrabold">{availablePoints}</span> points.
-                      </span>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      <label className="flex items-center gap-3 p-3 bg-emerald-50/40 hover:bg-emerald-50 rounded-xl border border-emerald-100 cursor-pointer transition-colors">
-                        <input
-                          type="checkbox"
-                          checked={isRedeeming}
-                          onChange={(e) => {
-                            setIsRedeeming(e.target.checked);
-                            if (e.target.checked) {
-                              setPointsToRedeem(maxPointsRedeemable);
-                            } else {
-                              setPointsToRedeem(0);
-                            }
-                          }}
-                          className="w-4 h-4 rounded border-emerald-300 text-emerald-600 focus:ring-emerald-500"
-                        />
-                        <div className="flex-1">
-                          <p className="text-xs font-bold text-slate-700">Apply Points Redemption</p>
-                          <p className="text-[10px] text-slate-400 font-semibold">
-                            Redeem points for instant discount (Save up to ₹{maxSavings.toLocaleString('en-IN')})
-                          </p>
-                        </div>
-                        {isRedeeming && pointsToRedeem > 0 && (
-                          <span className="text-xs font-black text-emerald-700 bg-emerald-100/70 px-2.5 py-1 rounded-lg border border-emerald-200">
-                            -{pointsToRedeem} pts
-                          </span>
-                        )}
-                      </label>
-
-                      {isRedeeming && (
-                        <div className="ml-7 p-3 bg-slate-50 border border-slate-150 rounded-xl space-y-3 animate-fade-in">
-                          <div className="flex items-center justify-between gap-3">
-                            <div>
-                              <p className="text-[10px] font-bold text-slate-500 uppercase">Points to Redeem</p>
-                              <p className="text-[9px] text-slate-400 font-medium">
-                                Max redeemable: {maxPointsRedeemable} pts (Min: {minPoints} pts)
-                              </p>
-                            </div>
-                            <div className="flex items-center gap-1.5">
-                              <input
-                                type="number"
-                                min="0"
-                                max={availablePoints}
-                                value={pointsToRedeem || ''}
-                                onChange={(e) => setPointsToRedeem(Math.max(0, parseInt(e.target.value) || 0))}
-                                placeholder="0"
-                                className="w-20 text-right px-2.5 py-1.5 text-xs font-bold border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white"
-                              />
-                              <span className="text-xs font-bold text-slate-400">pts</span>
-                            </div>
+                  </h4>                  {/* Self Points Redemption Box */}
+                  <div className="space-y-2">
+                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Redeem Own Points</p>
+                    {!hasMinPointsSelf ? (
+                      <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-500 text-[11px] font-medium flex items-center gap-2">
+                        <Info className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                        <span>
+                          Self-redemption requires at least <span className="font-extrabold">{minPoints}</span> points. Customer has <span className="font-extrabold">{availablePointsSelf}</span> points.
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <label className="flex items-center gap-3 p-3 bg-emerald-50/40 hover:bg-emerald-50 rounded-xl border border-emerald-100 cursor-pointer transition-colors">
+                          <input
+                            type="checkbox"
+                            checked={isRedeemingSelf}
+                            onChange={(e) => {
+                              setIsRedeemingSelf(e.target.checked);
+                              if (e.target.checked) {
+                                setPointsToRedeemSelf(maxPointsRedeemableSelf);
+                              } else {
+                                setPointsToRedeemSelf(0);
+                              }
+                            }}
+                            className="w-4 h-4 rounded border-emerald-300 text-emerald-600 focus:ring-emerald-500"
+                          />
+                          <div className="flex-1">
+                            <p className="text-xs font-bold text-slate-700">Apply Own Points Redemption</p>
+                            <p className="text-[10px] text-slate-400 font-semibold">
+                              Redeem points for instant discount (Save up to ₹{maxSavingsSelf.toLocaleString('en-IN')})
+                            </p>
                           </div>
+                          {isRedeemingSelf && pointsToRedeemSelf > 0 && (
+                            <span className="text-xs font-black text-emerald-700 bg-emerald-100/70 px-2.5 py-1 rounded-lg border border-emerald-200">
+                              -{pointsToRedeemSelf} pts
+                            </span>
+                          )}
+                        </label>
 
-                          <div className="flex gap-2 pt-1">
-                            <button
-                              type="button"
-                              onClick={() => setPointsToRedeem(maxPointsRedeemable)}
-                              className="flex-1 py-1 px-2 text-[10px] font-bold text-emerald-700 bg-emerald-100/40 hover:bg-emerald-100/70 border border-emerald-150 rounded-lg transition-colors cursor-pointer"
-                            >
-                              Redeem Max ({maxPointsRedeemable})
-                            </button>
-                            {maxPointsRedeemable > minPoints * 2 && (
+                        {isRedeemingSelf && (
+                          <div className="ml-7 p-3 bg-slate-50 border border-slate-150 rounded-xl space-y-3 animate-fade-in">
+                            <div className="flex items-center justify-between gap-3">
+                              <div>
+                                <p className="text-[10px] font-bold text-slate-500 uppercase">Points to Redeem</p>
+                                <p className="text-[9px] text-slate-400 font-medium">
+                                  Max redeemable: {maxPointsRedeemableSelf} pts (Min: {minPoints} pts)
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  max={availablePointsSelf}
+                                  value={pointsToRedeemSelf || ''}
+                                  onChange={(e) => setPointsToRedeemSelf(Math.max(0, parseInt(e.target.value) || 0))}
+                                  placeholder="0"
+                                  className="w-20 text-right px-2.5 py-1.5 text-xs font-bold border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white"
+                                />
+                                <span className="text-xs font-bold text-slate-400">pts</span>
+                              </div>
+                            </div>
+
+                            <div className="flex gap-2 pt-1">
                               <button
                                 type="button"
-                                onClick={() => setPointsToRedeem(Math.floor(maxPointsRedeemable / 2))}
-                                className="flex-1 py-1 px-2 text-[10px] font-bold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg transition-colors cursor-pointer"
+                                onClick={() => setPointsToRedeemSelf(maxPointsRedeemableSelf)}
+                                className={`flex-1 py-1 px-2 text-[10px] font-bold rounded-lg border transition-all cursor-pointer ${
+                                  pointsToRedeemSelf === maxPointsRedeemableSelf
+                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-300 ring-1 ring-emerald-100 font-extrabold shadow-sm'
+                                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                                }`}
                               >
-                                Redeem Half ({Math.floor(maxPointsRedeemable / 2)})
+                                Redeem Max ({maxPointsRedeemableSelf})
                               </button>
+                              {maxPointsRedeemableSelf > minPoints * 2 && (
+                                <button
+                                  type="button"
+                                  onClick={() => setPointsToRedeemSelf(Math.floor(maxPointsRedeemableSelf / 2))}
+                                  className={`flex-1 py-1 px-2 text-[10px] font-bold rounded-lg border transition-all cursor-pointer ${
+                                    pointsToRedeemSelf === Math.floor(maxPointsRedeemableSelf / 2)
+                                      ? 'bg-emerald-50 text-emerald-700 border-emerald-300 ring-1 ring-emerald-100 font-extrabold shadow-sm'
+                                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                                  }`}
+                                >
+                                  Redeem Half ({Math.floor(maxPointsRedeemableSelf / 2)})
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Other Person's Points Redemption Box */}
+                  <div className="space-y-2 pt-2 border-t border-slate-100">
+                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Redeem Another Person's Points</p>
+                    <div className="pb-1">
+                      <LoyaltyCustomerSearch 
+                        selectedCustomer={loyaltyCustomer} 
+                        onSelectCustomer={(c) => {
+                          setLoyaltyCustomer(c);
+                          setPointsToRedeemOther(0);
+                          setIsRedeemingOther(false);
+                        }} 
+                        onClear={() => { 
+                          setLoyaltyCustomer(null); 
+                          setPointsToRedeemOther(0); 
+                          setIsRedeemingOther(false); 
+                        }} 
+                      />
+                    </div>
+
+                    {loyaltyCustomer && (
+                      <>
+                        {!hasMinPointsOther ? (
+                          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-500 text-[11px] font-medium flex items-center gap-2">
+                            <Info className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                            <span>
+                              Redemption for {loyaltyCustomer.first_name} requires at least <span className="font-extrabold">{minPoints}</span> points. Customer has <span className="font-extrabold">{availablePointsOther}</span> points.
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="space-y-2 animate-fade-in">
+                            <label className="flex items-center gap-3 p-3 bg-emerald-50/40 hover:bg-emerald-50 rounded-xl border border-emerald-100 cursor-pointer transition-colors">
+                              <input
+                                type="checkbox"
+                                checked={isRedeemingOther}
+                                onChange={(e) => {
+                                  setIsRedeemingOther(e.target.checked);
+                                  if (e.target.checked) {
+                                    setPointsToRedeemOther(maxPointsRedeemableOther);
+                                  } else {
+                                    setPointsToRedeemOther(0);
+                                  }
+                                }}
+                                className="w-4 h-4 rounded border-emerald-300 text-emerald-600 focus:ring-emerald-500"
+                              />
+                              <div className="flex-1">
+                                <p className="text-xs font-bold text-slate-700">Apply {loyaltyCustomer.first_name}'s Points</p>
+                                <p className="text-[10px] text-slate-400 font-semibold">
+                                  Redeem points for instant discount (Save up to ₹{maxSavingsOther.toLocaleString('en-IN')})
+                                </p>
+                              </div>
+                              {isRedeemingOther && pointsToRedeemOther > 0 && (
+                                <span className="text-xs font-black text-emerald-700 bg-emerald-100/70 px-2.5 py-1 rounded-lg border border-emerald-200">
+                                  -{pointsToRedeemOther} pts
+                                </span>
+                              )}
+                            </label>
+
+                            {isRedeemingOther && (
+                              <div className="ml-7 p-3 bg-slate-50 border border-slate-150 rounded-xl space-y-3 animate-fade-in">
+                                <div className="flex items-center justify-between gap-3">
+                                  <div>
+                                    <p className="text-[10px] font-bold text-slate-500 uppercase">Points to Redeem</p>
+                                    <p className="text-[9px] text-slate-400 font-medium">
+                                      Max redeemable: {maxPointsRedeemableOther} pts (Min: {minPoints} pts)
+                                    </p>
+                                  </div>
+                                  <div className="flex items-center gap-1.5">
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      max={availablePointsOther}
+                                      value={pointsToRedeemOther || ''}
+                                      onChange={(e) => setPointsToRedeemOther(Math.max(0, parseInt(e.target.value) || 0))}
+                                      placeholder="0"
+                                      className="w-20 text-right px-2.5 py-1.5 text-xs font-bold border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white"
+                                    />
+                                    <span className="text-xs font-bold text-slate-400">pts</span>
+                                  </div>
+                                </div>
+
+                                <div className="flex gap-2 pt-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => setPointsToRedeemOther(maxPointsRedeemableOther)}
+                                    className={`flex-1 py-1 px-2 text-[10px] font-bold rounded-lg border transition-all cursor-pointer ${
+                                      pointsToRedeemOther === maxPointsRedeemableOther
+                                        ? 'bg-emerald-50 text-emerald-700 border-emerald-300 ring-1 ring-emerald-100 font-extrabold shadow-sm'
+                                        : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                                    }`}
+                                  >
+                                    Redeem Max ({maxPointsRedeemableOther})
+                                  </button>
+                                  {maxPointsRedeemableOther > minPoints * 2 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setPointsToRedeemOther(Math.floor(maxPointsRedeemableOther / 2))}
+                                      className={`flex-1 py-1 px-2 text-[10px] font-bold rounded-lg border transition-all cursor-pointer ${
+                                        pointsToRedeemOther === Math.floor(maxPointsRedeemableOther / 2)
+                                          ? 'bg-emerald-50 text-emerald-700 border-emerald-300 ring-1 ring-emerald-100 font-extrabold shadow-sm'
+                                          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                                      }`}
+                                    >
+                                      Redeem Half ({Math.floor(maxPointsRedeemableOther / 2)})
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
                             )}
                           </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
+                        )}
+                      </>
+                    )}
+                  </div>
 
                   {previewError && (
                     <div className="flex items-start gap-2 p-2.5 bg-red-50 border border-red-100 rounded-lg">

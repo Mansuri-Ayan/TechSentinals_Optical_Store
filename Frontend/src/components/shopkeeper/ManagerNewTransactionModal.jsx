@@ -6,7 +6,7 @@ import { useProducts } from '../../hooks/useProducts';
 import { getInventoryApi } from '../../api/inventory/inventory.api';
 
 const MANAGER_EMPTY_FORM = {
-  mode: 'request', // 'request' (pull), 'send' (push), or 'purchase'
+  mode: 'request', // 'request', 'send', 'purchase', 'damage', 'loss', 'sale', 'return'
   targetStore: 'admin', // admin warehouse or another store ID
   categoryId: '',
   product: '',
@@ -21,6 +21,10 @@ const ManagerNewTransactionModal = ({
   onRequest,
   onPush,
   onPurchase,
+  onDamage,
+  onLoss,
+  onSale,
+  onReturn,
   currentUser,
   stores,
   isSubmitting,
@@ -28,9 +32,13 @@ const ManagerNewTransactionModal = ({
   const [form, setForm] = useState(MANAGER_EMPTY_FORM);
   const [errors, setErrors] = useState({});
 
-  const { categories } = useCategories(null, { limit: 100, all_tenant: true });
+  const categoryStoreId = form.mode === 'request'
+    ? (form.targetStore === 'admin' ? 'admin' : (form.targetStore || null))
+    : (currentUser?.store_id || null);
 
-  // If mode is 'send', we show OUR store's inventory
+  const { categories } = useCategories(categoryStoreId, { limit: 100, all_tenant: false });
+
+  // If mode is one of the own store stock-reducing actions or return
   const { data: ownInventoryData, isLoading: isLoadingOwnInventory } = useQuery({
     queryKey: ['inventory', 'STORE', currentUser?.store_id],
     queryFn: () => getInventoryApi({
@@ -38,10 +46,10 @@ const ManagerNewTransactionModal = ({
       owner_id: currentUser?.store_id,
       paginate: false
     }),
-    enabled: isOpen && form.mode === 'send' && !!currentUser?.store_id,
+    enabled: isOpen && ['send', 'damage', 'loss', 'sale', 'return'].includes(form.mode) && !!currentUser?.store_id,
   });
 
-  const ownInventoryItems = ownInventoryData?.items || [];
+  const ownInventoryItems = (ownInventoryData?.items || []).filter(item => (item.available_quantity || 0) > 0);
 
   // If mode is 'request', fetch source inventory (Admin Warehouse or sister store)
   const sourceOwnerType = form.targetStore === 'admin' ? 'ADMIN' : 'STORE';
@@ -57,7 +65,7 @@ const ManagerNewTransactionModal = ({
     enabled: isOpen && form.mode === 'request' && !!form.targetStore,
   });
 
-  const sourceInventoryItems = sourceInventoryData?.items || [];
+  const sourceInventoryItems = (sourceInventoryData?.items || []).filter(item => (item.available_quantity || 0) > 0);
 
   const { products: catalogProducts } = useProducts({
     category_id: form.categoryId ? Number(form.categoryId) : null,
@@ -78,16 +86,16 @@ const ManagerNewTransactionModal = ({
     setForm(prev => ({
       ...prev,
       [key]: val,
-      ...(key === 'mode' ? { product: '', quantity: '', targetStore: val === 'request' ? 'admin' : '', purchasePrice: '' } : {}),
+      ...(key === 'mode' ? { product: '', quantity: '', targetStore: val === 'request' ? 'admin' : '', purchasePrice: '', categoryId: '' } : {}),
       ...(key === 'categoryId' ? { product: '' } : {}),
-      ...(key === 'targetStore' ? { product: '' } : {}),
+      ...(key === 'targetStore' ? { product: '', categoryId: '' } : {}),
     }));
     setErrors(prev => ({ ...prev, [key]: '' }));
   };
 
   const validate = () => {
     const e = {};
-    if (form.mode !== 'purchase' && !form.targetStore) {
+    if (['request', 'send', 'return'].includes(form.mode) && !form.targetStore) {
       e.targetStore = form.mode === 'request' ? 'Source store/warehouse is required' : 'Destination is required';
     }
     if (!form.product) e.product = 'Product is required';
@@ -95,7 +103,7 @@ const ManagerNewTransactionModal = ({
       e.quantity = 'Enter a valid quantity (≥ 1)';
     }
 
-    if (form.mode === 'send') {
+    if (['send', 'damage', 'loss', 'sale', 'return'].includes(form.mode)) {
       const selectedItem = ownInventoryItems.find(item => String(item.product_id) === String(form.product));
       if (selectedItem && Number(form.quantity) > Number(selectedItem.available_quantity || 0)) {
         e.quantity = `Only ${selectedItem.available_quantity || 0} available in your store stock`;
@@ -141,6 +149,33 @@ const ManagerNewTransactionModal = ({
           purchase_price: Number(form.purchasePrice),
           remarks: form.remarks || null,
         });
+      } else if (form.mode === 'damage') {
+        await onDamage({
+          product_id: Number(form.product),
+          quantity: Number(form.quantity),
+          remarks: form.remarks || null,
+        });
+      } else if (form.mode === 'loss') {
+        await onLoss({
+          product_id: Number(form.product),
+          quantity: Number(form.quantity),
+          remarks: form.remarks || null,
+        });
+      } else if (form.mode === 'sale') {
+        await onSale({
+          product_id: Number(form.product),
+          quantity: Number(form.quantity),
+          remarks: form.remarks || null,
+        });
+      } else if (form.mode === 'return') {
+        const isToAdmin = form.targetStore === 'admin';
+        await onReturn({
+          product_id: Number(form.product),
+          quantity: Number(form.quantity),
+          owner_type: isToAdmin ? 'ADMIN' : 'STORE',
+          owner_id: isToAdmin ? 1 : Number(form.targetStore),
+          remarks: form.remarks || null,
+        });
       }
     } catch {
       // Error handled elsewhere
@@ -168,7 +203,7 @@ const ManagerNewTransactionModal = ({
   if (form.mode === 'request') {
     productOptions = sourceInventoryItems.filter(item => !form.categoryId || String(item.category_id) === String(form.categoryId));
     isLoadingProducts = isLoadingSourceInventory;
-  } else if (form.mode === 'send') {
+  } else if (['send', 'damage', 'loss', 'sale', 'return'].includes(form.mode)) {
     productOptions = ownInventoryItems.filter(item => !form.categoryId || String(item.category_id) === String(form.categoryId));
     isLoadingProducts = isLoadingOwnInventory;
   } else {
@@ -186,8 +221,21 @@ const ManagerNewTransactionModal = ({
               <ArrowRightLeft className="w-4 h-4 text-blue-600" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-slate-900">{form.mode === 'purchase' ? 'Supplier Purchase' : 'New Stock Transfer'}</h2>
-              <p className="text-xs text-slate-500">{form.mode === 'purchase' ? 'Record a purchase into your store inventory' : 'Request stock or send inventory to other branches'}</p>
+              <h2 className="text-base font-bold text-slate-900">
+                {form.mode === 'purchase' ? 'Supplier Purchase' :
+                 form.mode === 'damage' ? 'Record Damaged Stock' :
+                 form.mode === 'loss' ? 'Record Lost Stock' :
+                 form.mode === 'sale' ? 'Record Sale' :
+                 form.mode === 'return' ? 'Record Return' : 'New Stock Transfer'}
+              </h2>
+              <p className="text-xs text-slate-500">
+                {form.mode === 'purchase' ? 'Record a purchase into your store inventory' :
+                 form.mode === 'damage' ? 'Deduct damaged items from your store stock' :
+                 form.mode === 'loss' ? 'Deduct lost items from your store stock' :
+                 form.mode === 'sale' ? 'Record a manual sale/stock reduction' :
+                 form.mode === 'return' ? 'Add returned items back to store stock' :
+                 'Request stock or send inventory to other branches'}
+              </p>
             </div>
           </div>
           <button onClick={handleClose} className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors">
@@ -198,49 +246,27 @@ const ManagerNewTransactionModal = ({
         <form onSubmit={handleSubmit} className="overflow-y-auto flex-1">
           <div className="px-5 sm:px-6 py-5 space-y-4">
             
-            {/* Mode selection (Tabs) */}
+            {/* Transaction Type selection (Dropdown matching admin style) */}
             <div>
-              <label className="text-xs font-semibold text-slate-600 mb-1.5 block">Action Type</label>
-              <div className="grid grid-cols-3 gap-2 bg-slate-50 p-1.5 rounded-xl border border-slate-150">
-                <button
-                  type="button"
-                  onClick={() => set('mode', 'request')}
-                  className={`py-2 px-3 text-xs font-bold rounded-lg transition-all ${
-                    form.mode === 'request'
-                      ? 'bg-white text-blue-700 shadow-sm border border-slate-200'
-                      : 'text-slate-500 hover:text-slate-800'
-                  }`}
-                >
-                  Request Stock
-                </button>
-                <button
-                  type="button"
-                  onClick={() => set('mode', 'send')}
-                  className={`py-2 px-3 text-xs font-bold rounded-lg transition-all ${
-                    form.mode === 'send'
-                      ? 'bg-white text-blue-700 shadow-sm border border-slate-200'
-                      : 'text-slate-500 hover:text-slate-800'
-                  }`}
-                >
-                  Send Stock
-                </button>
-                <button
-                  type="button"
-                  onClick={() => set('mode', 'purchase')}
-                  className={`py-2 px-3 text-xs font-bold rounded-lg transition-all ${
-                    form.mode === 'purchase'
-                      ? 'bg-white text-purple-700 shadow-sm border border-slate-200'
-                      : 'text-slate-500 hover:text-slate-800'
-                  }`}
-                >
-                  Purchase
-                </button>
-              </div>
+              <label className="text-xs font-semibold text-slate-600 mb-1.5 block">Transaction Type <span className="text-red-500">*</span></label>
+              <select
+                value={form.mode}
+                onChange={e => set('mode', e.target.value)}
+                className={inputCls('mode')}
+              >
+                <option value="request">Inventory Transfer (Request)</option>
+                <option value="send">Inventory Transfer (Send)</option>
+                <option value="purchase">Purchase</option>
+                <option value="damage">Damage</option>
+                <option value="loss">Loss</option>
+                <option value="sale">Sale</option>
+                <option value="return">Return</option>
+              </select>
             </div>
 
-            {form.mode === 'purchase' ? (
+            {['purchase', 'damage', 'loss', 'sale'].includes(form.mode) ? (
               <div>
-                <label className="text-xs font-semibold text-slate-600 mb-1.5 block">Destination</label>
+                <label className="text-xs font-semibold text-slate-600 mb-1.5 block">Store / Warehouse</label>
                 <input
                   value={currentUser?.store_name || "My Store Stock"}
                   disabled
@@ -280,12 +306,12 @@ const ManagerNewTransactionModal = ({
                   value={form.product}
                   onChange={e => set('product', e.target.value)}
                   className={inputCls('product')}
-                  disabled={isLoadingProducts}
+                  disabled={isLoadingProducts || (form.mode === 'request' && !form.targetStore)}
                 >
                   <option value="">
                     {isLoadingProducts
                       ? 'Loading inventory...'
-                      : form.mode !== 'purchase' && !form.targetStore
+                      : form.mode === 'request' && !form.targetStore
                         ? 'Select source first'
                         : 'Select product...'
                     }
@@ -359,7 +385,13 @@ const ManagerNewTransactionModal = ({
             <button type="submit" disabled={isSubmitting}
               className="px-5 py-2 text-sm font-semibold text-white bg-[#0A0F1F] rounded-xl hover:bg-slate-800 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed">
               <Plus className="w-4 h-4" />
-              {isSubmitting ? 'Submitting...' : form.mode === 'request' ? 'Request Stock' : form.mode === 'purchase' ? 'Record Purchase' : 'Send Stock'}
+              {isSubmitting ? 'Submitting...' :
+               form.mode === 'request' ? 'Request Stock' :
+               form.mode === 'send' ? 'Send Stock' :
+               form.mode === 'purchase' ? 'Record Purchase' :
+               form.mode === 'damage' ? 'Record Damage' :
+               form.mode === 'loss' ? 'Record Loss' :
+               form.mode === 'sale' ? 'Record Sale' : 'Record Return'}
             </button>
           </div>
         </form>

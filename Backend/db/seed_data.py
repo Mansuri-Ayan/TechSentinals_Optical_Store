@@ -869,8 +869,7 @@ EXPENSES_DATA = [
         "expense_date": date(2025, 6, 1),
         "payment_method": ExpensePaymentMethod.BANK_TRANSFER,
         "reference_number": "TXN-RENT-001",
-        "is_recurring": True,
-        "recurring_interval": "MONTHLY",
+
         "owner_type": ExpenseOwnerType.STORE,
         "recorded_by_type": ExpenseRecordedByType.MANAGER,
         "incurred_by_type": None,
@@ -883,7 +882,7 @@ EXPENSES_DATA = [
         "expense_date": date(2025, 6, 5),
         "payment_method": ExpensePaymentMethod.UPI,
         "reference_number": "TXN-ELEC-002",
-        "is_recurring": False,
+
         "owner_type": ExpenseOwnerType.STORE,
         "recorded_by_type": ExpenseRecordedByType.WORKER,
         "incurred_by_type": None,
@@ -896,8 +895,7 @@ EXPENSES_DATA = [
         "expense_date": date(2025, 6, 5),
         "payment_method": ExpensePaymentMethod.BANK_TRANSFER,
         "reference_number": "TXN-SAL-003",
-        "is_recurring": True,
-        "recurring_interval": "MONTHLY",
+
         "owner_type": ExpenseOwnerType.STORE,
         "recorded_by_type": ExpenseRecordedByType.ADMIN,
         "incurred_by_type": ExpenseRecordedByType.OPTICIAN,
@@ -910,7 +908,7 @@ EXPENSES_DATA = [
         "expense_date": date(2025, 6, 2),
         "payment_method": ExpensePaymentMethod.CARD,
         "reference_number": "TXN-MKT-004",
-        "is_recurring": False,
+
         "owner_type": ExpenseOwnerType.ADMIN,
         "recorded_by_type": ExpenseRecordedByType.ADMIN,
         "incurred_by_type": None,
@@ -923,7 +921,7 @@ EXPENSES_DATA = [
         "expense_date": date(2025, 6, 8),
         "payment_method": ExpensePaymentMethod.CASH,
         "reference_number": "TXN-SUP-005",
-        "is_recurring": False,
+
         "owner_type": ExpenseOwnerType.STORE,
         "recorded_by_type": ExpenseRecordedByType.WORKER,
         "incurred_by_type": ExpenseRecordedByType.WORKER,
@@ -2182,8 +2180,6 @@ async def seed() -> None:
                     expense_date=exp_tpl["expense_date"],
                     payment_method=exp_tpl["payment_method"],
                     reference_number=exp_tpl["reference_number"],
-                    is_recurring=exp_tpl.get("is_recurring", False),
-                    recurring_interval=exp_tpl.get("recurring_interval"),
                     is_approved=exp_tpl["is_approved"],
                     approved_by=approved_by_admin,
                     approved_at=approved_at_dt,

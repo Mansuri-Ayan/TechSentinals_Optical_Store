@@ -185,7 +185,8 @@ const NewTransactionModal = ({
     ];
   }, [stores]);
 
-  const { categories } = useCategories(null, { limit: 100 });
+  const categoryStoreId = form.sender || null;
+  const { categories } = useCategories(categoryStoreId, { limit: 100, all_tenant: false });
 
   const senderType = form.sender === 'admin' ? 'ADMIN' : 'STORE';
   const senderIdVal = form.sender === 'admin' ? user?.id : Number(form.sender);
@@ -626,6 +627,14 @@ const Transactions = () => {
     isCreatingManagerPush,
     createManagerPurchaseAsync,
     isCreatingManagerPurchase,
+    createManagerDamageAsync,
+    isCreatingManagerDamage,
+    createManagerLossAsync,
+    isCreatingManagerLoss,
+    createManagerSaleAsync,
+    isCreatingManagerSale,
+    createManagerReturnAsync,
+    isCreatingManagerReturn,
   } = useTransactions(inPageStoreId, {
     page: currentPage,
     limit: ITEMS_PER_PAGE,
@@ -757,6 +766,26 @@ const Transactions = () => {
 
   const handleNewPurchase = async (data) => {
     await createManagerPurchaseAsync(data);
+    setShowNewModal(false);
+  };
+
+  const handleNewDamage = async (data) => {
+    await createManagerDamageAsync(data);
+    setShowNewModal(false);
+  };
+
+  const handleNewLoss = async (data) => {
+    await createManagerLossAsync(data);
+    setShowNewModal(false);
+  };
+
+  const handleNewSale = async (data) => {
+    await createManagerSaleAsync(data);
+    setShowNewModal(false);
+  };
+
+  const handleNewReturn = async (data) => {
+    await createManagerReturnAsync(data);
     setShowNewModal(false);
   };
 
@@ -1168,9 +1197,22 @@ const Transactions = () => {
           onRequest={handleNewRequest}
           onPush={handleNewPush}
           onPurchase={handleNewPurchase}
+          onDamage={handleNewDamage}
+          onLoss={handleNewLoss}
+          onSale={handleNewSale}
+          onReturn={handleNewReturn}
           currentUser={user}
           stores={stores}
-          isSubmitting={isCreatingTransaction || isCreatingManagerRequest || isCreatingManagerPush || isCreatingManagerPurchase}
+          isSubmitting={
+            isCreatingTransaction ||
+            isCreatingManagerRequest ||
+            isCreatingManagerPush ||
+            isCreatingManagerPurchase ||
+            isCreatingManagerDamage ||
+            isCreatingManagerLoss ||
+            isCreatingManagerSale ||
+            isCreatingManagerReturn
+          }
         />
       )}
       <TransactionDetailModal

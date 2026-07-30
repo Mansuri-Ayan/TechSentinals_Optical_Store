@@ -178,26 +178,35 @@ class LoyaltyTierDistribution(BaseModel):
 class LoyaltyCalculatePreviewRequest(BaseModel):
     customer_id: int
     loyalty_redeem_customer_id: Optional[int] = None
+    loyalty_redeem_other_customer_id: Optional[int] = None
     loyalty_awarded_to_customer_id: Optional[int] = None
     sale_items: List[Dict]
     final_amount: Decimal
-    points_to_redeem: int
+    points_to_redeem: int = 0
+    points_to_redeem_self: int = 0
+    points_to_redeem_other: int = 0
     custom_points: int
     category_points_override: bool
     price_points_override: bool
     enabled_category_ids: Optional[List[int]] = None
 
 class LoyaltyCalculatePreviewResponse(BaseModel):
-    customer_current_points: int
+    customer_current_points: int = 0
+    customer_current_points_self: int = 0
+    customer_current_points_other: int = 0
     category_points: int
     price_points: int
     custom_points: int
     total_points_to_earn: int
     redemption_valid: bool
     rupee_discount: Decimal
+    rupee_discount_self: Decimal = Decimal("0.00")
+    rupee_discount_other: Decimal = Decimal("0.00")
     points_after_transaction: int
     tier_after_transaction: str
     error: Optional[str] = None
+    error_self: Optional[str] = None
+    error_other: Optional[str] = None
 
 
 class LoyaltyAdjustRequest(BaseModel):

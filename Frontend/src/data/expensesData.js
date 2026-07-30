@@ -24,8 +24,8 @@ export const EXPENSE_MOCK_DATA = [
     referenceNumber: 'TXN-HDFC-7834912',
     paymentStatus: 'Paid',
     receiptUrl: null,
-    isRecurring: true,
-    recurringInterval: 'Monthly',
+
+
     approvalStatus: 'Approved',
     approvedBy: 'Neha Mehta',
     approvedDate: '2026-06-01',
@@ -45,8 +45,8 @@ export const EXPENSE_MOCK_DATA = [
     referenceNumber: 'UPI-REF-99203812',
     paymentStatus: 'Paid',
     receiptUrl: null,
-    isRecurring: true,
-    recurringInterval: 'Monthly',
+
+
     approvalStatus: 'Approved',
     approvedBy: 'Kunal Patil',
     approvedDate: '2026-06-02',
@@ -66,8 +66,8 @@ export const EXPENSE_MOCK_DATA = [
     referenceNumber: 'PAYROLL-JUN-2026',
     paymentStatus: 'Paid',
     receiptUrl: null,
-    isRecurring: true,
-    recurringInterval: 'Monthly',
+
+
     approvalStatus: 'Approved',
     approvedBy: 'Neha Mehta',
     approvedDate: '2026-06-04',
@@ -87,8 +87,8 @@ export const EXPENSE_MOCK_DATA = [
     referenceNumber: 'CC-AXIS-001234',
     paymentStatus: 'Paid',
     receiptUrl: null,
-    isRecurring: false,
-    recurringInterval: null,
+
+
     approvalStatus: 'Approved',
     approvedBy: 'Neha Mehta',
     approvedDate: '2026-06-05',
@@ -108,8 +108,8 @@ export const EXPENSE_MOCK_DATA = [
     referenceNumber: 'CHQ-004512',
     paymentStatus: 'Paid',
     receiptUrl: null,
-    isRecurring: true,
-    recurringInterval: 'Yearly',
+
+
     approvalStatus: 'Approved',
     approvedBy: 'Rohan Joshi',
     approvedDate: '2026-06-06',
@@ -129,8 +129,8 @@ export const EXPENSE_MOCK_DATA = [
     referenceNumber: 'PO-RB-2026-006',
     paymentStatus: 'Paid',
     receiptUrl: null,
-    isRecurring: false,
-    recurringInterval: null,
+
+
     approvalStatus: 'Approved',
     approvedBy: 'Neha Mehta',
     approvedDate: '2026-06-07',
@@ -150,8 +150,8 @@ export const EXPENSE_MOCK_DATA = [
     referenceNumber: null,
     paymentStatus: 'Paid',
     receiptUrl: null,
-    isRecurring: false,
-    recurringInterval: null,
+
+
     approvalStatus: 'Approved',
     approvedBy: 'Rohan Joshi',
     approvedDate: '2026-06-07',
@@ -171,8 +171,8 @@ export const EXPENSE_MOCK_DATA = [
     referenceNumber: null,
     paymentStatus: 'Paid',
     receiptUrl: null,
-    isRecurring: false,
-    recurringInterval: null,
+
+
     approvalStatus: 'Pending',
     approvedBy: null,
     approvedDate: null,
@@ -192,8 +192,8 @@ export const EXPENSE_MOCK_DATA = [
     referenceNumber: 'UPI-REF-00341212',
     paymentStatus: 'Paid',
     receiptUrl: null,
-    isRecurring: false,
-    recurringInterval: null,
+
+
     approvalStatus: 'Pending',
     approvedBy: null,
     approvedDate: null,
@@ -213,8 +213,8 @@ export const EXPENSE_MOCK_DATA = [
     referenceNumber: 'ACT-INV-2026061',
     paymentStatus: 'Paid',
     receiptUrl: null,
-    isRecurring: true,
-    recurringInterval: 'Monthly',
+
+
     approvalStatus: 'Approved',
     approvedBy: 'Vikram Singh',
     approvedDate: '2026-06-01',
@@ -234,8 +234,8 @@ export const EXPENSE_MOCK_DATA = [
     referenceNumber: null,
     paymentStatus: 'Paid',
     receiptUrl: null,
-    isRecurring: false,
-    recurringInterval: null,
+
+
     approvalStatus: 'Rejected',
     approvedBy: null,
     approvedDate: null,
@@ -258,8 +258,8 @@ export const EXPENSE_MOCK_DATA = [
     referenceNumber: 'PO-ESS-2026-012',
     paymentStatus: 'Pending',
     receiptUrl: null,
-    isRecurring: false,
-    recurringInterval: null,
+
+
     approvalStatus: 'Pending',
     approvedBy: null,
     approvedDate: null,

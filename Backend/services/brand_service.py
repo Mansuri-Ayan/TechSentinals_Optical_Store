@@ -1,5 +1,5 @@
 # Service: brand_service.py
-from sqlalchemy import select, func as sa_func
+from sqlalchemy import select, func as sa_func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from models.brand import Brand
 from models.product import Product
@@ -15,6 +15,7 @@ async def create_brand(
     """Create a new brand owned by the given admin."""
     brand = Brand(
         admin_id=admin_id,
+        store_id=payload.store_id,
         name=payload.name,
     )
     db.add(brand)
@@ -70,6 +71,10 @@ async def get_brands_by_admin(
 
     # ── Base conditions ──
     conditions = [Brand.admin_id == admin_id]
+    if store_id is not None:
+        conditions.append(or_(Brand.store_id == store_id, Brand.store_id.is_(None)))
+    else:
+        conditions.append(Brand.store_id.is_(None))
     if active_status == "active":
         conditions.append(Brand.is_active.is_(True))
     elif active_status == "inactive":
@@ -78,30 +83,27 @@ async def get_brands_by_admin(
         conditions.append(Brand.name.ilike(f"%{search.strip()}%"))
 
     # ── Total count of matching records ──
-    if store_id is not None:
-        count_stmt = select(sa_func.count(Brand.id)).join(count_sq, Brand.id == count_sq.c.brand_id).where(*conditions)
-    else:
-        count_stmt = select(sa_func.count(Brand.id)).where(*conditions)
+    count_stmt = select(sa_func.count(Brand.id)).where(*conditions)
     total = (await db.execute(count_stmt)).scalar() or 0
 
     # ── Global count statistics ──
     count_conditions = [Brand.admin_id == admin_id]
     if store_id is not None:
-        active_stmt = select(sa_func.count(Brand.id)).join(count_sq, Brand.id == count_sq.c.brand_id).where(*count_conditions, Brand.is_active.is_(True))
-        inactive_stmt = select(sa_func.count(Brand.id)).join(count_sq, Brand.id == count_sq.c.brand_id).where(*count_conditions, Brand.is_active.is_(False))
+        count_conditions.append(or_(Brand.store_id == store_id, Brand.store_id.is_(None)))
     else:
-        active_stmt = select(sa_func.count(Brand.id)).where(*count_conditions, Brand.is_active.is_(True))
-        inactive_stmt = select(sa_func.count(Brand.id)).where(*count_conditions, Brand.is_active.is_(False))
+        count_conditions.append(Brand.store_id.is_(None))
+    active_stmt = select(sa_func.count(Brand.id)).where(*count_conditions, Brand.is_active.is_(True))
+    inactive_stmt = select(sa_func.count(Brand.id)).where(*count_conditions, Brand.is_active.is_(False))
     active_cnt = (await db.execute(active_stmt)).scalar() or 0
     inactive_cnt = (await db.execute(inactive_stmt)).scalar() or 0
 
     # ── Data query with product count ──
-    data_stmt = select(Brand, sa_func.coalesce(count_sq.c.cnt, 0).label("products_count"))
-    if store_id is not None:
-        data_stmt = data_stmt.join(count_sq, Brand.id == count_sq.c.brand_id)
-    else:
-        data_stmt = data_stmt.outerjoin(count_sq, Brand.id == count_sq.c.brand_id)
-    data_stmt = data_stmt.where(*conditions).order_by(Brand.name)
+    data_stmt = (
+        select(Brand, sa_func.coalesce(count_sq.c.cnt, 0).label("products_count"))
+        .outerjoin(count_sq, Brand.id == count_sq.c.brand_id)
+        .where(*conditions)
+        .order_by(Brand.name)
+    )
 
     if paginate:
         offset = (page - 1) * limit

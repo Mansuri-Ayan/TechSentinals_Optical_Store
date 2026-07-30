@@ -1592,13 +1592,7 @@ const InventoryDetailDrawer = ({ item, onClose, onEdit, onRestockSupplier, onApp
               <DetailRow label="Amount" value={fmt(item.amount)} />
               <DetailRow label="Expense Date" value={fmtDate(item.expenseDate)} />
               <DetailRow label="Store / Branch" value={item.store} />
-              {item.isRecurring && (
-                <DetailRow label="Recurring" value={
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-violet-50 text-violet-700 border border-violet-200 rounded-full text-[11px] font-bold">
-                    <RefreshCw className="w-3 h-3" /> {item.recurringInterval}
-                  </span>
-                } />
-              )}
+
             </Section>
 
             {/* Payment */}

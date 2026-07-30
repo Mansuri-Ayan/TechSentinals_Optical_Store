@@ -65,6 +65,26 @@ export const createManagerPurchaseApi = async (payload) => {
   return response.data;
 };
 
+export const createManagerDamageApi = async (payload) => {
+  const response = await api.post('/api/shopkeeper/transactions/damage', payload);
+  return response.data;
+};
+
+export const createManagerLossApi = async (payload) => {
+  const response = await api.post('/api/shopkeeper/transactions/loss', payload);
+  return response.data;
+};
+
+export const createManagerSaleApi = async (payload) => {
+  const response = await api.post('/api/shopkeeper/transactions/sale', payload);
+  return response.data;
+};
+
+export const createManagerReturnApi = async (payload) => {
+  const response = await api.post('/api/shopkeeper/transactions/return', payload);
+  return response.data;
+};
+
 export const getManagerTransactionsApi = async (params = {}) => {
   const response = await api.get('/api/shopkeeper/transactions/', { params });
   return response.data;

@@ -1,16 +1,16 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Plus, Receipt, Store, IndianRupee, Repeat, Tag } from 'lucide-react';
+import { X, Plus, Receipt, Store, IndianRupee, Tag } from 'lucide-react';
 import { createExpenseCategory } from '../../api/expense/expense.api';
 
 const TODAY = new Date().toISOString().split('T')[0];
 const PAYMENT_METHODS     = ['Cash', 'UPI', 'Bank Transfer', 'Credit Card', 'Cheque', 'Other'];
-const RECURRING_INTERVALS = ['Daily', 'Weekly', 'Monthly', 'Quarterly', 'Yearly'];
+
 
 const EMPTY_FORM = {
   title: '', category_id: '', description: '', amount: '',
   expense_date: TODAY, payment_method: 'Cash', reference_number: '',
-  receipt_url: '', is_recurring: false, recurring_interval: '',
+  receipt_url: '',
 };
 
 /* ─────────────────────────────────────────────────────────
@@ -137,8 +137,6 @@ export const AddExpenseModal = ({ isOpen, onClose, onSubmit, categories, isSubmi
           payment_method: formatPaymentMethodFromBackend(initialData.payment_method),
           reference_number: initialData.reference_number || '',
           receipt_url: initialData.receipt_url || '',
-          is_recurring: Boolean(initialData.is_recurring),
-          recurring_interval: initialData.recurring_interval ? (initialData.recurring_interval.charAt(0).toUpperCase() + initialData.recurring_interval.slice(1).toLowerCase()) : '',
           target_store_id: initialData.owner_type === 'ADMIN' ? 'admin' : (initialData.owner_id || ''),
         });
       } else {
@@ -167,8 +165,7 @@ export const AddExpenseModal = ({ isOpen, onClose, onSubmit, categories, isSubmi
       e.expense_date = 'Please select a date';
     if (!form.payment_method)
       e.payment_method = 'Please select a payment method';
-    if (form.is_recurring && !form.recurring_interval)
-      e.recurring_interval = 'Select an interval';
+
     if (storeId === 'admin' && !form.target_store_id)
       e.target_store_id = 'Please select a store / branch';
     
@@ -330,33 +327,7 @@ export const AddExpenseModal = ({ isOpen, onClose, onSubmit, categories, isSubmi
                    className={ic('receipt_url')}
                 />
               </div>
-              <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-xl border border-slate-200">
-                <button
-                  type="button"
-                  onClick={() => handleChange('is_recurring', !form.is_recurring)}
-                  className={`relative w-10 h-6 rounded-full transition-colors flex-shrink-0 focus:outline-none ${form.is_recurring ? 'bg-violet-600' : 'bg-slate-300'}`}
-                >
-                  <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${form.is_recurring ? 'translate-x-4' : 'translate-x-0'}`} />
-                </button>
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
-                    <Repeat className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" /> Is Recurring
-                  </p>
-                  <p className="text-xs text-slate-400">This expense repeats on a schedule</p>
-                </div>
-              </div>
-              {form.is_recurring && (
-                <div>
-                  <label className="text-xs font-semibold text-slate-600 mb-1.5 block">
-                    Recurring Interval <span className="text-red-500">*</span>
-                  </label>
-                  <select value={form.recurring_interval} onChange={e => handleChange('recurring_interval', e.target.value)} className={ic('recurring_interval')}>
-                    <option value="">Select interval...</option>
-                    {RECURRING_INTERVALS.map(i => <option key={i} value={i}>{i}</option>)}
-                  </select>
-                  {errors.recurring_interval && <p className="text-xs text-red-500 mt-1">{errors.recurring_interval}</p>}
-                </div>
-              )}
+
             </div>
             <div className="px-5 sm:px-6 py-4 border-t border-slate-100 flex items-center justify-end gap-3 flex-shrink-0 bg-slate-50">
               <button type="button" onClick={onClose}

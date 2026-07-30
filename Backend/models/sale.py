@@ -14,6 +14,7 @@ from sqlalchemy import (
     DateTime,
     Enum,
     ForeignKey,
+    Integer,
     Numeric,
     String,
     Text,
@@ -112,6 +113,28 @@ class Sale(Base):
             "FK → customers.id — whose points were redeemed. "
             "NULL means no redemption or same as customer_id."
         )
+    )
+
+    loyalty_redeemed_other_customer_id = Column(
+        BigInteger,
+        ForeignKey("customers.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+        comment="FK → customers.id — the second customer (Person B) whose points were redeemed."
+    )
+
+    loyalty_points_redeemed_self = Column(
+        Integer,
+        nullable=False,
+        default=0,
+        comment="Points redeemed from the main customer (Person A) in this sale"
+    )
+
+    loyalty_points_redeemed_other = Column(
+        Integer,
+        nullable=False,
+        default=0,
+        comment="Points redeemed from the other customer (Person B) in this sale"
     )
 
 
@@ -303,6 +326,11 @@ class Sale(Base):
     loyalty_redeemed_from_customer = relationship(
         "Customer",
         foreign_keys=[loyalty_redeemed_from_customer_id],
+        lazy="selectin",
+    )
+    loyalty_redeemed_other_customer = relationship(
+        "Customer",
+        foreign_keys=[loyalty_redeemed_other_customer_id],
         lazy="selectin",
     )
     items = relationship(

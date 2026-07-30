@@ -293,51 +293,106 @@ async def create_sale(
 
         # Skip all loyalty operations if program is disabled
         if getattr(config, "is_enabled", True):
-            # Step 1: Redemption
-            rupee_discount = Decimal("0.00")
-            if payload.points_to_redeem > 0:
-                redeem_customer_id = payload.loyalty_redeem_customer_id or customer_id_for_sale
-                if redeem_customer_id != customer.id:
-                    redeem_customer = await db.scalar(select(Customer).where(Customer.id == redeem_customer_id))
-                    if not redeem_customer:
-                        raise HTTPException(status_code=404, detail="Loyalty redeem customer not found")
-                else:
-                    redeem_customer = customer
+            # Step 1: Co-Redemption (Self + Other Customer B)
+            rupee_discount_self = Decimal("0.00")
+            rupee_discount_other = Decimal("0.00")
+            points_redeemed_self = 0
+            points_redeemed_other = 0
 
-                redemption_res = await loyalty_service.validate_redemption(
-                    customer_current_points=redeem_customer.current_points,
-                    points_to_redeem=payload.points_to_redeem,
+            pts_self = payload.points_to_redeem_self
+            if pts_self == 0 and payload.points_to_redeem > 0:
+                pts_self = payload.points_to_redeem
+            pts_other = payload.points_to_redeem_other
+
+            # Validate Self Redemption
+            if pts_self > 0:
+                res_self = await loyalty_service.validate_redemption(
+                    customer_current_points=customer.current_points,
+                    points_to_redeem=pts_self,
                     sale_total=total_amount,
                     config=config
                 )
-                if not redemption_res["valid"]:
-                    raise HTTPException(status_code=400, detail=redemption_res["error"])
-                
-                points_redeemed = redemption_res["points_redeemed"]
-                rupee_discount = redemption_res["rupee_discount"]
+                if not res_self["valid"]:
+                    raise HTTPException(status_code=400, detail=f"Self redemption error: {res_self['error']}")
+                points_redeemed_self = res_self["points_redeemed"]
+                rupee_discount_self = res_self["rupee_discount"]
 
-                txn = LoyaltyTransaction(
-                    customer_id=redeem_customer.id,
+            # Validate Other Redemption
+            other_customer = None
+            if pts_other > 0 and payload.loyalty_redeem_other_customer_id:
+                other_customer = await db.scalar(
+                    select(Customer).where(Customer.id == payload.loyalty_redeem_other_customer_id)
+                )
+                if not other_customer:
+                    raise HTTPException(status_code=404, detail="Other loyalty customer not found")
+                res_other = await loyalty_service.validate_redemption(
+                    customer_current_points=other_customer.current_points,
+                    points_to_redeem=pts_other,
+                    sale_total=total_amount,
+                    config=config
+                )
+                if not res_other["valid"]:
+                    raise HTTPException(status_code=400, detail=f"Other redemption error: {res_other['error']}")
+                points_redeemed_other = res_other["points_redeemed"]
+                rupee_discount_other = res_other["rupee_discount"]
+
+            # Apply combined capping logic
+            max_discount_pct = getattr(config, "max_redemption_percentage", 100)
+            max_total_discount = (total_amount * Decimal(str(max_discount_pct)) / Decimal("100")).quantize(Decimal("0.01"))
+            
+            total_requested_discount = rupee_discount_self + rupee_discount_other
+            if total_requested_discount > max_total_discount:
+                if rupee_discount_self >= max_total_discount:
+                    rupee_discount_self = max_total_discount
+                    points_redeemed_self = int(rupee_discount_self * config.points_per_rupee)
+                    rupee_discount_other = Decimal("0.00")
+                    points_redeemed_other = 0
+                else:
+                    rupee_discount_other = max_total_discount - rupee_discount_self
+                    points_redeemed_other = int(rupee_discount_other * config.points_per_rupee)
+
+            # Process Self points deduction
+            if points_redeemed_self > 0:
+                customer.current_points -= points_redeemed_self
+                customer.loyalty_points_redeemed += points_redeemed_self
+                db.add(customer)
+
+                db.add(LoyaltyTransaction(
+                    customer_id=customer.id,
                     store_id=payload.store_id,
                     sale_id=sale.id,
                     type=LoyaltyTransactionType.REDEEMED,
-                    points=-points_redeemed,
-                    rupee_value=rupee_discount
-                )
-                db.add(txn)
-                
-                redeem_customer.current_points -= points_redeemed
-                redeem_customer.loyalty_points_redeemed += points_redeemed
-                if redeem_customer_id != customer.id:
-                    db.add(redeem_customer)
+                    points=-points_redeemed_self,
+                    rupee_value=rupee_discount_self
+                ))
 
-                sale.loyalty_points_redeemed = points_redeemed
+            # Process Other points deduction
+            if points_redeemed_other > 0 and other_customer:
+                other_customer.current_points -= points_redeemed_other
+                other_customer.loyalty_points_redeemed += points_redeemed_other
+                db.add(other_customer)
 
-                # Adjust sale totals for redemption discount
-                sale.total_amount -= rupee_discount
-                sale.due_amount = max(Decimal("0"), sale.total_amount - sale.paid_amount)
-                if sale.due_amount <= 0:
-                    sale.status = SaleStatus.COMPLETED
+                db.add(LoyaltyTransaction(
+                    customer_id=other_customer.id,
+                    store_id=payload.store_id,
+                    sale_id=sale.id,
+                    type=LoyaltyTransactionType.REDEEMED,
+                    points=-points_redeemed_other,
+                    rupee_value=rupee_discount_other
+                ))
+
+            # Set fields on Sale record
+            sale.loyalty_redeemed_other_customer_id = payload.loyalty_redeem_other_customer_id
+            sale.loyalty_points_redeemed_self = points_redeemed_self
+            sale.loyalty_points_redeemed_other = points_redeemed_other
+            sale.loyalty_points_redeemed = points_redeemed_self + points_redeemed_other
+
+            # Adjust sale totals for redemption discount
+            total_discount_from_redemption = rupee_discount_self + rupee_discount_other
+            sale.total_amount -= total_discount_from_redemption
+            sale.due_amount = max(Decimal("0"), sale.total_amount - sale.paid_amount)
+            if sale.due_amount <= 0:
+                sale.status = SaleStatus.COMPLETED
 
             # Step 2: Earning
             earn_customer_id = payload.loyalty_awarded_to_customer_id or customer_id_for_sale
@@ -764,6 +819,68 @@ async def cancel_sale(
 
         # Phase 1: Restore assigned ProductUnit rows
         await restore_units_from_sale_item(db=db, sale_item_id=item.id)
+
+    # --- LOYALTY REVERSAL ---
+    # 1. Reverse earned points
+    if sale.loyalty_points_earned > 0:
+        earn_customer_id = sale.loyalty_awarded_to_customer_id or sale.customer_id
+        if earn_customer_id:
+            earn_cust = await db.scalar(select(Customer).where(Customer.id == earn_customer_id))
+            if earn_cust:
+                earn_cust.current_points = max(0, earn_cust.current_points - sale.loyalty_points_earned)
+                earn_cust.loyalty_points_earned = max(0, earn_cust.loyalty_points_earned - sale.loyalty_points_earned)
+                db.add(earn_cust)
+                
+                db.add(LoyaltyTransaction(
+                    customer_id=earn_cust.id,
+                    store_id=sale.store_id,
+                    sale_id=sale.id,
+                    type=LoyaltyTransactionType.ADJUSTED,
+                    points=-sale.loyalty_points_earned,
+                    note=f"Reverse earned points for cancelled sale {sale.invoice_number}"
+                ))
+
+    # 2. Refund redeemed points (Self)
+    pts_self = getattr(sale, "loyalty_points_redeemed_self", 0)
+    if pts_self == 0 and sale.loyalty_points_redeemed > 0:
+        pts_self = sale.loyalty_points_redeemed
+    
+    if pts_self > 0:
+        self_customer_id = sale.loyalty_redeemed_from_customer_id or sale.customer_id
+        if self_customer_id:
+            self_cust = await db.scalar(select(Customer).where(Customer.id == self_customer_id))
+            if self_cust:
+                self_cust.current_points += pts_self
+                self_cust.loyalty_points_redeemed = max(0, self_cust.loyalty_points_redeemed - pts_self)
+                db.add(self_cust)
+
+                db.add(LoyaltyTransaction(
+                    customer_id=self_cust.id,
+                    store_id=sale.store_id,
+                    sale_id=sale.id,
+                    type=LoyaltyTransactionType.ADJUSTED,
+                    points=pts_self,
+                    note=f"Refund redeemed points for cancelled sale {sale.invoice_number}"
+                ))
+
+    # 3. Refund redeemed points (Other)
+    pts_other = getattr(sale, "loyalty_points_redeemed_other", 0)
+    other_customer_id = getattr(sale, "loyalty_redeemed_other_customer_id", None)
+    if pts_other > 0 and other_customer_id:
+        other_cust = await db.scalar(select(Customer).where(Customer.id == other_customer_id))
+        if other_cust:
+            other_cust.current_points += pts_other
+            other_cust.loyalty_points_redeemed = max(0, other_cust.loyalty_points_redeemed - pts_other)
+            db.add(other_cust)
+
+            db.add(LoyaltyTransaction(
+                customer_id=other_cust.id,
+                store_id=sale.store_id,
+                sale_id=sale.id,
+                type=LoyaltyTransactionType.ADJUSTED,
+                points=pts_other,
+                note=f"Refund redeemed points (other customer) for cancelled sale {sale.invoice_number}"
+            ))
 
     sale.status = SaleStatus.CANCELLED
     await db.commit()

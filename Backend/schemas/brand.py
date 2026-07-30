@@ -8,6 +8,9 @@ class BrandCreate(BaseModel):
         ..., max_length=255, examples=["Ray-Ban"],
         description="Brand display name",
     )
+    store_id: int | None = Field(
+        default=None, description="Optional store ID to scope this brand"
+    )
 
 
 class BrandUpdate(BaseModel):
@@ -18,6 +21,7 @@ class BrandUpdate(BaseModel):
 class BrandRead(BaseModel):
     id: int
     admin_id: int
+    store_id: int | None = None
     name: str
     is_active: bool
     created_at: datetime

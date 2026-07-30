@@ -47,7 +47,7 @@ const APPROVAL_TABS = [
 ];
 
 const PAYMENT_METHODS     = ['Cash', 'UPI', 'Bank Transfer', 'Credit Card', 'Cheque', 'Other'];
-const RECURRING_INTERVALS = ['Daily', 'Weekly', 'Monthly', 'Quarterly', 'Yearly'];
+
 
 // Helper to map UI payment method to Backend enum
 const formatPaymentMethodForBackend = (method) => {
@@ -278,8 +278,6 @@ const Expenses = () => {
         payment_method: formatPaymentMethodForBackend(form.payment_method),
         reference_number: form.reference_number || null,
         receipt_url: form.receipt_url || null,
-        is_recurring: form.is_recurring || false,
-        recurring_interval: form.recurring_interval ? form.recurring_interval.toUpperCase() : null
       });
       fetchExpenses();
       setShowAddModal(false);
@@ -534,8 +532,7 @@ const Expenses = () => {
                         category: exp.category_name,
                         expenseDate: exp.expense_date,
                         store: exp.owner_name,
-                        isRecurring: exp.is_recurring,
-                        recurringInterval: exp.recurring_interval,
+
                         paymentMethod: formatPaymentMethod(exp.payment_method),
                         paymentStatus: exp.is_approved ? 'Paid' : 'Pending',
                         recordedBy: exp.recorded_by_name,
@@ -550,11 +547,7 @@ const Expenses = () => {
                       <td className="px-4 py-3.5 max-w-[200px]">
                         <p className="font-semibold text-slate-900 truncate text-sm">{exp.title}</p>
                         <p className="font-mono text-[10px] text-slate-400 mt-0.5">EXP-{exp.id}</p>
-                        {exp.is_recurring && (
-                          <span className="inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 bg-violet-50 text-violet-600 border border-violet-200 rounded text-[10px] font-bold">
-                            <RefreshCw className="w-2.5 h-2.5" /> {exp.recurring_interval}
-                          </span>
-                        )}
+
                       </td>
                       <td className="px-4 py-3.5 whitespace-nowrap">
                         <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-50 border border-slate-100 rounded-lg text-xs font-semibold text-slate-600">
@@ -590,8 +583,7 @@ const Expenses = () => {
                   category: exp.category_name,
                   expenseDate: exp.expense_date,
                   store: exp.owner_name,
-                  isRecurring: exp.is_recurring,
-                  recurringInterval: exp.recurring_interval,
+
                   paymentMethod: formatPaymentMethod(exp.payment_method),
                   paymentStatus: exp.is_approved ? 'Paid' : 'Pending',
                   recordedBy: exp.recorded_by_name,
@@ -626,11 +618,7 @@ const Expenses = () => {
                 </div>
                 <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400 font-medium">
                   <span>By <span className="font-semibold text-slate-600">{exp.recorded_by_name}</span></span>
-                  {exp.is_recurring && (
-                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-violet-50 text-violet-600 border border-violet-200 rounded text-[10px] font-bold">
-                      <RefreshCw className="w-2.5 h-2.5" /> {exp.recurring_interval}
-                    </span>
-                  )}
+
                 </div>
               </div>
             ))}

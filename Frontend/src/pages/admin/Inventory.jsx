@@ -9,6 +9,7 @@ import {
   Plus,
   Package,
   ChevronRight,
+  ChevronLeft,
   Eye,
   Trash2,
   AlertTriangle,
@@ -590,6 +591,21 @@ const Inventory = () => {
     setRequestModalOpen(true);
   };
 
+  const categoryScrollRef = useRef(null);
+
+  const scrollCategories = (direction) => {
+    if (categoryScrollRef.current) {
+      const scrollAmount = direction === 'left' ? -250 : 250;
+      categoryScrollRef.current.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+    }
+  };
+
+  const handleCategoryWheel = (e) => {
+    if (e.deltaY !== 0 && categoryScrollRef.current) {
+      categoryScrollRef.current.scrollLeft += e.deltaY;
+    }
+  };
+
   const handleRequestStockSuccess = () => {
     inventoryQuery.refetch();
   };
@@ -648,9 +664,11 @@ const Inventory = () => {
   ]);
 
   /* Fetch database categories & subcategories */
-  const { categories } = useCategories();
+  const { categories } = useCategories(null, { paginate: false, all_tenant: true });
   const { subcategories } = useSubcategories(
     activeCategory !== "all" ? Number(activeCategory) : null,
+    null,
+    { paginate: false }
   );
 
   /* Fetch all brands to find active brand name */
@@ -1147,45 +1165,69 @@ const Inventory = () => {
         </label>
       </div>
 
-      {/* Category Tabs */}
-      <div className="flex items-center gap-2 mb-3 overflow-x-auto hide-scrollbar pb-1">
+      {/* Category Tabs with Sideways Scroll Controls */}
+      <div className="relative group/scroll mb-3">
         <button
-          onClick={() => handleCategoryChange("all")}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all whitespace-nowrap flex-shrink-0 ${activeCategory === "all"
-              ? "bg-slate-900 text-white shadow-md"
-              : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50"
-            }`}
+          type="button"
+          onClick={() => scrollCategories('left')}
+          className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-7 h-7 bg-white/95 shadow-md border border-slate-200 rounded-full flex items-center justify-center text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-all opacity-0 group-hover/scroll:opacity-100"
+          title="Scroll Left"
         >
-          <Layers className="w-4 h-4" />
-          All Items
-          {activeCategory === "all" && (
-            <span className="ml-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-white/20">
-              {total}
-            </span>
-          )}
+          <ChevronLeft className="w-4 h-4" />
         </button>
 
-        {categories.map((cat) => {
-          const isActive = String(activeCategory) === String(cat.id);
-          const config = getCategoryConfig(cat.name);
-          const Icon = config.icon;
-          return (
-            <button
-              key={cat.id}
-              onClick={() => handleCategoryChange(cat.id)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all whitespace-nowrap flex-shrink-0 ${isActive ? config.activeTab : config.hoverTab
-                }`}
-            >
-              <Icon className="w-4 h-4" />
-              {cat.name}
-              {isActive && (
-                <span className="ml-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-white/20">
-                  {total}
-                </span>
-              )}
-            </button>
-          );
-        })}
+        <div
+          ref={categoryScrollRef}
+          onWheel={handleCategoryWheel}
+          className="flex items-center gap-2 overflow-x-auto scroll-smooth hide-scrollbar py-1 px-1"
+        >
+          <button
+            onClick={() => handleCategoryChange("all")}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all whitespace-nowrap flex-shrink-0 ${activeCategory === "all"
+                ? "bg-slate-900 text-white shadow-md"
+                : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50"
+              }`}
+          >
+            <Layers className="w-4 h-4" />
+            All Items
+            {activeCategory === "all" && (
+              <span className="ml-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-white/20">
+                {total}
+              </span>
+            )}
+          </button>
+
+          {categories.map((cat) => {
+            const isActive = String(activeCategory) === String(cat.id);
+            const config = getCategoryConfig(cat.name);
+            const Icon = config.icon;
+            return (
+              <button
+                key={cat.id}
+                onClick={() => handleCategoryChange(cat.id)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all whitespace-nowrap flex-shrink-0 ${isActive ? config.activeTab : config.hoverTab
+                  }`}
+              >
+                <Icon className="w-4 h-4" />
+                {cat.name}
+                {isActive && (
+                  <span className="ml-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-white/20">
+                    {total}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        <button
+          type="button"
+          onClick={() => scrollCategories('right')}
+          className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-7 h-7 bg-white/95 shadow-md border border-slate-200 rounded-full flex items-center justify-center text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-all opacity-0 group-hover/scroll:opacity-100"
+          title="Scroll Right"
+        >
+          <ChevronRight className="w-4 h-4" />
+        </button>
       </div>
 
       {/* Subcategory Chips */}

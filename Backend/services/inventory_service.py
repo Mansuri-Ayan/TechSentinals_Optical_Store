@@ -97,9 +97,9 @@ async def get_inventory_by_owner_product(
             Inventory.owner_id == owner_id,
             Inventory.product_id == product_id,
         )
-    )
+    ).limit(1)
     result = await db.execute(stmt)
-    return result.scalar_one_or_none()
+    return result.scalars().first()
 
 
 async def get_or_create_inventory(

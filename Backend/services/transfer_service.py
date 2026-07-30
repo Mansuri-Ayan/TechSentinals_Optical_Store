@@ -103,6 +103,87 @@ async def _consume_stock_fifo(
     return tot_cost, consumed_list
 
 
+async def ensure_category_and_brand_copied(
+    db: AsyncSession,
+    product_id: int,
+    owner_type: str,
+    owner_id: int,
+) -> None:
+    """Ensure that the Category and Brand of the product are copied to the destination store if they don't exist."""
+    if owner_type.upper() != "STORE":
+        return
+
+    from models.category import Category
+    from models.brand import Brand
+    from models.store_category_loyalty import StoreCategoryLoyalty
+
+    # Fetch product
+    prod_stmt = select(Product).where(Product.id == product_id)
+    prod_res = await db.execute(prod_stmt)
+    product = prod_res.scalar_one_or_none()
+    if not product:
+        return
+
+    # 1. Handle Category copying
+    if product.category_id is not None:
+        cat_stmt = select(Category).where(Category.id == product.category_id)
+        cat_res = await db.execute(cat_stmt)
+        orig_cat = cat_res.scalar_one_or_none()
+        if orig_cat:
+            # Check if a category with same name exists for this store
+            store_cat_stmt = select(Category).where(
+                Category.store_id == owner_id,
+                Category.name == orig_cat.name
+            )
+            store_cat_res = await db.execute(store_cat_stmt)
+            store_cat = store_cat_res.scalar_one_or_none()
+            if not store_cat:
+                # Create category for this store
+                new_cat = Category(
+                    admin_id=orig_cat.admin_id,
+                    store_id=owner_id,
+                    name=orig_cat.name,
+                    description=orig_cat.description,
+                    is_active=True
+                )
+                db.add(new_cat)
+                await db.flush()
+
+                # Create loyalty category record for the new category
+                scl = StoreCategoryLoyalty(
+                    store_id=owner_id,
+                    category_id=new_cat.id,
+                    points_per_unit=50,
+                    is_enabled=True,
+                )
+                db.add(scl)
+                await db.flush()
+
+    # 2. Handle Brand copying
+    if product.brand_id is not None:
+        brand_stmt = select(Brand).where(Brand.id == product.brand_id)
+        brand_res = await db.execute(brand_stmt)
+        orig_brand = brand_res.scalar_one_or_none()
+        if orig_brand:
+            # Check if a brand with same name exists for this store
+            store_brand_stmt = select(Brand).where(
+                Brand.store_id == owner_id,
+                Brand.name == orig_brand.name
+            )
+            store_brand_res = await db.execute(store_brand_stmt)
+            store_brand = store_brand_res.scalar_one_or_none()
+            if not store_brand:
+                # Create brand for this store
+                new_brand = Brand(
+                    admin_id=orig_brand.admin_id,
+                    store_id=owner_id,
+                    name=orig_brand.name,
+                    is_active=True
+                )
+                db.add(new_brand)
+                await db.flush()
+
+
 async def _receive_stock_batches(
     db: AsyncSession,
     owner_type: str,
@@ -115,6 +196,8 @@ async def _receive_stock_batches(
     inheriting batch attributes from the source consumed batches.
     Returns the inventory_id of the first batch created.
     """
+    await ensure_category_and_brand_copied(db, product_id, owner_type, owner_id)
+
     if not consumed_batches:
         return 0
 
@@ -336,6 +419,9 @@ async def purchase_stock(
         # Capture snapshot of product at purchase time
         prod = await db.scalar(select(Product).where(Product.id == product_id))
         selling_price = prod.selling_price if prod else 0.00
+
+        # Ensure category and brand exist in the target store/warehouse
+        await ensure_category_and_brand_copied(db, product_id, ot, oid)
 
         # Create a new inventory row (batch) for this purchase
         inventory = Inventory(
@@ -911,6 +997,68 @@ async def create_pending_push_service(
             message=f"{store_name} manager wants to send {quantity} units of {product_name} to {to_store_name}.",
             txn_id=txn_out.id,
         )
+
+    await db.commit()
+    await db.refresh(txn_out)
+    await db.refresh(txn_in)
+    return txn_out, txn_in
+
+
+async def create_pending_return_service(
+    db: AsyncSession,
+    manager_user_id: int,
+    manager_store_id: int,
+    product_id: int,
+    quantity: int,
+    to_owner_type: str,
+    to_owner_id: int,
+    remarks: str | None = None,
+) -> tuple[InventoryTransaction, InventoryTransaction]:
+    """
+    Manager returns stock (creates pending Return transaction showing on both sides, requiring approval).
+    """
+    to_owner_type = to_owner_type.upper()
+    
+    async with db.begin_nested():
+        from_inv = await get_or_create_inventory(db, OwnerType.STORE, manager_store_id, product_id)
+        to_inv = await get_or_create_inventory(db, to_owner_type, to_owner_id, product_id)
+
+        txn_out = InventoryTransaction(
+            inventory_id=from_inv.id,
+            product_id=product_id,
+            transaction_type=TransactionType.RETURN,
+            quantity=quantity,
+            send_store_id=manager_store_id,
+            receive_store_id=to_owner_id if to_owner_type == "STORE" else None,
+            remarks=remarks,
+            created_by=manager_user_id,
+            status=TransactionStatus.PENDING,
+            transfer_direction=TransferDirection.BRANCH_TO_ADMIN if to_owner_type == "ADMIN" else TransferDirection.BRANCH_TO_BRANCH,
+            requested_by_store_id=manager_store_id,
+            is_request=True,
+        )
+        db.add(txn_out)
+        await db.flush()
+
+        txn_in = InventoryTransaction(
+            inventory_id=to_inv.id,
+            product_id=product_id,
+            transaction_type=TransactionType.RETURN,
+            quantity=quantity,
+            send_store_id=manager_store_id,
+            receive_store_id=to_owner_id if to_owner_type == "STORE" else None,
+            remarks=remarks,
+            created_by=manager_user_id,
+            status=TransactionStatus.PENDING,
+            transfer_direction=TransferDirection.BRANCH_TO_ADMIN if to_owner_type == "ADMIN" else TransferDirection.BRANCH_TO_BRANCH,
+            requested_by_store_id=manager_store_id,
+            reference_id=txn_out.id,
+            is_request=True,
+        )
+        db.add(txn_in)
+        await db.flush()
+
+        txn_out.reference_id = txn_in.id
 
     await db.commit()
     await db.refresh(txn_out)

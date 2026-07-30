@@ -13,6 +13,9 @@ class CategoryCreate(BaseModel):
         default=None, examples=["Eyeglass and sunglass frames"],
         description="Optional description of the category",
     )
+    store_id: int | None = Field(
+        default=None, description="Optional store ID to scope this category"
+    )
 
 
 class CategoryUpdate(BaseModel):
@@ -24,6 +27,7 @@ class CategoryUpdate(BaseModel):
 class CategoryRead(BaseModel):
     id: int
     admin_id: int
+    store_id: int | None = None
     name: str
     description: str | None = None
     is_active: bool

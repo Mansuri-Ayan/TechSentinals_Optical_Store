@@ -1,18 +1,17 @@
 # API: store/staff.py
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import status as http_status
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from core.deps import require_permission, get_current_user
 from db.session import get_db
 from models.admin import Admin
 from models.manager import Manager
+from models.store import Store
 from schemas.staff import StaffRead
 from schemas.pagination import PaginatedResponse
 from services.store_service import get_store
 from services.staff_service import get_staff_by_store
-
-import select
-from models.store import Store
-from sqlalchemy import select
 
 router = APIRouter()
 
@@ -27,7 +26,7 @@ async def list_store_staff(
     page: int = Query(default=1, ge=1, description="Page number"),
     page_size: int = Query(default=10, ge=1, le=100, alias="limit", description="Page size"),
     search: str | None = Query(default=None, description="Search query matching staff name/email/phone/code"),
-    status: str | None = Query(default=None, description="Filter by status: ACTIVE/INACTIVE"),
+    status_filter: str | None = Query(default=None, alias="status", description="Filter by status: ACTIVE/INACTIVE"),
     role: str | None = Query(default=None, description="Filter by role: MANAGER/WORKER/OPTICIAN"),
     paginate: bool = Query(default=True),
     db: AsyncSession = Depends(get_db),
@@ -50,6 +49,7 @@ async def list_store_staff(
         
     if not has_access:
         raise HTTPException(status_code=403, detail="Missing permission to read staff")
+
     # Check permissions and resolve store IDs
     store_ids = []
     if isinstance(current_user, Admin):
@@ -63,13 +63,13 @@ async def list_store_staff(
                 store_id_int = int(store_id)
             except ValueError:
                 raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
+                    status_code=http_status.HTTP_400_BAD_REQUEST,
                     detail="Invalid store ID format",
                 )
             store = await get_store(db, store_id_int)
             if store is None or store.admin_id != current_user.id:
                 raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
+                    status_code=http_status.HTTP_404_NOT_FOUND,
                     detail="Store not found",
                 )
             store_ids = [store_id_int]
@@ -78,24 +78,26 @@ async def list_store_staff(
             store_id_int = int(store_id)
         except ValueError:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
+                status_code=http_status.HTTP_400_BAD_REQUEST,
                 detail="Invalid store ID format",
             )
         if current_user.store_id != store_id_int:
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
+                status_code=http_status.HTTP_403_FORBIDDEN,
                 detail="Access denied to this store's staff directory",
             )
         store_ids = [store_id_int]
     else:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied",
-        )
+        # Workers, Opticians, etc. — they already passed the permission check above.
+        # Scope them to their own store.
+        user_store_id = getattr(current_user, "store_id", None)
+        if user_store_id is None:
+            raise HTTPException(status_code=403, detail="Access denied")
+        store_ids = [user_store_id]
         
     is_active = None
-    if status:
-        is_active = status.upper() == "ACTIVE"
+    if status_filter:
+        is_active = status_filter.upper() == "ACTIVE"
         
     staff_items, total = await get_staff_by_store(
         db,

@@ -15,8 +15,6 @@ class ExpenseCreate(BaseModel):
     payment_method: ExpensePaymentMethod
     reference_number: str | None = Field(default=None, max_length=100)
     receipt_url: str | None = None
-    is_recurring: bool = False
-    recurring_interval: str | None = Field(default=None, max_length=20)
     
     incurred_by_type: ExpenseRecordedByType | None = None
     incurred_by_id: int | None = None
@@ -31,8 +29,6 @@ class ExpenseUpdate(BaseModel):
     payment_method: ExpensePaymentMethod | None = None
     reference_number: str | None = Field(default=None, max_length=100)
     receipt_url: str | None = None
-    is_recurring: bool | None = None
-    recurring_interval: str | None = Field(default=None, max_length=20)
     
     incurred_by_type: ExpenseRecordedByType | None = None
     incurred_by_id: int | None = None
@@ -59,8 +55,6 @@ class ExpenseRead(BaseModel):
     payment_method: ExpensePaymentMethod
     reference_number: str | None = None
     receipt_url: str | None = None
-    is_recurring: bool
-    recurring_interval: str | None = None
     is_approved: bool
     approved_by: int | None = None
     approved_at: datetime | None = None

@@ -31,6 +31,14 @@ class Category(Base):
         comment="FK → admins.id — owner of this category",
     )
 
+    store_id = Column(
+        BigInteger,
+        ForeignKey("stores.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+        comment="FK → stores.id — owner store of this category (null for admin/warehouse)",
+    )
+
     name = Column(
         String(255),
         nullable=False,
@@ -69,6 +77,9 @@ class Category(Base):
     admin = relationship(
         "Admin",
         back_populates="categories",
+    )
+    store = relationship(
+        "Store",
     )
     subcategories = relationship(
         "Subcategory",

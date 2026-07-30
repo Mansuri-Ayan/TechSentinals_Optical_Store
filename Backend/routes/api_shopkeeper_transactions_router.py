@@ -15,9 +15,12 @@ from services.transfer_service import (
     get_transactions_filtered,
     create_pending_request_service,
     create_pending_push_service,
+    create_pending_return_service,
     store_to_admin_transfer,
     purchase_stock,
+    record_stock_action,
 )
+from models.inventory_transaction import TransactionType
 
 router = APIRouter(
     prefix="/api/shopkeeper/transactions",
@@ -207,3 +210,118 @@ async def create_manager_purchase(
         remarks=payload.remarks,
     )
     return _txn_to_read(txn)
+
+
+# ── Damage / Loss / Sale / Return ──────────────────────────────
+
+class ManagerStockActionPayload(BaseModel):
+    product_id: int
+    quantity: int
+    owner_type: Optional[str] = None
+    owner_id: Optional[int] = None
+    remarks: Optional[str] = None
+
+
+@router.post("/damage", response_model=TransactionRead, status_code=status.HTTP_201_CREATED)
+async def create_manager_damage(
+    payload: ManagerStockActionPayload,
+    db: AsyncSession = Depends(get_db),
+    current_user = Depends(require_permission('transactions', 'create')),
+):
+    """Record damaged stock in the manager's own store inventory."""
+    if isinstance(current_user, Admin):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden — This endpoint is for store staff",
+        )
+    txn = await record_stock_action(
+        db,
+        action=TransactionType.DAMAGE,
+        owner_type="STORE",
+        owner_id=current_user.store_id,
+        product_id=payload.product_id,
+        quantity=payload.quantity,
+        created_by=current_user.id,
+        remarks=payload.remarks,
+    )
+    return _txn_to_read(txn)
+
+
+@router.post("/loss", response_model=TransactionRead, status_code=status.HTTP_201_CREATED)
+async def create_manager_loss(
+    payload: ManagerStockActionPayload,
+    db: AsyncSession = Depends(get_db),
+    current_user = Depends(require_permission('transactions', 'create')),
+):
+    """Record lost stock in the manager's own store inventory."""
+    if isinstance(current_user, Admin):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden — This endpoint is for store staff",
+        )
+    txn = await record_stock_action(
+        db,
+        action=TransactionType.LOSS,
+        owner_type="STORE",
+        owner_id=current_user.store_id,
+        product_id=payload.product_id,
+        quantity=payload.quantity,
+        created_by=current_user.id,
+        remarks=payload.remarks,
+    )
+    return _txn_to_read(txn)
+
+
+@router.post("/sale", response_model=TransactionRead, status_code=status.HTTP_201_CREATED)
+async def create_manager_sale(
+    payload: ManagerStockActionPayload,
+    db: AsyncSession = Depends(get_db),
+    current_user = Depends(require_permission('transactions', 'create')),
+):
+    """Record a manual sale in the manager's own store inventory."""
+    if isinstance(current_user, Admin):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden — This endpoint is for store staff",
+        )
+    txn = await record_stock_action(
+        db,
+        action=TransactionType.SALE,
+        owner_type="STORE",
+        owner_id=current_user.store_id,
+        product_id=payload.product_id,
+        quantity=payload.quantity,
+        created_by=current_user.id,
+        remarks=payload.remarks,
+    )
+    return _txn_to_read(txn)
+
+
+@router.post("/return", response_model=list[TransactionRead], status_code=status.HTTP_201_CREATED)
+async def create_manager_return(
+    payload: ManagerStockActionPayload,
+    db: AsyncSession = Depends(get_db),
+    current_user = Depends(require_permission('transactions', 'create')),
+):
+    """Record a pending return requiring approval from the manager's store to a destination."""
+    if isinstance(current_user, Admin):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden — This endpoint is for store staff",
+        )
+    
+    owner_type = payload.owner_type.upper() if payload.owner_type else "ADMIN"
+    owner_id = payload.owner_id if payload.owner_id is not None else 1
+
+    txn_out, txn_in = await create_pending_return_service(
+        db=db,
+        manager_user_id=current_user.id,
+        manager_store_id=current_user.store_id,
+        product_id=payload.product_id,
+        quantity=payload.quantity,
+        to_owner_type=owner_type,
+        to_owner_id=owner_id,
+        remarks=payload.remarks,
+    )
+
+    return [_txn_to_read(txn_out), _txn_to_read(txn_in)]

@@ -134,23 +134,6 @@ class Expense(Base):
         comment="URL or file path to the uploaded bill / receipt image",
     )
 
-    # ── Recurring expense support ──────────────────────────────
-    is_recurring = Column(
-        Boolean,
-        nullable=False,
-        default=False,
-        server_default="false",
-        comment="Whether this is a recurring expense (e.g. monthly rent)",
-    )
-
-    recurring_interval = Column(
-        String(20),
-        nullable=True,
-        comment=(
-            "Recurrence frequency when is_recurring=true. "
-            "Values: DAILY, WEEKLY, MONTHLY, QUARTERLY, YEARLY"
-        ),
-    )
 
     # ── Approval workflow ─────────────────────────────────────
     is_approved = Column(

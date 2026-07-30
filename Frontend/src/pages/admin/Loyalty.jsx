@@ -270,7 +270,7 @@ const Loyalty = () => {
                 </PermissionGuard>
               </div>
 
-              <div className="overflow-hidden border border-slate-100 rounded-xl">
+              <div className="max-h-[320px] overflow-y-auto border border-slate-100 rounded-xl custom-scrollbar">
                 <table className="w-full text-left text-xs">
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-100 text-[9px] font-bold text-slate-400 uppercase tracking-widest">

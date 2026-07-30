@@ -30,6 +30,14 @@ class Brand(Base):
         comment="FK → admins.id — owner of this brand record",
     )
 
+    store_id = Column(
+        BigInteger,
+        ForeignKey("stores.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+        comment="FK → stores.id — owner store of this brand (null for admin/warehouse)",
+    )
+
     name = Column(
         String(255),
         nullable=False,
@@ -62,6 +70,9 @@ class Brand(Base):
     admin = relationship(
         "Admin",
         back_populates="brands",
+    )
+    store = relationship(
+        "Store",
     )
     products = relationship(
         "Product",

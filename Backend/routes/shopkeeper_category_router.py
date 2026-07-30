@@ -2,7 +2,7 @@
 import math
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from core.deps import get_current_user
+from core.deps import get_current_user, require_permission, get_user_admin_id
 from db.session import get_db
 from models.admin import Admin
 from schemas.category import (
@@ -31,14 +31,10 @@ async def list_categories(
     limit: int = Query(20, ge=1, le=100),
     paginate: bool = Query(True),
     db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_user),
+    current_user = Depends(require_permission('categories', 'read')),
 ):
-    if isinstance(current_user, Admin):
-        admin_id = current_user.id
-        store_id = None
-    else:
-        admin_id = current_user.store.admin_id
-        store_id = None if all_tenant else current_user.store_id
+    admin_id = get_user_admin_id(current_user)
+    store_id = None if (isinstance(current_user, Admin) or all_tenant) else getattr(current_user, "store_id", None)
 
     items, total = await get_categories_by_admin(
         db,
@@ -72,12 +68,9 @@ async def list_categories(
 async def get_category_endpoint(
     category_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_user),
+    current_user = Depends(require_permission('categories', 'read')),
 ) -> CategoryRead:
-    if isinstance(current_user, Admin):
-        admin_id = current_user.id
-    else:
-        admin_id = current_user.store.admin_id
+    admin_id = get_user_admin_id(current_user)
 
     category = await get_category(db, category_id)
     if category is None or category.admin_id != admin_id:
@@ -99,12 +92,11 @@ async def get_category_endpoint(
 async def create_category_endpoint(
     payload: CategoryCreate,
     db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_user),
+    current_user = Depends(require_permission('categories', 'create')),
 ) -> CategoryRead:
-    if isinstance(current_user, Admin):
-        admin_id = current_user.id
-    else:
-        admin_id = current_user.store.admin_id
+    admin_id = get_user_admin_id(current_user)
+    if not isinstance(current_user, Admin):
+        payload.store_id = current_user.store_id
     category = await create_category(db, admin_id=admin_id, payload=payload)
     return CategoryRead(
         **{c.key: getattr(category, c.key) for c in category.__table__.columns},
@@ -120,12 +112,9 @@ async def update_category_endpoint(
     category_id: int,
     payload: CategoryUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_user),
+    current_user = Depends(require_permission('categories', 'update')),
 ) -> CategoryRead:
-    if isinstance(current_user, Admin):
-        admin_id = current_user.id
-    else:
-        admin_id = current_user.store.admin_id
+    admin_id = get_user_admin_id(current_user)
 
     category = await get_category(db, category_id)
     if category is None or category.admin_id != admin_id:
@@ -147,12 +136,9 @@ async def update_category_endpoint(
 async def delete_category_endpoint(
     category_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_user),
+    current_user = Depends(require_permission('categories', 'delete')),
 ) -> CategoryRead:
-    if isinstance(current_user, Admin):
-        admin_id = current_user.id
-    else:
-        admin_id = current_user.store.admin_id
+    admin_id = get_user_admin_id(current_user)
 
     category = await get_category(db, category_id)
     if category is None or category.admin_id != admin_id:
@@ -178,14 +164,10 @@ async def list_subcategories(
     limit: int = Query(20, ge=1, le=100),
     paginate: bool = Query(True),
     db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_user),
+    current_user = Depends(require_permission('categories', 'read')),
 ):
-    if isinstance(current_user, Admin):
-        admin_id = current_user.id
-        store_id = None
-    else:
-        admin_id = current_user.store.admin_id
-        store_id = current_user.store_id
+    admin_id = get_user_admin_id(current_user)
+    store_id = None if isinstance(current_user, Admin) else getattr(current_user, "store_id", None)
 
     category = await get_category(db, category_id)
     if category is None or category.admin_id != admin_id:
@@ -228,12 +210,9 @@ async def create_subcategory_endpoint(
     category_id: int,
     payload: SubcategoryCreate,
     db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_user),
+    current_user = Depends(require_permission('categories', 'create')),
 ) -> SubcategoryRead:
-    if isinstance(current_user, Admin):
-        admin_id = current_user.id
-    else:
-        admin_id = current_user.store.admin_id
+    admin_id = get_user_admin_id(current_user)
 
     category = await get_category(db, category_id)
     if category is None or category.admin_id != admin_id:
@@ -253,12 +232,9 @@ async def update_subcategory_endpoint(
     subcategory_id: int,
     payload: SubcategoryUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_user),
+    current_user = Depends(require_permission('categories', 'update')),
 ) -> SubcategoryRead:
-    if isinstance(current_user, Admin):
-        admin_id = current_user.id
-    else:
-        admin_id = current_user.store.admin_id
+    admin_id = get_user_admin_id(current_user)
 
     subcategory = await get_subcategory(db, subcategory_id)
     if subcategory is None:
@@ -283,12 +259,9 @@ async def update_subcategory_endpoint(
 async def delete_subcategory_endpoint(
     subcategory_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_user),
+    current_user = Depends(require_permission('categories', 'delete')),
 ) -> SubcategoryRead:
-    if isinstance(current_user, Admin):
-        admin_id = current_user.id
-    else:
-        admin_id = current_user.store.admin_id
+    admin_id = get_user_admin_id(current_user)
 
     subcategory = await get_subcategory(db, subcategory_id)
     if subcategory is None:

@@ -99,13 +99,16 @@ const Brands = () => {
           payload: { name: data.name, is_active: data.is_active },
         });
       } else {
-        await createBrandAsync({ name: data.name });
+        await createBrandAsync({
+          name: data.name,
+          store_id: inPageStoreId === 'admin' ? null : Number(inPageStoreId),
+        });
       }
       return true;
     } catch {
       return false;
     }
-  }, [createBrandAsync, updateBrandAsync]);
+  }, [createBrandAsync, updateBrandAsync, inPageStoreId]);
 
   const handleDelete = useCallback((id) => {
     setConfirmModal({ isOpen: true, brandId: id });

@@ -10,7 +10,37 @@ from models.store_category_loyalty import StoreCategoryLoyalty
 from schemas.loyalty import StoreCategoryLoyaltyRead, StoreCategoryLoyaltyUpdate
 from typing import List
 
+from models.category import Category
+from models.store import Store
+from typing import List
+
 router = APIRouter()
+
+
+async def ensure_store_category_loyalties(db: AsyncSession, store_id: int, admin_id: int):
+    """Ensure all active categories owned by admin have a StoreCategoryLoyalty entry for store_id."""
+    cats_stmt = select(Category.id).where(Category.admin_id == admin_id, Category.is_active.is_(True))
+    cat_ids = (await db.execute(cats_stmt)).scalars().all()
+    if not cat_ids:
+        return
+
+    existing_stmt = select(StoreCategoryLoyalty.category_id).where(StoreCategoryLoyalty.store_id == store_id)
+    existing_cat_ids = set((await db.execute(existing_stmt)).scalars().all())
+
+    new_added = False
+    for cat_id in cat_ids:
+        if cat_id not in existing_cat_ids:
+            scl = StoreCategoryLoyalty(
+                store_id=store_id,
+                category_id=cat_id,
+                points_per_unit=50,
+                is_enabled=True,
+            )
+            db.add(scl)
+            new_added = True
+    if new_added:
+        await db.commit()
+
 
 # --- Admin Endpoints ---
 
@@ -25,9 +55,19 @@ async def get_loyalty_categories_admin(
     current_user = Depends(require_permission('loyalty', 'read')),
 ) -> List[StoreCategoryLoyaltyRead]:
     admin_id = get_user_admin_id(current_user)
-    # Check if the admin owns the store
-    # This implicit check relies on StoreCategoryLoyalty.store relationship loading Store
-    # and then checking admin_id. We can also explicitly check the store first.
+
+    # Verify store belongs to admin
+    store_stmt = select(Store).where(Store.id == store_id)
+    store = (await db.execute(store_stmt)).scalar_one_or_none()
+    if not store or store.admin_id != admin_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Store not found or access denied"
+        )
+
+    # Auto-seed missing entries with 50 points
+    await ensure_store_category_loyalties(db, store_id, admin_id)
+
     scl_stmt = select(StoreCategoryLoyalty).options(
         joinedload(StoreCategoryLoyalty.store),
         joinedload(StoreCategoryLoyalty.category)
@@ -36,17 +76,7 @@ async def get_loyalty_categories_admin(
     category_loyalties = result.scalars().all()
 
     if not category_loyalties:
-        # If no entries found, check if store exists and belongs to admin
-        from models.store import Store
-        store_stmt = select(Store).where(Store.id == store_id)
-        store_result = await db.execute(store_stmt)
-        store = store_result.scalar_one_or_none()
-        if not store or store.admin_id != admin_id:
-             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Store not found or access denied"
-            )
-        # If store exists and belongs to admin but no SCL, return empty list
+        # If no entries found, return empty list
         return []
 
     # Verify admin ownership for any returned category loyalty config
@@ -118,14 +148,17 @@ async def get_loyalty_categories_shopkeeper(
     db: AsyncSession = Depends(get_db),
     current_user = Depends(require_permission('loyalty', 'read')),
 ) -> List[StoreCategoryLoyaltyRead]:
+    admin_id = get_user_admin_id(current_user)
     if hasattr(current_user, "store_id"):
         store_id = current_user.store_id
     else:
-        from models.store import Store
-        store = await db.scalar(select(Store).where(Store.admin_id == current_user.id))
+        store = await db.scalar(select(Store).where(Store.admin_id == admin_id))
         if not store:
             raise HTTPException(status_code=400, detail="Admin has no stores")
         store_id = store.id
+
+    await ensure_store_category_loyalties(db, store_id, admin_id)
+
     scl_stmt = select(StoreCategoryLoyalty).options(
         joinedload(StoreCategoryLoyalty.category)
     ).where(StoreCategoryLoyalty.store_id == store_id)

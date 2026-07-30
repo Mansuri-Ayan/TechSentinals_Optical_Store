@@ -14,6 +14,10 @@ import {
   createManagerRequestApi,
   createManagerPushApi,
   createManagerPurchaseApi,
+  createManagerDamageApi,
+  createManagerLossApi,
+  createManagerSaleApi,
+  createManagerReturnApi,
   getWarehouseTransactionsApi,
   createAdminRequestApi,
 } from '../api/transactions/transaction.api';
@@ -146,6 +150,54 @@ export const useTransactions = (storeId, filters = {}, isManager = false) => {
     },
   });
 
+  const createManagerDamageMutation = useMutation({
+    mutationFn: (payload) => createManagerDamageApi(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [transactionsQueryKey] });
+      queryClient.invalidateQueries({ queryKey: ['inventory'] });
+      toast.success('Damage recorded successfully.');
+    },
+    onError: (error) => {
+      toast.error(error.response?.data?.detail || 'Failed to record damage.');
+    },
+  });
+
+  const createManagerLossMutation = useMutation({
+    mutationFn: (payload) => createManagerLossApi(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [transactionsQueryKey] });
+      queryClient.invalidateQueries({ queryKey: ['inventory'] });
+      toast.success('Loss recorded successfully.');
+    },
+    onError: (error) => {
+      toast.error(error.response?.data?.detail || 'Failed to record loss.');
+    },
+  });
+
+  const createManagerSaleMutation = useMutation({
+    mutationFn: (payload) => createManagerSaleApi(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [transactionsQueryKey] });
+      queryClient.invalidateQueries({ queryKey: ['inventory'] });
+      toast.success('Sale recorded successfully.');
+    },
+    onError: (error) => {
+      toast.error(error.response?.data?.detail || 'Failed to record sale.');
+    },
+  });
+
+  const createManagerReturnMutation = useMutation({
+    mutationFn: (payload) => createManagerReturnApi(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [transactionsQueryKey] });
+      queryClient.invalidateQueries({ queryKey: ['inventory'] });
+      toast.success('Return recorded successfully.');
+    },
+    onError: (error) => {
+      toast.error(error.response?.data?.detail || 'Failed to record return.');
+    },
+  });
+
   return {
     transactions: query.data?.items || query.data || [],
     totalTransactions: query.data?.total || (Array.isArray(query.data) ? query.data.length : 0),
@@ -166,6 +218,14 @@ export const useTransactions = (storeId, filters = {}, isManager = false) => {
     isCreatingManagerPush: createManagerPushMutation.isPending,
     createManagerPurchaseAsync: createManagerPurchaseMutation.mutateAsync,
     isCreatingManagerPurchase: createManagerPurchaseMutation.isPending,
+    createManagerDamageAsync: createManagerDamageMutation.mutateAsync,
+    isCreatingManagerDamage: createManagerDamageMutation.isPending,
+    createManagerLossAsync: createManagerLossMutation.mutateAsync,
+    isCreatingManagerLoss: createManagerLossMutation.isPending,
+    createManagerSaleAsync: createManagerSaleMutation.mutateAsync,
+    isCreatingManagerSale: createManagerSaleMutation.isPending,
+    createManagerReturnAsync: createManagerReturnMutation.mutateAsync,
+    isCreatingManagerReturn: createManagerReturnMutation.isPending,
     createAdminRequestAsync: createAdminRequestMutation.mutateAsync,
     isCreatingAdminRequest: createAdminRequestMutation.isPending,
   };

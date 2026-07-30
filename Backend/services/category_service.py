@@ -1,10 +1,12 @@
 # Service: category_service.py
-from sqlalchemy import select, func as sa_func
+from sqlalchemy import select, func as sa_func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from models.category import Category
 from models.subcategory import Subcategory
 from models.product import Product
 from models.inventory import Inventory
+from models.store import Store
+from models.store_category_loyalty import StoreCategoryLoyalty
 from schemas.category import (
     CategoryCreate, CategoryUpdate,
     SubcategoryCreate, SubcategoryUpdate,
@@ -18,15 +20,41 @@ async def create_category(
     admin_id: int,
     payload: CategoryCreate,
 ) -> Category:
-    """Create a new category owned by the given admin."""
+    """Create a new category owned by the given admin and create default loyalty records for stores."""
     category = Category(
         admin_id=admin_id,
+        store_id=payload.store_id,
         name=payload.name,
         description=payload.description,
     )
     db.add(category)
     await db.commit()
     await db.refresh(category)
+
+    # Auto-create default 50 points StoreCategoryLoyalty for target stores
+    if category.store_id is not None:
+        scl = StoreCategoryLoyalty(
+            store_id=category.store_id,
+            category_id=category.id,
+            points_per_unit=50,
+            is_enabled=True,
+        )
+        db.add(scl)
+        await db.commit()
+    else:
+        stores_stmt = select(Store.id).where(Store.admin_id == admin_id)
+        store_ids = (await db.execute(stores_stmt)).scalars().all()
+        for s_id in store_ids:
+            scl = StoreCategoryLoyalty(
+                store_id=s_id,
+                category_id=category.id,
+                points_per_unit=50,
+                is_enabled=True,
+            )
+            db.add(scl)
+        if store_ids:
+            await db.commit()
+
     return category
 
 
@@ -87,31 +115,31 @@ async def get_categories_by_admin(
 
     # ── Base conditions ──
     conditions = [Category.admin_id == admin_id]
+    if store_id is not None:
+        conditions.append(or_(Category.store_id == store_id, Category.store_id.is_(None)))
+    else:
+        conditions.append(Category.store_id.is_(None))
     if active_only:
         conditions.append(Category.is_active.is_(True))
     if search:
         conditions.append(Category.name.ilike(f"%{search.strip()}%"))
 
     # ── Total count ──
-    if store_id is not None:
-        count_stmt = select(sa_func.count(Category.id)).join(prod_sq, Category.id == prod_sq.c.category_id).where(*conditions)
-    else:
-        count_stmt = select(sa_func.count(Category.id)).where(*conditions)
+    count_stmt = select(sa_func.count(Category.id)).where(*conditions)
     total = (await db.execute(count_stmt)).scalar() or 0
 
     # ── Data query ──
-    data_stmt = select(
-        Category,
-        sa_func.coalesce(sub_sq.c.sub_cnt, 0).label("subcategories_count"),
-        sa_func.coalesce(prod_sq.c.cnt, 0).label("products_count"),
-    ).outerjoin(sub_sq, Category.id == sub_sq.c.category_id)
-
-    if store_id is not None:
-        data_stmt = data_stmt.join(prod_sq, Category.id == prod_sq.c.category_id)
-    else:
-        data_stmt = data_stmt.outerjoin(prod_sq, Category.id == prod_sq.c.category_id)
-
-    data_stmt = data_stmt.where(*conditions).order_by(Category.name)
+    data_stmt = (
+        select(
+            Category,
+            sa_func.coalesce(sub_sq.c.sub_cnt, 0).label("subcategories_count"),
+            sa_func.coalesce(prod_sq.c.cnt, 0).label("products_count"),
+        )
+        .outerjoin(sub_sq, Category.id == sub_sq.c.category_id)
+        .outerjoin(prod_sq, Category.id == prod_sq.c.category_id)
+        .where(*conditions)
+        .order_by(Category.name)
+    )
 
     if paginate:
         offset = (page - 1) * limit
@@ -226,24 +254,19 @@ async def get_subcategories_by_category(
         conditions.append(Subcategory.name.ilike(f"%{search.strip()}%"))
 
     # ── Total count ──
-    if store_id is not None:
-        count_stmt = select(sa_func.count(Subcategory.id)).join(prod_sq, Subcategory.id == prod_sq.c.subcategory_id).where(*conditions)
-    else:
-        count_stmt = select(sa_func.count(Subcategory.id)).where(*conditions)
+    count_stmt = select(sa_func.count(Subcategory.id)).where(*conditions)
     total = (await db.execute(count_stmt)).scalar() or 0
 
     # ── Data query ──
-    data_stmt = select(
-        Subcategory,
-        sa_func.coalesce(prod_sq.c.cnt, 0).label("products_count"),
+    data_stmt = (
+        select(
+            Subcategory,
+            sa_func.coalesce(prod_sq.c.cnt, 0).label("products_count"),
+        )
+        .outerjoin(prod_sq, Subcategory.id == prod_sq.c.subcategory_id)
+        .where(*conditions)
+        .order_by(Subcategory.name)
     )
-
-    if store_id is not None:
-        data_stmt = data_stmt.join(prod_sq, Subcategory.id == prod_sq.c.subcategory_id)
-    else:
-        data_stmt = data_stmt.outerjoin(prod_sq, Subcategory.id == prod_sq.c.subcategory_id)
-
-    data_stmt = data_stmt.where(*conditions).order_by(Subcategory.name)
 
     if paginate:
         offset = (page - 1) * limit

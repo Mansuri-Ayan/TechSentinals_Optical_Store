@@ -184,7 +184,16 @@ class SaleCreate(BaseModel):
         default=[], description="Payment splits (can be empty for credit sales)",
     )
     points_to_redeem: int = Field(
-        default=0, ge=0, description="Loyalty points to redeem for discount",
+        default=0, ge=0, description="Loyalty points to redeem for discount (legacy/total)",
+    )
+    points_to_redeem_self: int = Field(
+        default=0, ge=0, description="Loyalty points to redeem from main customer",
+    )
+    points_to_redeem_other: int = Field(
+        default=0, ge=0, description="Loyalty points to redeem from other customer",
+    )
+    loyalty_redeem_other_customer_id: int | None = Field(
+        default=None, description="FK → customers.id of other customer being redeemed",
     )
     custom_points: int = Field(
         default=0, ge=0, description="Custom bonus loyalty points to award",
@@ -219,6 +228,9 @@ class SaleRead(BaseModel):
     billing_account_customer_id: int | None = None
     loyalty_awarded_to_customer_id: int | None = None
     loyalty_redeemed_from_customer_id: int | None = None
+    loyalty_redeemed_other_customer_id: int | None = None
+    loyalty_points_redeemed_self: int = 0
+    loyalty_points_redeemed_other: int = 0
     sold_by_type: StaffTypeEnum
     sold_by_id: int
     sale_date: date
