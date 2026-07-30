@@ -40,3 +40,13 @@ export const getSaleBillApi = async (saleId) => {
   return response.data;
 };
 
+/**
+ * Delete a sale permanently and perform full inventory/loyalty rollback.
+ * 
+ * @param {number|string} saleId - The sale ID.
+ */
+export const deleteSaleApi = async (saleId) => {
+  const response = await api.delete(`/sales/${saleId}`);
+  return response.data;
+};
+

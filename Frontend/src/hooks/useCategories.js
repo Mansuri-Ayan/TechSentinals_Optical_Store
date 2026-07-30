@@ -20,8 +20,8 @@ import {
   deleteShopkeeperSubcategoryApi,
 } from '../api/category/category.api';
 
-export const categoriesQueryKey = ['categories'];
-export const subcategoriesQueryKey = ['subcategories'];
+export const categoriesQueryKey = 'categories';
+export const subcategoriesQueryKey = 'subcategories';
 
 /**
  * Paginated categories hook with CRUD.

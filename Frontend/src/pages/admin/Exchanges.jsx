@@ -15,7 +15,7 @@ import { useRoleContext } from '../../hooks/useRoleContext';
 import { usePagePermissions } from '../../hooks/usePermissions';
 import { useCategories, useSubcategories } from '../../hooks/useCategories';
 import { getSalesApi } from '../../api/sales/sales.api';
-import { getInventoryApi } from '../../api/inventory/inventory.api';
+import { getInventoryApi, getUniversalInventoryApi } from '../../api/inventory/inventory.api';
 import { createExchangeApi, cancelExchangeApi, getExchangeReceiptApi } from '../../api/exchange/exchange.api';
 
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
@@ -704,9 +704,11 @@ const NewExchangeWizard = ({ isOpen, onClose, storeId, onSuccess }) => {
   const [activeCategory, setActiveCategory] = useState('all');
   const [activeSubcategory, setActiveSubcategory] = useState('');
 
-  const { categories } = useCategories();
+  const { categories } = useCategories(null, { limit: 1000, paginate: false, all_tenant: true });
   const { subcategories } = useSubcategories(
-    activeCategory !== 'all' ? Number(activeCategory) : null
+    activeCategory !== 'all' ? Number(activeCategory) : null,
+    null,
+    { limit: 1000, paginate: false }
   );
 
   // Payment splits
@@ -715,41 +717,57 @@ const NewExchangeWizard = ({ isOpen, onClose, storeId, onSuccess }) => {
   const [remarks, setRemarks] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Fetch store inventory for product catalog selection
+  // Fetch store inventory for product catalog selection (Universal search shows ALL products across categories)
   useEffect(() => {
+    if (!isOpen) return;
     const targetStoreId = selectedSale?.store_id || selectedSale?.store?.id || storeId;
+    const isWarehouse = targetStoreId === 'admin' || targetStoreId === 0 || targetStoreId === '0';
     const storeIdNum = Number(targetStoreId);
-    
-    if (isOpen && targetStoreId && targetStoreId !== 'All' && targetStoreId !== 'admin' && !isNaN(storeIdNum)) {
-      const fetchInventory = async () => {
-        setLoadingInventory(true);
+
+    const fetchInventory = async () => {
+      setLoadingInventory(true);
+      try {
+        const ownerType = isWarehouse ? 'ADMIN' : 'STORE';
+        const ownerId = isWarehouse ? undefined : (isNaN(storeIdNum) ? undefined : storeIdNum);
+        
+        let res;
         try {
-          const res = await getInventoryApi({
-            owner_type: 'STORE',
-            owner_id: storeIdNum,
+          res = await getUniversalInventoryApi({
+            owner_type: ownerType,
+            owner_id: ownerId,
             paginate: false,
+            limit: 500,
             search: inventorySearch || undefined,
             category_id: activeCategory !== 'all' ? Number(activeCategory) : undefined,
             subcategory_id: activeSubcategory ? Number(activeSubcategory) : undefined,
           });
-          const itemsArray = Array.isArray(res) ? res : (Array.isArray(res?.items) ? res.items : []);
-          setInventory(itemsArray);
-        } catch (err) {
-          console.error("Failed to fetch inventory in exchange wizard:", err);
-          setInventory([]);
-        } finally {
-          setLoadingInventory(false);
+        } catch (e) {
+          res = await getInventoryApi({
+            owner_type: ownerType,
+            owner_id: ownerId,
+            paginate: false,
+            limit: 500,
+            search: inventorySearch || undefined,
+            category_id: activeCategory !== 'all' ? Number(activeCategory) : undefined,
+            subcategory_id: activeSubcategory ? Number(activeSubcategory) : undefined,
+          });
         }
-      };
 
-      const timer = setTimeout(() => {
-        fetchInventory();
-      }, 350);
+        const itemsArray = Array.isArray(res) ? res : (Array.isArray(res?.items) ? res.items : []);
+        setInventory(itemsArray);
+      } catch (err) {
+        console.error("Failed to fetch inventory in exchange wizard:", err);
+        setInventory([]);
+      } finally {
+        setLoadingInventory(false);
+      }
+    };
 
-      return () => clearTimeout(timer);
-    } else {
-      setInventory([]);
-    }
+    const timer = setTimeout(() => {
+      fetchInventory();
+    }, 300);
+
+    return () => clearTimeout(timer);
   }, [isOpen, storeId, selectedSale?.store_id, selectedSale?.store?.id, inventorySearch, activeCategory, activeSubcategory]);
 
   const searchSales = async (q = searchQuery) => {
@@ -822,6 +840,7 @@ const NewExchangeWizard = ({ isOpen, onClose, storeId, onSuccess }) => {
 
   const handleSelectSale = (sale) => {
     setSelectedSale(sale);
+    setReturnedItems([]);
     setStep(2);
   };
 
@@ -831,28 +850,41 @@ const NewExchangeWizard = ({ isOpen, onClose, storeId, onSuccess }) => {
       if (exists) {
         return prev.filter(i => i.id !== item.id);
       } else {
-        return [...prev, item];
+        return [...prev, { ...item, exchange_quantity: Number(item.quantity || 1) }];
       }
     });
   };
 
+  const updateReturnedItemQty = (itemId, newQty) => {
+    setReturnedItems(prev => prev.map(i => {
+      if (i.id !== itemId) return i;
+      const maxQty = Number(i.quantity || 1);
+      const validQty = Math.max(1, Math.min(maxQty, Number(newQty)));
+      return { ...i, exchange_quantity: validQty };
+    }));
+  };
+
   // Cart operations
   const addToCart = (item) => {
+    const prodId = item.product_id || item.id;
+    const invId = item.id || item.inventory_id;
+    const availQty = Number(item.available_quantity ?? item.quantity ?? 9999);
+
     setCart(prev => {
-      const existing = prev.find(i => i.product_id === item.product_id);
+      const existing = prev.find(i => i.product_id === prodId);
       if (existing) {
-        if (existing.quantity >= item.available_quantity) {
-          toast.warning(`Cannot exceed available stock (${item.available_quantity})`);
+        if (availQty > 0 && existing.quantity >= availQty) {
+          toast.warning(`Cannot exceed available stock (${availQty})`);
           return prev;
         }
-        return prev.map(i => i.product_id === item.product_id ? { ...i, quantity: i.quantity + 1 } : i);
+        return prev.map(i => i.product_id === prodId ? { ...i, quantity: i.quantity + 1 } : i);
       }
       return [...prev, {
-        product_id: item.product_id,
-        inventory_id: item.id,
-        name: item.product_name,
+        product_id: prodId,
+        inventory_id: invId,
+        name: item.product_name || item.name || 'Product',
         unit_price: Number(item.selling_price || item.price || 0),
-        available_quantity: item.available_quantity,
+        available_quantity: availQty,
         quantity: 1,
         tax_percent: 0,
         discount_percent: Number(item.discount_percent || 0),
@@ -863,7 +895,7 @@ const NewExchangeWizard = ({ isOpen, onClose, storeId, onSuccess }) => {
   const updateCartQty = (productId, qty) => {
     const item = cart.find(i => i.product_id === productId);
     if (!item) return;
-    if (qty > item.available_quantity) {
+    if (item.available_quantity > 0 && qty > item.available_quantity) {
       toast.warning(`Cannot exceed available stock (${item.available_quantity})`);
       return;
     }
@@ -875,7 +907,13 @@ const NewExchangeWizard = ({ isOpen, onClose, storeId, onSuccess }) => {
   };
 
   // Calculations
-  const returnCredit = returnedItems.reduce((sum, item) => sum + Number(item.line_total || 0), 0);
+  const returnCredit = returnedItems.reduce((sum, item) => {
+    const itemTotal = Number(item.line_total || 0);
+    const maxQty = Number(item.quantity || 1);
+    const exQty = Number(item.exchange_quantity || maxQty);
+    const lineCredit = (itemTotal / maxQty) * exQty;
+    return sum + lineCredit;
+  }, 0);
 
   const cartTotal = cart.reduce((sum, item) => {
     const base = item.unit_price * item.quantity;
@@ -894,6 +932,10 @@ const NewExchangeWizard = ({ isOpen, onClose, storeId, onSuccess }) => {
         customer_id: selectedSale.customer_id,
         original_sale_id: selectedSale.id,
         original_sale_item_ids: returnedItems.map(item => item.id),
+        returned_items: returnedItems.map(item => ({
+          sale_item_id: item.id,
+          quantity: Number(item.exchange_quantity || item.quantity || 1)
+        })),
         new_items: cart.map(item => ({
           product_id: item.product_id,
           inventory_id: item.inventory_id,
@@ -907,8 +949,14 @@ const NewExchangeWizard = ({ isOpen, onClose, storeId, onSuccess }) => {
           payment_method: paymentMethod,
           reference_number: refNum || null,
         }] : [],
-        processed_by_type: user?.role === 'manager' ? 'MANAGER' : (user?.role === 'optician' ? 'OPTICIAN' : 'WORKER'),
-        processed_by_id: user?.id || 1,
+        processed_by_type: (() => {
+          const r = (user?.role || '').toLowerCase();
+          if (r.includes('admin') || r.includes('owner')) return 'ADMIN';
+          if (r.includes('manager')) return 'MANAGER';
+          if (r.includes('optician')) return 'OPTICIAN';
+          return 'WORKER';
+        })(),
+        processed_by_id: Number(user?.id || 1),
         exchange_date: new Date().toISOString().split('T')[0],
         reason: remarks || "Exchange items",
       };
@@ -923,22 +971,64 @@ const NewExchangeWizard = ({ isOpen, onClose, storeId, onSuccess }) => {
     }
   };
 
-  const filteredInventory = Array.isArray(inventory) ? inventory.map(item => ({
-    ...item,
-    sku: item.product_sku || item.sku,
-    category: item.category_name || item.category,
-    subcategory: item.subcategory_name || item.subcategory,
-    brand: item.brand_name || item.brand,
-    image: item.image_url || item.image,
-    quantity: item.available_quantity,
-    store: item.owner_name || 'Store',
-    supplier: item.supplier_name || 'No Supplier',
-  })).filter(item => {
+  const filteredInventory = Array.isArray(inventory) ? inventory.map(item => {
+    const prodName = item.product_name || item.name || 'Product';
+    const prodSku = item.product_sku || item.sku || 'N/A';
+    const categoryName = item.category_name || (typeof item.category === 'object' ? item.category?.name : item.category) || 'General';
+    const subcategoryName = item.subcategory_name || (typeof item.subcategory === 'object' ? item.subcategory?.name : item.subcategory) || '';
+    const brandName = item.brand_name || (typeof item.brand === 'object' ? item.brand?.name : item.brand) || '';
+    const availQty = Number(item.available_quantity ?? item.quantity ?? 0);
+    const priceVal = Number(item.selling_price ?? item.price ?? 0);
+
+    return {
+      ...item,
+      product_id: item.product_id || item.id,
+      id: item.id || item.inventory_id,
+      product_name: prodName,
+      sku: prodSku,
+      category: categoryName,
+      subcategory: subcategoryName,
+      brand: brandName,
+      image: item.image_url || item.image,
+      quantity: availQty,
+      available_quantity: availQty,
+      selling_price: priceVal,
+      store: item.owner_name || 'Store',
+      supplier: item.supplier_name || 'No Supplier',
+    };
+  }).filter(item => {
     if (!item) return false;
     const name = (item.product_name || '').toLowerCase();
     const sku = (item.sku || '').toLowerCase();
     const query = (inventorySearch || '').toLowerCase();
-    return name.includes(query) || sku.includes(query);
+    const matchesQuery = name.includes(query) || sku.includes(query);
+    if (!matchesQuery) return false;
+
+    if (activeCategory !== 'all') {
+      const catId = String(item.category_id || item.product?.category_id || item.category?.id || '');
+      const catName = String(item.category || item.category_name || item.product?.category_name || '').toLowerCase();
+      const selCat = (categories || []).find(c => String(c.id) === String(activeCategory));
+      const selCatName = (selCat?.name || '').toLowerCase();
+      if (catId) {
+        if (catId !== String(activeCategory)) return false;
+      } else if (selCatName && catName) {
+        if (!catName.includes(selCatName) && !selCatName.includes(catName)) return false;
+      }
+    }
+
+    if (activeSubcategory) {
+      const subCatId = String(item.subcategory_id || item.product?.subcategory_id || item.subcategory?.id || '');
+      const subCatName = String(item.subcategory || item.subcategory_name || item.product?.subcategory_name || '').toLowerCase();
+      const selSub = (subcategories || []).find(s => String(s.id) === String(activeSubcategory));
+      const selSubName = (selSub?.name || '').toLowerCase();
+      if (subCatId) {
+        if (subCatId !== String(activeSubcategory)) return false;
+      } else if (selSubName && subCatName) {
+        if (!subCatName.includes(selSubName) && !selSubName.includes(subCatName)) return false;
+      }
+    }
+
+    return true;
   }) : [];
 
   return (
@@ -961,7 +1051,7 @@ const NewExchangeWizard = ({ isOpen, onClose, storeId, onSuccess }) => {
               </div>
               <p className="text-xs text-slate-500">Step {step} of 5: {
                 step === 1 ? "Select Original Purchase Sale" :
-                step === 2 ? "Select Item to Return" :
+                step === 2 ? "Select Item & Quantity to Return" :
                 step === 3 ? "Select Replacement Items" :
                 step === 4 ? "Additional Amount Payment" : "Review & Complete"
               }</p>
@@ -1050,7 +1140,7 @@ const NewExchangeWizard = ({ isOpen, onClose, storeId, onSuccess }) => {
             </div>
           )}
 
-          {/* STEP 2: Select returned item */}
+          {/* STEP 2: Select returned item and partial quantity */}
           {step === 2 && selectedSale && (
             <div className="space-y-4 animate-fade-in">
               {/* Sale summary card */}
@@ -1071,15 +1161,29 @@ const NewExchangeWizard = ({ isOpen, onClose, storeId, onSuccess }) => {
                 </div>
               </div>
 
-              <p className="text-sm font-semibold text-slate-700">Select the items to return for exchange:</p>
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold text-slate-700">Select items & choose exchange quantity:</p>
+                {returnedItems.length > 0 && (
+                  <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-100">
+                    Total Credit: ₹{returnCredit.toFixed(2)}
+                  </span>
+                )}
+              </div>
+
               <div className="border border-slate-100 rounded-2xl overflow-hidden divide-y divide-slate-100 bg-white">
                 {selectedSale.items?.map(item => {
-                  const isSelected = returnedItems.some(i => i.id === item.id);
+                  const selectedObj = returnedItems.find(i => i.id === item.id);
+                  const isSelected = !!selectedObj;
+                  const maxQty = Number(item.quantity || 1);
+                  const exQty = selectedObj ? (selectedObj.exchange_quantity || maxQty) : maxQty;
+                  const itemTotal = Number(item.line_total || 0);
+                  const exCredit = (itemTotal / maxQty) * exQty;
+
                   return (
                     <div
                       key={item.id}
                       onClick={() => handleSelectReturnedItem(item)}
-                      className={`p-4 transition-colors flex justify-between items-center cursor-pointer ${
+                      className={`p-4 transition-colors flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 cursor-pointer ${
                         isSelected ? 'bg-blue-50/30' : 'hover:bg-slate-50'
                       }`}
                     >
@@ -1087,14 +1191,14 @@ const NewExchangeWizard = ({ isOpen, onClose, storeId, onSuccess }) => {
                         <input
                           type="checkbox"
                           checked={isSelected}
-                          onChange={() => {}} // Handle change via div onClick
+                          onChange={() => {}}
                           className="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500/20 cursor-pointer"
                         />
                         <div>
                           <p className="text-sm font-bold text-slate-900">{item.product_name}</p>
-                          <p className="text-xs text-slate-500 mt-1">
-                            Qty: <span className="font-bold">{item.quantity}</span> · 
-                            SKU: <span className="font-mono">{item.product_sku}</span>
+                          <p className="text-xs text-slate-500 mt-0.5">
+                            Purchased Qty: <span className="font-bold">{item.quantity}</span> · 
+                            SKU: <span className="font-mono">{item.product_sku || '—'}</span>
                             {item.product_category && (
                               <span className="ml-1.5 px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded text-[9px] font-bold">
                                 {item.product_category}
@@ -1103,13 +1207,48 @@ const NewExchangeWizard = ({ isOpen, onClose, storeId, onSuccess }) => {
                           </p>
                         </div>
                       </div>
-                      <div className="text-right flex-shrink-0">
-                        <p className="text-sm font-bold text-red-650">₹{Number(item.line_total).toFixed(2)}</p>
+
+                      <div className="flex items-center gap-3 text-right flex-shrink-0 self-end sm:self-center" onClick={e => e.stopPropagation()}>
+                        {isSelected && maxQty > 1 && (
+                          <div className="flex items-center gap-1.5 bg-white border border-slate-200 px-2 py-1 rounded-xl shadow-xs">
+                            <span className="text-[11px] font-bold text-slate-500 mr-1">Exchange Qty:</span>
+                            <button
+                              type="button"
+                              onClick={() => updateReturnedItemQty(item.id, exQty - 1)}
+                              className="w-6 h-6 flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition-colors"
+                            >
+                              -
+                            </button>
+                            <input
+                              type="number"
+                              min="1"
+                              max={maxQty}
+                              value={exQty}
+                              onChange={e => updateReturnedItemQty(item.id, Number(e.target.value))}
+                              className="w-10 text-center font-extrabold text-xs text-slate-800 outline-none"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => updateReturnedItemQty(item.id, exQty + 1)}
+                              className="w-6 h-6 flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition-colors"
+                            >
+                              +
+                            </button>
+                            <span className="text-[10px] text-slate-400 font-semibold">/ {maxQty}</span>
+                          </div>
+                        )}
+                        <div>
+                          <p className="text-sm font-bold text-red-600">₹{exCredit.toFixed(2)}</p>
+                          {isSelected && maxQty > 1 && (
+                            <p className="text-[10px] text-slate-400 font-semibold">₹{(itemTotal / maxQty).toFixed(2)} / unit</p>
+                          )}
+                        </div>
                       </div>
                     </div>
                   );
                 })}
               </div>
+
               <div className="flex justify-between items-center pt-2">
                 <button
                   type="button"
@@ -1131,12 +1270,12 @@ const NewExchangeWizard = ({ isOpen, onClose, storeId, onSuccess }) => {
             </div>
           )}
 
-          {/* STEP 3: Cart / Select replacement items */}
+          {/* STEP 3: Cart / Select replacement items with Product Cards UI */}
           {step === 3 && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-fade-in">
-              {/* Product catalog list */}
-              <div className="flex flex-col border border-slate-100 rounded-2xl p-4 bg-slate-50">
-                <h3 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-1.5">
+              {/* Product catalog list - independent scrollable box */}
+              <div className="flex flex-col border border-slate-100 rounded-2xl p-4 bg-slate-50 h-[520px]">
+                <h3 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-1.5 flex-shrink-0">
                   <Package className="w-4 h-4 text-blue-500" /> Choose Replacement Products
                 </h3>
 
@@ -1185,89 +1324,89 @@ const NewExchangeWizard = ({ isOpen, onClose, storeId, onSuccess }) => {
                   />
                 </div>
 
-                <div className="overflow-y-auto grid grid-cols-1 sm:grid-cols-2 gap-3 p-1" style={{ height: '350px' }}>
+                {/* Grid of Product Cards - Only this catalog list scrolls */}
+                <div className="flex-1 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 gap-3 p-1 pr-1.5">
                   {loadingInventory ? (
-                    <p className="col-span-2 text-center text-xs text-slate-400 py-10">Loading inventory...</p>
+                    <div className="col-span-2 flex flex-col items-center justify-center py-12">
+                      <div className="animate-spin rounded-full h-7 w-7 border-b-2 border-blue-500 mb-2" />
+                      <p className="text-xs text-slate-400 font-semibold">Loading available items...</p>
+                    </div>
                   ) : filteredInventory.length === 0 ? (
-                    <p className="col-span-2 text-center text-xs text-slate-400 py-10">No items available.</p>
+                    <div className="col-span-2 text-center py-12">
+                      <Package className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                      <p className="text-xs font-bold text-slate-500">No items available in stock.</p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">Try clearing category or search filters.</p>
+                    </div>
                   ) : (
                     filteredInventory.map(item => {
                       const status = getWizardStockStatus(item);
                       const config = getWizardCategoryConfig(item.category);
                       const gradIdx = Number(item.id || item.product_id || 0) % WIZARD_GRAD_PALETTE.length;
                       const grad = WIZARD_GRAD_PALETTE[isNaN(gradIdx) ? 0 : gradIdx];
+                      const priceVal = Number(item.selling_price || item.price || 0);
+
                       return (
                         <div
                           key={item.id ? `inv-${item.id}` : `prod-${item.product_id || item.id}`}
                           onClick={() => addToCart(item)}
-                          className="bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-200 group overflow-hidden flex flex-col cursor-pointer"
+                          className="bg-white rounded-xl border border-slate-200/80 shadow-xs hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 group overflow-hidden flex flex-col cursor-pointer border-l-4 border-l-blue-500"
                         >
-                          {/* Image area */}
-                          <div className="relative bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center overflow-hidden" style={{ height: '11rem' }}>
+                          {/* Top Banner / Image thumbnail area */}
+                          <div className="relative bg-slate-100/70 h-28 flex items-center justify-center overflow-hidden flex-shrink-0">
                             {item.image ? (
                               <img
                                 src={item.image}
                                 alt={item.product_name}
-                                className="w-full h-full object-cover"
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                               />
                             ) : (
-                              <div className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${grad} flex items-center justify-center shadow-lg`}>
-                                <span className="text-2xl font-black text-white">
+                              <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${grad} flex items-center justify-center shadow-md`}>
+                                <span className="text-xl font-black text-white">
                                   {(item.product_name || "P")[0]}
                                 </span>
                               </div>
                             )}
 
                             {/* Status badge */}
-                            <div className="absolute top-3 left-3">
+                            <div className="absolute top-2 left-2">
                               <StockStatusBadge status={status} />
                             </div>
 
-                            {/* Qty badge */}
-                            <div className="absolute bottom-3 right-3">
-                              <span className={`px-2 py-0.5 rounded-lg text-xs font-bold shadow-sm border border-white/50 bg-white/90 text-slate-700`}>
-                                Qty: {item.quantity}
+                            {/* Available Qty badge */}
+                            <div className="absolute bottom-2 right-2">
+                              <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-white/90 text-slate-800 shadow-xs border border-slate-200">
+                                Stock: {item.quantity}
                               </span>
                             </div>
                           </div>
 
-                          {/* Card body */}
-                          <div className="p-4 flex flex-col flex-1 gap-2">
-                            {/* Badges row */}
-                            <div className="flex flex-wrap gap-1.5">
-                              <span className={`self-start inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold border ${config.badge}`}>
-                                {item.subcategory}
-                              </span>
-                              {Number(item.discount_percent || 0) > 0 && (
-                                <span className="self-start inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold border bg-rose-50 text-rose-700 border-rose-200">
-                                  {item.discount_percent}% Off
+                          {/* Card details */}
+                          <div className="p-3 flex flex-col flex-1 justify-between gap-1.5">
+                            <div>
+                              <div className="flex items-center gap-1 mb-1">
+                                <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold border ${config.badge}`}>
+                                  {item.subcategory || item.category || 'General'}
                                 </span>
-                              )}
-                              {Number(item.warranty_months || 0) > 0 && (
-                                <span className="self-start inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold border bg-blue-50 text-blue-700 border-blue-200">
-                                  {item.warranty_months}M Warranty
-                                </span>
-                              )}
+                                {Number(item.discount_percent || 0) > 0 && (
+                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-rose-50 text-rose-600 border border-rose-100">
+                                    {item.discount_percent}% Off
+                                  </span>
+                                )}
+                              </div>
+                              <h4 className="text-xs font-bold text-slate-900 leading-snug line-clamp-1 group-hover:text-blue-600 transition-colors" title={item.product_name}>
+                                {item.product_name}
+                              </h4>
+                              <p className="text-[10px] font-mono text-slate-400 mt-0.5 truncate">
+                                SKU: {item.sku || '—'} {item.brand ? `· ${item.brand}` : ''}
+                              </p>
                             </div>
 
-                            {/* Name */}
-                            <h3 className="text-sm font-bold text-slate-900 leading-tight line-clamp-2 group-hover:text-emerald-700 transition-colors" title={item.product_name}>
-                              {item.product_name}
-                            </h3>
-
-                            {/* Brand + SKU */}
-                            <p className="text-xs font-semibold text-slate-500">{item.brand}</p>
-                            <p className="text-[10px] font-mono text-slate-400 bg-slate-50 px-2 py-0.5 rounded-md self-start">
-                              {item.sku}
-                            </p>
-
-                            {/* Price */}
-                            <div className="border-t border-slate-50 mt-auto pt-2 flex items-center justify-between">
-                              <span className="text-sm font-bold text-slate-900">
-                                ₹{Number(item.selling_price || item.price || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                            <div className="pt-2 border-t border-slate-100 flex items-center justify-between mt-auto">
+                              <span className="text-xs font-black text-slate-900">
+                                ₹{priceVal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                               </span>
-                              <span className="text-xs text-slate-450 truncate max-w-[90px]" title={item.supplier}>
-                                {item.supplier}
+                              <span className="text-[10px] font-bold text-blue-600 group-hover:translate-x-0.5 transition-transform flex items-center gap-0.5">
+                                + Add <Plus className="w-3 h-3" />
                               </span>
                             </div>
                           </div>
@@ -1278,11 +1417,11 @@ const NewExchangeWizard = ({ isOpen, onClose, storeId, onSuccess }) => {
                 </div>
               </div>
 
-              {/* Cart review */}
-              <div className="flex flex-col border border-slate-100 rounded-2xl p-4 bg-white justify-between">
-                <div>
-                  <h3 className="text-sm font-bold text-slate-800 mb-3">Replacement Cart</h3>
-                  <div className="overflow-y-auto divide-y divide-slate-100 pr-1" style={{ height: '250px' }}>
+              {/* Cart review - independent scrollable box */}
+              <div className="flex flex-col border border-slate-100 rounded-2xl p-4 bg-white justify-between h-[520px]">
+                <div className="flex flex-col flex-1 min-h-0">
+                  <h3 className="text-sm font-bold text-slate-800 mb-3 flex-shrink-0">Replacement Cart</h3>
+                  <div className="flex-1 overflow-y-auto divide-y divide-slate-100 pr-1">
                     {cart.length === 0 ? (
                       <p className="text-center text-xs text-slate-400 py-10">Cart is empty. Select products from left catalog.</p>
                     ) : (
@@ -1408,12 +1547,17 @@ const NewExchangeWizard = ({ isOpen, onClose, storeId, onSuccess }) => {
                 <div className="p-4">
                   <span className="text-slate-500 font-semibold text-xs block mb-2">Returning Items</span>
                   <div className="space-y-1.5">
-                    {returnedItems.map((item, idx) => (
-                      <div key={idx} className="flex justify-between items-center text-xs">
-                        <span className="text-slate-600 font-medium">{item.product_name} (x{item.quantity})</span>
-                        <span className="font-semibold text-red-500">₹{Number(item.line_total).toFixed(2)}</span>
-                      </div>
-                    ))}
+                    {returnedItems.map((item, idx) => {
+                      const maxQty = Number(item.quantity || 1);
+                      const exQty = Number(item.exchange_quantity || maxQty);
+                      const exCredit = (Number(item.line_total || 0) / maxQty) * exQty;
+                      return (
+                        <div key={idx} className="flex justify-between items-center text-xs">
+                          <span className="text-slate-600 font-medium">{item.product_name} (x{exQty} of {maxQty})</span>
+                          <span className="font-semibold text-red-500">₹{exCredit.toFixed(2)}</span>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
                 <div className="p-4 flex justify-between items-center text-xs">

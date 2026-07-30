@@ -2,13 +2,16 @@ import { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useForm } from 'react-hook-form';
 import { toast } from 'react-toastify';
-import { X, ArrowRightLeft, Loader2, Info, ChevronDown } from 'lucide-react';
-import { useStoreStore } from '../../store/store';
+import { X, ArrowRightLeft, Loader2, Info, ChevronDown, Lock } from 'lucide-react';
+import { useStoreStore, useAuthStore } from '../../store/store';
 import { useTransactions } from '../../hooks/useTransactions';
+import { useHasPermission } from '../../hooks/usePermissions';
 
 const AdminRequestStockModal = ({ isOpen, onClose, product, sourceStore, activeStoreId, onSuccess }) => {
   const { stores } = useStoreStore();
+  const { user } = useAuthStore();
   const { createAdminRequestAsync, isCreatingAdminRequest } = useTransactions(null, {}, false);
+  const canCreateRequest = useHasPermission('inventory:create') || useHasPermission('transactions:create') || ['admin', 'super_admin', 'manager', 'worker', 'optician'].includes(user?.role);
 
   // Destination option: Only branch stores (Excludes Admin Warehouse 'admin' as destination)
   const destinationStoreOptions = useMemo(() => {
@@ -53,19 +56,12 @@ const AdminRequestStockModal = ({ isOpen, onClose, product, sourceStore, activeS
   const watchedSourceStoreId = watch('source_store_id');
   const watchedTargetStoreId = watch('target_store_id');
 
-  // Filter out the destination store from the source store options so they don't request from itself
-  const sourceStoreOptions = useMemo(() => {
-    return allLocationOptions.filter(s => String(s.id) !== String(watchedTargetStoreId));
-  }, [allLocationOptions, watchedTargetStoreId]);
+  // Filter out the fixed source store from the destination store options so they don't request to itself
+  const filteredDestinationOptions = useMemo(() => {
+    return destinationStoreOptions.filter(s => String(s.id) !== String(watchedSourceStoreId));
+  }, [destinationStoreOptions, watchedSourceStoreId]);
 
-  // If source and destination stores are the same, clear source store selection
-  useEffect(() => {
-    if (watchedSourceStoreId && watchedTargetStoreId && String(watchedSourceStoreId) === String(watchedTargetStoreId)) {
-      setValue('source_store_id', '');
-    }
-  }, [watchedSourceStoreId, watchedTargetStoreId, setValue]);
-
-  // Compute available stock limit dynamically matching selected source store
+  // Compute available stock limit dynamically matching fixed source store
   const currentSourceStock = useMemo(() => {
     if (!watchedSourceStoreId || !product) return 0;
     
@@ -92,18 +88,9 @@ const AdminRequestStockModal = ({ isOpen, onClose, product, sourceStore, activeS
     return 0;
   }, [watchedSourceStoreId, product, sourceStore]);
 
-  // Pre-fill target (destination) and source store IDs on open
+  // Pre-fill fixed source store and target (destination) store IDs on open
   useEffect(() => {
     if (isOpen && product) {
-      let defaultTargetId = '';
-      if (activeStoreId && activeStoreId !== 'admin') {
-        defaultTargetId = String(activeStoreId);
-      } else if (product.owner_id && product.owner_type === 'STORE') {
-        defaultTargetId = String(product.owner_id);
-      } else if (destinationStoreOptions.length > 0) {
-        defaultTargetId = String(destinationStoreOptions[0].id);
-      }
-
       let defaultSourceId = '';
       if (sourceStore) {
         const sourceIdStr = String(sourceStore.store_id || sourceStore.id || '');
@@ -114,13 +101,22 @@ const AdminRequestStockModal = ({ isOpen, onClose, product, sourceStore, activeS
         }
       } else {
         const whOption = allLocationOptions.find(s => s.owner_type === 'ADMIN');
-        if (whOption && String(whOption.id) !== defaultTargetId) {
+        if (whOption) {
           defaultSourceId = String(whOption.id);
-        } else {
-          const firstSource = allLocationOptions.find(s => String(s.id) !== defaultTargetId);
-          if (firstSource) {
-            defaultSourceId = String(firstSource.id);
-          }
+        } else if (allLocationOptions.length > 0) {
+          defaultSourceId = String(allLocationOptions[0].id);
+        }
+      }
+
+      let defaultTargetId = '';
+      if (activeStoreId && activeStoreId !== 'admin' && String(activeStoreId) !== defaultSourceId) {
+        defaultTargetId = String(activeStoreId);
+      } else if (product.owner_id && product.owner_type === 'STORE' && String(product.owner_id) !== defaultSourceId) {
+        defaultTargetId = String(product.owner_id);
+      } else {
+        const validTarget = destinationStoreOptions.find(s => String(s.id) !== defaultSourceId);
+        if (validTarget) {
+          defaultTargetId = String(validTarget.id);
         }
       }
 
@@ -142,10 +138,15 @@ const AdminRequestStockModal = ({ isOpen, onClose, product, sourceStore, activeS
   };
 
   const onSubmit = async (data) => {
+    if (!canCreateRequest) {
+      toast.error('Permission denied: You do not have permission to submit stock requests.');
+      return;
+    }
+
     const targetId = data.target_store_id;
     const sourceId = data.source_store_id;
     if (!targetId || !sourceId) {
-      toast.error('Please select both source and destination.');
+      toast.error('Please select a destination store.');
       return;
     }
 
@@ -158,7 +159,6 @@ const AdminRequestStockModal = ({ isOpen, onClose, product, sourceStore, activeS
       }
       
       const fromType = fromStoreObj.owner_type || 'STORE';
-      // In the database, warehouse requests use from_owner_id = 0 for ADMIN
       const fromId = fromType === 'ADMIN' ? 0 : Number(fromStoreObj.id);
       
       const toType = 'STORE';
@@ -183,6 +183,8 @@ const AdminRequestStockModal = ({ isOpen, onClose, product, sourceStore, activeS
     }
   };
 
+  const currentSourceLocationName = allLocationOptions.find(s => String(s.id) === String(watchedSourceStoreId))?.store_name || 'Admin Warehouse';
+
   return createPortal(
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[1200] p-3 sm:p-4 animate-fade-in font-sans">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[95vh] flex flex-col border border-slate-100 animate-slide-up">
@@ -194,7 +196,7 @@ const AdminRequestStockModal = ({ isOpen, onClose, product, sourceStore, activeS
             </div>
             <div>
               <h2 className="text-lg font-bold text-slate-900">Request Stock</h2>
-              <p className="text-xs text-slate-505 mt-0.5">Submit a pending stock request for approval.</p>
+              <p className="text-xs text-slate-500 mt-0.5">Submit a pending stock request for destination store approval.</p>
             </div>
           </div>
           <button type="button" onClick={handleCancel} disabled={isCreatingAdminRequest}
@@ -212,10 +214,8 @@ const AdminRequestStockModal = ({ isOpen, onClose, product, sourceStore, activeS
               <p className="text-slate-800 text-sm font-bold">{product.product_name || product.name}</p>
               <p><span className="text-slate-400 font-medium">SKU:</span> {product.product_sku || product.sku || 'N/A'}</p>
               <p>
-                <span className="text-slate-400 font-medium">From Location:</span>{' '}
-                <span className="text-slate-800 font-bold">
-                  {allLocationOptions.find(s => String(s.id) === String(watchedSourceStoreId))?.store_name || 'N/A'}
-                </span>
+                <span className="text-slate-400 font-medium">Fixed Source Location:</span>{' '}
+                <span className="text-slate-800 font-bold">{currentSourceLocationName}</span>
               </p>
               <p>
                 <span className="text-slate-400 font-medium">Source Stock:</span>{' '}
@@ -224,42 +224,38 @@ const AdminRequestStockModal = ({ isOpen, onClose, product, sourceStore, activeS
             </div>
           </div>
 
+          {/* Fixed Source Location Display */}
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-1.5 flex items-center justify-between">
+              <span>Source Location (From)</span>
+              <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded flex items-center gap-1">
+                <Lock className="w-3 h-3 text-slate-400" /> Fixed
+              </span>
+            </label>
+            <div className="w-full px-4 py-2.5 bg-slate-100/80 border border-slate-200 rounded-xl font-bold text-slate-800 text-sm flex items-center justify-between cursor-not-allowed">
+              <span>{currentSourceLocationName}</span>
+              <span className="text-xs font-bold text-emerald-600">({currentSourceStock} units)</span>
+            </div>
+            <input type="hidden" {...register('source_store_id', { required: true })} />
+          </div>
+
           {/* Destination Store Select */}
           <div>
             <label className="block text-sm font-semibold text-slate-700 mb-1.5">Destination Store (To) <span className="text-red-500">*</span></label>
             <div className="relative">
               <select
                 {...register('target_store_id', { required: 'Destination is required' })}
-                disabled={isCreatingAdminRequest}
+                disabled={isCreatingAdminRequest || !canCreateRequest}
                 className="w-full px-4 py-2.5 bg-white border border-slate-350 rounded-xl focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 font-semibold text-slate-808 text-sm transition-all cursor-pointer disabled:bg-slate-50 disabled:text-slate-450 appearance-none pr-10"
               >
                 <option value="">-- Select Destination Store --</option>
-                {destinationStoreOptions.map(s => (
+                {filteredDestinationOptions.map(s => (
                   <option key={s.id} value={s.id}>{s.store_name}</option>
                 ))}
               </select>
               <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
             </div>
             {errors.target_store_id && <p className="mt-1 text-xs text-red-500 font-medium">{errors.target_store_id.message}</p>}
-          </div>
-
-          {/* Source Store Select */}
-          <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-1.5">Source Location (From) <span className="text-red-500">*</span></label>
-            <div className="relative">
-              <select
-                {...register('source_store_id', { required: 'Source location is required' })}
-                disabled={isCreatingAdminRequest}
-                className="w-full px-4 py-2.5 bg-white border border-slate-350 rounded-xl focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 font-semibold text-slate-808 text-sm transition-all cursor-pointer disabled:bg-slate-50 disabled:text-slate-450 appearance-none pr-10"
-              >
-                <option value="">-- Select Source Location --</option>
-                {sourceStoreOptions.map(s => (
-                  <option key={s.id} value={s.id}>{s.store_name}</option>
-                ))}
-              </select>
-              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-            </div>
-            {errors.source_store_id && <p className="mt-1 text-xs text-red-500 font-medium">{errors.source_store_id.message}</p>}
           </div>
 
           {/* Quantity Input */}

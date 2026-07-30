@@ -1,5 +1,6 @@
-import { useQuery } from '@tanstack/react-query';
-import { getSalesApi } from '../api/sales/sales.api';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'react-toastify';
+import { getSalesApi, deleteSaleApi } from '../api/sales/sales.api';
 
 export const salesQueryKey = 'sales';
 
@@ -79,6 +80,23 @@ export const useSales = (filters = {}) => {
     retry: false,
   });
 
+  const queryClient = useQueryClient();
+
+  const deleteSaleMutation = useMutation({
+    mutationFn: (saleId) => deleteSaleApi(saleId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sales'] });
+      queryClient.invalidateQueries({ queryKey: ['labOrders'] });
+      queryClient.invalidateQueries({ queryKey: ['inventory'] });
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['customers'] });
+      toast.success('Order cancelled and all inventory rolled back successfully.');
+    },
+    onError: (err) => {
+      toast.error(err.response?.data?.detail || 'Failed to delete order.');
+    },
+  });
+
   return {
     salesQuery: query,
     sales: query.data?.items || [],
@@ -90,5 +108,7 @@ export const useSales = (filters = {}) => {
     isFetching: query.isFetching,
     isError: query.isError,
     error: query.error,
+    deleteSaleAsync: deleteSaleMutation.mutateAsync,
+    isDeletingSale: deleteSaleMutation.isPending,
   };
 };

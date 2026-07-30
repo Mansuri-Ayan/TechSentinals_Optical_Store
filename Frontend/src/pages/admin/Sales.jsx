@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import {
   Search, Store, ShoppingCart, UserCheck, ChevronRight,
-  X, Package, Clock, Users, DollarSign, Printer, Calendar
+  X, Package, Clock, Users, DollarSign, Printer, Calendar, Trash2
 } from 'lucide-react';
 import { useSales } from '../../hooks/useSales';
 import { useStores } from '../../hooks/useStores';
@@ -85,7 +85,7 @@ const Sales = () => {
   }, [selectedBranch, selectedStatus, selectedPayment, searchTerm, dateFrom, dateTo]);
 
   // Fetch sales from backend
-  const { sales, total, pages, kpis, isLoading } = useSales({
+  const { sales, total, pages, kpis, isLoading, deleteSaleAsync } = useSales({
     page: currentPage,
     limit: 8,
     storeId: selectedBranch,
@@ -95,6 +95,16 @@ const Sales = () => {
     dateTo,
     hasDue: selectedPayment === 'Remaining' ? true : selectedPayment === 'Paid' ? false : undefined,
   });
+
+  const handleDeleteOrder = async (saleId, invoiceNumber) => {
+    if (window.confirm(`Are you sure you want to delete order ${invoiceNumber || ''}? This will permanently delete the order and restore all inventory stock batches & product units.`)) {
+      try {
+        await deleteSaleAsync(saleId);
+      } catch (err) {
+        // Error handled in hook
+      }
+    }
+  };
 
   const fmt = (n) => `₹${Number(n).toLocaleString('en-IN')}`;
   const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
@@ -311,9 +321,9 @@ const Sales = () => {
                     <td className="px-3 py-3 text-xs font-bold text-slate-900 max-w-[140px] truncate">{sale.customerName}</td>
                     <td className="px-3 py-3 text-xs max-w-[140px] truncate">
                       {sale.billedOnAccountOf ? (
-                        <span className="font-bold text-slate-900">{sale.billedOnAccountOf.name}</span>
+                        <span className="font-bold text-slate-900" title={sale.billedOnAccountOf.name}>{sale.billedOnAccountOf.name}</span>
                       ) : (
-                        <span className="font-semibold text-slate-400">—</span>
+                        <span className="font-semibold text-slate-700">{sale.customerName || 'Direct Customer'}</span>
                       )}
                     </td>
                     <td className="px-3 py-3 text-xs font-medium text-slate-600 max-w-[160px] truncate">{sale.productName || '—'}</td>
@@ -346,17 +356,29 @@ const Sales = () => {
                         )}
                       </div>
                     </td>
-                    <td className="px-3 py-3 text-right">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedSale({ ...sale, initialTab: 'bill' });
-                        }}
-                        className="p-1.5 hover:bg-slate-100 text-slate-500 hover:text-slate-900 rounded-lg transition-colors cursor-pointer inline-flex items-center justify-center border border-slate-150"
-                        title="Print / Share Bill"
-                      >
-                        <Printer className="w-3.5 h-3.5" />
-                      </button>
+                    <td className="px-3 py-3 text-right whitespace-nowrap">
+                      <div className="flex items-center justify-end gap-1.5" onClick={e => e.stopPropagation()}>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedSale({ ...sale, initialTab: 'bill' });
+                          }}
+                          className="p-1.5 hover:bg-slate-100 text-slate-500 hover:text-slate-900 rounded-lg transition-colors cursor-pointer inline-flex items-center justify-center border border-slate-150"
+                          title="Print / Share Bill"
+                        >
+                          <Printer className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteOrder(sale.id, sale.orderId);
+                          }}
+                          className="p-1.5 hover:bg-red-50 text-red-500 hover:text-red-700 rounded-lg transition-colors cursor-pointer inline-flex items-center justify-center border border-red-100"
+                          title="Delete Order & Rollback Stock"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -376,11 +398,9 @@ const Sales = () => {
                   <div>
                     <span className="text-[10px] font-mono font-bold text-slate-400">{sale.orderId}</span>
                     <h3 className="font-bold text-slate-950 text-sm mt-0.5">{sale.customerName}</h3>
-                    {sale.billedOnAccountOf && (
-                      <p className="text-[10px] font-semibold text-slate-500 mt-0.5">
-                        Billed to: {sale.billedOnAccountOf.name}
-                      </p>
-                    )}
+                    <p className="text-[10px] font-semibold text-slate-500 mt-0.5">
+                      Billed to: {sale.billedOnAccountOf ? sale.billedOnAccountOf.name : (sale.customerName || 'Direct Customer')}
+                    </p>
                   </div>
                   <div className="flex items-center gap-1.5 flex-wrap justify-end">
                     <button
@@ -392,6 +412,16 @@ const Sales = () => {
                       title="Print / Share Bill"
                     >
                       <Printer className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteOrder(sale.id, sale.orderId);
+                      }}
+                      className="p-1.5 hover:bg-red-50 text-red-500 hover:text-red-700 rounded-lg transition-colors cursor-pointer border border-red-100 inline-flex items-center justify-center"
+                      title="Delete Order & Rollback Stock"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
                     </button>
                     <StatusBadge status={sale.status} />
                     {sale.is_exchanged && (

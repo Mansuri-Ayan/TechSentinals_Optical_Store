@@ -29,7 +29,7 @@ class SaleItem(Base):
         comment="Auto-generated BIGINT primary key",
     )
 
-    sale_id = Column(
+    sale_id = Column(    
         BigInteger,
         ForeignKey("sales.id", ondelete="CASCADE"),
         nullable=False,
@@ -40,7 +40,7 @@ class SaleItem(Base):
     product_id = Column(
         BigInteger,
         ForeignKey("products.id", ondelete="RESTRICT"),
-        nullable=False,
+        nullable=False, 
         index=True,
         comment="FK → products.id — product sold (live catalogue reference)",
     )
@@ -64,7 +64,7 @@ class SaleItem(Base):
         index=True,
         comment="FK → inventories.id — inventory record decremented by this sale",
     )
-
+    
     quantity = Column(
         Integer,
         nullable=False,
@@ -158,7 +158,7 @@ class SaleItem(Base):
 
     @property
     def unit_skus(self) -> list[str]:
-        if hasattr(self, "assigned_units") and self.assigned_units:
+        if "assigned_units" in self.__dict__ and self.assigned_units:
             return [u.unit_sku for u in self.assigned_units]
         return []
 

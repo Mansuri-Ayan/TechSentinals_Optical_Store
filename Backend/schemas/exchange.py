@@ -19,12 +19,18 @@ class ExchangeItemCreate(BaseModel):
     notes: str | None = None
 
 
+class ReturnedItemCreate(BaseModel):
+    sale_item_id: int = Field(..., description="FK → sale_items.id (returned item)")
+    quantity: int = Field(..., ge=1, description="Quantity of this item being returned/exchanged")
+
+
 class ExchangeCreate(BaseModel):
     store_id: int = Field(..., description="FK → stores.id")
     customer_id: int | None = Field(default=None, description="FK → customers.id")
     original_sale_id: int = Field(..., description="FK → sales.id (exchanged from)")
     original_sale_item_id: int | None = Field(default=None, description="FK → sale_items.id (returned item)")
     original_sale_item_ids: list[int] | None = Field(default=None, description="List of FK → sale_items.id (returned items)")
+    returned_items: list[ReturnedItemCreate] | None = Field(default=None, description="List of returned items with exchange quantities")
     
     # Replacement items
     new_items: list[ExchangeItemCreate] = Field(..., min_length=1, description="Replacement items")
@@ -35,7 +41,7 @@ class ExchangeCreate(BaseModel):
         description="Payment split details if new total is higher than exchange credit",
     )
     
-    processed_by_type: StaffTypeEnum = Field(..., description="MANAGER / WORKER / OPTICIAN")
+    processed_by_type: StaffTypeEnum = Field(..., description="ADMIN / MANAGER / WORKER / OPTICIAN")
     processed_by_id: int = Field(..., description="ID of staff processing the exchange")
     exchange_date: date = Field(..., description="Date of exchange")
     reason: str | None = Field(default=None, description="Reason for return/exchange")

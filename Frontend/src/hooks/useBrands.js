@@ -12,7 +12,7 @@ import {
   deleteShopkeeperBrandApi,
 } from '../api/brand/brand.api';
 
-export const brandsQueryKey = ['brands'];
+export const brandsQueryKey = 'brands';
 
 /**
  * React Query hook for paginated, filtered brands with CRUD mutations.
@@ -50,6 +50,7 @@ export const useBrands = (storeId = null, filters = {}) => {
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: [brandsQueryKey] });
+    queryClient.invalidateQueries({ queryKey: ['brands'] });
   };
 
   const createBrandMutation = useMutation({

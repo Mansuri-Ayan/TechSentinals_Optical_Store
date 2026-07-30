@@ -5,7 +5,7 @@ from core.deps import require_permission
 from db.session import get_db
 from models.admin import Admin
 from schemas.sale import SaleUpdate, SaleRead, SaleItemRead, SalePaymentRead, SalePartialReturnRequest
-from services.sale_service import get_sale, update_sale, cancel_sale, process_partial_return
+from services.sale_service import get_sale, update_sale, cancel_sale, delete_sale, process_partial_return
 from apis.customer.read import _get_user_admin_id
 
 router = APIRouter()
@@ -111,7 +111,13 @@ async def update_sale_endpoint(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Sale not found",
         )
-    # Allowed to update if belonging to the same admin tenant
+    # Scoping check for store users
+    if not isinstance(current_user, Admin):
+        if sale.store_id != current_user.store_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied to update sale records for another store.",
+            )
     updated = await update_sale(db, sale, payload)
     return _sale_to_read(updated)
 
@@ -171,3 +177,31 @@ async def partial_return_sale(
 
     updated = await process_partial_return(db, sale_id, payload, processed_by=current_user.id)
     return _sale_to_read(updated)
+
+
+@router.delete(
+    "/{sale_id}",
+    summary="Delete sale and rollback state",
+    description="Delete a sale permanently and perform full inventory, product unit, loyalty, and expense rollback.",
+)
+async def delete_sale_endpoint(
+    sale_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(require_permission("sales", "delete")),
+):
+    admin_id = _get_user_admin_id(current_user)
+    sale = await get_sale(db, sale_id)
+    if not sale or sale.admin_id != admin_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Sale not found",
+        )
+    if not isinstance(current_user, Admin):
+        if sale.store_id != current_user.store_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied to delete sale records for another store.",
+            )
+
+    await delete_sale(db, sale, deleted_by=current_user.id)
+    return {"success": True, "message": "Order cancelled and all inventory rolled back successfully."}

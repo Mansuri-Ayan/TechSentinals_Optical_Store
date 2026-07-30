@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useForm } from 'react-hook-form';
 import { toast } from 'react-toastify';
-import { X, ArrowRightLeft, Loader2, Info, ChevronDown } from 'lucide-react';
+import { X, ArrowRightLeft, Loader2, Info, ChevronDown, Lock } from 'lucide-react';
 import { useTransactions } from '../../hooks/useTransactions';
 import { useAuthStore } from '../../store/store';
 import { useStores } from '../../hooks/useStores';
@@ -142,6 +142,8 @@ const RequestStockModal = ({ isOpen, onClose, product, sourceStore, onSuccess })
     }
   };
 
+  const currentSourceLocationName = sourceStoreOptions.find(s => String(s.id) === String(watchedSourceStoreId))?.store_name || 'Central Warehouse';
+
   return createPortal(
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[1200] p-3 sm:p-4 animate-fade-in font-sans">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[95vh] flex flex-col border border-slate-100 animate-slide-up">
@@ -173,9 +175,7 @@ const RequestStockModal = ({ isOpen, onClose, product, sourceStore, onSuccess })
               <p><span className="text-slate-400 font-medium">Brand:</span> {product.brand_name || product.brand || 'N/A'}</p>
               <p>
                 <span className="text-slate-400 font-medium">Source Location:</span>{' '}
-                <span className="text-slate-800 font-bold">
-                  {sourceStoreOptions.find(s => String(s.id) === String(watchedSourceStoreId))?.store_name || 'N/A'}
-                </span>
+                <span className="text-slate-800 font-bold">{currentSourceLocationName}</span>
               </p>
               <p>
                 <span className="text-slate-400 font-medium">Available Quantity:</span>{' '}
@@ -184,23 +184,19 @@ const RequestStockModal = ({ isOpen, onClose, product, sourceStore, onSuccess })
             </div>
           </div>
 
-          {/* Source Store Select */}
+          {/* Fixed Source Store Display */}
           <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-1.5">Source Location (From) <span className="text-red-500">*</span></label>
-            <div className="relative">
-              <select
-                {...register('source_store_id', { required: 'Source location is required' })}
-                disabled={isPending}
-                className="w-full px-4 py-2.5 bg-white border border-slate-350 rounded-xl focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 font-semibold text-slate-800 text-sm transition-all cursor-pointer disabled:bg-slate-50 disabled:text-slate-400 appearance-none pr-10"
-              >
-                <option value="">-- Select Source Location --</option>
-                {sourceStoreOptions.map(s => (
-                  <option key={s.id} value={s.id}>{s.store_name}</option>
-                ))}
-              </select>
-              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+            <label className="block text-sm font-semibold text-slate-700 mb-1.5 flex items-center justify-between">
+              <span>Source Location (From)</span>
+              <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded flex items-center gap-1">
+                <Lock className="w-3 h-3 text-slate-400" /> Fixed Location
+              </span>
+            </label>
+            <div className="w-full px-4 py-2.5 bg-slate-100/80 border border-slate-200 rounded-xl font-bold text-slate-800 text-sm flex items-center justify-between cursor-not-allowed">
+              <span>{currentSourceLocationName}</span>
+              <span className="text-xs font-bold text-emerald-600">({currentSourceStock} units)</span>
             </div>
-            {errors.source_store_id && <p className="mt-1 text-xs text-red-500 font-medium">{errors.source_store_id.message}</p>}
+            <input type="hidden" {...register('source_store_id', { required: true })} />
           </div>
 
           {/* Quantity Input */}

@@ -32,6 +32,7 @@ class SaleStatus(str, enum.Enum):
 
 
 class StaffType(str, enum.Enum):
+    ADMIN = "ADMIN"
     MANAGER = "MANAGER"
     WORKER = "WORKER"
     OPTICIAN = "OPTICIAN"

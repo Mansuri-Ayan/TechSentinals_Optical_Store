@@ -531,14 +531,21 @@ const InventoryDetailDrawer = ({ item, onClose, onEdit, onRestockSupplier, onApp
                 <DetailRow label="Customer Name" value={item.customerName} />
                 <DetailRow label="Phone Number" value={item.customerPhone} />
                 <DetailRow label="Address" value={item.customerAddress} />
-                {item.billedOnAccountOf && (
-                  <div className="mt-3 pt-3 border-t border-slate-100">
-                    <h3 className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-2">Billing Account</h3>
-                    <DetailRow label="Billed To" value={item.billedOnAccountOf.name} />
-                    <DetailRow label="Billing Phone" value={item.billedOnAccountOf.phone} />
-                    {item.billedOnAccountOf.address && <DetailRow label="Billing Address" value={item.billedOnAccountOf.address} />}
-                  </div>
-                )}
+                <div className="mt-3 pt-3 border-t border-slate-100">
+                  <h3 className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-2">Billing Account</h3>
+                  {item.billedOnAccountOf ? (
+                    <>
+                      <DetailRow label="Billed To" value={item.billedOnAccountOf.name} />
+                      <DetailRow label="Billing Phone" value={item.billedOnAccountOf.phone} />
+                      {item.billedOnAccountOf.address && <DetailRow label="Billing Address" value={item.billedOnAccountOf.address} />}
+                    </>
+                  ) : (
+                    <>
+                      <DetailRow label="Billed To" value={item.customerName || 'Direct Customer'} />
+                      <DetailRow label="Account Type" value="Direct Customer Billing" />
+                    </>
+                  )}
+                </div>
               </Section>
 
               {/* Order Information */}
@@ -1127,15 +1134,22 @@ const InventoryDetailDrawer = ({ item, onClose, onEdit, onRestockSupplier, onApp
                   <DetailRow label="Customer Name" value={item.customerName} />
                   <DetailRow label="Phone Number" value={item.customerPhone} />
                   <DetailRow label="Address" value={item.customerAddress} />
-                  {item.billedOnAccountOf && (
-                    <div className="mt-3 pt-3 border-t border-slate-100">
-                      <h3 className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-2">Billing Account</h3>
-                      <DetailRow label="Billed To" value={item.billedOnAccountOf.name} />
-                      <DetailRow label="Billing Phone" value={item.billedOnAccountOf.phone} />
-                      {item.billedOnAccountOf.email && <DetailRow label="Billing Email" value={item.billedOnAccountOf.email} />}
-                      {item.billedOnAccountOf.address && <DetailRow label="Billing Address" value={item.billedOnAccountOf.address} />}
-                    </div>
-                  )}
+                  <div className="mt-3 pt-3 border-t border-slate-100">
+                    <h3 className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-2">Billing Account</h3>
+                    {item.billedOnAccountOf ? (
+                      <>
+                        <DetailRow label="Billed To" value={item.billedOnAccountOf.name} />
+                        <DetailRow label="Billing Phone" value={item.billedOnAccountOf.phone} />
+                        {item.billedOnAccountOf.email && <DetailRow label="Billing Email" value={item.billedOnAccountOf.email} />}
+                        {item.billedOnAccountOf.address && <DetailRow label="Billing Address" value={item.billedOnAccountOf.address} />}
+                      </>
+                    ) : (
+                      <>
+                        <DetailRow label="Billed To" value={item.customerName || 'Direct Customer'} />
+                        <DetailRow label="Account Type" value="Direct Customer Billing" />
+                      </>
+                    )}
+                  </div>
                 </Section>
                 <Section icon={CreditCard} title="Payment Information" color="rose">
                   <DetailRow label="Subtotal" value={fmtPrice(item.subtotal)} />

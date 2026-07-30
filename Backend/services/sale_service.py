@@ -655,8 +655,22 @@ async def update_sale(
     sale: Sale,
     payload: SaleUpdate,
 ) -> Sale:
-    """Update sale header (status, notes, lab details)."""
+    """Update sale header (status, notes, lab details) with concurrency & transition validation."""
+    if sale.status in (SaleStatus.CANCELLED, SaleStatus.REFUNDED):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot update status for sale that is already {sale.status.value}."
+        )
+
     update_data = payload.model_dump(exclude_unset=True)
+
+    if "lab_status" in update_data and update_data["lab_status"] != sale.lab_status:
+        if sale.lab_status == "Delivered" and update_data["lab_status"] != "Delivered":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Delivered lab orders cannot be reverted to a pending status."
+            )
+
     for field, value in update_data.items():
         setattr(sale, field, value)
         
@@ -758,6 +772,130 @@ async def cancel_sale(
     await update_bill_for_sale(db, sale.id)
     await check_and_update_sales_loss(db, sale.id)
     return sale
+
+
+async def delete_sale(
+    db: AsyncSession,
+    sale: Sale,
+    deleted_by: int,
+) -> bool:
+    """
+    Permanently delete a sale and perform complete rollback of:
+    - Inventory batch stock
+    - Assigned ProductUnit SKUs
+    - Customer loyalty points (earned & redeemed)
+    - Sales loss expenses and bill records
+    """
+    from models.loyalty_transaction import LoyaltyTransaction
+    from models.customer import Customer
+    from models.expense import Expense
+    from models.bill import Bill
+
+    # Load full sale details
+    sale_with_items = await get_sale(db, sale.id)
+    if sale_with_items:
+        sale = sale_with_items
+
+    # 1. Reverse inventory for each item using consumed batch metadata
+    for item in (sale.items or []):
+        if item.consumed_batches:
+            for batch_meta in item.consumed_batches:
+                batch_id = batch_meta["inventory_id"]
+                qty_to_restore = batch_meta["quantity"]
+                inv_stmt = select(Inventory).where(Inventory.id == batch_id)
+                inv_result = await db.execute(inv_stmt)
+                inventory = inv_result.scalar_one_or_none()
+                if inventory:
+                    inventory.quantity += qty_to_restore
+                    inventory.available_quantity += qty_to_restore
+                    inventory.last_stock_in_at = _now()
+                    inventory.is_active = True
+
+                    txn = InventoryTransaction(
+                        inventory_id=inventory.id,
+                        product_id=item.product_id,
+                        product_snapshot_id=item.product_snapshot_id,
+                        unit_price=item.unit_price,
+                        total_value=item.unit_price * qty_to_restore,
+                        transaction_type=TransactionType.RETURN,
+                        quantity=qty_to_restore,
+                        reference_id=sale.id,
+                        remarks=f"Deletion rollback of sale {sale.invoice_number}",
+                        created_by=deleted_by,
+                        consumed_batches=[batch_meta]
+                    )
+                    db.add(txn)
+        elif item.inventory_id:
+            inv_stmt = select(Inventory).where(Inventory.id == item.inventory_id)
+            inv_result = await db.execute(inv_stmt)
+            inventory = inv_result.scalar_one_or_none()
+            if inventory:
+                inventory.quantity += item.quantity
+                inventory.available_quantity += item.quantity
+                inventory.last_stock_in_at = _now()
+                inventory.is_active = True
+
+                txn = InventoryTransaction(
+                    inventory_id=inventory.id,
+                    product_id=item.product_id,
+                    product_snapshot_id=item.product_snapshot_id,
+                    unit_price=item.unit_price,
+                    total_value=item.line_total,
+                    transaction_type=TransactionType.RETURN,
+                    quantity=item.quantity,
+                    reference_id=sale.id,
+                    remarks=f"Deletion rollback of sale {sale.invoice_number} (fallback)",
+                    created_by=deleted_by,
+                )
+                db.add(txn)
+
+        # Phase 1: Restore assigned ProductUnit rows back to AVAILABLE
+        await restore_units_from_sale_item(db=db, sale_item_id=item.id)
+
+    # 2. Reverse loyalty points & remove loyalty transactions
+    loyalty_txns_stmt = select(LoyaltyTransaction).where(LoyaltyTransaction.sale_id == sale.id)
+    loyalty_res = await db.execute(loyalty_txns_stmt)
+    loyalty_txns = list(loyalty_res.scalars().all())
+
+    for l_txn in loyalty_txns:
+        if l_txn.customer_id:
+            cust_stmt = select(Customer).where(Customer.id == l_txn.customer_id)
+            cust_res = await db.execute(cust_stmt)
+            customer = cust_res.scalar_one_or_none()
+            if customer:
+                customer.current_points -= l_txn.points
+                if l_txn.points > 0:
+                    customer.loyalty_points_earned = max(0, customer.loyalty_points_earned - l_txn.points)
+                elif l_txn.points < 0:
+                    customer.loyalty_points_redeemed = max(0, customer.loyalty_points_redeemed + l_txn.points)
+                db.add(customer)
+        await db.delete(l_txn)
+
+    # 3. Clean up associated exchanges, expenses (Sales Loss), and bills
+    from models.exchange import Exchange
+    exc_stmt = select(Exchange).where(
+        (Exchange.original_sale_id == sale.id) | (Exchange.new_sale_id == sale.id)
+    )
+    exc_res = await db.execute(exc_stmt)
+    for exc in exc_res.scalars().all():
+        await db.delete(exc)
+
+    ref_num = f"SALE-{sale.id}"
+    exp_stmt = select(Expense).where(Expense.reference_number == ref_num)
+    exp_res = await db.execute(exp_stmt)
+    for exp in exp_res.scalars().all():
+        await db.delete(exp)
+
+    bill_stmt = select(Bill).where(Bill.sale_id == sale.id)
+    bill_res = await db.execute(bill_stmt)
+    for bill in bill_res.scalars().all():
+        await db.delete(bill)
+
+    # 4. Mark sale as CANCELLED (preserving historical record in DB)
+    sale.status = SaleStatus.CANCELLED
+    await db.commit()
+    await db.refresh(sale)
+    return True
 
 
 # ── Add Payment ───────────────────────────────────────────────

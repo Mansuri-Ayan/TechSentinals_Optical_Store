@@ -2,8 +2,9 @@ import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   Search, Store, Clock, Calendar, CheckCircle, AlertTriangle,
-  X, Package, User, CreditCard, Truck, ChevronRight, RefreshCw, BarChart3
+  X, Package, User, CreditCard, Truck, ChevronRight, RefreshCw, BarChart3, Trash2
 } from 'lucide-react';
+import { deleteSaleApi } from '../../api/sales/sales.api';
 import { useStoreStore } from '../../store/store';
 import { useLabOrders } from '../../hooks/useLabOrders';
 import { useStores } from '../../hooks/useStores';
@@ -125,6 +126,20 @@ const LabOrders = () => {
   const readyStatuses = ['Ready For Pickup'];
 
 
+
+  const handleDeleteOrder = async (orderId, invoiceNumber) => {
+    if (window.confirm(`Are you sure you want to delete order ${invoiceNumber || ''}? This will permanently delete the order and restore all inventory stock batches & product units.`)) {
+      try {
+        await deleteSaleApi(orderId);
+        queryClient.invalidateQueries({ queryKey: ['labOrders'] });
+        queryClient.invalidateQueries({ queryKey: ['sales'] });
+        queryClient.invalidateQueries({ queryKey: ['inventory'] });
+        toast.success('Order cancelled and all inventory rolled back successfully.');
+      } catch (err) {
+        toast.error(err.response?.data?.detail || 'Failed to delete order.');
+      }
+    }
+  };
 
   const fmt = (n) => `₹${Number(n).toLocaleString('en-IN')}`;
   const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
@@ -327,15 +342,15 @@ const LabOrders = () => {
                 <tr className="bg-slate-50 border-b border-slate-100">
                   {activeTab === 'pending' ? (
                     // Lab pending headers
-                    ['Order ID', 'Customer Name', 'Product', 'Lab Name', 'Sent Date', 'Expected Delivery', 'Status'].map(col => (
-                      <th key={col} className="px-5 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">
+                    ['Order ID', 'Customer Name', 'Product', 'Lab Name', 'Sent Date', 'Expected Delivery', 'Status', ''].map(col => (
+                      <th key={col} className={`px-5 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap ${col === '' ? 'text-right' : 'text-left'}`}>
                         {col}
                       </th>
                     ))
                   ) : (
                     // Queue & Ready headers
-                    ['Order ID', 'Customer Name', 'Mobile Number', 'Billing Account', 'Product Name', 'Store', 'Order Date', 'Total', 'Paid', 'Due', 'Status'].map(col => (
-                      <th key={col} className="px-5 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">
+                    ['Order ID', 'Customer Name', 'Mobile Number', 'Billing Account', 'Product Name', 'Store', 'Order Date', 'Total', 'Paid', 'Due', 'Status', ''].map(col => (
+                      <th key={col} className={`px-5 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap ${col === '' ? 'text-right' : 'text-left'}`}>
                         {col}
                       </th>
                     ))
@@ -370,6 +385,18 @@ const LabOrders = () => {
                         <td className="px-5 py-4">
                           <StatusBadge status={order.status} />
                         </td>
+                        <td className="px-5 py-4 text-right">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteOrder(order.id, order.orderId);
+                            }}
+                            className="p-1.5 hover:bg-red-50 text-red-500 hover:text-red-700 rounded-lg transition-colors cursor-pointer inline-flex items-center justify-center border border-red-100"
+                            title="Delete Order & Rollback Stock"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </td>
                       </>
                     ) : (
                       // Queue and Ready columns
@@ -391,15 +418,9 @@ const LabOrders = () => {
                           <div>{order.customerPhone}</div>
                         </td>
                         <td className="px-5 py-4">
-                          {order.billedOnAccountOf ? (
-                            <div className="font-bold text-slate-900 whitespace-nowrap">
-                              {order.billedOnAccountOf.name}
-                            </div>
-                          ) : (
-                            <div className="font-bold text-slate-900 whitespace-nowrap">
-                              —
-                            </div>
-                          )}
+                          <div className="font-semibold text-slate-700 whitespace-nowrap">
+                            {order.billedOnAccountOf ? order.billedOnAccountOf.name : (order.customerName || 'Direct Customer')}
+                          </div>
                         </td>
                         <td className="px-5 py-4 font-medium text-slate-600 max-w-[150px] truncate">{order.productName}</td>
                         <td className="px-5 py-4 text-xs font-semibold text-slate-500 whitespace-nowrap">{order.branchName || order.storeName}</td>
@@ -409,6 +430,18 @@ const LabOrders = () => {
                         <td className="px-5 py-4 text-sm font-bold text-red-500">{fmt(order.dueAmount)}</td>
                         <td className="px-5 py-4">
                           <StatusBadge status={order.status} />
+                        </td>
+                        <td className="px-5 py-4 text-right">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteOrder(order.id, order.orderId);
+                            }}
+                            className="p-1.5 hover:bg-red-50 text-red-500 hover:text-red-700 rounded-lg transition-colors cursor-pointer inline-flex items-center justify-center border border-red-100"
+                            title="Delete Order & Rollback Stock"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
                         </td>
                       </>
                     )}

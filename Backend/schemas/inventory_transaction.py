@@ -6,17 +6,7 @@ from pydantic import BaseModel, Field, model_validator
 from schemas.product_snapshot import ProductSnapshotRead
 
 
-class TransactionTypeEnum(str, Enum):
-    PURCHASE = "PURCHASE"
-    SALE = "SALE"
-    ADMIN_TRANSFER_OUT = "ADMIN_TRANSFER_OUT"
-    ADMIN_TRANSFER_IN = "ADMIN_TRANSFER_IN"
-    STORE_TRANSFER_OUT = "STORE_TRANSFER_OUT"
-    STORE_TRANSFER_IN = "STORE_TRANSFER_IN"
-    DAMAGE = "DAMAGE"
-    LOSS = "LOSS"
-    AUDIT_ADJUSTMENT = "AUDIT_ADJUSTMENT"
-    RETURN = "RETURN"
+from models.inventory_transaction import TransactionType as TransactionTypeEnum
 
 
 class PurchaseRequest(BaseModel):

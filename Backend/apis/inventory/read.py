@@ -368,7 +368,7 @@ async def universal_search_inventories(
         description="Filter by stock status: in_stock, low_stock, out_of_stock",
     ),
     page: int = Query(default=1, ge=1, description="Page number"),
-    limit: int = Query(default=20, ge=1, le=100, description="Page size"),
+    limit: int = Query(default=20, ge=1, le=1000, description="Page size"),
     paginate: bool = Query(default=True, description="Enable pagination"),
     db: AsyncSession = Depends(get_db),
     current_user = Depends(require_permission('inventory', 'read')),

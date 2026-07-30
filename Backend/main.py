@@ -53,7 +53,8 @@ async def lifespan(app: FastAPI):
     try:
         async with engine.begin() as conn:
             await conn.execute(text("ALTER TABLE inventories ADD COLUMN IF NOT EXISTS selling_price NUMERIC(10, 2) DEFAULT NULL;"))
-            print("Successfully added selling_price to inventories!")
+            await conn.execute(text("ALTER TYPE staff_type_enum ADD VALUE IF NOT EXISTS 'ADMIN';"))
+            print("Successfully executed schema migrations for selling_price and staff_type_enum!")
     except Exception as e:
         print(f"Skipped schema alter: {e}")
     yield
@@ -82,10 +83,21 @@ app.add_middleware(
         "http://127.0.0.1:5174",
         "http://127.0.0.1:5175",
     ],
+    allow_origin_regex=r"http://(localhost|127\.0\.0\.1)(:\d+)?",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+from fastapi.responses import JSONResponse
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logging.error(f"Unhandled error on {request.url.path}: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": str(exc) or "Internal Server Error"},
+    )
 # ── Register routers ──────────────────────────────────────────
 app.include_router(auth_router)
 app.include_router(store_router)

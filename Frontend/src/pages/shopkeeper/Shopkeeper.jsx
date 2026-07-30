@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { ClipboardList } from 'lucide-react';
 import StepIndicator from '../../components/shopkeeper/StepIndicator';
 import ProductSelectionStep from '../../components/shopkeeper/ProductSelectionStep';
@@ -60,6 +61,7 @@ const defaultPrescription = {
 
 const Shopkeeper = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [activeStep, setActiveStep] = useState(() => safeParse(POS_KEYS.step, 1));
   const [cart, setCart] = useState(() => safeParse(POS_KEYS.cart, []));
   const [customer, setCustomer] = useState(() => safeParse(POS_KEYS.customer, defaultCustomer));
@@ -357,6 +359,12 @@ const Shopkeeper = () => {
       };
 
       const saleResult = await createSaleApi(salePayload);
+
+      // Invalidate queries so new order displays immediately across all pages without browser refresh
+      queryClient.invalidateQueries({ queryKey: ['sales'] });
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['inventory'] });
+      queryClient.invalidateQueries({ queryKey: ['customers'] });
 
       // Construct a resultCustomer object matching mock customer response
       const billCustomer = loyaltyData.billing_account_customer || customer;
