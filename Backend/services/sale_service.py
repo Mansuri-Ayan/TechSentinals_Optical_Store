@@ -129,6 +129,7 @@ async def create_sale(
             product_id=item_data.product_id,
             product_snapshot_id=snapshot.id,
             inventory_id=item_data.inventory_id,
+            deadstock_item_id=getattr(item_data, "deadstock_item_id", None),
             quantity=item_data.quantity,
             unit_price=item_data.unit_price,
             unit_cost=product.cost_price,  # snapshot at sale time
@@ -149,7 +150,11 @@ async def create_sale(
     if payload.discount_amount:
         total_discount += payload.discount_amount
 
+    if getattr(payload, "deadstock_deduction", None):
+        total_discount += payload.deadstock_deduction
+
     total_amount = (subtotal - total_discount + total_tax).quantize(Decimal("0.01"))
+
 
     # Unpack items tuple — service builds (SaleItem, Product, ProductSnapshot, SaleItemCreate) quads
     sale_items_unpacked = [si for si, _p, _s, _d in sale_items]
@@ -542,6 +547,12 @@ async def create_sale(
             sale_item_id=sale_item.id,
             specific_unit_skus=getattr(item_data, "unit_skus", None)
         )
+
+        # Mark deadstock item as SOLD if applicable
+        if getattr(item_data, "deadstock_item_id", None):
+            from services.deadstock_service import mark_deadstock_sold
+            await mark_deadstock_sold(db, item_data.deadstock_item_id, sale.id)
+
 
     await db.commit()
     from services.bill_service import update_bill_for_sale

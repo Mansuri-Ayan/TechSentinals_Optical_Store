@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { ArrowLeft, CheckCircle, Award, Zap, Gift, Star, ChevronDown, ChevronUp, Info, Link, UserPlus } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Award, Zap, Gift, Star, ChevronDown, ChevronUp, Info, Link, UserPlus, Archive, Tag } from 'lucide-react';
+
 import OrderSummary from './OrderSummary';
 import PaymentForm from './PaymentForm';
 import { useLoyaltyConfig } from '../../hooks/useLoyalty';
@@ -70,10 +71,32 @@ const PaymentStep = ({ customer, cart, prescription, onBack, onComplete }) => {
   const maxSavingsOther = Math.floor(maxPointsRedeemableOther / pointsPerRupee);
   const hasMinPointsOther = availablePointsOther >= minPoints;
 
+  // --- Deadstock Deduction State ---
+  const deadstockCartItems = useMemo(() => {
+    return cart.filter((item) => item.product?.is_deadstock || item.product?.deadstock_item_id);
+  }, [cart]);
+
+  const maxDeadstockDeduction = useMemo(() => {
+    return deadstockCartItems.reduce(
+      (sum, item) => sum + (Number(item.product?.selling_price) || 0) * item.quantity,
+      0
+    );
+  }, [deadstockCartItems]);
+
+  const [isDeadstockDeductionEnabled, setIsDeadstockDeductionEnabled] = useState(true);
+  const [deadstockDeductionAmount, setDeadstockDeductionAmount] = useState(maxDeadstockDeduction);
+
+  useEffect(() => {
+    setDeadstockDeductionAmount(maxDeadstockDeduction);
+  }, [maxDeadstockDeduction]);
+
+  const activeDeadstockDeduction = isDeadstockDeductionEnabled ? deadstockDeductionAmount : 0;
+
   // Compute redemption discount from preview
   const loyaltyDiscount = preview?.redemption_valid ? Number(preview.rupee_discount || 0) : 0;
 
-  const finalAmount = Math.max(0, subtotal - discount - loyaltyDiscount);
+  const finalAmount = Math.max(0, subtotal - discount - loyaltyDiscount - activeDeadstockDeduction);
+
 
   // Sync payment amounts when finalAmount changes
   const [prevFinalAmount, setPrevFinalAmount] = useState(finalAmount);
@@ -194,7 +217,7 @@ const PaymentStep = ({ customer, cart, prescription, onBack, onComplete }) => {
       return;
     }
 
-    // Pass loyalty data along with payment and discount
+    // Pass loyalty and deadstock data along with payment and discount
     onComplete(payment, discount, {
       billing_account_customer: billingAccountCustomer,
       billing_account_customer_id: billingAccountCustomer?.id,
@@ -208,6 +231,7 @@ const PaymentStep = ({ customer, cart, prescription, onBack, onComplete }) => {
       pricePointsEnabled,
       enabledCategoryIds,
       loyaltyDiscount,
+      deadstockDeduction: activeDeadstockDeduction,
     });
   };
 
@@ -239,8 +263,10 @@ const PaymentStep = ({ customer, cart, prescription, onBack, onComplete }) => {
             prescription={prescription}
             subtotal={subtotal}
             discount={discount + loyaltyDiscount}
+            deadstockDeduction={activeDeadstockDeduction}
             finalAmount={finalAmount}
           />
+
           {/* Payment Form */}
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 sm:p-6">
             <PaymentForm
@@ -257,8 +283,70 @@ const PaymentStep = ({ customer, cart, prescription, onBack, onComplete }) => {
         {/* Right Column: Loyalty & Overrides */}
         <div className="lg:col-span-6 xl:col-span-5 space-y-6">
 
+          {/* Deadstock Item Deduction Box */}
+          {deadstockCartItems.length > 0 && (
+            <div className="bg-white rounded-2xl border border-amber-200 shadow-sm overflow-hidden animate-fade-in">
+              <div className="p-5 sm:p-6 bg-gradient-to-r from-amber-50 to-orange-50/40 border-b border-amber-100 flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-sm">
+                    <Archive className="w-4 h-4 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-extrabold text-amber-900 uppercase tracking-wider">Deadstock Deduction</h3>
+                    <p className="text-[10px] text-amber-700 font-semibold mt-0.5">
+                      {deadstockCartItems.length} deadstock item(s) selected in cart
+                    </p>
+                  </div>
+                </div>
+                <span className="text-xs font-black text-amber-700 bg-amber-100/80 px-2.5 py-1 rounded-lg border border-amber-200">
+                  - ₹{activeDeadstockDeduction.toLocaleString('en-IN')}
+                </span>
+              </div>
+
+              <div className="p-5 sm:p-6 space-y-4">
+                <label className="flex items-center gap-3 p-3 bg-slate-50 hover:bg-slate-100/60 rounded-xl border border-slate-200 cursor-pointer transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={isDeadstockDeductionEnabled}
+                    onChange={(e) => setIsDeadstockDeductionEnabled(e.target.checked)}
+                    className="w-4 h-4 rounded border-amber-400 text-amber-600 focus:ring-amber-500"
+                  />
+                  <div className="flex-1">
+                    <p className="text-xs font-bold text-slate-800">Apply Deadstock Price Deduction</p>
+                    <p className="text-[10px] text-slate-500 font-medium">
+                      Subtract deadstock item original value from order total
+                    </p>
+                  </div>
+                </label>
+
+                {isDeadstockDeductionEnabled && (
+                  <div className="p-3 bg-amber-50/50 border border-amber-100 rounded-xl space-y-2.5 animate-fade-in">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-bold text-amber-800">Deduction Amount:</span>
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs font-bold text-slate-500">₹</span>
+                        <input
+                          type="number"
+                          min="0"
+                          max={maxDeadstockDeduction}
+                          value={deadstockDeductionAmount}
+                          onChange={(e) => setDeadstockDeductionAmount(Math.max(0, Math.min(maxDeadstockDeduction, Number(e.target.value) || 0)))}
+                          className="w-24 text-right px-2.5 py-1.5 text-xs font-bold border border-amber-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500/20 bg-white"
+                        />
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-amber-700 font-semibold">
+                      Max deductible value: ₹{maxDeadstockDeduction.toLocaleString('en-IN')}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Billing Account */}
           {customer?.id && (
+
             <div className="bg-white rounded-2xl border border-slate-100 shadow-sm">
               <button
                 onClick={() => setBillingOptionsExpanded(!billingOptionsExpanded)}

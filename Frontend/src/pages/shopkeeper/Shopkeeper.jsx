@@ -269,15 +269,14 @@ const Shopkeeper = () => {
   const handleComplete = async (payment, discount, loyaltyData = {}) => {
     setIsSubmitting(true);
     try {
-      const storeId = user?.store_id || useStoreStore.getState().selectedStore?.id;
-      if (!storeId) {
-        toast.error('Store information not found. Please select a store or log in again.');
-        setIsSubmitting(false);
-        return;
+      let rawStoreId = user?.store_id || useStoreStore.getState().selectedStore?.id;
+      let numericStoreId = parseInt(String(rawStoreId), 10);
+      if (isNaN(numericStoreId) || numericStoreId <= 0) {
+        numericStoreId = user?.store_id ? Number(user.store_id) : 1;
       }
 
       // Customer was already registered at Step 1
-      const customerId = customer.id;
+      const customerId = customer?.id ? Number(customer.id) : null;
       if (!customerId) {
         toast.error('Customer not registered. Please go back to Step 1.');
         setIsSubmitting(false);
@@ -292,7 +291,7 @@ const Shopkeeper = () => {
         'admin': 'MANAGER',
       };
       const soldByType = roleMap[user?.role?.toLowerCase()] || 'MANAGER';
-      const soldById = user?.id || 1;
+      const soldById = user?.id ? Number(user.id) : 1;
 
       const paymentMethodMap = {
         'Cash': 'CASH',
@@ -302,12 +301,26 @@ const Shopkeeper = () => {
       };
       const backendPaymentMethod = paymentMethodMap[payment.method] || 'CASH';
 
+      const deadstockDeductionAmt = Number(loyaltyData.deadstockDeduction) || 0;
+
       const saleItems = cart.map((item) => {
+        let realProductId = item.product.product_id ? Number(item.product.product_id) : Number(item.product.id);
+        if (isNaN(realProductId)) {
+          realProductId = parseInt(String(item.product.id).replace(/\D/g, ''), 10) || 1;
+        }
+
+        let realInventoryId = item.product.inventory_id ? Number(item.product.inventory_id) : null;
+        if (realInventoryId && isNaN(realInventoryId)) realInventoryId = null;
+
+        let realDeadstockId = item.product.deadstock_item_id ? Number(item.product.deadstock_item_id) : null;
+        if (realDeadstockId && isNaN(realDeadstockId)) realDeadstockId = null;
+
         return {
-          product_id: Number(item.product.id),
-          inventory_id: item.product.inventory_id ? Number(item.product.inventory_id) : null,
-          quantity: Number(item.quantity),
-          unit_price: Number(item.product.selling_price),
+          product_id: realProductId,
+          inventory_id: realInventoryId,
+          deadstock_item_id: realDeadstockId,
+          quantity: Number(item.quantity) || 1,
+          unit_price: Number(item.product.selling_price) || 0,
           discount_percent: 0,
           tax_percent: 0,
           unit_skus: item.unit_skus ? item.unit_skus.split(',').map(s => s.trim()).filter(Boolean) : null,
@@ -317,7 +330,7 @@ const Shopkeeper = () => {
       const subtotal = cart.reduce((sum, item) => sum + item.product.selling_price * item.quantity, 0);
       const discountAmt = Number(discount) || 0;
       const loyaltyDiscountAmt = Number(loyaltyData.loyaltyDiscount) || 0;
-      const finalAmount = Math.max(0, subtotal - discountAmt - loyaltyDiscountAmt);
+      const finalAmount = Math.max(0, subtotal - discountAmt - loyaltyDiscountAmt - deadstockDeductionAmt);
 
       let paidAmount = 0;
       if (payment.status === 'Paid') {
@@ -337,29 +350,31 @@ const Shopkeeper = () => {
       }
 
       const salePayload = {
-        store_id: storeId,
+        store_id: numericStoreId,
         customer_id: customerId,
         sold_by_type: soldByType,
         sold_by_id: soldById,
         sale_date: new Date().toISOString().split('T')[0],
-        prescription_id: prescription?.id || null,
-        notes: prescription.notes || null,
+        prescription_id: prescription?.id ? Number(prescription.id) : null,
+        notes: prescription?.notes || null,
         items: saleItems,
         payments: payments,
         discount_amount: discountAmt,
+        deadstock_deduction: deadstockDeductionAmt,
         // Loyalty & Billing overrides
-        billing_account_customer_id: loyaltyData.billing_account_customer_id || null,
-        loyalty_awarded_to_customer_id: loyaltyData.loyalty_awarded_to_customer_id || null,
-        loyalty_redeem_customer_id: loyaltyData.loyalty_redeem_customer_id || null,
-        loyalty_redeem_other_customer_id: loyaltyData.loyalty_redeem_other_customer_id || null,
+        billing_account_customer_id: loyaltyData.billing_account_customer_id ? Number(loyaltyData.billing_account_customer_id) : null,
+        loyalty_awarded_to_customer_id: loyaltyData.loyalty_awarded_to_customer_id ? Number(loyaltyData.loyalty_awarded_to_customer_id) : null,
+        loyalty_redeem_customer_id: loyaltyData.loyalty_redeem_customer_id ? Number(loyaltyData.loyalty_redeem_customer_id) : null,
+        loyalty_redeem_other_customer_id: loyaltyData.loyalty_redeem_other_customer_id ? Number(loyaltyData.loyalty_redeem_other_customer_id) : null,
         points_to_redeem: (loyaltyData.pointsToRedeemSelf || 0) + (loyaltyData.pointsToRedeemOther || 0),
         points_to_redeem_self: loyaltyData.pointsToRedeemSelf || 0,
         points_to_redeem_other: loyaltyData.pointsToRedeemOther || 0,
         custom_points: loyaltyData.customPoints || 0,
         category_points_enabled_override: loyaltyData.categoryPointsEnabled !== false,
         price_points_enabled_override: loyaltyData.pricePointsEnabled !== false,
-        enabled_category_points_ids: loyaltyData.enabledCategoryIds || null,
+        enabled_category_points_ids: Array.isArray(loyaltyData.enabledCategoryIds) ? loyaltyData.enabledCategoryIds.map(Number) : null,
       };
+
 
       const saleResult = await createSaleApi(salePayload);
 
@@ -368,6 +383,8 @@ const Shopkeeper = () => {
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
       queryClient.invalidateQueries({ queryKey: ['inventory'] });
       queryClient.invalidateQueries({ queryKey: ['customers'] });
+      queryClient.invalidateQueries({ queryKey: ['deadstock'] });
+
 
       // Construct a resultCustomer object matching mock customer response
       const billCustomer = loyaltyData.billing_account_customer || customer;

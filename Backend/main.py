@@ -39,6 +39,7 @@ from routes.loyalty_router import router as loyalty_router
 from routes.shopkeeper_loyalty_router import router as shopkeeper_loyalty_router
 from routes.lab_router import lab_router
 from routes.exchange_router import exchange_router
+from routes.deadstock_router import deadstock_router
 from apis.permission.me import router as permission_me_router
 from apis.permission.tier2 import router as permission_tier2_router
 from apis.permission.tier3 import router as permission_tier3_router
@@ -132,6 +133,7 @@ app.include_router(loyalty_router)
 app.include_router(shopkeeper_loyalty_router)
 app.include_router(lab_router)
 app.include_router(exchange_router)
+app.include_router(deadstock_router)
 # ── Permissions & SuperAdmin module ───────────────────────────
 app.include_router(permission_me_router)
 app.include_router(permission_tier2_router)
@@ -139,3 +141,4 @@ app.include_router(permission_tier3_router)
 app.include_router(permission_staff_list_router)
 app.include_router(superadmin_router)
 app.include_router(bill_settings_router, prefix="/bill-settings", tags=["Bill Settings"])
+

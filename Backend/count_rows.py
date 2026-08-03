@@ -11,7 +11,7 @@ async def count_rows():
         
         stmt_p = select(func.count(Permission.id))
         count_p = (await db.execute(stmt_p)).scalar()
-        print(f"Total Permissions: {count_p}")
+        print(f"Total Permissions: {count_p}")  
         print(f"Total GlobalRolePermissions: {count}")
         break
 

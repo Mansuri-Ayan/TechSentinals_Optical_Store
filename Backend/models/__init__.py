@@ -63,3 +63,5 @@ from models.accountant import Accountant
 from models.bill_settings import BillSettings
 from models.bill import Bill
 from models.exchange import Exchange, ExchangeStatus
+from models.deadstock_item import DeadstockItem, DeadstockStatus
+

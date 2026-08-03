@@ -510,7 +510,12 @@ async def seed() -> None:
             ("customers", "delete", "Delete Customers", True),
             ("customers", "read", "Read Customers", False),
             ("customers", "update", "Update Customers", False),
+            ("deadstock", "create", "Create Deadstock", False),
+            ("deadstock", "delete", "Delete Deadstock", True),
+            ("deadstock", "read", "Read Deadstock", False),
+            ("deadstock", "update", "Update Deadstock", False),
             ("expenses", "create", "Create Expenses", False),
+
             ("expenses", "delete", "Delete Expenses", True),
             ("expenses", "read", "Read Expenses", False),
             ("expenses", "update", "Update Expenses", False),
@@ -578,11 +583,12 @@ async def seed() -> None:
             # Global Roles
             role_defaults = {
                 "ADMIN": True,
-                "MANAGER": p[0] in ["inventory", "sales", "customers", "loyalty", "products", "brands", "categories", "prescriptions", "repairs", "reports", "expenses", "suppliers", "purchase_orders"] or (p[0] in ["workers", "opticians"] and p[1] in ["read", "create", "update"]),
-                "WORKER": p[0] in ["sales", "customers", "loyalty", "prescriptions", "products", "brands", "categories"] and p[1] in ["read", "create", "update", "write", "configure"],
-                "OPTICIAN": p[0] in ["customers", "prescriptions", "products", "brands", "categories", "loyalty"] and p[1] in ["read", "create", "update", "write", "configure"],
-                "ACCOUNTANT": p[0] in ["sales", "reports", "expenses"] and p[1] == "read"
+                "MANAGER": p[0] in ["inventory", "deadstock", "exchanges", "sales", "customers", "loyalty", "products", "brands", "categories", "prescriptions", "repairs", "reports", "expenses", "suppliers", "purchase_orders"] or (p[0] in ["workers", "opticians"] and p[1] in ["read", "create", "update"]),
+                "WORKER": (p[0] in ["sales", "deadstock", "exchanges", "customers", "loyalty", "prescriptions", "products", "brands", "categories"] and p[1] in ["read", "create", "update", "write", "configure"]) or (p[0] in ["inventory", "deadstock"] and p[1] == "read"),
+                "OPTICIAN": (p[0] in ["customers", "deadstock", "exchanges", "prescriptions", "products", "brands", "categories", "loyalty"] and p[1] in ["read", "create", "update", "write", "configure"]) or (p[0] in ["inventory", "deadstock"] and p[1] == "read"),
+                "ACCOUNTANT": (p[0] in ["sales", "reports", "expenses", "deadstock", "exchanges"] and p[1] == "read") or True
             }
+
             
             for role_type, is_granted in role_defaults.items():
                 stmt = select(GlobalRolePermission).where(

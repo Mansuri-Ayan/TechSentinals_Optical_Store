@@ -128,6 +128,7 @@ async def generate_bill_html(sale: Sale, db: AsyncSession) -> str:
 
     # Build items table rows
     item_rows = ""
+    has_deadstock_items = False
     for item in sale.items:
         snap = item.product_snapshot
         p_name = snap.name if snap else (item.product.name if item.product else "Optical Item")
@@ -135,6 +136,10 @@ async def generate_bill_html(sale: Sale, db: AsyncSession) -> str:
         selected_color = getattr(item, "selected_color", "") or ""
         selected_size = getattr(item, "selected_size", "") or ""
         
+        is_deadstock = getattr(item, "deadstock_item_id", None) is not None
+        if is_deadstock:
+            has_deadstock_items = True
+
         color_size_str = ""
         if p_brand != "—":
             color_size_str += f"{p_brand}"
@@ -142,11 +147,17 @@ async def generate_bill_html(sale: Sale, db: AsyncSession) -> str:
             color_size_str += f" · Color: {selected_color}"
         if selected_size:
             color_size_str += f" · Size: {selected_size}"
+        if is_deadstock:
+            color_size_str += " · <span style='color: #d97706; font-weight: 800;'>Exchanged Deadstock Item</span>"
             
+        deadstock_badge = ""
+        if is_deadstock:
+            deadstock_badge = " <span style='background-color: #fef3c7; color: #b45309; border: 1px solid #fde68a; padding: 1px 5px; border-radius: 4px; font-size: 8px; font-weight: 800;'>DEADSTOCK</span>"
+
         item_rows += f"""
         <tr style="border-bottom: 1px solid #f1f5f9;">
             <td style="padding: 10px 12px; text-align: left; vertical-align: top;">
-                <p style="font-weight: 700; color: #0f172a; margin: 0; font-size: 11px;">{p_name}</p>
+                <p style="font-weight: 700; color: #0f172a; margin: 0; font-size: 11px;">{p_name}{deadstock_badge}</p>
                 <p style="font-size: 9px; color: #94a3b8; margin: 2px 0 0 0; font-weight: 600;">{color_size_str}</p>
             </td>
             <td style="padding: 10px 12px; text-align: center; font-family: monospace; font-weight: 600; vertical-align: top; font-size: 11px;">{item.quantity}</td>
@@ -223,6 +234,7 @@ async def generate_bill_html(sale: Sale, db: AsyncSession) -> str:
             <span style="font-family: monospace; font-weight: 700;">- ₹{loyalty_discount:,.2f}</span>
         </div>
         """
+
 
     date_str = sale.sale_date.strftime("%d %b %Y") if isinstance(sale.sale_date, datetime) or hasattr(sale.sale_date, "strftime") else str(sale.sale_date)
 

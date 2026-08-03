@@ -9,7 +9,7 @@ const GRAD_PALETTE = [
   'from-cyan-400 to-sky-600',
 ];
 
-const OrderSummary = ({ customer, cart, prescription, subtotal, discount, finalAmount }) => {
+const OrderSummary = ({ customer, cart, prescription, subtotal, discount, deadstockDeduction = 0, finalAmount }) => {
   const hasPrescription =
     prescription &&
     (prescription.lensType ||
@@ -17,6 +17,7 @@ const OrderSummary = ({ customer, cart, prescription, subtotal, discount, finalA
       prescription.prescriptionDate ||
       prescription.rightEye?.sph ||
       prescription.leftEye?.sph);
+
 
   return (
     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden font-sans">
@@ -251,6 +252,13 @@ const OrderSummary = ({ customer, cart, prescription, subtotal, discount, finalA
             <span>- ₹{discount.toLocaleString('en-IN')}</span>
           </div>
         )}
+        {deadstockDeduction > 0 && (
+          <div className="flex items-center justify-between text-xs font-semibold text-amber-600">
+            <span>Deadstock Deduction</span>
+            <span>- ₹{deadstockDeduction.toLocaleString('en-IN')}</span>
+          </div>
+        )}
+
         <div className="pt-2 border-t border-slate-200 flex items-center justify-between">
           <span className="text-sm font-bold text-slate-800">Final Amount</span>
           <span className="text-lg font-black text-slate-900">₹{finalAmount.toLocaleString('en-IN')}</span>

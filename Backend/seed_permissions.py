@@ -147,7 +147,13 @@ PERMISSION_CATALOG = [
     ("labs", "read", "View labs", False),
     ("labs", "update", "Update labs", False),
     ("labs", "delete", "Delete labs", True),
+    # ── Deadstock ─────────────────────────────────────────────
+    ("deadstock", "create", "Create deadstock", False),
+    ("deadstock", "read", "View deadstock", False),
+    ("deadstock", "update", "Reuse / Update deadstock", False),
+    ("deadstock", "delete", "Delete deadstock", True),
 ]
+
 
 
 # ══════════════════════════════════════════════════════════════

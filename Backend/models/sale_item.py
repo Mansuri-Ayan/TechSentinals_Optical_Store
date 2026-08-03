@@ -64,6 +64,14 @@ class SaleItem(Base):
         index=True,
         comment="FK → inventories.id — inventory record decremented by this sale",
     )
+
+    deadstock_item_id = Column(
+        BigInteger,
+        ForeignKey("deadstock_items.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+        comment="FK → deadstock_items.id — deadstock item consumed by this sale",
+    )
     
     quantity = Column(
         Integer,
@@ -155,6 +163,12 @@ class SaleItem(Base):
         "Inventory",
         lazy="selectin",
     )
+    deadstock_item = relationship(
+        "DeadstockItem",
+        lazy="selectin",
+        foreign_keys="[SaleItem.deadstock_item_id]",
+    )
+
 
     @property
     def unit_skus(self) -> list[str]:

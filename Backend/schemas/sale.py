@@ -52,6 +52,8 @@ class SaleItemCreate(BaseModel):
     tax_percent: Decimal = Field(default=Decimal("0"), ge=0, decimal_places=2)
     notes: str | None = None
     unit_skus: List[str] | None = Field(default=None, description="Optional list of specific unit SKUs assigned")
+    deadstock_item_id: int | None = Field(default=None, description="FK → deadstock_items.id if item is from deadstock")
+
 
 
 class SaleItemReturnRequest(BaseModel):
@@ -79,7 +81,9 @@ class SaleItemRead(BaseModel):
     line_total: Decimal
     notes: str | None = None
     unit_skus: List[str] | None = None
+    deadstock_item_id: int | None = None
     created_at: datetime
+
     updated_at: datetime
 
     # Embedded snapshot — all frozen product data at time of sale
@@ -177,7 +181,9 @@ class SaleCreate(BaseModel):
     notes: str | None = None
     prescription_id: int | None = None
     discount_amount: Decimal = Field(default=Decimal("0"), ge=0, decimal_places=2)
+    deadstock_deduction: Decimal = Field(default=Decimal("0"), ge=0, decimal_places=2, description="Deduction applied for deadstock items")
     items: list[SaleItemCreate] = Field(
+
         ..., min_length=1, description="At least one item",
     )
     payments: list[SalePaymentCreate] = Field(

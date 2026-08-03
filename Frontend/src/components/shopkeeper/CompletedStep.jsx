@@ -51,9 +51,12 @@ const CompletedStep = ({ customer, cart, prescription, paymentInfo, savedCustome
   const totalAmount = cart.reduce((sum, item) => sum + item.product.selling_price * item.quantity, 0);
   const discount = paymentInfo?.discount || 0;
   const loyaltyDiscount = paymentInfo?.loyaltyDiscount || 0;
-  const finalAmount = Math.max(0, totalAmount - discount - loyaltyDiscount);
+  const deadstockDeduction = paymentInfo?.deadstockDeduction || 0;
+  const finalAmount = Math.max(0, totalAmount - discount - loyaltyDiscount - deadstockDeduction);
   const receivedAmount = Number(paymentInfo?.receivedAmount) || finalAmount;
   const remainingAmount = finalAmount - receivedAmount;
+
+
 
   const hasPrescription =
     prescription &&
@@ -317,6 +320,13 @@ const CompletedStep = ({ customer, cart, prescription, paymentInfo, savedCustome
                     <span className="font-mono">- ₹{loyaltyDiscount.toLocaleString('en-IN')}</span>
                   </div>
                 )}
+                {deadstockDeduction > 0 && (
+                  <div className="flex justify-between items-center text-xs text-amber-600 font-bold">
+                    <span>Deadstock Deduction</span>
+                    <span className="font-mono">- ₹{deadstockDeduction.toLocaleString('en-IN')}</span>
+                  </div>
+                )}
+
                 <div className="flex justify-between items-center text-xs text-slate-800 font-extrabold border-t border-slate-200/60 pt-2">
                   <span>Final Total</span>
                   <span className="text-sm font-black text-slate-950 font-mono">₹{finalAmount.toLocaleString('en-IN')}</span>

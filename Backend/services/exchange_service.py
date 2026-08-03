@@ -19,6 +19,8 @@ from services.bill_service import update_bill_for_sale
 from services.product_unit_service import restore_units_from_sale_item, assign_units_to_sale_item
 from models.inventory import OwnerType
 from schemas.exchange import ExchangeCreate
+from services.deadstock_service import create_deadstock_from_exchange, cancel_deadstock_for_exchange
+
 
 
 def _now() -> datetime:
@@ -412,8 +414,20 @@ async def create_exchange(
         )
         db.add(exchange)
         await db.flush()
+
+        # Create deadstock entry for returned item
+        await create_deadstock_from_exchange(
+            db=db,
+            exchange=exchange,
+            original_item=original_item,
+            exchange_qty=exchange_qty,
+            admin_id=admin_id,
+            store_id=payload.store_id,
+        )
+
         if idx == 0:
             first_exchange = exchange
+
 
     # Check if ALL items in original_sale are fully exchanged
     sale_fully_exchanged = True
@@ -636,7 +650,11 @@ async def cancel_exchange(
         if original_sale:
             original_sale.is_exchanged = False
 
+    # Clean up deadstock items associated with this exchange
+    await cancel_deadstock_for_exchange(db, exchange.id)
+
     exchange.status = ExchangeStatus.CANCELLED
     await db.commit()
     await db.refresh(exchange)
     return exchange
+
