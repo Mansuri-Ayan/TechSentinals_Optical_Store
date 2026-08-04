@@ -315,7 +315,7 @@ const LoyaltyCustomerSearch = ({ selectedCustomer, onSelectCustomer, onClear, al
                   <div className="grid grid-cols-2 gap-3">
                     <div className="col-span-2">
                       <label className="text-[10px] font-semibold text-slate-500">Phone <span className="text-red-500">*</span></label>
-                      <input type="text" required value={newPhone} onChange={(e) => setNewPhone(e.target.value)} className="w-full text-xs px-2.5 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 mt-1 transition-all" />
+                      <input type="text" maxLength={10} pattern="[0-9]{10}" required value={newPhone} onChange={(e) => setNewPhone(e.target.value.replace(/\D/g, ''))} className="w-full text-xs px-2.5 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 mt-1 transition-all" />
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-3">

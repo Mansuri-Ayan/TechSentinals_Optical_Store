@@ -184,7 +184,7 @@ const AddEditSupplierModal = ({ isOpen, supplier, onClose, onSubmit }) => {
                   </label>
                   <input
                     {...register('phone', {
-                      validate: (v) => !v || /^\d{10}$/.test(v) || 'Phone number must be exactly 10 digits'
+                      maxLength: { value: 10, message: 'Phone number cannot exceed 10 digits' }
                     })}
                     type="text"
                     placeholder="e.g. 9876543210"
@@ -201,7 +201,7 @@ const AddEditSupplierModal = ({ isOpen, supplier, onClose, onSubmit }) => {
                   </label>
                   <input
                     {...register('alternate_phone', {
-                      validate: (v) => !v || /^\d{10}$/.test(v) || 'Alternate phone must be exactly 10 digits'
+                      maxLength: { value: 10, message: 'Alternate phone cannot exceed 10 digits' }
                     })}
                     type="text"
                     placeholder="e.g. 9876543211"
@@ -255,10 +255,11 @@ const AddEditSupplierModal = ({ isOpen, supplier, onClose, onSubmit }) => {
                   </label>
                   <input
                     {...register('pincode', {
-                      validate: (v) => !v || /^\d{6}$/.test(v) || 'Enter a valid 6-digit pincode'
+                      maxLength: { value: 6, message: 'Pincode cannot exceed 6 characters' }
                     })}
                     type="text"
                     placeholder="e.g. 400001"
+                    maxLength={6}
                     className={inputCls('pincode')}
                   />
                   {errors.pincode && <p className="text-xs text-red-500 mt-1">{errors.pincode.message}</p>}
@@ -279,10 +280,11 @@ const AddEditSupplierModal = ({ isOpen, supplier, onClose, onSubmit }) => {
                   </label>
                   <input
                     {...register('gst_number', {
-                      validate: (v) => !v || /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/i.test(v) || 'Enter a valid GSTIN format (e.g. 27AAAAA1111A1Z1)'
+                      maxLength: { value: 15, message: 'GSTIN cannot exceed 15 characters' }
                     })}
                     type="text"
                     placeholder="e.g. 27AAAAA1111A1Z1"
+                    maxLength={15}
                     className={inputCls('gst_number')}
                   />
                   {errors.gst_number && <p className="text-xs text-red-500 mt-1">{errors.gst_number.message}</p>}
@@ -295,10 +297,11 @@ const AddEditSupplierModal = ({ isOpen, supplier, onClose, onSubmit }) => {
                   </label>
                   <input
                     {...register('pan_number', {
-                      validate: (v) => !v || /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/i.test(v) || 'Enter a valid PAN format (e.g. ABCDE1234F)'
+                      maxLength: { value: 10, message: 'PAN cannot exceed 10 characters' }
                     })}
                     type="text"
                     placeholder="e.g. ABCDE1234F"
+                    maxLength={10}
                     className={inputCls('pan_number')}
                   />
                   {errors.pan_number && <p className="text-xs text-red-500 mt-1">{errors.pan_number.message}</p>}
@@ -314,6 +317,7 @@ const AddEditSupplierModal = ({ isOpen, supplier, onClose, onSubmit }) => {
                       validate: (v) => !v || Number(v) >= 0 || 'Credit days must be non-negative'
                     })}
                     type="number"
+                    min={0}
                     placeholder="e.g. 30"
                     className={inputCls('credit_days')}
                   />
@@ -348,9 +352,12 @@ const AddEditSupplierModal = ({ isOpen, supplier, onClose, onSubmit }) => {
                     Account Number
                   </label>
                   <input
-                    {...register('bank_account_number')}
+                    {...register('bank_account_number', {
+                      maxLength: { value: 20, message: 'Account number cannot exceed 20 characters' }
+                    })}
                     type="text"
                     placeholder="e.g. 501001234567"
+                    maxLength={20}
                     className={inputCls('bank_account_number')}
                   />
                   {errors.bank_account_number && <p className="text-xs text-red-500 mt-1">{errors.bank_account_number.message}</p>}
@@ -363,10 +370,11 @@ const AddEditSupplierModal = ({ isOpen, supplier, onClose, onSubmit }) => {
                   </label>
                   <input
                     {...register('bank_ifsc', {
-                      validate: (v) => !v || /^[A-Z]{4}0[A-Z0-9]{6}$/i.test(v) || 'Enter a valid IFSC code (e.g. HDFC0000123)'
+                      maxLength: { value: 11, message: 'IFSC code cannot exceed 11 characters' }
                     })}
                     type="text"
                     placeholder="e.g. HDFC0000123"
+                    maxLength={11}
                     className={inputCls('bank_ifsc')}
                   />
                   {errors.bank_ifsc && <p className="text-xs text-red-500 mt-1">{errors.bank_ifsc.message}</p>}

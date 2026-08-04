@@ -13,6 +13,7 @@ from models.store import Store
 from models.manager import Manager
 from models.worker import Worker
 from models.optician import Optician
+from models.product_unit import ProductUnit, UnitStatus
 from schemas.repair import RepairCreate, RepairUpdate, RepairStatusUpdate
 
 
@@ -53,12 +54,24 @@ def _build_repair_read_dict(repair: Repair) -> dict:
 
     store_name = repair.store.store_name if repair.store else None
     sale_invoice_number = repair.sale.invoice_number if repair.sale else None
+    unit_sku = repair.product_unit.unit_sku if repair.product_unit else None
 
     return {
         "customer_full_name": customer_full_name,
         "store_name": store_name,
         "sale_invoice_number": sale_invoice_number,
+        "unit_sku": unit_sku,
     }
+
+
+async def _restore_unit_status(db: AsyncSession, product_unit_id: int):
+    """Restore a unit's status to normal when it leaves the repair lifecycle."""
+    if not product_unit_id:
+        return
+    unit = await db.get(ProductUnit, product_unit_id)
+    if unit:
+        unit.repair_id = None
+        unit.status = UnitStatus.SOLD if unit.sale_item_id else UnitStatus.AVAILABLE
 
 
 async def create_repair(
@@ -68,6 +81,16 @@ async def create_repair(
 ) -> Repair:
     """Create a new repair/service record."""
     repair_number = await _generate_repair_number(db)
+
+    product_unit_id = payload.product_unit_id
+    if payload.unit_sku:
+        sku_clean = "".join(c for c in payload.unit_sku if c.isalnum()).upper()
+        stmt = select(ProductUnit).where(ProductUnit.unit_sku == sku_clean)
+        res = await db.execute(stmt)
+        unit = res.scalar_one_or_none()
+        if not unit:
+            raise ValueError(f"Product unit with SKU '{payload.unit_sku}' not found.")
+        product_unit_id = unit.id
 
     repair = Repair(
         repair_number=repair_number,
@@ -87,8 +110,17 @@ async def create_repair(
         handled_by_type=payload.handled_by_type,
         handled_by_id=payload.handled_by_id,
         notes=payload.notes,
+        product_unit_id=product_unit_id,
     )
     db.add(repair)
+    await db.flush()
+
+    if product_unit_id:
+        unit = await db.get(ProductUnit, product_unit_id)
+        if unit:
+            unit.status = UnitStatus.IN_REPAIR
+            unit.repair_id = repair.id
+
     await db.commit()
     await db.refresh(repair)
     return repair
@@ -172,8 +204,37 @@ async def update_repair(
         update_data.setdefault("estimated_cost", Decimal("0.00"))
         update_data.setdefault("final_cost", Decimal("0.00"))
 
+    # Track unit ID updates
+    old_unit_id = repair.product_unit_id
+    new_unit_id = payload.product_unit_id if payload.product_unit_id is not None else old_unit_id
+
+    if payload.unit_sku is not None:
+        if payload.unit_sku == "":
+            new_unit_id = None
+        else:
+            sku_clean = "".join(c for c in payload.unit_sku if c.isalnum()).upper()
+            stmt = select(ProductUnit).where(ProductUnit.unit_sku == sku_clean)
+            res = await db.execute(stmt)
+            unit = res.scalar_one_or_none()
+            if not unit:
+                raise ValueError(f"Product unit with SKU '{payload.unit_sku}' not found.")
+            new_unit_id = unit.id
+
     for field, value in update_data.items():
-        setattr(repair, field, value)
+        if field != "unit_sku":
+            setattr(repair, field, value)
+
+    if payload.unit_sku is not None or payload.product_unit_id is not None:
+        repair.product_unit_id = new_unit_id
+
+    if old_unit_id != new_unit_id:
+        if old_unit_id:
+            await _restore_unit_status(db, old_unit_id)
+        if new_unit_id and repair.status in ["RECEIVED", "IN_PROGRESS"]:
+            unit = await db.get(ProductUnit, new_unit_id)
+            if unit:
+                unit.status = UnitStatus.IN_REPAIR
+                unit.repair_id = repair.id
 
     await db.commit()
     await db.refresh(repair)
@@ -187,9 +248,21 @@ async def update_repair_status(
 ) -> Repair:
     """Update only the status field of a repair."""
     from datetime import date as date_type
-    repair.status = payload.status
-    if payload.status == "COMPLETED" and not repair.completed_date:
+    old_status = repair.status
+    new_status = payload.status
+
+    repair.status = new_status
+    if new_status == "COMPLETED" and not repair.completed_date:
         repair.completed_date = date_type.today()
+
+    if new_status in ["COMPLETED", "DELIVERED", "CANCELLED"] and repair.product_unit_id:
+        await _restore_unit_status(db, repair.product_unit_id)
+    elif new_status in ["RECEIVED", "IN_PROGRESS"] and repair.product_unit_id:
+        unit = await db.get(ProductUnit, repair.product_unit_id)
+        if unit:
+            unit.status = UnitStatus.IN_REPAIR
+            unit.repair_id = repair.id
+
     await db.commit()
     await db.refresh(repair)
     return repair
@@ -201,6 +274,8 @@ async def delete_repair(
 ) -> Repair:
     """Cancel a repair by setting status to CANCELLED."""
     repair.status = RepairStatus.CANCELLED
+    if repair.product_unit_id:
+        await _restore_unit_status(db, repair.product_unit_id)
     await db.commit()
     await db.refresh(repair)
     return repair

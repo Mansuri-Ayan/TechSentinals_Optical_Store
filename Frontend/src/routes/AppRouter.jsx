@@ -31,6 +31,7 @@ import BillTemplate from "../pages/admin/BillTemplate";
 import Permissions from "../pages/admin/Permissions";
 import PermissionRoute from "../components/shared/PermissionRoute";
 import Exchanges from "../pages/admin/Exchanges";
+import ManageUnits from "../pages/admin/ManageUnits";
 
 import ShopKeeperLayout from "../layouts/ShopKeeperLayout";
 import ShopkeeperDashboard from "../pages/shopkeeper/Dashboard";
@@ -274,6 +275,7 @@ function AppRouter() {
         <Route path="store/:storeId/staff/:staffId" element={<StaffDetail />} />
         <Route path="inventory" element={<InventoryRouteRedirect />} />
         <Route path="store/:storeId/inventory" element={<Inventory />} />
+        <Route path="store/:storeId/inventory/manage/:productId" element={<ManageUnits />} />
         <Route path="brands" element={<BrandsRouteRedirect />} />
         <Route path="store/:storeId/brands" element={<Brands />} />
         <Route path="categories" element={<CategoriesRouteRedirect />} />
@@ -356,6 +358,7 @@ function AppRouter() {
         <Route path="customers" element={<PermissionRoute permission="customers:read"><AdminCustomers /></PermissionRoute>} />
         <Route path="customers/:customerId" element={<PermissionRoute permission="customers:read"><AdminCustomerDetail /></PermissionRoute>} />
         <Route path="inventory" element={<PermissionRoute permission="inventory:read"><Inventory /></PermissionRoute>} />
+        <Route path="inventory/manage/:productId" element={<PermissionRoute permission="inventory:read"><ManageUnits /></PermissionRoute>} />
         <Route path="sales" element={<PermissionRoute permission="sales:read"><Sales /></PermissionRoute>} />
         <Route path="exchanges" element={<PermissionRoute permission="exchanges:read"><Exchanges /></PermissionRoute>} />
         <Route path="deadstock" element={<PermissionRoute permission="deadstock:read"><Deadstock /></PermissionRoute>} />

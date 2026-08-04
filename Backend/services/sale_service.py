@@ -744,11 +744,12 @@ async def update_sale(
         if sale.due_amount <= 0:
             sale.status = SaleStatus.COMPLETED
 
+    await db.flush()
+    from services.bill_service import update_bill_for_sale
+    await update_bill_for_sale(db, sale.id, commit=False)
+    await check_and_update_sales_loss(db, sale.id, commit=False)
     await db.commit()
     await db.refresh(sale)
-    from services.bill_service import update_bill_for_sale
-    await update_bill_for_sale(db, sale.id)
-    await check_and_update_sales_loss(db, sale.id)
     return sale
 
 
@@ -894,11 +895,12 @@ async def cancel_sale(
             ))
 
     sale.status = SaleStatus.CANCELLED
+    await db.flush()
+    from services.bill_service import update_bill_for_sale
+    await update_bill_for_sale(db, sale.id, commit=False)
+    await check_and_update_sales_loss(db, sale.id, commit=False)
     await db.commit()
     await db.refresh(sale)
-    from services.bill_service import update_bill_for_sale
-    await update_bill_for_sale(db, sale.id)
-    await check_and_update_sales_loss(db, sale.id)
     return sale
 
 
@@ -1061,17 +1063,18 @@ async def add_sale_payment(
     if payload.payment_method == SalePaymentMethod.LOYALTY_POINTS:
         sale.loyalty_points_redeemed += int(payload.amount)
 
+    await db.flush()
+    from services.bill_service import update_bill_for_sale
+    await update_bill_for_sale(db, sale.id, commit=False)
+    await check_and_update_sales_loss(db, sale.id, commit=False)
     await db.commit()
     await db.refresh(payment)
-    from services.bill_service import update_bill_for_sale
-    await update_bill_for_sale(db, sale.id)
-    await check_and_update_sales_loss(db, sale.id)
     return payment
 
 
 # ── check_and_update_sales_loss ──────────────────────────────────────
 
-async def check_and_update_sales_loss(db: AsyncSession, sale_id: int):
+async def check_and_update_sales_loss(db: AsyncSession, sale_id: int, commit: bool = True):
     from models.sale import Sale, SaleStatus
     from models.sale_item import SaleItem
     from models.product import Product
@@ -1153,7 +1156,10 @@ async def check_and_update_sales_loss(db: AsyncSession, sale_id: int):
     if total_loss <= 0:
         if existing_expense:
             await db.delete(existing_expense)
-            await db.commit()
+            if commit:
+                await db.commit()
+            else:
+                await db.flush()
         return
 
     # Resolve "Sales Loss" category
@@ -1206,7 +1212,10 @@ async def check_and_update_sales_loss(db: AsyncSession, sale_id: int):
         )
         db.add(new_expense)
 
-    await db.commit()
+    if commit:
+        await db.commit()
+    else:
+        await db.flush()
 
 
 # ── Partial Return ─────────────────────────────────────────────
@@ -1346,11 +1355,10 @@ async def process_partial_return(
     if sale.total_amount <= 0:
         sale.status = SaleStatus.REFUNDED
         
+    await db.flush()
+    from services.bill_service import update_bill_for_sale
+    await update_bill_for_sale(db, sale.id, commit=False)
+    await check_and_update_sales_loss(db, sale.id, commit=False)
     await db.commit()
     await db.refresh(sale)
-    
-    from services.bill_service import update_bill_for_sale
-    await update_bill_for_sale(db, sale.id)
-    await check_and_update_sales_loss(db, sale.id)
-
     return sale

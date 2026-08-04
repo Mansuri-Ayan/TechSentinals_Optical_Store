@@ -8,7 +8,7 @@ from sqlalchemy import (
     Enum,
     func,
 )
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, validates
 from db.session import Base
 from models.inventory import OwnerType
 
@@ -19,6 +19,8 @@ class UnitStatus(str, enum.Enum):
     IN_REPAIR = "IN_REPAIR"
     LOST = "LOST"
     RESERVED = "RESERVED"
+    DEADSTOCK = "DEADSTOCK"
+    EXCHANGED = "EXCHANGED"
 
 class UnitSourceType(str, enum.Enum):
     PURCHASE_ORDER = "PURCHASE_ORDER"
@@ -64,6 +66,14 @@ class ProductUnit(Base):
         nullable=False,
         index=True,
         comment="FK → inventories.id — links unit to its cost batch",
+    )
+
+    original_batch_id = Column(
+        BigInteger,
+        ForeignKey("inventories.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+        comment="FK → inventories.id — links unit to its original batch before transfer",
     )
 
     status = Column(
@@ -141,6 +151,12 @@ class ProductUnit(Base):
     # ── Relationships ──────────────────────────────────────────────────────────
 
     product = relationship("Product", backref="product_units")
-    inventory_batch = relationship("Inventory", backref="product_units")
+    inventory_batch = relationship("Inventory", backref="product_units", foreign_keys="[ProductUnit.inventory_batch_id]")
     sale_item = relationship("SaleItem", backref="assigned_units")
     repair = relationship("Repair", backref="repaired_units", foreign_keys="[ProductUnit.repair_id]")
+
+    @validates("unit_sku")
+    def validate_unit_sku(self, key, value):
+        if value:
+            return "".join(c for c in value if c.isalnum()).upper()
+        return value

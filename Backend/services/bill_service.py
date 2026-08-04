@@ -564,7 +564,7 @@ async def generate_exchange_bill_html(exchange, db: AsyncSession) -> str:
     return html
 
 
-async def update_bill_for_sale(db: AsyncSession, sale_id: int) -> Bill:
+async def update_bill_for_sale(db: AsyncSession, sale_id: int, commit: bool = True) -> Bill:
     stmt = (
         select(Sale)
         .options(
@@ -599,6 +599,9 @@ async def update_bill_for_sale(db: AsyncSession, sale_id: int) -> Bill:
         )
         db.add(bill)
         
-    await db.commit()
-    await db.refresh(bill)
+    if commit:
+        await db.commit()
+        await db.refresh(bill)
+    else:
+        await db.flush()
     return bill

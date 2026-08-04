@@ -34,7 +34,13 @@ async def create_repair_endpoint(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Either customer_id (registered) or customer_name (walk-in) must be provided.",
         )
-    repair = await create_repair(db, admin_id=admin_id, payload=payload)
+    try:
+        repair = await create_repair(db, admin_id=admin_id, payload=payload)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
     extra = _build_repair_read_dict(repair)
     return RepairRead(
         **{c.key: getattr(repair, c.key) for c in repair.__table__.columns},

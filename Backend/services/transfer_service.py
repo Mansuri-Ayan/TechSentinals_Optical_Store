@@ -1548,13 +1548,27 @@ async def record_stock_action(
         db.add(txn)
         await db.flush()
 
-        from services.product_unit_service import mark_units_damaged, mark_units_lost
+        from services.product_unit_service import mark_units_damaged, mark_units_lost, mark_units_sold, create_units_for_batch
+        from models.product_unit import UnitSourceType
         
         owner_type_enum = OwnerType(owner_type) if isinstance(owner_type, str) else owner_type
         if action == TransactionType.DAMAGE:
             await mark_units_damaged(db, product_id, owner_type_enum, owner_id, quantity)
         elif action == TransactionType.LOSS:
             await mark_units_lost(db, product_id, owner_type_enum, owner_id, quantity)
+        elif action == TransactionType.SALE:
+            await mark_units_sold(db, product_id, owner_type_enum, owner_id, quantity)
+        elif action == TransactionType.RETURN:
+            await create_units_for_batch(
+                db=db,
+                product_id=product_id,
+                product_sku=prod.sku if prod else "SKU",
+                inventory_batch_id=inv_id,
+                count=quantity,
+                owner_type=owner_type_enum,
+                owner_id=owner_id,
+                source_type=UnitSourceType.RETURN,
+            )
 
     await db.commit()
     await db.refresh(txn)

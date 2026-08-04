@@ -20,6 +20,8 @@ class RepairCreate(BaseModel):
     handled_by_type: str | None = Field(default=None, description="Staff type: MANAGER/WORKER/OPTICIAN")
     handled_by_id: int | None = Field(default=None, description="Staff member ID")
     notes: str | None = Field(default=None, description="Internal notes")
+    product_unit_id: int | None = Field(default=None, description="FK -> product_units.id")
+    unit_sku: str | None = Field(default=None, description="SKU of the physical unit being repaired")
 
 
 # ── Repair Update ───────────────────────────────────────────────
@@ -36,6 +38,8 @@ class RepairUpdate(BaseModel):
     handled_by_type: str | None = Field(default=None)
     handled_by_id: int | None = Field(default=None)
     notes: str | None = Field(default=None)
+    product_unit_id: int | None = Field(default=None)
+    unit_sku: str | None = Field(default=None)
 
 
 # ── Repair Status Update ─────────────────────────────────────────
@@ -67,6 +71,8 @@ class RepairRead(BaseModel):
     notes: str | None = None
     created_at: datetime
     updated_at: datetime
+    product_unit_id: int | None = None
+    unit_sku: str | None = None
 
     # Denormalized fields
     customer_full_name: str | None = None
@@ -97,6 +103,8 @@ class RepairListItem(BaseModel):
     notes: str | None = None
     description: str | None = None
     created_at: datetime
+    product_unit_id: int | None = None
+    unit_sku: str | None = None
 
     model_config = {"from_attributes": True}
 

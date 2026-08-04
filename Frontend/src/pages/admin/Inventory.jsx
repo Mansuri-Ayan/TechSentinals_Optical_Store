@@ -1,7 +1,7 @@
 /** @format */
 
 import { useState, useMemo, useEffect, useRef } from "react";
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { Link, useParams, useSearchParams, useNavigate } from "react-router-dom";
 
 import { toast } from "react-toastify";
 import {
@@ -161,7 +161,7 @@ const StatusBadge = ({ status }) => {
 /* ─────────────────────────────────────────────────────────
    PRODUCT CARD
    ───────────────────────────────────────────────────────── */
-const ProductCard = ({ item, onViewDetails, onDelete, onEdit, onRequestStock, onRestockSupplier, onAddStock }) => {
+const ProductCard = ({ item, onViewDetails, onDelete, onEdit, onRequestStock, onRestockSupplier, onAddStock, onManage }) => {
   const { stores } = useStoreStore();
   const actualStoresCount = stores.filter(s => s.store_name !== 'All Store' && s.name !== 'All Store').length;
 
@@ -213,6 +213,13 @@ const ProductCard = ({ item, onViewDetails, onDelete, onEdit, onRequestStock, on
             className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1.5"
             onClick={(e) => e.stopPropagation()}
           >
+            <button
+              onClick={() => onManage(item)}
+              className="w-7 h-7 bg-violet-50 border border-violet-200 rounded-lg flex items-center justify-center text-violet-600 hover:bg-violet-100 transition-colors"
+              title="Manage serialized units"
+            >
+              <Layers className="w-3.5 h-3.5" />
+            </button>
             {(!perms || perms.canUpdate) && (
               <button
                 onClick={() => onAddStock(item)}
@@ -483,6 +490,7 @@ const SearchSuggestions = ({ items, searchTerm, onSelectProduct }) => {
    MAIN PAGE
    ───────────────────────────────────────────────────────── */
 const Inventory = () => {
+  const navigate = useNavigate();
   const { storeId, buildPath, showStoreSwitcher, isPathAdmin } = useRoleContext();
   const { user } = useAuthStore();
   const { stores, selectedStore, setSelectedStore } = useStoreStore();
@@ -498,6 +506,12 @@ const Inventory = () => {
     canUpdate: 'inventory:update',
     canDelete: 'inventory:delete'
   });
+
+  const handleManageUnits = (product) => {
+    const productId = product.product_id || product.id;
+    const path = buildPath(`inventory/manage/${productId}`);
+    navigate(path);
+  };
 
   /* Filters & Pagination states */
   const [inPageStoreId, setInPageStoreId] = useState(storeId);
@@ -1405,6 +1419,7 @@ const Inventory = () => {
                     setPreselectedProduct(product);
                     setShowAddModal(true);
                   }}
+                  onManage={handleManageUnits}
                 />
               ))}
             </div>

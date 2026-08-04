@@ -287,9 +287,6 @@ async def create_exchange(
             db.add(exc_in_txn)
             await db.flush()
 
-            # Restore original units
-            await restore_units_from_sale_item(db=db, sale_item_id=original_item.id)
-
     # ── 5. Create new Sale for replacement items ──
     new_invoice = await _generate_invoice_number(db, admin_id)
     

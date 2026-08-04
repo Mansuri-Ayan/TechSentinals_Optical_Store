@@ -140,6 +140,14 @@ class DeadstockItem(Base):
         comment="FK → sales.id — sale ID if sold via POS deadstock checkout",
     )
 
+    product_unit_id = Column(
+        BigInteger,
+        ForeignKey("product_units.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+        comment="FK → product_units.id — product unit associated with this deadstock item",
+    )
+
     notes = Column(
         Text,
         nullable=True,
@@ -167,6 +175,7 @@ class DeadstockItem(Base):
     store = relationship("Store", lazy="selectin")
     original_sale_item = relationship("SaleItem", foreign_keys=[original_sale_item_id], lazy="selectin")
     sold_in_sale = relationship("Sale", foreign_keys=[sold_in_sale_id], lazy="selectin")
+    product_unit = relationship("ProductUnit", lazy="selectin")
 
     def __repr__(self) -> str:
         return (

@@ -5,7 +5,7 @@ import {
   Store, CheckCircle, AlertTriangle, XCircle, Image as ImageIcon, Sliders,
   User, Users, CreditCard, UserCheck, Calendar, IndianRupee, ShoppingCart,
   Receipt, FileText, RefreshCw, Shield, ThumbsUp, ThumbsDown,
-  Briefcase, Clock, Phone, Mail, Pencil, Printer, Share2, Eye, Sparkles, Beaker, Search, ChevronRight
+  Briefcase, Clock, Phone, Mail, Pencil, Printer, Share2, Eye, Sparkles, Beaker, Search, ChevronRight, ChevronDown, List
 } from 'lucide-react';
 import { useCustomer } from '../../hooks/useCustomers';
 import { useBillSettings } from '../../hooks/useBillSettings';
@@ -180,6 +180,14 @@ const InventoryDetailDrawer = ({ item, onClose, onEdit, onRestockSupplier, onApp
 
   const [batches, setBatches] = useState([]);
   const [loadingBatches, setLoadingBatches] = useState(false);
+  const [expandedSkus, setExpandedSkus] = useState({});
+
+  const toggleSkuExpand = (key) => {
+    setExpandedSkus(prev => ({
+      ...prev,
+      [key]: !prev[key]
+    }));
+  };
 
   useEffect(() => {
     if (item) {
@@ -190,7 +198,7 @@ const InventoryDetailDrawer = ({ item, onClose, onEdit, onRestockSupplier, onApp
       setLabSearchTerm('');
 
       // Fetch batches if it's an inventory record
-      if (item.product_name && item.id && item.type !== 'staff' && item.type !== 'expenses' && item.type !== 'sales') {
+      if (item.product_name && item.id && !item.type) {
         setLoadingBatches(true);
         const params = {};
         if (item.product_id) params.product_id = item.product_id;
@@ -556,18 +564,18 @@ const InventoryDetailDrawer = ({ item, onClose, onEdit, onRestockSupplier, onApp
 
               {/* Purchased Items Section */}
               <Section icon={ShoppingCart} title="Purchased Items" color="blue">
-                <div className="max-h-60 overflow-y-auto overflow-x-auto pr-1">
-                  <table className="w-full text-left border-collapse text-xs">
+                <div className="max-h-68 overflow-y-auto overflow-x-auto pr-1">
+                  <table className="min-w-[750px] w-full text-left border-collapse text-xs">
                     <thead>
                       <tr className="border-b border-slate-100 text-slate-400 font-bold uppercase tracking-wider text-[10px]">
-                        <th className="py-2 pr-4 font-semibold">Product Name</th>
-                        <th className="py-2 px-2 font-semibold">Category</th>
-                        <th className="py-2 px-2 font-semibold text-center">Qty</th>
-                        <th className="py-2 px-2 font-semibold text-right">Cost</th>
-                        <th className="py-2 px-2 font-semibold text-right">Price</th>
-                        <th className="py-2 px-2 font-semibold text-right">Discount</th>
-                        <th className="py-2 px-2 font-semibold text-right">Final</th>
-                        <th className="py-2 pl-4 font-semibold text-right">Total</th>
+                        <th className="py-2 pr-4 font-semibold w-[35%]">Product Name</th>
+                        <th className="py-2 px-2 font-semibold w-[15%]">Category</th>
+                        <th className="py-2 px-2 font-semibold text-center w-[8%]">Qty</th>
+                        <th className="py-2 px-2 font-semibold text-right w-[10%]">Cost</th>
+                        <th className="py-2 px-2 font-semibold text-right w-[10%]">Price</th>
+                        <th className="py-2 px-2 font-semibold text-right w-[10%]">Discount</th>
+                        <th className="py-2 px-2 font-semibold text-right w-[10%]">Final</th>
+                        <th className="py-2 pl-4 font-semibold text-right w-[12%]">Total</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50 font-medium text-slate-700">
@@ -579,30 +587,48 @@ const InventoryDetailDrawer = ({ item, onClose, onEdit, onRestockSupplier, onApp
                         const finalUnitPrice = Number(subItem.unit_price) - unitDiscount;
 
                         return (
-                          <tr key={subItem.id || idx} className="hover:bg-slate-50/50 transition-colors">
-                            <td className="py-2.5 pr-4 font-semibold text-slate-900">
+                          <tr key={subItem.id || idx} className="hover:bg-slate-50/50 transition-colors align-top">
+                            <td className="py-3 pr-4 font-semibold text-slate-900">
                               <div>{subItem.product_name || 'Optical Item'}</div>
-                              <div className="text-[10px] text-slate-450 mt-0.5">
+                              <div className="text-[10px] text-slate-450 mt-0.5 font-medium">
                                 Brand: {subItem.product_brand || '—'} &middot; Catalog SKU: {subItem.product_sku || '—'}
                               </div>
-                              {subItem.unit_skus && subItem.unit_skus.length > 0 && (
-                                <div className="mt-1">
-                                  <span className="inline-flex items-center text-[10px] font-mono text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-md font-bold">
-                                    Unit SKU{subItem.unit_skus.length > 1 ? 's' : ''}: {subItem.unit_skus.join(', ')}
-                                  </span>
-                                </div>
-                              )}
+                              {subItem.unit_skus && subItem.unit_skus.length > 0 && (() => {
+                                const rowKey = `lab-${subItem.id || idx}`;
+                                const isExpanded = !!expandedSkus[rowKey];
+                                return (
+                                  <div className="mt-1.5">
+                                    <button
+                                      onClick={() => toggleSkuExpand(rowKey)}
+                                      className="inline-flex items-center gap-1.5 px-2 py-1 text-[9px] font-bold text-indigo-750 bg-indigo-50 border border-indigo-150 hover:bg-indigo-100/70 active:bg-indigo-150 rounded transition-all cursor-pointer shadow-sm select-none"
+                                    >
+                                      <List className="w-2.5 h-2.5" />
+                                      <span>{subItem.unit_skus.length} Unit SKUs</span>
+                                      <ChevronDown className={`w-2.5 h-2.5 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
+                                    </button>
+                                    {isExpanded && (
+                                      <div className="mt-1.5 flex flex-wrap gap-1 max-w-[280px] bg-slate-50 border border-slate-200/60 p-1.5 rounded-lg animate-fade-in">
+                                        {subItem.unit_skus.map((sku) => (
+                                          <span key={sku} className="inline-flex items-center text-[9px] font-mono font-bold text-indigo-700 bg-white border border-indigo-100 px-1.5 py-0.5 rounded shadow-sm">
+                                            {sku}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })()}
                             </td>
-                            <td className="py-2.5 px-2 text-slate-550">
+                            <td className="py-3 px-2 text-slate-550">
                               <div>{subItem.product_category || '—'}</div>
                               <div className="text-[10px] text-slate-450 mt-0.5">{subItem.product_subcategory || '—'}</div>
                             </td>
-                            <td className="py-2.5 px-2 text-center text-slate-900 font-bold">{subItem.quantity}</td>
-                            <td className="py-2.5 px-2 text-right">{fmtPrice(subItem.unit_cost)}</td>
-                            <td className="py-2.5 px-2 text-right">{fmtPrice(subItem.unit_price)}</td>
-                            <td className="py-2.5 px-2 text-right text-red-500 font-bold">{discountStr}</td>
-                            <td className="py-2.5 px-2 text-right font-bold text-slate-900">{fmtPrice(finalUnitPrice)}</td>
-                            <td className="py-2.5 pl-4 text-right font-black text-slate-950">{fmtPrice(subItem.line_total)}</td>
+                            <td className="py-3 px-2 text-center text-slate-900 font-bold">{subItem.quantity}</td>
+                            <td className="py-3 px-2 text-right text-slate-600">{fmtPrice(subItem.unit_cost)}</td>
+                            <td className="py-3 px-2 text-right text-slate-650">{fmtPrice(subItem.unit_price)}</td>
+                            <td className="py-3 px-2 text-right text-red-500 font-bold">{discountStr}</td>
+                            <td className="py-3 px-2 text-right font-bold text-slate-900">{fmtPrice(finalUnitPrice)}</td>
+                            <td className="py-3 pl-4 text-right font-black text-slate-950">{fmtPrice(subItem.line_total)}</td>
                           </tr>
                         );
                       })}
@@ -1188,18 +1214,18 @@ const InventoryDetailDrawer = ({ item, onClose, onEdit, onRestockSupplier, onApp
                 </Section>
                 {/* Purchased Items Section */}
                 <Section icon={ShoppingCart} title="Purchased Items" color="blue">
-                  <div className="max-h-60 overflow-y-auto overflow-x-auto pr-1">
-                    <table className="w-full text-left border-collapse text-xs">
+                  <div className="max-h-68 overflow-y-auto overflow-x-auto pr-1">
+                    <table className="min-w-[750px] w-full text-left border-collapse text-xs">
                       <thead>
                         <tr className="border-b border-slate-100 text-slate-400 font-bold uppercase tracking-wider text-[10px]">
-                          <th className="py-2 pr-4 font-semibold">Product Name</th>
-                          <th className="py-2 px-2 font-semibold">Category</th>
-                          <th className="py-2 px-2 font-semibold text-center">Qty</th>
-                          <th className="py-2 px-2 font-semibold text-right">Cost</th>
-                          <th className="py-2 px-2 font-semibold text-right">Price</th>
-                          <th className="py-2 px-2 font-semibold text-right">Discount</th>
-                          <th className="py-2 px-2 font-semibold text-right">Final</th>
-                          <th className="py-2 pl-4 font-semibold text-right">Total</th>
+                          <th className="py-2 pr-4 font-semibold w-[35%]">Product Name</th>
+                          <th className="py-2 px-2 font-semibold w-[15%]">Category</th>
+                          <th className="py-2 px-2 font-semibold text-center w-[8%]">Qty</th>
+                          <th className="py-2 px-2 font-semibold text-right w-[10%]">Cost</th>
+                          <th className="py-2 px-2 font-semibold text-right w-[10%]">Price</th>
+                          <th className="py-2 px-2 font-semibold text-right w-[10%]">Discount</th>
+                          <th className="py-2 px-2 font-semibold text-right w-[10%]">Final</th>
+                          <th className="py-2 pl-4 font-semibold text-right w-[12%]">Total</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-50 font-medium text-slate-700">
@@ -1211,30 +1237,48 @@ const InventoryDetailDrawer = ({ item, onClose, onEdit, onRestockSupplier, onApp
                           const finalUnitPrice = Number(subItem.unit_price) - unitDiscount;
 
                           return (
-                            <tr key={subItem.id || idx} className="hover:bg-slate-50/50 transition-colors">
-                              <td className="py-2.5 pr-4 font-semibold text-slate-900">
+                            <tr key={subItem.id || idx} className="hover:bg-slate-50/50 transition-colors align-top">
+                              <td className="py-3 pr-4 font-semibold text-slate-900">
                                 <div>{subItem.product_name || 'Optical Item'}</div>
-                                <div className="text-[10px] text-slate-450 mt-0.5">
+                                <div className="text-[10px] text-slate-455 mt-0.5 font-medium">
                                   Brand: {subItem.product_brand || '—'} &middot; Catalog SKU: {subItem.product_sku || '—'}
                                 </div>
-                                {subItem.unit_skus && subItem.unit_skus.length > 0 && (
-                                  <div className="mt-1">
-                                    <span className="inline-flex items-center text-[10px] font-mono text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-md font-bold">
-                                      Unit SKU{subItem.unit_skus.length > 1 ? 's' : ''}: {subItem.unit_skus.join(', ')}
-                                    </span>
-                                  </div>
-                                )}
+                                {subItem.unit_skus && subItem.unit_skus.length > 0 && (() => {
+                                  const rowKey = `sale-${subItem.id || idx}`;
+                                  const isExpanded = !!expandedSkus[rowKey];
+                                  return (
+                                    <div className="mt-1.5">
+                                      <button
+                                        onClick={() => toggleSkuExpand(rowKey)}
+                                        className="inline-flex items-center gap-1.5 px-2 py-1 text-[9px] font-bold text-indigo-750 bg-indigo-50 border border-indigo-150 hover:bg-indigo-100/70 active:bg-indigo-150 rounded transition-all cursor-pointer shadow-sm select-none"
+                                      >
+                                        <List className="w-2.5 h-2.5" />
+                                        <span>{subItem.unit_skus.length} Unit SKUs</span>
+                                        <ChevronDown className={`w-2.5 h-2.5 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
+                                      </button>
+                                      {isExpanded && (
+                                        <div className="mt-1.5 flex flex-wrap gap-1 max-w-[280px] bg-slate-50 border border-slate-200/60 p-1.5 rounded-lg animate-fade-in">
+                                          {subItem.unit_skus.map((sku) => (
+                                            <span key={sku} className="inline-flex items-center text-[9px] font-mono font-bold text-indigo-700 bg-white border border-indigo-100 px-1.5 py-0.5 rounded shadow-sm">
+                                              {sku}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })()}
                               </td>
-                              <td className="py-2.5 px-2 text-slate-550">
+                              <td className="py-3 px-2 text-slate-550">
                                 <div>{subItem.product_category || '—'}</div>
                                 <div className="text-[10px] text-slate-455 mt-0.5">{subItem.product_subcategory || '—'}</div>
                               </td>
-                              <td className="py-2.5 px-2 text-center text-slate-900 font-bold">{subItem.quantity}</td>
-                              <td className="py-2.5 px-2 text-right">{fmtPrice(subItem.unit_cost)}</td>
-                              <td className="py-2.5 px-2 text-right">{fmtPrice(subItem.unit_price)}</td>
-                              <td className="py-2.5 px-2 text-right text-red-500 font-bold">{discountStr}</td>
-                              <td className="py-2.5 px-2 text-right font-bold text-slate-900">{fmtPrice(finalUnitPrice)}</td>
-                              <td className="py-2.5 pl-4 text-right font-black text-slate-950">{fmtPrice(subItem.line_total)}</td>
+                              <td className="py-3 px-2 text-center text-slate-900 font-bold">{subItem.quantity}</td>
+                              <td className="py-3 px-2 text-right text-slate-600">{fmtPrice(subItem.unit_cost)}</td>
+                              <td className="py-3 px-2 text-right text-slate-650">{fmtPrice(subItem.unit_price)}</td>
+                              <td className="py-3 px-2 text-right text-red-500 font-bold">{discountStr}</td>
+                              <td className="py-3 px-2 text-right font-bold text-slate-900">{fmtPrice(finalUnitPrice)}</td>
+                              <td className="py-3 pl-4 text-right font-black text-slate-950">{fmtPrice(subItem.line_total)}</td>
                             </tr>
                           );
                         })}

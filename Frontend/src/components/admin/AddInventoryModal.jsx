@@ -275,11 +275,14 @@ const InventoryItemForm = ({
             <input
               {...register(`items.${index}.sku`, {
                 required: 'SKU is required',
-                pattern: { value: /^[A-Za-z0-9\-_]+$/, message: 'Only letters, numbers, - and _' },
+                pattern: { value: /^[A-Z0-9]+$/, message: 'Only uppercase letters and numbers are allowed' },
+                onChange: (e) => {
+                  e.target.value = e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+                }
               })}
               type="text"
               disabled={isPending}
-              placeholder="e.g. RB-3025-001"
+              placeholder="e.g. RB3025001"
               className={inputCls(!!itemErrors.sku)}
             />
             <FieldError message={itemErrors.sku?.message} />

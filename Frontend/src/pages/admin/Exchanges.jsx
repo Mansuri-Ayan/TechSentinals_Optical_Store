@@ -980,12 +980,17 @@ const NewExchangeWizard = ({ isOpen, onClose, storeId, onSuccess }) => {
     const availQty = Number(item.available_quantity ?? item.quantity ?? 0);
     const priceVal = Number(item.selling_price ?? item.price ?? 0);
 
+    const catId = item.category_id || (typeof item.category === 'object' ? item.category?.id : null) || item.product?.category_id;
+    const subCatId = item.subcategory_id || (typeof item.subcategory === 'object' ? item.subcategory?.id : null) || item.product?.subcategory_id;
+
     return {
       ...item,
       product_id: item.product_id || item.id,
       id: item.id || item.inventory_id,
       product_name: prodName,
       sku: prodSku,
+      category_id: catId,
+      subcategory_id: subCatId,
       category: categoryName,
       subcategory: subcategoryName,
       brand: brandName,
@@ -1000,8 +1005,9 @@ const NewExchangeWizard = ({ isOpen, onClose, storeId, onSuccess }) => {
     if (!item) return false;
     const name = (item.product_name || '').toLowerCase();
     const sku = (item.sku || '').toLowerCase();
+    const brand = (item.brand || '').toLowerCase();
     const query = (inventorySearch || '').toLowerCase();
-    const matchesQuery = name.includes(query) || sku.includes(query);
+    const matchesQuery = name.includes(query) || sku.includes(query) || brand.includes(query);
     if (!matchesQuery) return false;
 
     if (activeCategory !== 'all') {
@@ -1325,95 +1331,97 @@ const NewExchangeWizard = ({ isOpen, onClose, storeId, onSuccess }) => {
                 </div>
 
                 {/* Grid of Product Cards - Only this catalog list scrolls */}
-                <div className="flex-1 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 gap-3 p-1 pr-1.5">
-                  {loadingInventory ? (
-                    <div className="col-span-2 flex flex-col items-center justify-center py-12">
-                      <div className="animate-spin rounded-full h-7 w-7 border-b-2 border-blue-500 mb-2" />
-                      <p className="text-xs text-slate-400 font-semibold">Loading available items...</p>
-                    </div>
-                  ) : filteredInventory.length === 0 ? (
-                    <div className="col-span-2 text-center py-12">
-                      <Package className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-                      <p className="text-xs font-bold text-slate-500">No items available in stock.</p>
-                      <p className="text-[11px] text-slate-400 mt-0.5">Try clearing category or search filters.</p>
-                    </div>
-                  ) : (
-                    filteredInventory.map(item => {
-                      const status = getWizardStockStatus(item);
-                      const config = getWizardCategoryConfig(item.category);
-                      const gradIdx = Number(item.id || item.product_id || 0) % WIZARD_GRAD_PALETTE.length;
-                      const grad = WIZARD_GRAD_PALETTE[isNaN(gradIdx) ? 0 : gradIdx];
-                      const priceVal = Number(item.selling_price || item.price || 0);
+                <div className="flex-1 overflow-y-auto min-h-0 p-1 pr-1.5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {loadingInventory ? (
+                      <div className="col-span-2 flex flex-col items-center justify-center py-12">
+                        <div className="animate-spin rounded-full h-7 w-7 border-b-2 border-blue-500 mb-2" />
+                        <p className="text-xs text-slate-400 font-semibold">Loading available items...</p>
+                      </div>
+                    ) : filteredInventory.length === 0 ? (
+                      <div className="col-span-2 text-center py-12">
+                        <Package className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                        <p className="text-xs font-bold text-slate-500">No items available in stock.</p>
+                        <p className="text-[11px] text-slate-400 mt-0.5">Try clearing category or search filters.</p>
+                      </div>
+                    ) : (
+                      filteredInventory.map(item => {
+                        const status = getWizardStockStatus(item);
+                        const config = getWizardCategoryConfig(item.category);
+                        const gradIdx = Number(item.id || item.product_id || 0) % WIZARD_GRAD_PALETTE.length;
+                        const grad = WIZARD_GRAD_PALETTE[isNaN(gradIdx) ? 0 : gradIdx];
+                        const priceVal = Number(item.selling_price || item.price || 0);
 
-                      return (
-                        <div
-                          key={item.id ? `inv-${item.id}` : `prod-${item.product_id || item.id}`}
-                          onClick={() => addToCart(item)}
-                          className="bg-white rounded-xl border border-slate-200/80 shadow-xs hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 group overflow-hidden flex flex-col cursor-pointer border-l-4 border-l-blue-500"
-                        >
-                          {/* Top Banner / Image thumbnail area */}
-                          <div className="relative bg-slate-100/70 h-28 flex items-center justify-center overflow-hidden flex-shrink-0">
-                            {item.image ? (
-                              <img
-                                src={item.image}
-                                alt={item.product_name}
-                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                              />
-                            ) : (
-                              <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${grad} flex items-center justify-center shadow-md`}>
-                                <span className="text-xl font-black text-white">
-                                  {(item.product_name || "P")[0]}
-                                </span>
-                              </div>
-                            )}
-
-                            {/* Status badge */}
-                            <div className="absolute top-2 left-2">
-                              <StockStatusBadge status={status} />
-                            </div>
-
-                            {/* Available Qty badge */}
-                            <div className="absolute bottom-2 right-2">
-                              <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-white/90 text-slate-800 shadow-xs border border-slate-200">
-                                Stock: {item.quantity}
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Card details */}
-                          <div className="p-3 flex flex-col flex-1 justify-between gap-1.5">
-                            <div>
-                              <div className="flex items-center gap-1 mb-1">
-                                <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold border ${config.badge}`}>
-                                  {item.subcategory || item.category || 'General'}
-                                </span>
-                                {Number(item.discount_percent || 0) > 0 && (
-                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-rose-50 text-rose-600 border border-rose-100">
-                                    {item.discount_percent}% Off
+                        return (
+                          <div
+                            key={item.id ? `inv-${item.id}` : `prod-${item.product_id || item.id}`}
+                            onClick={() => addToCart(item)}
+                            className="bg-white rounded-xl border border-slate-200/80 shadow-xs hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 group overflow-hidden flex flex-col cursor-pointer border-l-4 border-l-blue-500"
+                          >
+                            {/* Top Banner / Image thumbnail area */}
+                            <div className="relative bg-slate-100/70 h-28 flex items-center justify-center overflow-hidden flex-shrink-0">
+                              {item.image ? (
+                                <img
+                                  src={item.image}
+                                  alt={item.product_name}
+                                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                />
+                              ) : (
+                                <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${grad} flex items-center justify-center shadow-md`}>
+                                  <span className="text-xl font-black text-white">
+                                    {(item.product_name || "P")[0]}
                                   </span>
-                                )}
+                                </div>
+                              )}
+
+                              {/* Status badge */}
+                              <div className="absolute top-2 left-2">
+                                <StockStatusBadge status={status} />
                               </div>
-                              <h4 className="text-xs font-bold text-slate-900 leading-snug line-clamp-1 group-hover:text-blue-600 transition-colors" title={item.product_name}>
-                                {item.product_name}
-                              </h4>
-                              <p className="text-[10px] font-mono text-slate-400 mt-0.5 truncate">
-                                SKU: {item.sku || '—'} {item.brand ? `· ${item.brand}` : ''}
-                              </p>
+
+                              {/* Available Qty badge */}
+                              <div className="absolute bottom-2 right-2">
+                                <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-white/90 text-slate-800 shadow-xs border border-slate-200">
+                                  Stock: {item.quantity}
+                                </span>
+                              </div>
                             </div>
 
-                            <div className="pt-2 border-t border-slate-100 flex items-center justify-between mt-auto">
-                              <span className="text-xs font-black text-slate-900">
-                                ₹{priceVal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                              </span>
-                              <span className="text-[10px] font-bold text-blue-600 group-hover:translate-x-0.5 transition-transform flex items-center gap-0.5">
-                                + Add <Plus className="w-3 h-3" />
-                              </span>
+                            {/* Card details */}
+                            <div className="p-3 flex flex-col flex-1 justify-between gap-1.5">
+                              <div>
+                                <div className="flex items-center gap-1 mb-1">
+                                  <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold border ${config.badge}`}>
+                                    {item.subcategory || item.category || 'General'}
+                                  </span>
+                                  {Number(item.discount_percent || 0) > 0 && (
+                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-rose-50 text-rose-600 border border-rose-100">
+                                      {item.discount_percent}% Off
+                                    </span>
+                                  )}
+                                </div>
+                                <h4 className="text-xs font-bold text-slate-900 leading-snug line-clamp-1 group-hover:text-blue-600 transition-colors" title={item.product_name}>
+                                  {item.product_name}
+                                </h4>
+                                <p className="text-[10px] font-mono text-slate-400 mt-0.5 truncate">
+                                  SKU: {item.sku || '—'} {item.brand ? `· ${item.brand}` : ''}
+                                </p>
+                              </div>
+
+                              <div className="pt-2 border-t border-slate-100 flex items-center justify-between mt-auto">
+                                <span className="text-xs font-black text-slate-900">
+                                  ₹{priceVal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                </span>
+                                <span className="text-[10px] font-bold text-blue-600 group-hover:translate-x-0.5 transition-transform flex items-center gap-0.5">
+                                  + Add <Plus className="w-3 h-3" />
+                                </span>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      );
-                    })
-                  )}
+                        );
+                      })
+                    )}
+                  </div>
                 </div>
               </div>
 

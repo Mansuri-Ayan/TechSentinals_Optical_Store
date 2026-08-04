@@ -45,7 +45,13 @@ async def update_repair_endpoint(
             detail="Access denied to this store's repair record.",
         )
 
-    repair = await update_repair(db, repair=repair, payload=payload)
+    try:
+        repair = await update_repair(db, repair=repair, payload=payload)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
     return _repair_to_read(repair)
 
 

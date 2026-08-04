@@ -146,6 +146,7 @@ async def _populate_other_stocks(
 async def list_inventories(
     owner_type: str = Query(..., description="ADMIN or STORE"),
     owner_id: int | None = Query(default=None, description="Admin ID or Store ID. Omit for aggregated warehouse view."),
+    product_id: int | None = Query(default=None, description="Filter by product ID"),
     active_only: bool = Query(True),
     search: str | None = Query(default=None, description="Search product name or SKU"),
     category_id: int | None = Query(default=None, description="Filter by category ID"),
@@ -205,6 +206,7 @@ async def list_inventories(
         db,
         owner_type=owner_type,
         owner_id=owner_id,
+        product_id=product_id,
         active_only=active_only,
         search=search,
         category_id=category_id,
@@ -762,15 +764,12 @@ async def get_inventory_batches_endpoint(
                 detail="Access denied to this inventory record",
             )
 
-    # 3. Query all batches for this product and owner (sorted by id ASC, only those with available stock)
     batches_stmt = (
         select(Inventory)
         .where(
             Inventory.product_id == resolved_product_id,
             Inventory.owner_type == resolved_owner_type,
             Inventory.owner_id == resolved_owner_id,
-            Inventory.is_active.is_(True),
-            Inventory.available_quantity > 0,
         )
         .order_by(Inventory.id.asc())
     )

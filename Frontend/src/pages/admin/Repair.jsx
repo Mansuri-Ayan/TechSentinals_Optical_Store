@@ -112,6 +112,7 @@ const Repair = () => {
     description: '',
     notes: '',
     store_id: storeId === 'admin' ? '' : storeId,
+    unit_sku: '',
   });
   const [errors, setErrors] = useState({});
 
@@ -139,6 +140,19 @@ const Repair = () => {
   const isSelectedOrderInWarranty = selectedOrderObj
     ? isWithinWarrantyMonths(selectedOrderObj.date || selectedOrderObj.orderDate, warrantyMonths)
     : false;
+    
+  const orderUnitSkus = useMemo(() => {
+    if (!selectedOrderObj?.items) return [];
+    const skus = [];
+    selectedOrderObj.items.forEach(item => {
+      if (Array.isArray(item.unitSkus)) {
+        skus.push(...item.unitSkus);
+      } else if (Array.isArray(item.unit_skus)) {
+        skus.push(...item.unit_skus);
+      }
+    });
+    return skus;
+  }, [selectedOrderObj]);
 
   /* ── Sync form when warranty changes ── */
   useEffect(() => {
@@ -163,6 +177,7 @@ const Repair = () => {
       description: '',
       notes: '',
       store_id: inPageStoreId === 'admin' ? '' : inPageStoreId,
+      unit_sku: '',
     });
     setErrors({});
   };
@@ -177,6 +192,7 @@ const Repair = () => {
       is_warranty: false,
       estimated_cost: '',
       repair_type: 'FRAME_REPAIR',
+      unit_sku: '',
     }));
     setErrors(prev => ({ ...prev, customer: '', order: '' }));
   };
@@ -193,6 +209,7 @@ const Repair = () => {
       is_warranty: inWarranty,
       repair_type: inWarranty ? 'WARRANTY_SERVICE' : 'FRAME_REPAIR',
       estimated_cost: inWarranty ? '0' : '',
+      unit_sku: '',
     }));
     setErrors(prev => ({ ...prev, order: '' }));
   };
@@ -245,6 +262,7 @@ const Repair = () => {
       advance_paid: 0,
       received_date: new Date().toISOString().split('T')[0],
       notes: form.notes || null,
+      unit_sku: form.unit_sku || null,
     };
 
     try {
@@ -387,7 +405,7 @@ const Repair = () => {
               <table className="w-full text-sm min-w-[1100px]">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-100 text-left">
-                    {['Repair ID', 'Customer', ...(isPathAdmin ? ['Store'] : []), 'Type', 'Description', 'Date Received', 'Cost', 'Warranty', 'Status'].map(col => (
+                    {['Repair ID', 'Customer', ...(isPathAdmin ? ['Store'] : []), 'Type', 'Unit SKU', 'Description', 'Date Received', 'Cost', 'Warranty', 'Status'].map(col => (
                       <th key={col} className="px-5 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">
                         {col}
                       </th>
@@ -416,6 +434,9 @@ const Repair = () => {
                         <span className="inline-block px-2.5 py-0.5 rounded-lg bg-blue-50 text-blue-700 border border-blue-100 text-[10px] font-bold">
                           {getTypeBadge(repair.repair_type)}
                         </span>
+                      </td>
+                      <td className="px-5 py-4 text-xs font-mono font-bold text-slate-800">
+                        {repair.unit_sku || <span className="text-slate-400 font-medium">—</span>}
                       </td>
                       <td className="px-5 py-4 text-xs font-medium text-slate-500 max-w-[250px] truncate" title={repair.description}>
                         {repair.description || '—'}
@@ -734,6 +755,38 @@ const Repair = () => {
 
                 <div>
                   <label className="text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
+                    Product Unit SKU (optional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Type Unit SKU (e.g. RB2025001U0030)"
+                    value={form.unit_sku}
+                    onChange={e => setForm(p => ({ ...p, unit_sku: e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase() }))}
+                    className="w-full px-3 py-2.5 text-sm font-semibold rounded-xl border border-slate-200 focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 bg-white"
+                  />
+                  {orderUnitSkus.length > 0 && (
+                    <div className="mt-1.5 flex flex-wrap gap-1 items-center">
+                      <span className="text-[10px] text-slate-400 font-bold">From Selected Order:</span>
+                      {orderUnitSkus.map(sku => (
+                        <button
+                          key={sku}
+                          type="button"
+                          onClick={() => setForm(p => ({ ...p, unit_sku: sku }))}
+                          className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-colors ${
+                            form.unit_sku === sku
+                              ? 'bg-blue-600 text-white border-blue-600'
+                              : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                          }`}
+                        >
+                          {sku}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
                     Repair Description & Issue Details
                   </label>
                   <textarea
@@ -871,6 +924,7 @@ const RepairDetailDrawer = ({ repair, onClose, onStatusChange, isUpdatingStatus,
             <DetailRow label="Type" value={getTypeBadge(repair.repair_type)} />
             <DetailRow label="Estimated Cost" value={repair.is_warranty ? 'Free (Warranty)' : fmtCurrency(repair.estimated_cost)} />
             {repair.final_cost && <DetailRow label="Final Cost" value={fmtCurrency(repair.final_cost)} />}
+            {repair.unit_sku && <DetailRow label="Product Unit SKU" value={repair.unit_sku} mono />}
             {repair.sale_invoice_number && <DetailRow label="Sale Reference" value={repair.sale_invoice_number} mono />}
           </Section>
 

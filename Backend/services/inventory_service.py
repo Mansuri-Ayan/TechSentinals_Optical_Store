@@ -156,6 +156,7 @@ async def get_inventories_by_owner(
     db: AsyncSession,
     owner_type: str,
     owner_id: int,
+    product_id: int | None = None,
     active_only: bool = True,
     search: str | None = None,
     category_id: int | None = None,
@@ -182,6 +183,8 @@ async def get_inventories_by_owner(
         Inventory.owner_type == owner_type,
         Inventory.owner_id == owner_id,
     ]
+    if product_id is not None:
+        base_conditions.append(Inventory.product_id == product_id)
     if active_only:
         base_conditions.append(Inventory.is_active.is_(True))
 

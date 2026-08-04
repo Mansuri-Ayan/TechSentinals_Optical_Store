@@ -20,7 +20,10 @@ async def get_bill_settings_admin(
     result = await db.execute(stmt)
     settings = result.scalar_one_or_none()
     if not settings:
-        raise HTTPException(status_code=404, detail="Bill settings not found for this store")
+        settings = BillSettings(store_id=store_id)
+        db.add(settings)
+        await db.commit()
+        await db.refresh(settings)
     return settings
 
 @router.put("/admin/store/{store_id}", response_model=BillSettingsResponse)
@@ -57,7 +60,10 @@ async def get_bill_settings_shopkeeper(
     result = await db.execute(stmt)
     settings = result.scalar_one_or_none()
     if not settings:
-        raise HTTPException(status_code=404, detail="Bill settings not found for this store")
+        settings = BillSettings(store_id=store_id)
+        db.add(settings)
+        await db.commit()
+        await db.refresh(settings)
     return settings
 
 @router.put("/shopkeeper", response_model=BillSettingsResponse)

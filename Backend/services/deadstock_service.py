@@ -42,8 +42,25 @@ async def create_deadstock_from_exchange(
         sku = product.sku
         unit_price = (original_item.line_total / Decimal(original_item.quantity)).quantize(Decimal("0.01")) if original_item.quantity else product.selling_price
 
+    # Fetch physical units linked to the original sale item
+    from models.product_unit import ProductUnit, UnitStatus
+    res_units = await db.execute(
+        select(ProductUnit)
+        .where(ProductUnit.sale_item_id == original_item.id)
+        .limit(exchange_qty)
+    )
+    product_units = list(res_units.scalars().all())
+
     created_items = []
-    for _ in range(exchange_qty):
+    for i in range(exchange_qty):
+        unit_id = None
+        if i < len(product_units):
+            unit = product_units[i]
+            unit.status = UnitStatus.DEADSTOCK
+            unit.sale_item_id = None
+            unit.sold_at = None
+            unit_id = unit.id
+
         ds_item = DeadstockItem(
             admin_id=admin_id,
             store_id=store_id,
@@ -57,6 +74,7 @@ async def create_deadstock_from_exchange(
             original_price=unit_price,
             status=DeadstockStatus.AVAILABLE,
             is_exchanged=True,
+            product_unit_id=unit_id,
             notes=f"Exchanged from invoice {exchange.original_sale.invoice_number if exchange.original_sale else 'N/A'} (EXC: {exchange.exchange_number})",
         )
         db.add(ds_item)
@@ -252,6 +270,15 @@ async def reuse_deadstock(
     ds_item.is_exchanged = False
     ds_item.reused_at = _now()
 
+    if ds_item.product_unit_id:
+        from models.product_unit import ProductUnit, UnitStatus
+        unit = await db.scalar(select(ProductUnit).where(ProductUnit.id == ds_item.product_unit_id))
+        if unit:
+            unit.status = UnitStatus.EXCHANGED
+            unit.inventory_batch_id = inventory.id
+            unit.owner_type = inventory.owner_type
+            unit.owner_id = inventory.owner_id
+
     await db.commit()
     await db.refresh(ds_item)
     return ds_item, inventory
@@ -317,6 +344,21 @@ async def mark_deadstock_sold(
     ds_item.status = DeadstockStatus.SOLD
     ds_item.is_exchanged = False
     ds_item.sold_in_sale_id = sale_id
+
+    if ds_item.product_unit_id:
+        from models.product_unit import ProductUnit, UnitStatus
+        from models.sale_item import SaleItem
+        unit = await db.scalar(select(ProductUnit).where(ProductUnit.id == ds_item.product_unit_id))
+        if unit:
+            unit.status = UnitStatus.SOLD
+            # Try to associate with the SaleItem in this sale
+            s_item = await db.scalar(
+                select(SaleItem).where(SaleItem.sale_id == sale_id, SaleItem.product_id == ds_item.product_id).limit(1)
+            )
+            if s_item:
+                unit.sale_item_id = s_item.id
+            unit.sold_at = sa_func.now()
+
     await db.flush()
     return ds_item
 
@@ -332,5 +374,12 @@ async def cancel_deadstock_for_exchange(
     res = await db.execute(stmt)
     items = res.scalars().all()
     for item in items:
+        if item.product_unit_id:
+            from models.product_unit import ProductUnit, UnitStatus
+            unit = await db.scalar(select(ProductUnit).where(ProductUnit.id == item.product_unit_id))
+            if unit:
+                unit.status = UnitStatus.SOLD
+                unit.sale_item_id = item.original_sale_item_id
+                unit.sold_at = sa_func.now()
         await db.delete(item)
     await db.flush()

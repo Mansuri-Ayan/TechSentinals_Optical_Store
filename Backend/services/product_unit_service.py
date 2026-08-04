@@ -6,19 +6,21 @@ from models.inventory import OwnerType
 
 async def generate_unit_skus(db: AsyncSession, product_id: int, product_sku: str, count: int) -> List[str]:
     """Generate globally unique unit SKUs for a product."""
-    result = await db.execute(select(func.count(ProductUnit.id)).where(ProductUnit.unit_sku.like(f"{product_sku}-U%")))
+    cleaned_product_sku = "".join(c for c in product_sku if c.isalnum()).upper()
+    
+    result = await db.execute(select(func.count(ProductUnit.id)).where(ProductUnit.product_id == product_id))
     db_count = result.scalar_one_or_none() or 0
 
     session_count = sum(
         1 for obj in db.new
-        if isinstance(obj, ProductUnit) and obj.unit_sku and obj.unit_sku.startswith(f"{product_sku}-U")
+        if isinstance(obj, ProductUnit) and obj.product_id == product_id
     )
     current_count = db_count + session_count
 
     skus = []
     for i in range(1, count + 1):
         seq = current_count + i
-        skus.append(f"{product_sku}-U{seq:04d}")
+        skus.append(f"{cleaned_product_sku}U{seq:04d}")
     return skus
 
 async def create_units_for_batch(
@@ -40,6 +42,7 @@ async def create_units_for_batch(
             unit_sku=sku,
             product_id=product_id,
             inventory_batch_id=inventory_batch_id,
+            original_batch_id=inventory_batch_id,
             status=UnitStatus.AVAILABLE,
             owner_type=owner_type,
             owner_id=owner_id,
@@ -181,6 +184,8 @@ async def transfer_units(
         units_to_transfer.extend(fifo_units)
 
     for unit in units_to_transfer:
+        if unit.original_batch_id is None:
+            unit.original_batch_id = unit.inventory_batch_id
         unit.owner_type = to_owner_type
         unit.owner_id = to_owner_id
         unit.inventory_batch_id = new_batch_id
@@ -216,6 +221,22 @@ async def mark_units_lost(
         return  # Safety Rule 1
     
     await _mark_units_status(db, product_id, owner_type, owner_id, quantity, UnitStatus.LOST, specific_unit_skus)
+
+async def mark_units_sold(
+    db: AsyncSession,
+    product_id: int,
+    owner_type: OwnerType,
+    owner_id: int,
+    quantity: int,
+    specific_unit_skus: Optional[List[str]] = None,
+) -> None:
+    """Mark units as SOLD."""
+    if quantity <= 0:
+        return
+    if not await _check_units_exist(db, product_id=product_id):
+        return  # Safety Rule 1
+    
+    await _mark_units_status(db, product_id, owner_type, owner_id, quantity, UnitStatus.SOLD, specific_unit_skus)
 
 async def _mark_units_status(
     db: AsyncSession,

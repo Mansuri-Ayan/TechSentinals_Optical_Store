@@ -10,7 +10,7 @@ from sqlalchemy import (
     String,
     Text,
 )
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, validates
 from sqlalchemy.sql import func
 from db.session import Base
 
@@ -204,3 +204,9 @@ class Product(Base):
             f"<Product(id={self.id!r}, sku={self.sku!r}, "
             f"name={self.name!r})>"
         )
+
+    @validates("sku")
+    def validate_sku(self, key, value):
+        if value:
+            return "".join(c for c in value if c.isalnum()).upper()
+        return value

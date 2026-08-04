@@ -233,6 +233,11 @@ class Repair(Base):
         back_populates="repairs",
         lazy="selectin",
     )
+    product_unit = relationship(
+        "ProductUnit",
+        lazy="selectin",
+        foreign_keys="[Repair.product_unit_id]",
+    )
 
     def __repr__(self) -> str:
         return (
