@@ -25,15 +25,18 @@ async def reuse_deadstock_endpoint(
     if isinstance(current_user, Admin):
         admin_id = current_user.id
         user_id = current_user.id
+        store_id = None
     else:
         admin_id = current_user.store.admin_id
         user_id = current_user.id
+        store_id = current_user.store_id
 
     ds_item, inventory = await reuse_deadstock(
         db=db,
         item_id=item_id,
         admin_id=admin_id,
         user_id=user_id,
+        store_id=store_id,
     )
 
     return DeadstockReuseResponse(

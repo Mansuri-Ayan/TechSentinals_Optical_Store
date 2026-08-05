@@ -21,6 +21,8 @@ class DeadstockItemRead(BaseModel):
     status: str
     is_exchanged: bool
     reused_at: Optional[datetime] = None
+    product_unit_id: Optional[int] = None
+    unit_sku: Optional[str] = None
     sold_in_sale_id: Optional[int] = None
     notes: Optional[str] = None
     created_at: datetime
@@ -33,6 +35,7 @@ class DeadstockItemRead(BaseModel):
     exchange_number: Optional[str] = None
     original_invoice_number: Optional[str] = None
     product: Optional[ProductRead] = None
+
 
     model_config = {"from_attributes": True}
 

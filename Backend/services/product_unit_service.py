@@ -146,6 +146,7 @@ async def transfer_units(
     quantity: int,
     new_batch_id: int,
     specific_unit_skus: Optional[List[str]] = None,
+    from_batch_id: Optional[int] = None,
 ) -> None:
     """Transfer units between stores/admin, updating owner and batch."""
     if quantity <= 0:
@@ -158,6 +159,7 @@ async def transfer_units(
         result = await db.execute(
             select(ProductUnit)
             .where(
+                ProductUnit.product_id == product_id,
                 ProductUnit.unit_sku.in_(specific_unit_skus),
                 ProductUnit.status == UnitStatus.AVAILABLE,
                 ProductUnit.owner_type == from_owner_type,
@@ -168,18 +170,22 @@ async def transfer_units(
     
     remaining_qty = quantity - len(units_to_transfer)
     if remaining_qty > 0:
-        result = await db.execute(
+        stmt = (
             select(ProductUnit)
             .where(
                 ProductUnit.product_id == product_id,
                 ProductUnit.status == UnitStatus.AVAILABLE,
                 ProductUnit.owner_type == from_owner_type,
                 ProductUnit.owner_id == from_owner_id,
-                ProductUnit.id.notin_([u.id for u in units_to_transfer]) if units_to_transfer else True
             )
-            .order_by(ProductUnit.id.asc())
-            .limit(remaining_qty)
         )
+        if from_batch_id is not None:
+            stmt = stmt.where(ProductUnit.inventory_batch_id == from_batch_id)
+        if units_to_transfer:
+            stmt = stmt.where(ProductUnit.id.notin_([u.id for u in units_to_transfer]))
+        
+        stmt = stmt.order_by(ProductUnit.id.asc()).limit(remaining_qty)
+        result = await db.execute(stmt)
         fifo_units = list(result.scalars().all())
         units_to_transfer.extend(fifo_units)
 

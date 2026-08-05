@@ -39,11 +39,6 @@ def _parse_store_id(store_id_param: Optional[str], current_user) -> tuple[int, O
     else:
         admin_id = current_user.store.admin_id
         numeric_store_id = current_user.store_id
-        if store_id_param and str(store_id_param).lower() != "admin":
-            try:
-                numeric_store_id = int(store_id_param)
-            except ValueError:
-                pass
 
     return admin_id, numeric_store_id
 
@@ -127,4 +122,12 @@ async def get_deadstock_item_endpoint(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Deadstock item not found.",
         )
+
+    if not isinstance(current_user, Admin):
+        if item.store_id != current_user.store_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to access this deadstock item.",
+            )
+
     return DeadstockItemRead.model_validate(item)

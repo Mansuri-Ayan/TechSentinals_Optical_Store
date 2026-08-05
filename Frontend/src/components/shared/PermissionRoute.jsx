@@ -1,5 +1,5 @@
 import { Navigate, useLocation } from 'react-router-dom';
-import { useHasPermission } from '../../hooks/usePermissions';
+import { useHasPermission, useMyPermissions } from '../../hooks/usePermissions';
 import { useAuthStore } from '../../store/store';
 
 /**
@@ -7,11 +7,12 @@ import { useAuthStore } from '../../store/store';
  * Auto-detects route context (admin / shopkeeper / accountant).
  */
 const PermissionRoute = ({ permission, children, redirectTo }) => {
+  const { isLoading: isLoadingPermissions } = useMyPermissions();
   const hasPermission = useHasPermission(permission);
-  const { isLoading } = useAuthStore();
+  const { isLoading: isLoadingAuth } = useAuthStore();
   const location = useLocation();
 
-  if (isLoading) return null; // Wait for auth
+  if (isLoadingAuth || isLoadingPermissions) return null; // Wait for auth and permissions
 
   if (!hasPermission) {
     // Determine fallback from current route context

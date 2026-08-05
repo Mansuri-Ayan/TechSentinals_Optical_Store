@@ -261,10 +261,12 @@ async def _receive_stock_batches(
                 to_owner_id=owner_id,
                 quantity=qty,
                 new_batch_id=new_inv.id,
+                from_batch_id=src_inv.id,
             )
 
         if first_inv_id is None:
             first_inv_id = new_inv.id
+
 
     return first_inv_id
 

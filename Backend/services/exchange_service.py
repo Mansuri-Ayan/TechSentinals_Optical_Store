@@ -249,43 +249,12 @@ async def create_exchange(
             ),
         )
 
-    # ── 4. Restore original items to inventory (EXCHANGE_IN) ──
-    for original_item, exchange_qty, item_credit in original_items:
-        orig_inv_id = original_item.inventory_id
-        if not orig_inv_id:
-            orig_inventory = await get_or_create_inventory(
-                db, "STORE", payload.store_id, original_item.product_id
-            )
-        else:
-            orig_inventory = await db.scalar(
-                select(Inventory).where(Inventory.id == orig_inv_id)
-            )
-
-        if orig_inventory:
-            orig_inventory.quantity += exchange_qty
-            orig_inventory.available_quantity += exchange_qty
-            orig_inventory.last_stock_in_at = _now()
-
-            # Capture snapshot for transaction tracking
-            orig_product = await db.scalar(
-                select(Product).where(Product.id == original_item.product_id)
-            )
-            orig_snapshot = await capture_product_snapshot(db, orig_product)
-
-            exc_in_txn = InventoryTransaction(
-                inventory_id=orig_inventory.id,
-                product_id=original_item.product_id,
-                product_snapshot_id=orig_snapshot.id,
-                unit_price=original_item.unit_price,
-                total_value=item_credit,
-                transaction_type=TransactionType.EXCHANGE_IN,
-                quantity=exchange_qty,
-                reference_id=original_sale.id,
-                remarks=f"Returned via Exchange (Qty: {exchange_qty})",
-                created_by=payload.processed_by_id,
-            )
-            db.add(exc_in_txn)
-            await db.flush()
+    # ── 4. Returned items go to DEADSTOCK (handled in step 6) ──
+    # NOTE: We do NOT increment active inventory here. Exchanged items are
+    # placed into deadstock (inactive). Inventory is only restored when
+    # a deadstock item is explicitly "Reused" from the deadstock page.
+    # This prevents double-counting: once via EXCHANGE_IN and again via
+    # deadstock reuse PURCHASE.
 
     # ── 5. Create new Sale for replacement items ──
     new_invoice = await _generate_invoice_number(db, admin_id)
@@ -555,9 +524,12 @@ async def cancel_exchange(
 ) -> Exchange:
     """
     Cancel an exchange and reverse inventory effects:
-    1. Re-deduct original item from inventory (re-enter returned item outflow).
-    2. Cancel new sale (restores stock of new replacement items).
-    3. Mark exchange status as CANCELLED.
+    1. Cancel new sale (restores stock of new replacement items via RETURN).
+    2. Mark exchange status as CANCELLED.
+    3. Clean up associated deadstock items.
+
+    NOTE: No reversal is needed for the original returned items because
+    create_exchange does NOT increment active inventory (items go to deadstock).
     """
     if exchange.status == ExchangeStatus.CANCELLED:
         raise HTTPException(
@@ -565,36 +537,9 @@ async def cancel_exchange(
             detail="Exchange is already cancelled.",
         )
 
-    # 1. Reverse original item stock restoration
-    orig_item = exchange.original_sale_item
-    if orig_item and orig_item.inventory_id:
-        orig_inventory = await db.scalar(
-            select(Inventory).where(Inventory.id == orig_item.inventory_id)
-        )
-        if orig_inventory:
-            orig_inventory.quantity -= orig_item.quantity
-            orig_inventory.available_quantity -= orig_item.quantity
-            orig_inventory.last_stock_out_at = _now()
-
-            # Record inventory subtraction transaction (reverse EXCHANGE_IN)
-            orig_product = await db.scalar(
-                select(Product).where(Product.id == orig_item.product_id)
-            )
-            orig_snapshot = await capture_product_snapshot(db, orig_product)
-
-            exc_in_rev = InventoryTransaction(
-                inventory_id=orig_inventory.id,
-                product_id=orig_item.product_id,
-                product_snapshot_id=orig_snapshot.id,
-                unit_price=orig_item.unit_price,
-                total_value=orig_item.line_total,
-                transaction_type=TransactionType.RETURN,
-                quantity=orig_item.quantity,
-                reference_id=exchange.original_sale_id,
-                remarks=f"Reverse Exchange In (Cancel EXC {exchange.exchange_number})",
-                created_by=cancelled_by,
-            )
-            db.add(exc_in_rev)
+    # 1. No reversal needed for original items — create_exchange no longer
+    # increments inventory via EXCHANGE_IN. Returned items go directly to
+    # deadstock, so there is no stock increment to reverse here.
 
     # 2. Cancel the new Sale (this auto-restores inventory for the replacement items)
     if exchange.new_sale_id:

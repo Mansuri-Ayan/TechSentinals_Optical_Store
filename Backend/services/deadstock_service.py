@@ -177,6 +177,7 @@ async def list_deadstock(
             selectinload(DeadstockItem.exchange),
             selectinload(DeadstockItem.store),
             selectinload(DeadstockItem.original_sale_item),
+            selectinload(DeadstockItem.product_unit),
         )
         .where(*query_conditions)
         .order_by(DeadstockItem.created_at.desc())
@@ -200,6 +201,8 @@ async def list_deadstock(
             item.exchange_number = item.exchange.exchange_number
             if item.exchange.original_sale:
                 item.original_invoice_number = item.exchange.original_sale.invoice_number
+        if item.product_unit:
+            item.unit_sku = item.product_unit.unit_sku
 
     return items, total_matching, counts_dict
 
@@ -209,6 +212,7 @@ async def reuse_deadstock(
     item_id: int,
     admin_id: int,
     user_id: int | None = None,
+    store_id: int | None = None,
 ) -> tuple[DeadstockItem, Inventory]:
     """
     Reuse a deadstock item (frames/accessories):
@@ -225,6 +229,12 @@ async def reuse_deadstock(
         )
 
     if ds_item.admin_id != admin_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to access this deadstock item.",
+        )
+
+    if store_id is not None and ds_item.store_id != store_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to access this deadstock item.",
@@ -274,7 +284,7 @@ async def reuse_deadstock(
         from models.product_unit import ProductUnit, UnitStatus
         unit = await db.scalar(select(ProductUnit).where(ProductUnit.id == ds_item.product_unit_id))
         if unit:
-            unit.status = UnitStatus.EXCHANGED
+            unit.status = UnitStatus.AVAILABLE
             unit.inventory_batch_id = inventory.id
             unit.owner_type = inventory.owner_type
             unit.owner_id = inventory.owner_id
@@ -308,6 +318,7 @@ async def list_deadstock_for_pos(
             selectinload(DeadstockItem.product).selectinload(Product.category),
             selectinload(DeadstockItem.product).selectinload(Product.brand),
             selectinload(DeadstockItem.exchange),
+            selectinload(DeadstockItem.product_unit),
         )
         .where(*conditions)
         .order_by(DeadstockItem.created_at.desc())
@@ -322,6 +333,8 @@ async def list_deadstock_for_pos(
             item.brand_name = item.product.brand.name if item.product.brand else "Generic"
         if item.exchange:
             item.exchange_number = item.exchange.exchange_number
+        if item.product_unit:
+            item.unit_sku = item.product_unit.unit_sku
 
     return items
 

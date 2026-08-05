@@ -548,11 +548,13 @@ async def universal_search_inventories(
         conditions.append(
             and_(Inventory.owner_type == "STORE", Inventory.owner_id.in_(store_ids))
         )
-
-    inv_stmt = select(Inventory).where(
-        Inventory.product_id.in_([p.id for p in products]),
-        Inventory.is_active.is_(True),
-        or_(*conditions)
+    inv_stmt = (
+        select(Inventory)
+        .where(
+            Inventory.product_id.in_([p.id for p in products]),
+            or_(*conditions)
+        )
+        .order_by(Inventory.id.desc())
     )
     inv_res = await db.execute(inv_stmt)
     all_inventories = inv_res.scalars().all()
@@ -567,26 +569,31 @@ async def universal_search_inventories(
     for p in products:
         p_invs = inv_by_product[p.id]
         
-        # Find local inventory record
+        # Find local inventory record (prefer active, fallback to latest inactive)
         local_rec = None
         for inv in p_invs:
             if inv.owner_type == resolved_owner_type and inv.owner_id == resolved_owner_id:
-                local_rec = inv
-                break
+                if local_rec is None or (inv.is_active and not local_rec.is_active):
+                    local_rec = inv
+
+        # Calculate local inventory totals across all active batches for this product/owner
+        total_quantity = sum(inv.quantity for inv in p_invs if inv.owner_type == resolved_owner_type and inv.owner_id == resolved_owner_id and inv.is_active)
+        total_available = sum(inv.available_quantity for inv in p_invs if inv.owner_type == resolved_owner_type and inv.owner_id == resolved_owner_id and inv.is_active)
 
         # Calculate other stocks (include all other stores and the warehouse under the same admin, even with 0 stock)
         other_stocks = []
         
         # 1. Admin Warehouse (if not current local context)
         if not (resolved_owner_type == "ADMIN" and resolved_owner_id == admin_id):
-            admin_inv = next((inv for inv in p_invs if inv.owner_type == "ADMIN" and inv.owner_id == admin_id), None)
+            admin_qty = sum(inv.quantity for inv in p_invs if inv.owner_type == "ADMIN" and inv.owner_id == admin_id and inv.is_active)
+            admin_avail = sum(inv.available_quantity for inv in p_invs if inv.owner_type == "ADMIN" and inv.owner_id == admin_id and inv.is_active)
             other_stocks.append(
                 StoreStockRead(
                     store_id=admin_id,
                     store_name="Admin Warehouse",
                     owner_type="ADMIN",
-                    quantity=admin_inv.quantity if admin_inv else 0,
-                    available_quantity=admin_inv.available_quantity if admin_inv else 0
+                    quantity=admin_qty,
+                    available_quantity=admin_avail
                 )
             )
 
@@ -595,14 +602,15 @@ async def universal_search_inventories(
             if resolved_owner_type == "STORE" and resolved_owner_id == s_id:
                 continue
             
-            store_inv = next((inv for inv in p_invs if inv.owner_type == "STORE" and inv.owner_id == s_id), None)
+            store_qty = sum(inv.quantity for inv in p_invs if inv.owner_type == "STORE" and inv.owner_id == s_id and inv.is_active)
+            store_avail = sum(inv.available_quantity for inv in p_invs if inv.owner_type == "STORE" and inv.owner_id == s_id and inv.is_active)
             other_stocks.append(
                 StoreStockRead(
                     store_id=s_id,
                     store_name=s_name,
                     owner_type="STORE",
-                    quantity=store_inv.quantity if store_inv else 0,
-                    available_quantity=store_inv.available_quantity if store_inv else 0
+                    quantity=store_qty,
+                    available_quantity=store_avail
                 )
             )
 
@@ -643,16 +651,14 @@ async def universal_search_inventories(
                 supplier_name=supplier_name,
                 
                 # local stock
-                quantity=local_rec.quantity if local_rec else 0,
-                available_quantity=local_rec.available_quantity if local_rec else 0,
+                quantity=total_quantity,
+                available_quantity=total_available,
                 reorder_level=local_rec.reorder_level if local_rec else 0,
                 is_active=local_rec.is_active if local_rec else True,
                 owner_type=resolved_owner_type,
                 owner_id=resolved_owner_id,
                 owner_name=owner_name,
-
                 other_stocks=other_stocks,
-
                 frame_product=p.frame_product,
                 lens_product=p.lens_product,
                 accessory_product=p.accessory_product

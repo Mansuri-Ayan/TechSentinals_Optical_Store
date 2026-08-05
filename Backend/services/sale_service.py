@@ -537,21 +537,23 @@ async def create_sale(
         db.add(txn)
         await db.flush()
 
-        # Phase 1: Assign specific units (if any) or FIFO available units
-        await assign_units_to_sale_item(
-            db=db,
-            product_id=sale_item.product_id,
-            owner_type=owner_type_enum,
-            owner_id=owner_id,
-            quantity=sale_item.quantity,
-            sale_item_id=sale_item.id,
-            specific_unit_skus=getattr(item_data, "unit_skus", None)
-        )
+        # Phase 1: Assign specific units (if any) or FIFO available units (skip if deadstock item checkout)
+        if not getattr(item_data, "deadstock_item_id", None):
+            await assign_units_to_sale_item(
+                db=db,
+                product_id=sale_item.product_id,
+                owner_type=owner_type_enum,
+                owner_id=owner_id,
+                quantity=sale_item.quantity,
+                sale_item_id=sale_item.id,
+                specific_unit_skus=getattr(item_data, "unit_skus", None)
+            )
 
         # Mark deadstock item as SOLD if applicable
         if getattr(item_data, "deadstock_item_id", None):
             from services.deadstock_service import mark_deadstock_sold
             await mark_deadstock_sold(db, item_data.deadstock_item_id, sale.id)
+
 
 
     await db.commit()

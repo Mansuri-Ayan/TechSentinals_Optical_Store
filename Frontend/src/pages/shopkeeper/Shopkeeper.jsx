@@ -99,7 +99,7 @@ const Shopkeeper = () => {
         }
         return updated;
       }
-      return [...prev, { product, quantity, selectedColor: color, selectedSize: size, unit_skus: unitSku || '' }];
+      return [...prev, { product, quantity, selectedColor: color, selectedSize: size, unit_skus: unitSku || product.unit_sku || '' }];
     });
   };
 

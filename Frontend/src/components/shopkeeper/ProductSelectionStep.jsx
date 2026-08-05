@@ -184,6 +184,7 @@ const ProductSelectionStep = ({
       availableSizes: ['Standard'],
       image: item.image_url,
       is_deadstock: true,
+      unit_sku: item.unit_sku,
     }));
   }, [deadstockItems]);
 
