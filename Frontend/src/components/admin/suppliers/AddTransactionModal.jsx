@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  X, Package, ChevronDown, Layers, Hash, FileText, Plus, Check, CreditCard, Calendar, IndianRupee, Store
+  X, Package, ChevronDown, Layers, Hash, FileText, Plus, Check, CreditCard, Calendar, IndianRupee, Store, Building
 } from 'lucide-react';
 import { useCategories, useSubcategories } from '../../../hooks/useCategories';
 import { useProducts } from '../../../hooks/useProducts';
 import { useStores } from '../../../hooks/useStores';
 import SupplierSelect from '../SupplierSelect';
+import { useSuppliers } from '../../../hooks/useSuppliers';
 
 const PAYMENT_METHODS = ['Cash', 'Bank Transfer', 'Cheque', 'UPI', 'Credit'];
 
@@ -35,6 +36,15 @@ const AddTransactionModal = ({ isOpen, defaultProductId, defaultSupplierId, stor
   const [form, setForm] = useState(EMPTY);
   const [errors, setErrors] = useState({});
   const { stores } = useStores();
+
+  // When a defaultSupplierId is given, the supplier is locked (auto-selected)
+  const isSupplierLocked = !!defaultSupplierId;
+
+  // Fetch suppliers to display the locked supplier name
+  const { suppliers } = useSuppliers('admin', { limit: 200 });
+  const lockedSupplier = isSupplierLocked
+    ? suppliers.find(s => String(s.id) === String(defaultSupplierId))
+    : null;
 
   // Fetch all categories (using a high limit to get all)
   const { categories } = useCategories(null, { limit: 100 });
@@ -234,8 +244,8 @@ const AddTransactionModal = ({ isOpen, defaultProductId, defaultSupplierId, stor
       e.unitCostPrice = 'Enter a valid unit cost price (≥ 0)';
     if (form.unitSellingPrice === '' || isNaN(form.unitSellingPrice) || Number(form.unitSellingPrice) < 0)
       e.unitSellingPrice = 'Enter a valid unit selling price (≥ 0)';
-    if (form.discountPercent === '' || isNaN(form.discountPercent) || Number(form.discountPercent) < 0 || Number(form.discountPercent) > 100)
-      e.discountPercent = 'Enter a valid discount (0-100)';
+    if (form.discountPercent === '' || isNaN(form.discountPercent) || Number(form.discountPercent) < 0 || Number(form.discountPercent) >= 100)
+      e.discountPercent = 'Enter a valid discount (0–99.99%). 100% discount is not allowed.';
     
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -306,11 +316,33 @@ const AddTransactionModal = ({ isOpen, defaultProductId, defaultSupplierId, stor
             
             {/* Section: Supplier */}
             <div className="space-y-3 font-sans">
-              <SupplierSelect
-                selectedSupplierId={form.supplierId}
-                onChange={supplier => set('supplierId', supplier ? String(supplier.id) : '')}
-                error={errors.supplierId}
-              />
+              {isSupplierLocked ? (
+                // When opened from supplier detail page, show a locked read-only supplier card
+                <div className="space-y-2">
+                  <label className="block text-xs font-semibold text-slate-600 flex items-center gap-1.5">
+                    <Building className="w-3.5 h-3.5 text-slate-400" />
+                    Supplier <span className="text-red-500">*</span>
+                  </label>
+                  <div className="flex items-center gap-3 px-4 py-3 bg-emerald-50 border border-emerald-200 rounded-xl">
+                    <div className="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center flex-shrink-0">
+                      <span className="text-white text-xs font-black">{lockedSupplier?.company_name?.[0] ?? 'S'}</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-slate-800 truncate">{lockedSupplier?.company_name ?? 'Loading...'}</p>
+                      {lockedSupplier?.contact_person && (
+                        <p className="text-xs text-slate-500 truncate">Contact: {lockedSupplier.contact_person}</p>
+                      )}
+                    </div>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 border border-emerald-300 text-emerald-700 tracking-wide uppercase">Auto-Selected</span>
+                  </div>
+                </div>
+              ) : (
+                <SupplierSelect
+                  selectedSupplierId={form.supplierId}
+                  onChange={supplier => set('supplierId', supplier ? String(supplier.id) : '')}
+                  error={errors.supplierId}
+                />
+              )}
             </div>
 
             <hr className="border-slate-100" />
@@ -478,7 +510,7 @@ const AddTransactionModal = ({ isOpen, defaultProductId, defaultSupplierId, stor
                       <input
                         type="number"
                         min="0"
-                        max="100"
+                        max="99.99"
                         step="0.01"
                         value={form.discountPercent}
                         onChange={(e) => set('discountPercent', e.target.value)}
@@ -486,6 +518,7 @@ const AddTransactionModal = ({ isOpen, defaultProductId, defaultSupplierId, stor
                         className={inputCls('discountPercent')}
                       />
                       {errors.discountPercent && <p className="text-xs text-red-500 mt-1">{errors.discountPercent}</p>}
+                      <p className="mt-0.5 text-[10px] text-slate-400 font-medium">Max 99.99% — 100% not allowed</p>
                     </div>
                   </div>
                 </div>

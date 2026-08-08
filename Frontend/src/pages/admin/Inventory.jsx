@@ -302,9 +302,22 @@ const ProductCard = ({ item, onViewDetails, onDelete, onEdit, onRequestStock, on
         {/* Price */}
         <div className="border-t border-slate-50 mt-auto pt-2 flex flex-col gap-1 w-full">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-bold text-slate-900">
-              ₹{Number(item.selling_price).toLocaleString()}
-            </span>
+            <div className="flex flex-col">
+              {Number(item.discount_percent) > 0 ? (
+                <>
+                  <span className="text-[11px] text-slate-400 line-through leading-tight">
+                    ₹{Number(item.selling_price).toLocaleString()}
+                  </span>
+                  <span className="text-sm font-bold text-emerald-700">
+                    ₹{(Number(item.selling_price) * (1 - Number(item.discount_percent) / 100)).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                  </span>
+                </>
+              ) : (
+                <span className="text-sm font-bold text-slate-900">
+                  ₹{Number(item.selling_price).toLocaleString()}
+                </span>
+              )}
+            </div>
             <span className="text-xs text-slate-400 truncate max-w-[90px]">
               {item.supplier}
             </span>
@@ -816,6 +829,9 @@ const Inventory = () => {
   const handleAddItem = async (itemsData) => {
     const items = Array.isArray(itemsData) ? itemsData : [itemsData];
 
+    // Shopkeeper roles are always scoped to their own store
+    const isShopkeeperRole = user?.role === 'manager' || user?.role === 'worker' || user?.role === 'optician';
+
     for (const data of items) {
       let productId = data.product_id;
 
@@ -856,10 +872,18 @@ const Inventory = () => {
         }
       }
 
-      const targetStoreId = data.store_id || inPageStoreId;
-      const isTargetAdmin = targetStoreId === "admin";
-      const resolvedOwnerType = isTargetAdmin ? "ADMIN" : "STORE";
-      const resolvedOwnerId = isTargetAdmin ? user?.id : Number(targetStoreId);
+      // For shopkeeper (manager/worker/optician): always use their store, ignore form store_id
+      let targetStoreId, resolvedOwnerType, resolvedOwnerId;
+      if (isShopkeeperRole) {
+        targetStoreId = user?.store_id || inPageStoreId;
+        resolvedOwnerType = "STORE";
+        resolvedOwnerId = Number(targetStoreId);
+      } else {
+        targetStoreId = data.store_id || inPageStoreId;
+        const isTargetAdmin = targetStoreId === "admin";
+        resolvedOwnerType = isTargetAdmin ? "ADMIN" : "STORE";
+        resolvedOwnerId = isTargetAdmin ? user?.id : Number(targetStoreId);
+      }
 
       // 2. Create the Inventory record
       await createInventoryAsync({

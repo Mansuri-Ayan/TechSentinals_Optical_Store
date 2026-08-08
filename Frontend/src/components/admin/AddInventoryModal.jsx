@@ -5,7 +5,7 @@ import { toast } from 'react-toastify';
 import { X, Package, Image as ImageIcon, Loader2 } from 'lucide-react';
 import { useCategories, useSubcategories } from '../../hooks/useCategories';
 import { useBrands } from '../../hooks/useBrands';
-import { useStoreStore } from '../../store/store';
+import { useStoreStore, useAuthStore } from '../../store/store';
 import SupplierSelect from './SupplierSelect';
 
 /* ─── helpers ─────────────────────────────────────── */
@@ -18,10 +18,9 @@ const FieldError = ({ message }) =>
   ) : null;
 
 const inputCls = (hasError) =>
-  `w-full px-4 py-2.5 bg-white border rounded-xl focus:outline-none focus:ring-4 font-medium text-slate-900 transition-all text-sm placeholder:text-slate-400 ${
-    hasError
-      ? 'border-red-400 focus:ring-red-500/10 focus:border-red-500'
-      : 'border-slate-300 focus:ring-emerald-500/10 focus:border-emerald-500'
+  `w-full px-4 py-2.5 bg-white border rounded-xl focus:outline-none focus:ring-4 font-medium text-slate-900 transition-all text-sm placeholder:text-slate-400 ${hasError
+    ? 'border-red-400 focus:ring-red-500/10 focus:border-red-500'
+    : 'border-slate-300 focus:ring-emerald-500/10 focus:border-emerald-500'
   }`;
 
 const SectionHeading = ({ num, label }) => (
@@ -148,6 +147,7 @@ const InventoryItemForm = ({
   isPending,
   onRemove,
   showRemove,
+  isShopkeeper,
 }) => {
   const watchedProductId = watch(`items.${index}.product_id`);
   const isProductPreselected = !!watchedProductId;
@@ -314,8 +314,8 @@ const InventoryItemForm = ({
                 {!watchedCategoryId
                   ? 'Select Category First'
                   : isLoadingSubcategories
-                  ? 'Loading...'
-                  : 'Select Subcategory'}
+                    ? 'Loading...'
+                    : 'Select Subcategory'}
               </option>
               {subcategories.filter((sub) => sub.is_active).map((sub) => (
                 <option key={sub.id} value={sub.id}>{sub.name}</option>
@@ -646,11 +646,12 @@ const InventoryItemForm = ({
             <input
               {...register(`items.${index}.discount_percent`, {
                 min: { value: 0, message: 'Discount cannot be negative' },
-                max: { value: 100, message: 'Discount cannot exceed 100%' },
+                max: { value: 99.99, message: 'Discount cannot be 100% or more. Max is 99.99%' },
+                validate: v => Number(v) < 100 || 'Discount cannot be 100% — product cannot be free',
               })}
               type="number"
               min="0"
-              max="100"
+              max="99.99"
               step="0.01"
               disabled={isPending}
               placeholder="0.00"
@@ -679,33 +680,40 @@ const InventoryItemForm = ({
 
       <div className="border-t border-slate-100" />
 
-      {/* 5 – Store */}
-      <section>
-        <SectionHeading num="5" label="Store Information" />
-        <div>
-          <label className="block text-sm font-semibold text-slate-700 mb-1.5">Store <span className="text-red-500">*</span></label>
-          <select
-            {...register(`items.${index}.store_id`, { required: 'Store is required' })}
-            className={inputCls(!!itemErrors.store_id)}
-            disabled={isPending}
-          >
-            <option value="">Select Store</option>
-            {stores.map((st) => (
-              <option key={st.id} value={st.id}>{st.store_name || st.name || `Store #${st.id}`}</option>
-            ))}
-          </select>
-          <FieldError message={itemErrors.store_id?.message} />
-        </div>
-      </section>
+      {/* 5 – Store (only shown for admin users; shopkeepers are auto-assigned their store) */}
+      {!isShopkeeper && (
+        <section>
+          <SectionHeading num="5" label="Store Information" />
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-1.5">Store <span className="text-red-500">*</span></label>
+            <select
+              {...register(`items.${index}.store_id`, { required: !isShopkeeper ? 'Store is required' : false })}
+              className={inputCls(!!itemErrors.store_id)}
+              disabled={isPending}
+            >
+              <option value="">Select Store</option>
+              {stores.map((st) => (
+                <option key={st.id} value={st.id}>{st.store_name || st.name || `Store #${st.id}`}</option>
+              ))}
+            </select>
+            <FieldError message={itemErrors.store_id?.message} />
+          </div>
+        </section>
+      )}
     </div>
   );
 };
 
 const AddInventoryModal = ({ isOpen, onClose, onSubmit: onSubmitProp, preselectedProduct = null }) => {
   const { selectedStore, stores } = useStoreStore();
+  const { user } = useAuthStore();
   const { categories, isLoadingCategories } = useCategories();
   const { brands, createBrandAsync } = useBrands();
   const [isPending, setIsPending] = useState(false);
+
+  // Detect shopkeeper (manager/worker) — they cannot pick a store, it's auto-assigned
+  const isShopkeeper = user?.role === 'manager' || user?.role === 'worker' || user?.role === 'optician';
+  const shopkeeperStoreId = isShopkeeper ? (user?.store_id ? String(user.store_id) : (selectedStore?.id ? String(selectedStore.id) : '')) : null;
 
   const {
     register,
@@ -730,17 +738,27 @@ const AddInventoryModal = ({ isOpen, onClose, onSubmit: onSubmitProp, preselecte
   useEffect(() => {
     if (isOpen) {
       reset({
-        items: [getDefaultItemValues(selectedStore?.id ? String(selectedStore.id) : '', preselectedProduct)],
+        items: [getDefaultItemValues(
+          isShopkeeper
+            ? shopkeeperStoreId
+            : (selectedStore?.id ? String(selectedStore.id) : ''),
+          preselectedProduct
+        )],
       });
     }
-  }, [isOpen, selectedStore, preselectedProduct, reset]);
+  }, [isOpen, selectedStore, preselectedProduct, reset, isShopkeeper, shopkeeperStoreId]);
 
   if (!isOpen) return null;
 
   const handleCancel = () => {
     if (isPending) return;
     reset({
-      items: [getDefaultItemValues(selectedStore?.id ? String(selectedStore.id) : '', preselectedProduct)],
+      items: [getDefaultItemValues(
+        isShopkeeper
+          ? shopkeeperStoreId
+          : (selectedStore?.id ? String(selectedStore.id) : ''),
+        preselectedProduct
+      )],
     });
     onClose();
   };
@@ -825,7 +843,12 @@ const AddInventoryModal = ({ isOpen, onClose, onSubmit: onSubmitProp, preselecte
 
       // Clear, reset form, and close modal only on success
       reset({
-        items: [getDefaultItemValues(selectedStore?.id ? String(selectedStore.id) : '', preselectedProduct)],
+        items: [getDefaultItemValues(
+          isShopkeeper
+            ? shopkeeperStoreId
+            : (selectedStore?.id ? String(selectedStore.id) : ''),
+          preselectedProduct
+        )],
       });
       onClose();
       toast.success(
@@ -855,8 +878,8 @@ const AddInventoryModal = ({ isOpen, onClose, onSubmit: onSubmitProp, preselecte
                 {preselectedProduct
                   ? `Add Stock for "${preselectedProduct.product_name || preselectedProduct.name}"`
                   : fields.length > 1
-                  ? 'Add Bulk Inventory Items'
-                  : 'Add Inventory Item'}
+                    ? 'Add Bulk Inventory Items'
+                    : 'Add Inventory Item'}
               </h2>
               <p className="text-xs text-slate-500 mt-0.5 hidden sm:block">
                 {preselectedProduct
@@ -894,6 +917,7 @@ const AddInventoryModal = ({ isOpen, onClose, onSubmit: onSubmitProp, preselecte
                 isPending={isPending}
                 onRemove={() => remove(index)}
                 showRemove={fields.length > 1}
+                isShopkeeper={isShopkeeper}
               />
             ))}
           </div>

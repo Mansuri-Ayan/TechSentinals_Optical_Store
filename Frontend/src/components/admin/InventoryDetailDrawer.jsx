@@ -1910,7 +1910,19 @@ const InventoryDetailDrawer = ({ item, onClose, onEdit, onRestockSupplier, onApp
             <DetailRow label="Cost Price" value={item.cost_price ? `₹${Number(item.cost_price).toLocaleString()}` : null} />
             <DetailRow label="Selling Price" value={item.selling_price ? `₹${Number(item.selling_price).toLocaleString()}` : null} />
             {item.discount_percent !== undefined && Number(item.discount_percent) > 0 && (
-              <DetailRow label="Default Discount" value={`${item.discount_percent}%`} />
+              <>
+                <DetailRow label="Default Discount" value={`${item.discount_percent}%`} />
+                <DetailRow
+                  label="Effective Price"
+                  value={
+                    <span className="font-bold text-emerald-700">
+                      {item.selling_price
+                        ? `₹${(Number(item.selling_price) * (1 - Number(item.discount_percent) / 100)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                        : '—'}
+                    </span>
+                  }
+                />
+              </>
             )}
             {item.warranty_months !== undefined && Number(item.warranty_months) > 0 && (
               <DetailRow label="Warranty Duration" value={`${item.warranty_months} Months`} />

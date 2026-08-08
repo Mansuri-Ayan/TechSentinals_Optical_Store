@@ -701,6 +701,7 @@ const SupplierDetail = () => {
       <AddTransactionModal
         isOpen={showAddTransaction}
         supplierName={s.name}
+        defaultSupplierId={id}
         storeName={activeStoreName}
         activeStoreId={storeId}
         onClose={() => setShowAddTransaction(false)}
