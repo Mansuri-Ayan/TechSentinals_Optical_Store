@@ -104,6 +104,37 @@ async def download_barcode_pdf(
             detail="No units found for the given criteria",
         )
 
+    # ── Check role-based and store-based permissions ──
+    from models.admin import Admin
+    if not isinstance(current_user, Admin):
+        from models.worker import Worker
+        from models.optician import Optician
+        from models.accountant import Accountant
+
+        is_store_scoped = isinstance(current_user, (Worker, Optician)) or (isinstance(current_user, Accountant) and current_user.store_id is not None)
+    else:
+        is_store_scoped = False
+
+    for unit in units:
+        if is_store_scoped:
+            if unit.owner_type != OwnerType.STORE or unit.owner_id != current_user.store_id:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Access denied to one or more units",
+                )
+        
+        if unit.owner_type == OwnerType.ADMIN:
+            unit_admin_id = unit.owner_id
+        else:
+            store = await db.scalar(select(Store).where(Store.id == unit.owner_id))
+            unit_admin_id = store.admin_id if store else None
+
+        if unit_admin_id != admin_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied to one or more units",
+            )
+
     # ── Resolve batch labels & store name ─────────────────────────────────────
     batch_ids = list({u.inventory_batch_id for u in units})
     batch_labels = [f"#{bid}" for bid in sorted(batch_ids)]

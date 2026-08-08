@@ -177,30 +177,40 @@ async def list_inventories(
     store_map = {row[0]: row[1] for row in stores_res.fetchall()}
 
     if not isinstance(current_user, Admin):
-        # Manager: allow querying their own admin warehouse or any store under the same admin
-        requested_owner_type = owner_type.upper()
+        from models.worker import Worker
+        from models.optician import Optician
+        from models.accountant import Accountant
 
-        if requested_owner_type == "ADMIN":
-            # Manager querying admin warehouse — force owner_id to their admin
-            owner_id = admin_id
-        elif requested_owner_type == "STORE":
-            if owner_id is None:
-                # Default to their own store
-                owner_id = current_user.store_id
-            else:
-                # Validate the store belongs to the same admin
-                store_check = await db.execute(
-                    select(Store.admin_id).where(Store.id == owner_id)
-                )
-                store_admin = store_check.scalar_one_or_none()
-                if store_admin != admin_id:
-                    raise HTTPException(
-                        status_code=status.HTTP_403_FORBIDDEN,
-                        detail="Access denied to this store's inventory",
-                    )
-        else:
+        is_store_scoped = isinstance(current_user, (Worker, Optician)) or (isinstance(current_user, Accountant) and current_user.store_id is not None)
+
+        if is_store_scoped:
+            # Strictly limit to their own store scope
             owner_type = "STORE"
             owner_id = current_user.store_id
+        else:
+            # Manager or business-level Accountant: allow querying their own admin warehouse or any store under the same admin
+            requested_owner_type = owner_type.upper()
+            if requested_owner_type == "ADMIN":
+                # Manager querying admin warehouse — force owner_id to their admin
+                owner_id = admin_id
+            elif requested_owner_type == "STORE":
+                if owner_id is None:
+                    # Default to their own store
+                    owner_id = current_user.store_id
+                else:
+                    # Validate the store belongs to the same admin
+                    store_check = await db.execute(
+                        select(Store.admin_id).where(Store.id == owner_id)
+                    )
+                    store_admin = store_check.scalar_one_or_none()
+                    if store_admin != admin_id:
+                        raise HTTPException(
+                            status_code=status.HTTP_403_FORBIDDEN,
+                            detail="Access denied to this store's inventory",
+                        )
+            else:
+                owner_type = "STORE"
+                owner_id = current_user.store_id
 
     result_dict = await get_inventories_by_owner(
         db,
@@ -271,6 +281,16 @@ async def list_warehouse_inventories(
     if isinstance(current_user, Admin):
         admin_id = current_user.id
     else:
+        from models.worker import Worker
+        from models.optician import Optician
+        from models.accountant import Accountant
+
+        is_store_scoped = isinstance(current_user, (Worker, Optician)) or (isinstance(current_user, Accountant) and current_user.store_id is not None)
+        if is_store_scoped:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied to warehouse inventories",
+            )
         admin_id = get_user_admin_id(current_user)
 
     stores_stmt = select(Store.id, Store.store_name).where(Store.admin_id == admin_id)
@@ -393,22 +413,32 @@ async def universal_search_inventories(
     resolved_owner_type = owner_type.upper()
     resolved_owner_id = owner_id
     if not isinstance(current_user, Admin):
-        if resolved_owner_type == "ADMIN":
-            resolved_owner_id = admin_id
-        elif resolved_owner_type == "STORE":
-            if resolved_owner_id is None:
-                resolved_owner_id = current_user.store_id
-            else:
-                # check permission
-                store_check = await db.execute(
-                    select(Store.admin_id).where(Store.id == resolved_owner_id)
-                )
-                store_admin = store_check.scalar_one_or_none()
-                if store_admin != admin_id:
-                    raise HTTPException(
-                        status_code=status.HTTP_403_FORBIDDEN,
-                        detail="Access denied to this store's inventory",
+        from models.worker import Worker
+        from models.optician import Optician
+        from models.accountant import Accountant
+
+        is_store_scoped = isinstance(current_user, (Worker, Optician)) or (isinstance(current_user, Accountant) and current_user.store_id is not None)
+
+        if is_store_scoped:
+            resolved_owner_type = "STORE"
+            resolved_owner_id = current_user.store_id
+        else:
+            if resolved_owner_type == "ADMIN":
+                resolved_owner_id = admin_id
+            elif resolved_owner_type == "STORE":
+                if resolved_owner_id is None:
+                    resolved_owner_id = current_user.store_id
+                else:
+                    # check permission
+                    store_check = await db.execute(
+                        select(Store.admin_id).where(Store.id == resolved_owner_id)
                     )
+                    store_admin = store_check.scalar_one_or_none()
+                    if store_admin != admin_id:
+                        raise HTTPException(
+                            status_code=status.HTTP_403_FORBIDDEN,
+                            detail="Access denied to this store's inventory",
+                        )
     else:
         if resolved_owner_id is None:
             if resolved_owner_type == "ADMIN":
@@ -705,9 +735,16 @@ async def get_inventory_endpoint(
     store_map = {row[0]: row[1] for row in stores_res.fetchall()}
 
     if not isinstance(current_user, Admin):
+        from models.worker import Worker
+        from models.optician import Optician
+        from models.accountant import Accountant
+
+        is_store_scoped = isinstance(current_user, (Worker, Optician)) or (isinstance(current_user, Accountant) and current_user.store_id is not None)
+
         ot_str = inv.owner_type.value if hasattr(inv.owner_type, "value") else str(inv.owner_type)
         is_own_store = ot_str == "STORE" and inv.owner_id == current_user.store_id
-        is_warehouse = ot_str == "ADMIN" and inv.owner_id == admin_id
+        is_warehouse = ot_str == "ADMIN" and inv.owner_id == admin_id and not is_store_scoped
+
         if not (is_own_store or is_warehouse):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -762,8 +799,15 @@ async def get_inventory_batches_endpoint(
     # 2. Check permissions
     ot_str = resolved_owner_type.value if hasattr(resolved_owner_type, "value") else str(resolved_owner_type)
     if not isinstance(current_user, Admin):
+        from models.worker import Worker
+        from models.optician import Optician
+        from models.accountant import Accountant
+
+        is_store_scoped = isinstance(current_user, (Worker, Optician)) or (isinstance(current_user, Accountant) and current_user.store_id is not None)
+
         is_own_store = ot_str == "STORE" and resolved_owner_id == current_user.store_id
-        is_warehouse = ot_str == "ADMIN" and resolved_owner_id == admin_id
+        is_warehouse = ot_str == "ADMIN" and resolved_owner_id == admin_id and not is_store_scoped
+
         if not (is_own_store or is_warehouse):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,

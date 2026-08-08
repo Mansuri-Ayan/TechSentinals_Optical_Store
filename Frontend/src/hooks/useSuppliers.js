@@ -39,7 +39,7 @@ export const useSuppliers = (storeId, filters = {}) => {
   const createSupplierMutation = useMutation({
     mutationFn: async ({ payload }) => {
       const supplier = await createSupplierApi(payload);
-      if (storeId) {
+      if (storeId && storeId !== 'admin') {
         await linkSupplierToStoreApi(supplier.id, {
           store_id: Number(storeId),
           is_primary: false,

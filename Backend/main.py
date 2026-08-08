@@ -55,9 +55,10 @@ async def lifespan(app: FastAPI):
         async with engine.begin() as conn:
             await conn.execute(text("ALTER TABLE inventories ADD COLUMN IF NOT EXISTS selling_price NUMERIC(10, 2) DEFAULT NULL;"))
             await conn.execute(text("ALTER TYPE staff_type_enum ADD VALUE IF NOT EXISTS 'ADMIN';"))
-            print("Successfully executed schema migrations for selling_price and staff_type_enum!")
+            await conn.execute(text("UPDATE inventories SET is_active = true WHERE is_active = false;"))
+            print("Successfully executed schema migrations for selling_price, staff_type_enum and inventory reactivation!")
     except Exception as e:
-        print(f"Skipped schema alter: {e}")
+        print(f"Skipped schema alter/inventory reactivation: {e}")
     yield
     # Application shutdown
     await engine.dispose()

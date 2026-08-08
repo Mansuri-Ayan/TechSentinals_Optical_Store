@@ -83,8 +83,8 @@ async def _consume_stock_fifo(
         batch.quantity -= taken
         batch.available_quantity -= taken
         batch.last_stock_out_at = datetime.now(timezone.utc)
-        if batch.available_quantity == 0:
-            batch.is_active = False
+        # Keep batch active even when quantity reaches 0 so it remains visible
+        # in out-of-stock listings.
 
         # Build metadata copy
         consumed_list.append({
@@ -294,8 +294,8 @@ async def _decrease_stock(
     inventory.quantity -= quantity
     inventory.available_quantity -= quantity
     inventory.last_stock_out_at = _now()
-    if inventory.available_quantity == 0:
-        inventory.is_active = False
+    # Keep inventory active even when quantity reaches 0 so it remains visible
+    # in out-of-stock listings.
 
 
 async def _increase_stock(inventory: Inventory, quantity: int) -> None:

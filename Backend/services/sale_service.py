@@ -504,8 +504,8 @@ async def create_sale(
             batch.quantity -= taken
             batch.available_quantity -= taken
             batch.last_stock_out_at = _now()
-            if batch.available_quantity == 0:
-                batch.is_active = False
+            # Keep batch active even when quantity reaches 0 so it remains visible
+            # in out-of-stock listings.
             
             consumed_list.append({
                 "inventory_id": batch.id,

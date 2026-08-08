@@ -40,9 +40,35 @@ async def list_product_units(
     # Enforce tenant security
     stmt = stmt.where(Product.admin_id == admin_id)
     
+    from models.worker import Worker
+    from models.optician import Optician
+    from models.accountant import Accountant
+
+    is_store_scoped = isinstance(current_user, (Worker, Optician)) or (isinstance(current_user, Accountant) and current_user.store_id is not None)
+
+    if is_store_scoped:
+        context_owner_type = OwnerType.STORE
+        context_owner_id = current_user.store_id
+    else:
+        context_owner_type = owner_type if owner_type else OwnerType.ADMIN
+        context_owner_id = admin_id if context_owner_type == OwnerType.ADMIN else owner_id
+
     if product_id:
         stmt = stmt.where(ProductUnit.product_id == product_id)
     if inventory_batch_id:
+        if is_store_scoped:
+            batch_check = await db.scalar(
+                select(Inventory).where(
+                    Inventory.id == inventory_batch_id,
+                    Inventory.owner_type == OwnerType.STORE,
+                    Inventory.owner_id == current_user.store_id
+                )
+            )
+            if not batch_check:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Access denied to this inventory batch",
+                )
         stmt = stmt.where(
             or_(
                 ProductUnit.inventory_batch_id == inventory_batch_id,
@@ -58,9 +84,6 @@ async def list_product_units(
                 is_transferred_filter = True
             else:
                 cleaned_statuses.append(s)
-
-    context_owner_type = owner_type if owner_type else OwnerType.ADMIN
-    context_owner_id = admin_id if context_owner_type == OwnerType.ADMIN else owner_id
 
     # Base conditions for ownership
     is_owned_by_context = and_(
@@ -205,6 +228,19 @@ async def lookup_product_unit(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Product unit not found"
         )
+
+    if not isinstance(current_user, Admin):
+        from models.worker import Worker
+        from models.optician import Optician
+        from models.accountant import Accountant
+
+        is_store_scoped = isinstance(current_user, (Worker, Optician)) or (isinstance(current_user, Accountant) and current_user.store_id is not None)
+        if is_store_scoped:
+            if unit.owner_type != OwnerType.STORE or unit.owner_id != current_user.store_id:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Access denied to this product unit",
+                )
         
     unit_dict = {
         "id": unit.id,

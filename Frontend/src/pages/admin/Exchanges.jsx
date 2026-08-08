@@ -704,6 +704,14 @@ const NewExchangeWizard = ({ isOpen, onClose, storeId, onSuccess }) => {
   const [activeCategory, setActiveCategory] = useState('all');
   const [activeSubcategory, setActiveSubcategory] = useState('');
 
+  const targetStoreId = selectedSale?.store_id || selectedSale?.store?.id || storeId;
+  const isWarehouse = targetStoreId === 'admin' || targetStoreId === 0 || targetStoreId === '0' || targetStoreId === 'All';
+  const storeIdNum = Number(targetStoreId);
+
+  // Enforce role & scope: if user is store-scoped, force their store_id, otherwise use targetStoreId
+  const isStoreScopedUser = user?.role?.role !== 'admin' && user?.store_id !== null && user?.store_id !== undefined;
+  const scopedStoreIdForQueries = isStoreScopedUser ? user.store_id : (isWarehouse || isNaN(storeIdNum) ? null : storeIdNum);
+
   const { categories } = useCategories(null, { limit: 1000, paginate: false, all_tenant: true });
   const { subcategories } = useSubcategories(
     activeCategory !== 'all' ? Number(activeCategory) : null,
@@ -721,7 +729,7 @@ const NewExchangeWizard = ({ isOpen, onClose, storeId, onSuccess }) => {
   useEffect(() => {
     if (!isOpen) return;
     const targetStoreId = selectedSale?.store_id || selectedSale?.store?.id || storeId;
-    const isWarehouse = targetStoreId === 'admin' || targetStoreId === 0 || targetStoreId === '0';
+    const isWarehouse = targetStoreId === 'admin' || targetStoreId === 0 || targetStoreId === '0' || targetStoreId === 'All';
     const storeIdNum = Number(targetStoreId);
 
     const fetchInventory = async () => {
@@ -922,6 +930,10 @@ const NewExchangeWizard = ({ isOpen, onClose, storeId, onSuccess }) => {
     return sum + withTax;
   }, 0);
 
+  const cartBaseTotal = cart.reduce((sum, item) => {
+    return sum + (item.unit_price * item.quantity);
+  }, 0);
+
   const additionalPaymentNeeded = Math.max(cartTotal - returnCredit, 0);
 
   const handleCompleteExchange = async () => {
@@ -1003,6 +1015,7 @@ const NewExchangeWizard = ({ isOpen, onClose, storeId, onSuccess }) => {
     };
   }).filter(item => {
     if (!item) return false;
+    if (item.available_quantity <= 0) return false;
     const name = (item.product_name || '').toLowerCase();
     const sku = (item.sku || '').toLowerCase();
     const brand = (item.brand || '').toLowerCase();
@@ -1011,26 +1024,40 @@ const NewExchangeWizard = ({ isOpen, onClose, storeId, onSuccess }) => {
     if (!matchesQuery) return false;
 
     if (activeCategory !== 'all') {
-      const catId = String(item.category_id || item.product?.category_id || item.category?.id || '');
-      const catName = String(item.category || item.category_name || item.product?.category_name || '').toLowerCase();
+      const catIdStr = String(item.category_id || item.product?.category_id || item.category?.id || '').trim();
+      const catName = String(item.category || item.category_name || item.product?.category_name || '').toLowerCase().trim();
       const selCat = (categories || []).find(c => String(c.id) === String(activeCategory));
-      const selCatName = (selCat?.name || '').toLowerCase();
-      if (catId) {
-        if (catId !== String(activeCategory)) return false;
+      const selCatName = (selCat?.name || '').toLowerCase().trim();
+
+      if (!catIdStr && !catName) {
+        return false;
+      }
+
+      if (catIdStr && catIdStr !== 'null' && catIdStr !== 'undefined') {
+        if (catIdStr !== String(activeCategory)) return false;
       } else if (selCatName && catName) {
         if (!catName.includes(selCatName) && !selCatName.includes(catName)) return false;
+      } else {
+        return false;
       }
     }
 
     if (activeSubcategory) {
-      const subCatId = String(item.subcategory_id || item.product?.subcategory_id || item.subcategory?.id || '');
-      const subCatName = String(item.subcategory || item.subcategory_name || item.product?.subcategory_name || '').toLowerCase();
+      const subCatIdStr = String(item.subcategory_id || item.product?.subcategory_id || item.subcategory?.id || '').trim();
+      const subCatName = String(item.subcategory || item.subcategory_name || item.product?.subcategory_name || '').toLowerCase().trim();
       const selSub = (subcategories || []).find(s => String(s.id) === String(activeSubcategory));
-      const selSubName = (selSub?.name || '').toLowerCase();
-      if (subCatId) {
-        if (subCatId !== String(activeSubcategory)) return false;
+      const selSubName = (selSub?.name || '').toLowerCase().trim();
+
+      if (!subCatIdStr && !subCatName) {
+        return false;
+      }
+
+      if (subCatIdStr && subCatIdStr !== 'null' && subCatIdStr !== 'undefined') {
+        if (subCatIdStr !== String(activeSubcategory)) return false;
       } else if (selSubName && subCatName) {
         if (!subCatName.includes(selSubName) && !selSubName.includes(subCatName)) return false;
+      } else {
+        return false;
       }
     }
 
@@ -1299,7 +1326,7 @@ const NewExchangeWizard = ({ isOpen, onClose, storeId, onSuccess }) => {
                     >
                       <option value="all">All Categories</option>
                       {(categories || []).map(c => (
-                        <option key={c.id} value={c.id}>{c.name}</option>
+                        <option key={c.id} value={String(c.id)}>{c.name}</option>
                       ))}
                     </select>
                   </div>
@@ -1313,7 +1340,7 @@ const NewExchangeWizard = ({ isOpen, onClose, storeId, onSuccess }) => {
                     >
                       <option value="">All Subcategories</option>
                       {(subcategories || []).map(s => (
-                        <option key={s.id} value={s.id}>{s.name}</option>
+                        <option key={s.id} value={String(s.id)}>{s.name}</option>
                       ))}
                     </select>
                   </div>
@@ -1433,36 +1460,61 @@ const NewExchangeWizard = ({ isOpen, onClose, storeId, onSuccess }) => {
                     {cart.length === 0 ? (
                       <p className="text-center text-xs text-slate-400 py-10">Cart is empty. Select products from left catalog.</p>
                     ) : (
-                      cart.map(item => (
-                        <div key={item.product_id} className="py-2.5 flex justify-between items-center">
-                          <div className="min-w-0 flex-1 pr-2">
-                            <p className="text-xs font-bold text-slate-800 truncate">{item.name}</p>
-                            <p className="text-[10px] text-slate-400 mt-0.5">₹{item.unit_price.toFixed(2)} each</p>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <div className="flex items-center border border-slate-200 rounded-lg">
-                              <button
-                                type="button"
-                                onClick={() => updateCartQty(item.product_id, item.quantity - 1)}
-                                className="p-1 hover:bg-slate-50 text-slate-500"
-                              >
-                                <Minus className="w-3 h-3" />
-                              </button>
-                              <span className="px-2 text-xs font-bold text-slate-800">{item.quantity}</span>
-                              <button
-                                type="button"
-                                onClick={() => addToCart(item)}
-                                className="p-1 hover:bg-slate-50 text-slate-500"
-                              >
-                                <Plus className="w-3 h-3" />
-                              </button>
+                      cart.map(item => {
+                        const discPercent = Number(item.discount_percent || 0);
+                        const discountedUnitPrice = item.unit_price * (1 - discPercent / 100);
+                        return (
+                          <div key={item.product_id} className="py-2.5 flex justify-between items-center">
+                            <div className="min-w-0 flex-1 pr-2">
+                              <p className="text-xs font-bold text-slate-800 truncate">{item.name}</p>
+                              <p className="text-[10px] text-slate-400 mt-0.5">
+                                {discPercent > 0 ? (
+                                  <>
+                                    <span className="line-through text-slate-350 mr-1">₹{item.unit_price.toFixed(2)}</span>
+                                    <span className="font-semibold text-emerald-600">₹{discountedUnitPrice.toFixed(2)}</span>
+                                  </>
+                                ) : (
+                                  `₹${item.unit_price.toFixed(2)}`
+                                )}{' '}
+                                each
+                              </p>
                             </div>
-                            <span className="font-bold text-xs text-slate-900 min-w-[50px] text-right">
-                              ₹{(item.unit_price * item.quantity).toFixed(2)}
-                            </span>
+                            <div className="flex items-center gap-3">
+                              <div className="flex items-center border border-slate-200 rounded-lg">
+                                <button
+                                  type="button"
+                                  onClick={() => updateCartQty(item.product_id, item.quantity - 1)}
+                                  className="p-1 hover:bg-slate-50 text-slate-500"
+                                >
+                                  <Minus className="w-3 h-3" />
+                                </button>
+                                <span className="px-2 text-xs font-bold text-slate-800">{item.quantity}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => addToCart(item)}
+                                  className="p-1 hover:bg-slate-50 text-slate-500"
+                                >
+                                  <Plus className="w-3 h-3" />
+                                </button>
+                              </div>
+                              <span className="font-bold text-xs text-slate-900 min-w-[50px] text-right">
+                                {discPercent > 0 ? (
+                                  <>
+                                    <span className="line-through text-[10px] text-slate-400 block font-normal">
+                                      ₹{(item.unit_price * item.quantity).toFixed(2)}
+                                    </span>
+                                    <span className="text-emerald-600 block">
+                                      ₹{(discountedUnitPrice * item.quantity).toFixed(2)}
+                                    </span>
+                                  </>
+                                ) : (
+                                  `₹${(item.unit_price * item.quantity).toFixed(2)}`
+                                )}
+                              </span>
+                            </div>
                           </div>
-                        </div>
-                      ))
+                        );
+                      })
                     )}
                   </div>
                 </div>
@@ -1482,7 +1534,7 @@ const NewExchangeWizard = ({ isOpen, onClose, storeId, onSuccess }) => {
                     <span>₹{additionalPaymentNeeded.toFixed(2)}</span>
                   </div>
 
-                  {cartTotal < returnCredit && cart.length > 0 && (
+                  {cartBaseTotal < returnCredit && cart.length > 0 && (
                     <p className="text-[10px] font-bold text-red-500 flex items-center gap-1">
                       <AlertTriangle className="w-3 h-3 flex-shrink-0" />
                       Must add replacement items of value &ge; ₹{returnCredit.toFixed(2)}.
@@ -1620,7 +1672,7 @@ const NewExchangeWizard = ({ isOpen, onClose, storeId, onSuccess }) => {
             {step === 3 && (
               <button
                 type="button"
-                disabled={cart.length === 0 || cartTotal < returnCredit}
+                disabled={cart.length === 0 || cartBaseTotal < returnCredit}
                 onClick={() => {
                   if (additionalPaymentNeeded > 0) {
                     setStep(4);
