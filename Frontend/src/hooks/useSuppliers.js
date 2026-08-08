@@ -27,7 +27,7 @@ export const useSuppliers = (storeId, filters = {}) => {
   const query = useQuery({
     queryKey: [suppliersQueryKey, storeId, params],
     queryFn: () => getSuppliersApi(params),
-    enabled: Boolean(storeId) || filters.global === true,
+    enabled: true,
     retry: false,
     staleTime: 1000 * 60 * 2,
   });

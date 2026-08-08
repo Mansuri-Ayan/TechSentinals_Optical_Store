@@ -1100,8 +1100,12 @@ const Inventory = () => {
             )}
             <PermissionGuard permission="inventory:create">
               <button
-                onClick={() => setShowAddModal(true)}
-                className="flex items-center gap-2 px-5 py-2.5 bg-[#0A0F1F] text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 flex-shrink-0"
+                onClick={() => {
+                  setPreselectedProductId(null);
+                  setPreselectedSupplierId(null);
+                  setShowRecordPurchase(true);
+                }}
+                className="flex items-center gap-2 px-5 py-2.5 bg-[#0A0F1F] text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 flex-shrink-0 cursor-pointer"
               >
                 <Plus className="w-4 h-4" />
                 Add Inventory
@@ -1440,8 +1444,9 @@ const Inventory = () => {
                     setShowRecordPurchase(true);
                   }}
                   onAddStock={(product) => {
-                    setPreselectedProduct(product);
-                    setShowAddModal(true);
+                    setPreselectedProductId(product.product_id || product.id);
+                    setPreselectedSupplierId(product.supplier_id || null);
+                    setShowRecordPurchase(true);
                   }}
                   onManage={handleManageUnits}
                 />

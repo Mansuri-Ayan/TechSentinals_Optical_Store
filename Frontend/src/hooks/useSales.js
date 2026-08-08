@@ -14,6 +14,7 @@ export const useSales = (filters = {}) => {
     page: filters.page || 1,
     limit: filters.limit || 8,
     paginate: true,
+    is_lab_order: filters.is_lab_order !== undefined ? filters.is_lab_order : false,
     ...(filters.storeId && filters.storeId !== 'All' ? { store_id: filters.storeId } : {}),
     ...(filters.status && filters.status !== 'All' ? { status: filters.status } : {}),
     ...(filters.search ? { search: filters.search } : {}),

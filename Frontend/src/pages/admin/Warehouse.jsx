@@ -490,8 +490,11 @@ const Warehouse = () => {
               </PermissionGuard>
               <PermissionGuard permission="inventory:create">
                 <button
-                  onClick={() => setShowAddModal(true)}
-                  className="flex items-center gap-2 px-4.5 py-2.5 bg-[#0A0F1F] text-white rounded-xl text-sm font-bold hover:bg-slate-800 transition-all shadow-md flex-shrink-0"
+                  onClick={() => {
+                    setPreselectedProductId(null);
+                    setShowRecordPurchase(true);
+                  }}
+                  className="flex items-center gap-2 px-4.5 py-2.5 bg-[#0A0F1F] text-white rounded-xl text-sm font-bold hover:bg-slate-800 transition-all shadow-md flex-shrink-0 cursor-pointer"
                 >
                   <Plus className="w-4 h-4" />
                   Add Stock

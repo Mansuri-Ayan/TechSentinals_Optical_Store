@@ -59,20 +59,11 @@ async def list_suppliers(
     limit: int = 100,
     offset: int = 0,
 ) -> tuple[list[Supplier], int]:
-    """List suppliers belonging to an admin with optional filters."""
+    """List suppliers belonging to an admin (shared across all stores & admin warehouse)."""
     filters = [
         Supplier.admin_id == admin_id,
         Supplier.deleted_at.is_(None),
     ]
-    if store_id is not None:
-        linked_supplier_ids = (
-            select(SupplierStoreLink.supplier_id)
-            .where(
-                SupplierStoreLink.store_id == store_id,
-                SupplierStoreLink.is_active.is_(True),
-            )
-        )
-        filters.append(Supplier.id.in_(linked_supplier_ids))
     if status_filter:
         filters.append(Supplier.status == status_filter.upper())
     if search:

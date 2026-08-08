@@ -45,3 +45,42 @@ async def reuse_deadstock_endpoint(
         inventory_id=inventory.id,
         status=ds_item.status.value if hasattr(ds_item.status, "value") else str(ds_item.status),
     )
+
+
+from pydantic import BaseModel
+
+class BatchReuseRequest(BaseModel):
+    item_ids: list[int]
+
+@router.post(
+    "/batch-reuse",
+    summary="Batch move deadstock items of same product back into regular inventory",
+)
+async def batch_reuse_deadstock_endpoint(
+    payload: BatchReuseRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(require_permission("deadstock", "update")),
+):
+    if isinstance(current_user, Admin):
+        admin_id = current_user.id
+        user_id = current_user.id
+        store_id = None
+    else:
+        admin_id = current_user.store.admin_id
+        user_id = current_user.id
+        store_id = current_user.store_id
+
+    from services.deadstock_service import batch_reuse_deadstock
+    reused_count, inventory = await batch_reuse_deadstock(
+        db=db,
+        item_ids=payload.item_ids,
+        admin_id=admin_id,
+        user_id=user_id,
+        store_id=store_id,
+    )
+
+    return {
+        "message": f"Successfully restored {reused_count} deadstock units to active inventory.",
+        "reused_count": reused_count,
+        "inventory_id": inventory.id if inventory else None,
+    }

@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import TransactionDetailModal from '../../components/admin/suppliers/TransactionDetailModal';
+import AddTransactionModal from '../../components/admin/suppliers/AddTransactionModal';
 import { useQuery } from '@tanstack/react-query';
 import {
   ArrowRightLeft, Plus, Search, ChevronRight, ChevronDown,
@@ -16,6 +17,7 @@ import { useInventory } from '../../hooks/useInventory';
 import { useTransactions } from '../../hooks/useTransactions';
 import { useCategories } from '../../hooks/useCategories';
 import { useProducts } from '../../hooks/useProducts';
+import { usePurchaseOrders } from '../../hooks/usePurchaseOrders';
 import { getInventoryApi } from '../../api/inventory/inventory.api';
 import PermissionGuard from '../../components/shared/PermissionGuard';
 import { usePagePermissions } from '../../hooks/usePermissions'; 
@@ -143,10 +145,7 @@ const EMPTY_FORM = {
 
 const TRANSACTION_TYPE_OPTIONS = [
   { value: 'Inventory Transfer', label: 'Inventory Transfer' },
-  { value: 'Purchase', label: 'Purchase' },
   { value: 'Damage', label: 'Damage' },
-  { value: 'Loss', label: 'Loss' },
-  { value: 'Sale', label: 'Sale' },
   { value: 'Return', label: 'Return' },
 ];
 
@@ -198,7 +197,7 @@ const NewTransactionModal = ({
       owner_id: senderIdVal,
       paginate: false
     }),
-    enabled: isOpen && !!form.sender && (senderType === 'ADMIN' ? !!user?.id : !!senderIdVal) && form.type !== 'Purchase',
+    enabled: isOpen && !!form.sender && (senderType === 'ADMIN' ? !!user?.id : !!senderIdVal),
   });
 
   const inventoryItems = inventoryData?.items || [];
@@ -214,7 +213,7 @@ const NewTransactionModal = ({
       setForm({
         ...EMPTY_FORM,
         sender: isSenderLocked ? (myStore?.id ? String(myStore.id) : '') : (currentStore?.id ? String(currentStore.id) : ''),
-        type: stores.length <= 1 ? 'Purchase' : 'Inventory Transfer',
+        type: stores.length <= 1 ? 'Return' : 'Inventory Transfer',
       });
       setErrors({});
     }
@@ -608,8 +607,10 @@ const Transactions = () => {
   }, [searchTerm, filterType, setSearchParams]);
   const [currentPage, setCurrentPage] = useState(1);
   const [showNewModal, setShowNewModal] = useState(false);
+  const [showRecordPurchaseModal, setShowRecordPurchaseModal] = useState(false);
   const [viewTx, setViewTx] = useState(null);
   const [showFilters, setShowFilters] = useState(false);
+  const { recordPurchaseAsync } = usePurchaseOrders();
   const {
     transactions: backendTransactions,
     totalTransactions,
@@ -837,7 +838,7 @@ const Transactions = () => {
             <PermissionGuard permission="transactions:create">
               <button
                 onClick={() => setShowNewModal(true)}
-                className="flex items-center gap-2 px-5 py-2.5 bg-[#0A0F1F] text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 flex-shrink-0 justify-center animate-fade-in"
+                className="flex items-center gap-2 px-5 py-2.5 bg-[#0A0F1F] text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 flex-shrink-0 justify-center animate-fade-in cursor-pointer"
               >
                 <Plus className="w-4 h-4" />
                 New Transaction
@@ -1238,6 +1239,29 @@ const Transactions = () => {
               : String(viewTx?.raw?.receive_store_id) === String(user?.store_id)
           ))
         }
+      />
+
+      <AddTransactionModal
+        isOpen={showRecordPurchaseModal}
+        activeStoreId={inPageStoreId === 'admin' ? '' : inPageStoreId}
+        onClose={() => setShowRecordPurchaseModal(false)}
+        onSubmit={async (data) => {
+          await recordPurchaseAsync({
+            supplierId: data.supplierId,
+            storeId: data.storeId,
+            productId: data.productId,
+            quantity: data.quantity,
+            totalAmount: data.amount,
+            paidAmount: data.paidAmount,
+            paymentMethod: data.method,
+            date: data.date,
+            remarks: data.remarks,
+            costPrice: data.costPrice,
+            sellingPrice: data.sellingPrice,
+            discountPercent: data.discountPercent,
+          });
+          setShowRecordPurchaseModal(false);
+        }}
       />
     </div>
   );

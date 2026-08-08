@@ -4,6 +4,7 @@ import {
   getPosAvailableDeadstockApi,
   getDeadstockItemApi,
   reuseDeadstockApi,
+  batchReuseDeadstockApi,
 } from '../api/deadstock/deadstock.api';
 import { toast } from 'react-toastify';
 
@@ -59,6 +60,26 @@ export const useReuseDeadstock = () => {
     },
     onError: (error) => {
       const msg = error.response?.data?.detail || 'Failed to reuse deadstock item.';
+      toast.error(msg);
+    },
+  });
+};
+
+/**
+ * Custom hook to batch reuse multiple deadstock items.
+ */
+export const useBatchReuseDeadstock = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (itemIds) => batchReuseDeadstockApi(itemIds),
+    onSuccess: (data) => {
+      toast.success(data.message || 'Items moved back to active inventory!');
+      queryClient.invalidateQueries({ queryKey: ['deadstock'] });
+      queryClient.invalidateQueries({ queryKey: ['inventory'] });
+    },
+    onError: (error) => {
+      const msg = error.response?.data?.detail || 'Failed to reuse deadstock items.';
       toast.error(msg);
     },
   });

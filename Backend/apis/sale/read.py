@@ -2,7 +2,7 @@
 import math
 from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select
+from sqlalchemy import select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from core.deps import require_permission
 from db.session import get_db
@@ -291,7 +291,10 @@ async def list_sales_endpoint(
             "readyCount": ready_count,
         }
     else:
-        kpi_conditions = [Sale.admin_id == admin_id]
+        kpi_conditions = [
+            Sale.admin_id == admin_id,
+            or_(Sale.lab_status.is_(None), Sale.lab_status == "Delivered")
+        ]
         if numeric_store_id:
             kpi_conditions.append(Sale.store_id == numeric_store_id)
         if date_from:

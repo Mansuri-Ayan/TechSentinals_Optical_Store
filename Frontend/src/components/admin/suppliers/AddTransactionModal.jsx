@@ -1,17 +1,25 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  X, Package, ChevronDown, Layers, Hash, FileText, Plus, Check, CreditCard, Calendar, IndianRupee, Store, Building
+  X, Package, ChevronDown, Layers, Hash, FileText, Plus, Check, CreditCard, Calendar, IndianRupee, Store, Loader2, Tag
 } from 'lucide-react';
+import { toast } from 'react-toastify';
 import { useCategories, useSubcategories } from '../../../hooks/useCategories';
 import { useProducts } from '../../../hooks/useProducts';
 import { useStores } from '../../../hooks/useStores';
+import { useBrands } from '../../../hooks/useBrands';
+import { createProductApi } from '../../../api/product/product.api';
+import { addSupplierProductApi } from '../../../api/suppliers/supplier.api';
 import SupplierSelect from '../SupplierSelect';
 import { useSuppliers } from '../../../hooks/useSuppliers';
 
 const PAYMENT_METHODS = ['Cash', 'Bank Transfer', 'Cheque', 'UPI', 'Credit'];
 
 const EMPTY = {
+  isNewProduct: false,
+  newProductName: '',
+  newProductSku: '',
+  newBrandName: '',
   categoryId: '',
   subcategoryId: '',
   productId: '',
@@ -20,7 +28,7 @@ const EMPTY = {
   amount: '',
   paidAmount: '',
   dueAmount: '',
-  method: '',
+  method: 'Cash',
   date: new Date().toISOString().split('T')[0],
   remarks: '',
   
@@ -35,18 +43,11 @@ const EMPTY = {
 const AddTransactionModal = ({ isOpen, defaultProductId, defaultSupplierId, storeName, activeStoreId, onClose, onSubmit }) => {
   const [form, setForm] = useState(EMPTY);
   const [errors, setErrors] = useState({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const { stores } = useStores();
+  const { brands, createBrandAsync } = useBrands();
 
-  // When a defaultSupplierId is given, the supplier is locked (auto-selected)
-  const isSupplierLocked = !!defaultSupplierId;
-
-  // Fetch suppliers to display the locked supplier name
-  const { suppliers } = useSuppliers('admin', { limit: 200 });
-  const lockedSupplier = isSupplierLocked
-    ? suppliers.find(s => String(s.id) === String(defaultSupplierId))
-    : null;
-
-  // Fetch all categories (using a high limit to get all)
+  // Fetch all categories
   const { categories } = useCategories(null, { limit: 100 });
   
   // Fetch subcategories for the selected category
@@ -73,8 +74,10 @@ const AddTransactionModal = ({ isOpen, defaultProductId, defaultSupplierId, stor
         storeId: activeStoreId ? String(activeStoreId) : '',
         enterUnitCostPrice: true,
         supplierId: defaultSupplierId ? String(defaultSupplierId) : '',
+        method: 'Cash',
       });
       setErrors({});
+      setIsSubmitting(false);
     }
   }, [isOpen, activeStoreId, defaultSupplierId]);
 
@@ -114,7 +117,7 @@ const AddTransactionModal = ({ isOpen, defaultProductId, defaultSupplierId, stor
       };
 
       // Auto-populate unit price or product default cost if product is selected
-      if (k === 'productId' && v) {
+      if (k === 'productId' && v && !next.isNewProduct) {
         const prod = products.find(p => String(p.id) === String(v)) || allProducts.find(p => String(p.id) === String(v));
         if (prod) {
           const cp = Number(prod.cost_price || 0);
@@ -227,7 +230,15 @@ const AddTransactionModal = ({ isOpen, defaultProductId, defaultSupplierId, stor
     if (!form.supplierId)    e.supplierId    = 'Supplier is required';
     if (!form.categoryId)    e.categoryId    = 'Category is required';
     if (!form.subcategoryId) e.subcategoryId = 'Sub-category is required';
-    if (!form.productId)     e.productId     = 'Product is required';
+
+    if (form.isNewProduct) {
+      if (!form.newProductName.trim()) e.newProductName = 'Product Name is required';
+      if (!form.newProductSku.trim())  e.newProductSku  = 'SKU code is required';
+      if (!form.newBrandName.trim())    e.newBrandName    = 'Brand is required';
+    } else {
+      if (!form.productId)     e.productId     = 'Product is required';
+    }
+
     if (!form.storeId)       e.storeId       = 'Receiving store is required';
     if (!form.quantity || isNaN(form.quantity) || Number(form.quantity) < 1)
       e.quantity = 'Enter a valid quantity (≥ 1)';
@@ -251,30 +262,88 @@ const AddTransactionModal = ({ isOpen, defaultProductId, defaultSupplierId, stor
     return Object.keys(e).length === 0;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validate()) return;
-    onSubmit({
-      supplierId: Number(form.supplierId),
-      categoryId: Number(form.categoryId),
-      subcategoryId: Number(form.subcategoryId),
-      productId: Number(form.productId),
-      storeId: form.storeId === 'warehouse' ? 'warehouse' : Number(form.storeId),
-      quantity: Number(form.quantity),
-      amount: Number(form.amount),
-      paidAmount: Number(form.paidAmount),
-      dueAmount: Number(form.dueAmount),
-      method: form.method,
-      date: form.date,
-      remarks: form.remarks,
-      
-      costPrice: Number(form.unitCostPrice),
-      sellingPrice: Number(form.unitSellingPrice),
-      discountPercent: Number(form.discountPercent || 0),
-    });
+
+    setIsSubmitting(true);
+    try {
+      let targetProductId = Number(form.productId);
+
+      // If creating a brand-new product inline
+      if (form.isNewProduct) {
+        let brandId = null;
+        const typedBrand = form.newBrandName.trim();
+        if (typedBrand) {
+          const matchBrand = brands.find(b => b.name.toLowerCase() === typedBrand.toLowerCase());
+          if (matchBrand) {
+            brandId = matchBrand.id;
+          } else {
+            const createdBrand = await createBrandAsync({ name: typedBrand });
+            brandId = createdBrand.id;
+          }
+        }
+
+        const productPayload = {
+          category_id: Number(form.categoryId),
+          subcategory_id: Number(form.subcategoryId),
+          brand_id: brandId,
+          sku: form.newProductSku.trim().toUpperCase(),
+          name: form.newProductName.trim(),
+          cost_price: Number(form.unitCostPrice),
+          selling_price: Number(form.unitSellingPrice),
+          discount_percent: Number(form.discountPercent || 0),
+          description: form.remarks || null,
+        };
+
+        const newProduct = await createProductApi(productPayload);
+        targetProductId = newProduct.id;
+
+        // Link product to supplier
+        if (form.supplierId) {
+          try {
+            await addSupplierProductApi(Number(form.supplierId), {
+              product_id: targetProductId,
+              unit_price: Number(form.unitCostPrice),
+              minimum_order_quantity: 1,
+              lead_time_days: 0,
+            });
+          } catch (err) {
+            console.error("Failed to link supplier to new product:", err);
+          }
+        }
+      }
+
+      await onSubmit({
+        supplierId: Number(form.supplierId),
+        categoryId: Number(form.categoryId),
+        subcategoryId: Number(form.subcategoryId),
+        productId: targetProductId,
+        storeId: form.storeId === 'warehouse' ? 'warehouse' : Number(form.storeId),
+        quantity: Number(form.quantity),
+        amount: Number(form.amount),
+        paidAmount: Number(form.paidAmount),
+        dueAmount: Number(form.dueAmount),
+        method: form.method,
+        date: form.date,
+        remarks: form.remarks,
+        
+        costPrice: Number(form.unitCostPrice),
+        sellingPrice: Number(form.unitSellingPrice),
+        discountPercent: Number(form.discountPercent || 0),
+      });
+
+      handleClose();
+    } catch (err) {
+      console.error('Submit transaction failed:', err);
+      toast.error(err.response?.data?.detail || err.message || 'Failed to record purchase transaction.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleClose = () => {
+    if (isSubmitting) return;
     setForm(EMPTY);
     setErrors({});
     onClose();
@@ -290,6 +359,7 @@ const AddTransactionModal = ({ isOpen, defaultProductId, defaultSupplierId, stor
     }`;
 
   const selectedProduct = products.find(p => String(p.id) === String(form.productId));
+  const displayProductName = form.isNewProduct ? form.newProductName : selectedProduct?.name;
 
   return createPortal(
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[1000] p-3 sm:p-4 animate-fade-in">
@@ -301,11 +371,11 @@ const AddTransactionModal = ({ isOpen, defaultProductId, defaultSupplierId, stor
               <Package className="w-4 h-4 text-blue-600" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-slate-900">Record Purchase (Goods & Payment)</h2>
-              <p className="text-xs text-slate-500 truncate max-w-[280px]">Restock inventory and record supplier transaction.</p>
+              <h2 className="text-base font-bold text-slate-900">Record Purchase (Stock & Payment)</h2>
+              <p className="text-xs text-slate-500 truncate max-w-[280px]">Add stock to inventory with cash and supplier payment details.</p>
             </div>
           </div>
-          <button type="button" onClick={handleClose} className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors">
+          <button type="button" onClick={handleClose} disabled={isSubmitting} className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors disabled:opacity-50">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -314,42 +384,30 @@ const AddTransactionModal = ({ isOpen, defaultProductId, defaultSupplierId, stor
         <form onSubmit={handleSubmit} className="overflow-y-auto flex-1 min-h-0">
           <div className="px-5 py-5 space-y-4">
             
-            {/* Section: Supplier */}
+            {/* Section 1: Supplier */}
             <div className="space-y-3 font-sans">
-              {isSupplierLocked ? (
-                // When opened from supplier detail page, show a locked read-only supplier card
-                <div className="space-y-2">
-                  <label className="block text-xs font-semibold text-slate-600 flex items-center gap-1.5">
-                    <Building className="w-3.5 h-3.5 text-slate-400" />
-                    Supplier <span className="text-red-500">*</span>
-                  </label>
-                  <div className="flex items-center gap-3 px-4 py-3 bg-emerald-50 border border-emerald-200 rounded-xl">
-                    <div className="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center flex-shrink-0">
-                      <span className="text-white text-xs font-black">{lockedSupplier?.company_name?.[0] ?? 'S'}</span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-bold text-slate-800 truncate">{lockedSupplier?.company_name ?? 'Loading...'}</p>
-                      {lockedSupplier?.contact_person && (
-                        <p className="text-xs text-slate-500 truncate">Contact: {lockedSupplier.contact_person}</p>
-                      )}
-                    </div>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 border border-emerald-300 text-emerald-700 tracking-wide uppercase">Auto-Selected</span>
-                  </div>
-                </div>
-              ) : (
-                <SupplierSelect
-                  selectedSupplierId={form.supplierId}
-                  onChange={supplier => set('supplierId', supplier ? String(supplier.id) : '')}
-                  error={errors.supplierId}
-                />
-              )}
+              <SupplierSelect
+                selectedSupplierId={form.supplierId}
+                onChange={supplier => set('supplierId', supplier ? String(supplier.id) : '')}
+                error={errors.supplierId}
+                disabled={isSubmitting}
+              />
             </div>
 
             <hr className="border-slate-100" />
             
-            {/* Section: Goods Details */}
+            {/* Section 2: Goods & Product Selection */}
             <div className="space-y-3 font-sans">
-              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">2. Goods details</h3>
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">2. Product & Goods details</h3>
+                <button
+                  type="button"
+                  onClick={() => set('isNewProduct', !form.isNewProduct)}
+                  className="text-xs font-bold text-blue-600 hover:text-blue-700 hover:underline flex items-center gap-1"
+                >
+                  {form.isNewProduct ? '← Select Existing Product' : '+ Add New Product'}
+                </button>
+              </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {/* Category */}
@@ -358,7 +416,7 @@ const AddTransactionModal = ({ isOpen, defaultProductId, defaultSupplierId, stor
                     <Layers className="w-3.5 h-3.5 text-slate-400" /> Product Category <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
-                    <select value={form.categoryId} onChange={e => set('categoryId', e.target.value)} className={inputCls('categoryId')}>
+                    <select value={form.categoryId} onChange={e => set('categoryId', e.target.value)} className={inputCls('categoryId')} disabled={isSubmitting}>
                       <option value="">Select category…</option>
                       {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
@@ -373,7 +431,7 @@ const AddTransactionModal = ({ isOpen, defaultProductId, defaultSupplierId, stor
                     <Layers className="w-3.5 h-3.5 text-slate-400" /> Sub Category <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
-                    <select value={form.subcategoryId} onChange={e => set('subcategoryId', e.target.value)} className={inputCls('subcategoryId')} disabled={!form.categoryId}>
+                    <select value={form.subcategoryId} onChange={e => set('subcategoryId', e.target.value)} className={inputCls('subcategoryId')} disabled={!form.categoryId || isSubmitting}>
                       <option value="">{form.categoryId ? 'Select sub-category…' : 'Select a category first'}</option>
                       {subcategories.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                     </select>
@@ -383,224 +441,291 @@ const AddTransactionModal = ({ isOpen, defaultProductId, defaultSupplierId, stor
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {/* Product Selection */}
-                <div>
-                  <label className="text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
-                    <Package className="w-3.5 h-3.5 text-slate-400" /> Product <span className="text-red-500">*</span>
-                  </label>
-                  <div className="relative">
-                    <select value={form.productId} onChange={e => set('productId', e.target.value)} className={inputCls('productId')} disabled={!form.subcategoryId}>
-                      <option value="">{form.subcategoryId ? 'Select product…' : 'Select category & sub-category'}</option>
-                      {products.map(p => <option key={p.id} value={p.id}>{p.name} ({p.sku})</option>)}
-                    </select>
-                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+              {!form.isNewProduct ? (
+                /* Select Existing Product */
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
+                      <Package className="w-3.5 h-3.5 text-slate-400" /> Product <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <select value={form.productId} onChange={e => set('productId', e.target.value)} className={inputCls('productId')} disabled={!form.subcategoryId || isSubmitting}>
+                        <option value="">{form.subcategoryId ? 'Select product…' : 'Select category & sub-category'}</option>
+                        {products.map(p => <option key={p.id} value={p.id}>{p.name} ({p.sku})</option>)}
+                      </select>
+                      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                    </div>
+                    {errors.productId && <p className="text-xs text-red-500 mt-1">{errors.productId}</p>}
                   </div>
-                  {errors.productId && <p className="text-xs text-red-500 mt-1">{errors.productId}</p>}
-                </div>
 
-                {/* Quantity */}
-                <div>
-                  <label className="text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
-                    <Hash className="w-3.5 h-3.5 text-slate-400" /> Quantity <span className="text-red-500">*</span>
-                  </label>
-                  <input type="number" min="1" value={form.quantity} onChange={e => set('quantity', e.target.value)}
-                    placeholder="e.g. 20" className={inputCls('quantity')} />
-                  {errors.quantity && <p className="text-xs text-red-500 mt-1">{errors.quantity}</p>}
+                  <div>
+                    <label className="text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
+                      <Hash className="w-3.5 h-3.5 text-slate-400" /> Quantity <span className="text-red-500">*</span>
+                    </label>
+                    <input type="number" min="1" value={form.quantity} onChange={e => set('quantity', e.target.value)}
+                      disabled={isSubmitting} placeholder="e.g. 20" className={inputCls('quantity')} />
+                    {errors.quantity && <p className="text-xs text-red-500 mt-1">{errors.quantity}</p>}
+                  </div>
                 </div>
-              </div>
+              ) : (
+                /* Create New Product Fields */
+                <div className="space-y-3 p-3 bg-blue-50/50 rounded-xl border border-blue-100">
+                  <p className="text-xs font-bold text-blue-700 flex items-center gap-1">
+                    <Plus className="w-3.5 h-3.5" /> Enter New Product Details
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-semibold text-slate-600 mb-1 block">Product Name <span className="text-red-500">*</span></label>
+                      <input
+                        type="text"
+                        value={form.newProductName}
+                        onChange={e => set('newProductName', e.target.value)}
+                        disabled={isSubmitting}
+                        placeholder="e.g. Ray-Ban Aviator Classic"
+                        className={inputCls('newProductName')}
+                      />
+                      {errors.newProductName && <p className="text-xs text-red-500 mt-1">{errors.newProductName}</p>}
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-semibold text-slate-600 mb-1 block">SKU Code <span className="text-red-500">*</span></label>
+                      <input
+                        type="text"
+                        value={form.newProductSku}
+                        onChange={e => set('newProductSku', e.target.value.toUpperCase())}
+                        disabled={isSubmitting}
+                        placeholder="e.g. RB3025"
+                        className={inputCls('newProductSku')}
+                      />
+                      {errors.newProductSku && <p className="text-xs text-red-500 mt-1">{errors.newProductSku}</p>}
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-semibold text-slate-600 mb-1 block">Brand <span className="text-red-500">*</span></label>
+                      <input
+                        type="text"
+                        value={form.newBrandName}
+                        onChange={e => set('newBrandName', e.target.value)}
+                        disabled={isSubmitting}
+                        placeholder="e.g. Ray-Ban"
+                        className={inputCls('newBrandName')}
+                        list="modal-brand-datalist"
+                      />
+                      <datalist id="modal-brand-datalist">
+                        {brands.map(b => <option key={b.id} value={b.name} />)}
+                      </datalist>
+                      {errors.newBrandName && <p className="text-xs text-red-500 mt-1">{errors.newBrandName}</p>}
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-semibold text-slate-600 mb-1 block">Quantity <span className="text-red-500">*</span></label>
+                      <input type="number" min="1" value={form.quantity} onChange={e => set('quantity', e.target.value)}
+                        disabled={isSubmitting} placeholder="e.g. 20" className={inputCls('quantity')} />
+                      {errors.quantity && <p className="text-xs text-red-500 mt-1">{errors.quantity}</p>}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             <hr className="border-slate-100" />
 
-              {/* Destination & Payment Details */}
-              <div className="space-y-3 font-sans">
-                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">3. Destination & Payment details</h3>
-                
-                {/* Receiving Store selection dropdown */}
-                <div>
-                  <label className="text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
-                    <Store className="w-3.5 h-3.5 text-slate-400" /> Receiving Store <span className="text-red-500">*</span>
+            {/* Section 3: Destination & Pricing Details */}
+            <div className="space-y-3 font-sans">
+              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">3. Destination & Pricing</h3>
+              
+              {/* Receiving Store selection dropdown */}
+              <div>
+                <label className="text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
+                  <Store className="w-3.5 h-3.5 text-slate-400" /> Receiving Store / Warehouse <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <select value={form.storeId} onChange={e => set('storeId', e.target.value)} className={inputCls('storeId')} disabled={isSubmitting}>
+                    <option value="">Select receiving store…</option>
+                    <option value="warehouse">Central Warehouse</option>
+                    {stores.map(st => <option key={st.id} value={st.id}>{st.store_name || st.name || `Store #${st.id}`}</option>)}
+                  </select>
+                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                </div>
+                {errors.storeId && <p className="text-xs text-red-500 mt-1">{errors.storeId}</p>}
+              </div>
+
+              {/* Pricing details section */}
+              <div className="pt-2 border-t border-slate-100 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Unit Pricing</h4>
+                  <label className="inline-flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={form.enterUnitCostPrice}
+                      onChange={(e) => set('enterUnitCostPrice', e.target.checked)}
+                      disabled={isSubmitting}
+                      className="rounded border-slate-300 text-blue-600 focus:ring-blue-500/10 focus:ring-4"
+                    />
+                    <span className="text-xs font-bold text-slate-600">Enter Unit Cost Price</span>
                   </label>
-                  <div className="relative">
-                    <select value={form.storeId} onChange={e => set('storeId', e.target.value)} className={inputCls('storeId')}>
-                      <option value="">Select receiving store…</option>
-                      <option value="warehouse">Warehouse (Central)</option>
-                      {stores.map(st => <option key={st.id} value={st.id}>{st.store_name || st.name || `Store #${st.id}`}</option>)}
-                    </select>
-                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-                  </div>
-                  {errors.storeId && <p className="text-xs text-red-500 mt-1">{errors.storeId}</p>}
                 </div>
 
-                {/* Pricing details section */}
-                <div className="pt-2 border-t border-slate-100 space-y-3 md:col-span-2">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">2.5 Pricing details</h4>
-                    <label className="inline-flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={form.enterUnitCostPrice}
-                        onChange={(e) => set('enterUnitCostPrice', e.target.checked)}
-                        className="rounded border-slate-300 text-blue-600 focus:ring-blue-500/10 focus:ring-4"
-                      />
-                      <span className="text-xs font-bold text-slate-600">Enter Unit Cost Price</span>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {/* Unit Cost Price */}
+                  <div>
+                    <label className="text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
+                      <IndianRupee className="w-3.5 h-3.5 text-slate-400" /> Unit Cost Price (₹) <span className="text-red-500">*</span>
                     </label>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {/* Unit Cost Price */}
-                    <div>
-                      <label className="text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
-                        <IndianRupee className="w-3.5 h-3.5 text-slate-400" /> Unit Cost Price (₹) <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        disabled={!form.enterUnitCostPrice}
-                        value={form.unitCostPrice}
-                        onChange={(e) => set('unitCostPrice', e.target.value)}
-                        placeholder="0.00"
-                        className={inputCls('unitCostPrice')}
-                      />
-                      {errors.unitCostPrice && <p className="text-xs text-red-500 mt-1">{errors.unitCostPrice}</p>}
-                    </div>
-
-                    {/* Unit Selling Price */}
-                    <div>
-                      <label className="text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
-                        <IndianRupee className="w-3.5 h-3.5 text-slate-400" /> Unit Selling Price (₹) <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={form.unitSellingPrice}
-                        onChange={(e) => set('unitSellingPrice', e.target.value)}
-                        placeholder="0.00"
-                        className={inputCls('unitSellingPrice')}
-                      />
-                      {errors.unitSellingPrice && <p className="text-xs text-red-500 mt-1">{errors.unitSellingPrice}</p>}
-                    </div>
-
-                    {/* Profit Margin (%) */}
-                    <div>
-                      <label className="text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
-                        <Hash className="w-3.5 h-3.5 text-slate-400" /> Profit Margin (%)
-                      </label>
-                      <input
-                        type="number"
-                        min="-1000"
-                        max="99.99"
-                        step="0.01"
-                        value={form.profitMargin}
-                        onChange={(e) => set('profitMargin', e.target.value)}
-                        placeholder="0.00"
-                        className={inputCls('profitMargin')}
-                      />
-                      <p className="mt-0.5 text-[10px] text-slate-400 font-medium">Recalculates Unit Selling Price</p>
-                    </div>
-
-                    {/* Discount (%) */}
-                    <div>
-                      <label className="text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
-                        <Hash className="w-3.5 h-3.5 text-slate-400" /> Discount (%)
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        max="99.99"
-                        step="0.01"
-                        value={form.discountPercent}
-                        onChange={(e) => set('discountPercent', e.target.value)}
-                        placeholder="0.00"
-                        className={inputCls('discountPercent')}
-                      />
-                      {errors.discountPercent && <p className="text-xs text-red-500 mt-1">{errors.discountPercent}</p>}
-                      <p className="mt-0.5 text-[10px] text-slate-400 font-medium">Max 99.99% — 100% not allowed</p>
-                    </div>
-                  </div>
-                </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {/* Total Amount */}
-                <div>
-                  <label className="text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
-                    <IndianRupee className="w-3.5 h-3.5 text-slate-400" /> Total Amount (₹) <span className="text-red-500">*</span>
-                  </label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-semibold">₹</span>
-                    <input type="number" min="0" step="0.01" value={form.amount}
-                      disabled={form.enterUnitCostPrice}
-                      onChange={e => set('amount', e.target.value)}
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      disabled={!form.enterUnitCostPrice || isSubmitting}
+                      value={form.unitCostPrice}
+                      onChange={(e) => set('unitCostPrice', e.target.value)}
                       placeholder="0.00"
-                      className={`${inputCls('amount')} pl-7`} />
+                      className={inputCls('unitCostPrice')}
+                    />
+                    {errors.unitCostPrice && <p className="text-xs text-red-500 mt-1">{errors.unitCostPrice}</p>}
                   </div>
-                  {errors.amount && <p className="text-xs text-red-500 mt-1">{errors.amount}</p>}
-                </div>
 
-                {/* Date */}
-                <div>
-                  <label className="text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
-                    <Calendar className="w-3.5 h-3.5 text-slate-400" /> Date <span className="text-red-500">*</span>
-                  </label>
-                  <input type="date" value={form.date} onChange={e => set('date', e.target.value)}
-                    max={new Date().toISOString().split('T')[0]}
-                    className={inputCls('date')} />
-                  {errors.date && <p className="text-xs text-red-500 mt-1">{errors.date}</p>}
-                </div>
-
-                {/* Done Payment */}
-                <div>
-                  <label className="text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
-                    <IndianRupee className="w-3.5 h-3.5 text-slate-400" /> Done Payment (₹) <span className="text-red-500">*</span>
-                  </label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-semibold">₹</span>
-                    <input type="number" min="0" step="0.01" value={form.paidAmount}
-                      onChange={e => set('paidAmount', e.target.value)}
+                  {/* Unit Selling Price */}
+                  <div>
+                    <label className="text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
+                      <IndianRupee className="w-3.5 h-3.5 text-slate-400" /> Unit Selling Price (₹) <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      disabled={isSubmitting}
+                      value={form.unitSellingPrice}
+                      onChange={(e) => set('unitSellingPrice', e.target.value)}
                       placeholder="0.00"
-                      className={`${inputCls('paidAmount')} pl-7`} />
+                      className={inputCls('unitSellingPrice')}
+                    />
+                    {errors.unitSellingPrice && <p className="text-xs text-red-500 mt-1">{errors.unitSellingPrice}</p>}
                   </div>
-                  {errors.paidAmount && <p className="text-xs text-red-500 mt-1">{errors.paidAmount}</p>}
-                </div>
 
-                {/* Due Payment */}
-                <div>
-                  <label className="text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
-                    <IndianRupee className="w-3.5 h-3.5 text-slate-400" /> Due Payment (₹) <span className="text-red-500">*</span>
-                  </label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-semibold">₹</span>
-                    <input type="number" value={form.dueAmount}
-                      readOnly
+                  {/* Profit Margin (%) */}
+                  <div>
+                    <label className="text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
+                      <Hash className="w-3.5 h-3.5 text-slate-400" /> Profit Margin (%)
+                    </label>
+                    <input
+                      type="number"
+                      min="-1000"
+                      max="99.99"
+                      step="0.01"
+                      disabled={isSubmitting}
+                      value={form.profitMargin}
+                      onChange={(e) => set('profitMargin', e.target.value)}
                       placeholder="0.00"
-                      className={`${inputCls('dueAmount')} pl-7 bg-slate-50 cursor-not-allowed`} />
+                      className={inputCls('profitMargin')}
+                    />
                   </div>
-                  {errors.dueAmount && <p className="text-xs text-red-500 mt-1">{errors.dueAmount}</p>}
+
+                  {/* Discount (%) */}
+                  <div>
+                    <label className="text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
+                      <Hash className="w-3.5 h-3.5 text-slate-400" /> Discount (%)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.01"
+                      disabled={isSubmitting}
+                      value={form.discountPercent}
+                      onChange={(e) => set('discountPercent', e.target.value)}
+                      placeholder="0.00"
+                      className={inputCls('discountPercent')}
+                    />
+                    {errors.discountPercent && <p className="text-xs text-red-500 mt-1">{errors.discountPercent}</p>}
+                  </div>
                 </div>
               </div>
 
-              {/* Payment Method */}
-              <div>
-                <label className="text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
-                  <CreditCard className="w-3.5 h-3.5 text-slate-400" /> Payment Method <span className="text-red-500">*</span>
-                </label>
-                <div className="flex flex-wrap gap-1.5 sm:gap-2">
-                  {PAYMENT_METHODS.map(m => (
-                    <button key={m} type="button" onClick={() => set('method', m)}
-                      className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all text-center ${
-                        form.method === m
-                          ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
-                          : 'bg-white text-slate-600 border-slate-200 hover:border-blue-300 hover:bg-blue-50'
-                      }`}
-                      title={m}>
-                      {m}
-                    </button>
-                  ))}
+              {/* Section 4: Cash & Payment Info */}
+              <div className="pt-3 border-t border-slate-100 space-y-3">
+                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">4. Cash & Payment Info</h4>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {/* Total Amount */}
+                  <div>
+                    <label className="text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
+                      <IndianRupee className="w-3.5 h-3.5 text-slate-400" /> Total Purchase Amount (₹) <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-semibold">₹</span>
+                      <input type="number" min="0" step="0.01" value={form.amount}
+                        disabled={form.enterUnitCostPrice || isSubmitting}
+                        onChange={e => set('amount', e.target.value)}
+                        placeholder="0.00"
+                        className={`${inputCls('amount')} pl-7`} />
+                    </div>
+                    {errors.amount && <p className="text-xs text-red-500 mt-1">{errors.amount}</p>}
+                  </div>
+
+                  {/* Date */}
+                  <div>
+                    <label className="text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
+                      <Calendar className="w-3.5 h-3.5 text-slate-400" /> Purchase Date <span className="text-red-500">*</span>
+                    </label>
+                    <input type="date" value={form.date} onChange={e => set('date', e.target.value)}
+                      disabled={isSubmitting} max={new Date().toISOString().split('T')[0]}
+                      className={inputCls('date')} />
+                    {errors.date && <p className="text-xs text-red-500 mt-1">{errors.date}</p>}
+                  </div>
+
+                  {/* Done Payment */}
+                  <div>
+                    <label className="text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
+                      <IndianRupee className="w-3.5 h-3.5 text-emerald-600" /> Done / Paid Payment (₹) <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-semibold">₹</span>
+                      <input type="number" min="0" step="0.01" value={form.paidAmount}
+                        disabled={isSubmitting}
+                        onChange={e => set('paidAmount', e.target.value)}
+                        placeholder="0.00"
+                        className={`${inputCls('paidAmount')} pl-7 font-bold text-emerald-700`} />
+                    </div>
+                    {errors.paidAmount && <p className="text-xs text-red-500 mt-1">{errors.paidAmount}</p>}
+                  </div>
+
+                  {/* Due Payment */}
+                  <div>
+                    <label className="text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
+                      <IndianRupee className="w-3.5 h-3.5 text-rose-500" /> Remaining Due Payment (₹)
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-semibold">₹</span>
+                      <input type="number" value={form.dueAmount}
+                        readOnly
+                        placeholder="0.00"
+                        className={`${inputCls('dueAmount')} pl-7 bg-slate-50 cursor-not-allowed font-bold text-rose-600`} />
+                    </div>
+                  </div>
                 </div>
-                {errors.method && <p className="text-xs text-red-500 mt-1">{errors.method}</p>}
+
+                {/* Payment Method */}
+                <div>
+                  <label className="text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
+                    <CreditCard className="w-3.5 h-3.5 text-slate-400" /> Payment Method <span className="text-red-500">*</span>
+                  </label>
+                  <div className="flex flex-wrap gap-1.5 sm:gap-2">
+                    {PAYMENT_METHODS.map(m => (
+                      <button key={m} type="button" onClick={() => set('method', m)}
+                        disabled={isSubmitting}
+                        className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all text-center ${
+                          form.method === m
+                            ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                            : 'bg-white text-slate-600 border-slate-200 hover:border-blue-300 hover:bg-blue-50'
+                        }`}
+                        title={m}>
+                        {m}
+                      </button>
+                    ))}
+                  </div>
+                  {errors.method && <p className="text-xs text-red-500 mt-1">{errors.method}</p>}
+                </div>
               </div>
             </div>
 
@@ -609,25 +734,26 @@ const AddTransactionModal = ({ isOpen, defaultProductId, defaultSupplierId, stor
             {/* Remarks */}
             <div className="font-sans">
               <label className="text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
-                <FileText className="w-3.5 h-3.5 text-slate-400" /> Remarks <span className="text-slate-400 font-normal">(optional)</span>
+                <FileText className="w-3.5 h-3.5 text-slate-400" /> Remarks / Invoice Ref <span className="text-slate-400 font-normal">(optional)</span>
               </label>
               <textarea rows={2} value={form.remarks} onChange={e => set('remarks', e.target.value)}
-                placeholder="Invoice number, reference, or notes…"
+                disabled={isSubmitting}
+                placeholder="Supplier invoice number, batch details, or notes…"
                 className="w-full px-3 py-2 text-sm font-medium border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all bg-white resize-none placeholder:text-slate-400" />
             </div>
 
             {/* Preview chip */}
-            {form.categoryId && form.subcategoryId && form.productId && form.quantity && form.amount && form.paidAmount !== '' && form.method && (
-              <div className="flex flex-col gap-1 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-xl font-sans animate-fade-in">
+            {form.categoryId && form.subcategoryId && displayProductName && form.quantity && form.amount && form.paidAmount !== '' && form.method && (
+              <div className="flex flex-col gap-1 px-3.5 py-2.5 bg-emerald-50 border border-emerald-200 rounded-xl font-sans animate-fade-in">
                 <div className="flex items-center gap-1.5">
                   <Check className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
-                  <span className="text-xs font-semibold text-emerald-700">
-                    {selectedProduct?.name} (Qty: {form.quantity})
+                  <span className="text-xs font-bold text-emerald-800">
+                    {displayProductName} (Qty: {form.quantity})
                   </span>
                 </div>
-                <div className="text-xs text-emerald-600 font-medium pl-5 space-y-0.5">
-                  <div>Total: ₹{Number(form.amount).toLocaleString('en-IN')} | Paid: ₹{Number(form.paidAmount).toLocaleString('en-IN')} | Due: ₹{Number(form.dueAmount || 0).toLocaleString('en-IN')}</div>
-                  <div>Payment: via {form.method} | Deliver to: {storeName}</div>
+                <div className="text-xs text-emerald-700 font-medium pl-5 space-y-0.5">
+                  <div>Total Cost: ₹{Number(form.amount).toLocaleString('en-IN')} | Paid: ₹{Number(form.paidAmount).toLocaleString('en-IN')} | Due: ₹{Number(form.dueAmount || 0).toLocaleString('en-IN')}</div>
+                  <div>Payment Method: <strong>{form.method}</strong> | Stock Destination: {form.storeId === 'warehouse' ? 'Central Warehouse' : storeName || 'Selected Store'}</div>
                 </div>
               </div>
             )}
@@ -635,13 +761,22 @@ const AddTransactionModal = ({ isOpen, defaultProductId, defaultSupplierId, stor
 
           {/* Footer */}
           <div className="px-5 py-4 border-t border-slate-100 flex items-center justify-end gap-3 bg-slate-50 flex-shrink-0 font-sans">
-            <button type="button" onClick={handleClose}
-              className="px-4 py-2 text-sm font-semibold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors">
+            <button type="button" onClick={handleClose} disabled={isSubmitting}
+              className="px-4 py-2 text-sm font-semibold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors disabled:opacity-50">
               Cancel
             </button>
-            <button type="submit"
-              className="px-5 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 flex items-center gap-2">
-              <Plus className="w-4 h-4" /> Record Purchase
+            <button type="submit" disabled={isSubmitting}
+              className="px-5 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 flex items-center gap-2 disabled:opacity-60">
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin text-white" />
+                  Processing...
+                </>
+              ) : (
+                <>
+                  <Plus className="w-4 h-4" /> Record Purchase & Add Stock
+                </>
+              )}
             </button>
           </div>
         </form>
@@ -652,3 +787,4 @@ const AddTransactionModal = ({ isOpen, defaultProductId, defaultSupplierId, stor
 };
 
 export default AddTransactionModal;
+

@@ -16,7 +16,7 @@ import {
   ShoppingBag,
 } from 'lucide-react';
 import { toast } from 'react-toastify';
-import { useDeadstock, useReuseDeadstock } from '../../hooks/useDeadstock';
+import { useDeadstock, useReuseDeadstock, useBatchReuseDeadstock } from '../../hooks/useDeadstock';
 import { useAuthStore, useStoreStore } from '../../store/store';
 import { useRoleContext } from '../../hooks/useRoleContext';
 import { useStores } from '../../hooks/useStores';
@@ -53,7 +53,9 @@ const Deadstock = () => {
   const [searchInput, setSearchInput] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+  const [groupByItem, setGroupByItem] = useState(true);
   const [reuseModalItem, setReuseModalItem] = useState(null);
+  const [batchReuseGroup, setBatchReuseGroup] = useState(null);
 
   useEffect(() => {
     if (isPathAdmin && selectedStore && selectedStore.id !== 'admin') {
@@ -92,6 +94,7 @@ const Deadstock = () => {
 
   const { data, isLoading, isRefetching, refetch } = useDeadstock(queryParams);
   const reuseMutation = useReuseDeadstock();
+  const batchReuseMutation = useBatchReuseDeadstock();
 
   const items = data?.items || [];
   const total = data?.total || 0;
@@ -103,6 +106,40 @@ const Deadstock = () => {
     total_count: 0,
   };
 
+  const groupedItems = useMemo(() => {
+    if (!groupByItem) return [];
+    const groups = {};
+    items.forEach((item) => {
+      const key = item.product_id ? `p-${item.product_id}` : `sku-${item.sku}-${item.category_name}`;
+      if (!groups[key]) {
+        groups[key] = {
+          key,
+          product_id: item.product_id,
+          product_name: item.product_name || item.sku || 'Unassigned Product',
+          category_name: item.category_name,
+          brand_name: item.brand_name || 'Generic',
+          sku: item.sku,
+          store_name: item.store_name,
+          total_quantity: 0,
+          available_quantity: 0,
+          total_value: 0,
+          item_ids: [],
+          available_item_ids: [],
+          items: [],
+        };
+      }
+      groups[key].total_quantity += Number(item.quantity || 1);
+      groups[key].total_value += Number(item.original_price || 0) * Number(item.quantity || 1);
+      groups[key].item_ids.push(item.id);
+      groups[key].items.push(item);
+      if (item.status === 'AVAILABLE') {
+        groups[key].available_quantity += Number(item.quantity || 1);
+        groups[key].available_item_ids.push(item.id);
+      }
+    });
+    return Object.values(groups);
+  }, [items, groupByItem]);
+
   const handleConfirmReuse = () => {
     if (!reuseModalItem) return;
     reuseMutation.mutate(reuseModalItem.id, {
@@ -113,6 +150,20 @@ const Deadstock = () => {
       },
       onError: (err) => {
         toast.error(err.response?.data?.detail || "Failed to restore deadstock item.");
+      }
+    });
+  };
+
+  const handleConfirmBatchReuse = () => {
+    if (!batchReuseGroup || batchReuseGroup.available_item_ids.length === 0) return;
+    batchReuseMutation.mutate(batchReuseGroup.available_item_ids, {
+      onSuccess: (res) => {
+        toast.success(res.message || `Successfully restored ${batchReuseGroup.available_quantity} units of ${batchReuseGroup.product_name} to active inventory.`);
+        setBatchReuseGroup(null);
+        refetch();
+      },
+      onError: (err) => {
+        toast.error(err.response?.data?.detail || "Failed to restore deadstock product quantity.");
       }
     });
   };
@@ -227,9 +278,22 @@ const Deadstock = () => {
                 </div>
               )}
 
-              {/* Status Filter */}
+              {/* Group By Item Toggle & Status Filter */}
               <div className="flex items-center gap-2 sm:ml-2">
-                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Status:</span>
+                <button
+                  type="button"
+                  onClick={() => setGroupByItem(!groupByItem)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5 cursor-pointer ${
+                    groupByItem
+                      ? 'bg-amber-500 text-white border-amber-500 shadow-sm'
+                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  <Layers className="w-3.5 h-3.5" />
+                  {groupByItem ? 'Grouped by Product' : 'Individual Units'}
+                </button>
+
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Status:</span>
                 <div className="flex items-center gap-1 bg-slate-50 p-1 rounded-xl border border-slate-100 text-xs font-bold">
                   {['All', 'AVAILABLE', 'REUSED', 'SOLD'].map((st) => (
                     <button
@@ -328,7 +392,161 @@ const Deadstock = () => {
               Exchanged items automatically appear here. Try adjusting your filters or search keywords.
             </p>
           </div>
+        ) : groupByItem ? (
+          /* GROUPED BY PRODUCT VIEW */
+          <div className="space-y-4">
+            <div className="hidden lg:block border border-slate-100 rounded-2xl overflow-hidden shadow-sm bg-white">
+              <table className="w-full text-sm text-left">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-100 text-xs font-bold text-slate-500 uppercase tracking-wider">
+                    <th className="px-5 py-4">Product Details</th>
+                    <th className="px-5 py-4">Category</th>
+                    <th className="px-5 py-4 text-center">Total Deadstock Qty</th>
+                    <th className="px-5 py-4 text-center">Available Qty</th>
+                    <th className="px-5 py-4 text-right">Total Valuation</th>
+                    <th className="px-5 py-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {groupedItems.map((group) => {
+                    const catCfg = categoryConfig[group.category_name] || categoryConfig.Other;
+                    const CatIcon = catCfg.icon;
+                    const canReuseGroup = group.available_quantity > 0 && canUpdate;
+
+                    return (
+                      <tr key={group.key} className="hover:bg-slate-50/70 transition-colors group">
+                        <td className="px-5 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-white font-extrabold text-xs shadow-sm flex-shrink-0">
+                              {group.product_name[0]}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="font-bold text-slate-900 group-hover:text-amber-600 transition-colors truncate max-w-[240px]">
+                                {group.product_name}
+                              </p>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                <span className="font-mono text-[10px] bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 text-slate-600 font-bold">
+                                  SKU: {group.sku}
+                                </span>
+                                {group.brand_name && (
+                                  <span className="text-[10px] text-slate-400 font-semibold truncate">
+                                    {group.brand_name}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+
+                        <td className="px-5 py-4">
+                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold border ${catCfg.color}`}>
+                            <CatIcon className="w-3.5 h-3.5" />
+                            {group.category_name}
+                          </span>
+                        </td>
+
+                        <td className="px-5 py-4 text-center font-extrabold text-slate-800 text-base">
+                          <span className="bg-slate-100 px-3 py-1 rounded-full text-slate-900 border border-slate-200">
+                            {group.total_quantity} units
+                          </span>
+                        </td>
+
+                        <td className="px-5 py-4 text-center font-extrabold">
+                          {group.available_quantity > 0 ? (
+                            <span className="bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full border border-emerald-200">
+                              {group.available_quantity} available
+                            </span>
+                          ) : (
+                            <span className="bg-slate-100 text-slate-500 px-3 py-1 rounded-full">
+                              0 available
+                            </span>
+                          )}
+                        </td>
+
+                        <td className="px-5 py-4 text-right font-mono font-bold text-slate-900">
+                          {fmt(group.total_value)}
+                        </td>
+
+                        <td className="px-5 py-4 text-right">
+                          {canReuseGroup ? (
+                            <button
+                              onClick={() => setBatchReuseGroup(group)}
+                              className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 ml-auto cursor-pointer"
+                              type="button"
+                            >
+                              <RotateCcw className="w-3.5 h-3.5" />
+                              Restore {group.available_quantity} {group.available_quantity === 1 ? 'Unit' : 'Units'} to Stock
+                            </button>
+                          ) : (
+                            <span className="text-xs text-slate-400 font-semibold italic">Reused / Sold</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Group Cards */}
+            <div className="lg:hidden space-y-3">
+              {groupedItems.map((group) => {
+                const catCfg = categoryConfig[group.category_name] || categoryConfig.Other;
+                const CatIcon = catCfg.icon;
+                const canReuseGroup = group.available_quantity > 0 && canUpdate;
+
+                return (
+                  <div key={group.key} className="bg-white p-4 border border-slate-100 rounded-2xl shadow-sm space-y-3">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <span className="font-mono text-[10px] font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+                          SKU: {group.sku}
+                        </span>
+                        <h3 className="font-bold text-slate-900 text-sm mt-1">{group.product_name}</h3>
+                      </div>
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${catCfg.color}`}>
+                        <CatIcon className="w-3 h-3" />
+                        {group.category_name}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-slate-100">
+                      <div>
+                        <span className="text-slate-400 font-semibold block text-[10px]">Total Quantity</span>
+                        <span className="font-extrabold text-slate-900 text-sm mt-0.5 block">{group.total_quantity} Units</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 font-semibold block text-[10px]">Total Value</span>
+                        <span className="font-bold text-slate-900 font-mono mt-0.5 block">{fmt(group.total_value)}</span>
+                      </div>
+                    </div>
+
+                    {canReuseGroup && (
+                      <div className="pt-2 border-t border-slate-100 flex justify-end">
+                        <button
+                          onClick={() => setBatchReuseGroup(group)}
+                          className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
+                          type="button"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" />
+                          Restore {group.available_quantity} Units to Active Inventory
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <Pagination
+              totalItems={total}
+              itemsPerPage={10}
+              currentPage={currentPage}
+              onPageChange={setCurrentPage}
+            />
+          </div>
         ) : (
+          /* INDIVIDUAL UNITS VIEW */
           <div className="space-y-4">
             {/* Desktop Table View */}
             <div className="hidden lg:block border border-slate-100 rounded-2xl overflow-hidden shadow-sm bg-white">
@@ -350,8 +568,6 @@ const Deadstock = () => {
                     const CatIcon = catCfg.icon;
                     const stBadge = statusBadges[item.status] || statusBadges.AVAILABLE;
                     const canReuse = item.status === 'AVAILABLE' && canUpdate;
-
-                    const isLensPOS = item.status === 'AVAILABLE' && item.category_name === 'Lenses';
 
                     return (
                       <tr key={item.id} className="hover:bg-slate-50/70 transition-colors group">
@@ -420,31 +636,17 @@ const Deadstock = () => {
 
                         {/* Actions */}
                         <td className="px-5 py-4 text-right">
-                          {canReuse && (
+                          {canReuse ? (
                             <button
                               onClick={() => setReuseModalItem(item)}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm hover:shadow-md cursor-pointer"
+                              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 ml-auto cursor-pointer"
                               type="button"
                             >
                               <RotateCcw className="w-3.5 h-3.5" />
                               Reuse Item
                             </button>
-                          )}
-                          {isLensPOS && (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-bold">
-                              <ShoppingBag className="w-3.5 h-3.5 text-emerald-600" />
-                              Available for POS
-                            </span>
-                          )}
-                          {item.status === 'REUSED' && (
-                            <span className="text-xs font-bold text-slate-400 italic">
-                              Moved to Stock
-                            </span>
-                          )}
-                          {item.status === 'SOLD' && (
-                            <span className="text-xs font-bold text-slate-400 italic">
-                              Sold in Sale
-                            </span>
+                          ) : (
+                            <span className="text-xs text-slate-400 font-semibold italic">—</span>
                           )}
                         </td>
                       </tr>
@@ -461,7 +663,6 @@ const Deadstock = () => {
                 const CatIcon = catCfg.icon;
                 const stBadge = statusBadges[item.status] || statusBadges.AVAILABLE;
                 const canReuse = item.status === 'AVAILABLE' && canUpdate;
-
 
                 return (
                   <div key={item.id} className="bg-white p-4 border border-slate-100 rounded-2xl shadow-sm space-y-3">
@@ -496,7 +697,7 @@ const Deadstock = () => {
                       <div className="pt-2 border-t border-slate-100 flex justify-end">
                         <button
                           onClick={() => setReuseModalItem(item)}
-                          className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1.5"
+                          className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
                           type="button"
                         >
                           <RotateCcw className="w-3.5 h-3.5" />
@@ -519,7 +720,71 @@ const Deadstock = () => {
           </div>
         )}
 
-        {/* ── Reuse Modal Confirmation ── */}
+        {/* ── Batch Reuse Modal Confirmation ── */}
+        {batchReuseGroup && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[1200] flex items-center justify-center p-4 animate-fade-in">
+            <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl border border-slate-100 overflow-hidden">
+              <div className="p-6 space-y-4 text-center">
+                <div className="w-14 h-14 bg-amber-50 border border-amber-100 rounded-2xl flex items-center justify-center mx-auto text-amber-600 shadow-inner">
+                  <RotateCcw className="w-7 h-7" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">Restore Product Quantity to Active Stock?</h3>
+                  <p className="text-xs text-slate-500 mt-1">
+                    This action will restore <span className="font-extrabold text-slate-800">{batchReuseGroup.available_quantity} {batchReuseGroup.available_quantity === 1 ? 'unit' : 'units'}</span> of <span className="font-extrabold text-slate-800">{batchReuseGroup.product_name}</span> back into active inventory and increase store stock quantity by <span className="font-bold text-emerald-600">+{batchReuseGroup.available_quantity}</span>.
+                  </p>
+                </div>
+
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 text-left text-xs font-medium space-y-1">
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Product:</span>
+                    <span className="font-bold text-slate-800">{batchReuseGroup.product_name}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Category:</span>
+                    <span className="font-semibold text-slate-700">{batchReuseGroup.category_name}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">SKU Code:</span>
+                    <span className="font-mono font-bold text-slate-800">{batchReuseGroup.sku}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Restored Quantity:</span>
+                    <span className="font-bold text-emerald-600">+{batchReuseGroup.available_quantity} units</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setBatchReuseGroup(null)}
+                    disabled={batchReuseMutation.isPending}
+                    className="px-4 py-2 text-xs font-bold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleConfirmBatchReuse}
+                    disabled={batchReuseMutation.isPending}
+                    className="px-5 py-2 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-xl transition-all shadow-md flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
+                  >
+                    {batchReuseMutation.isPending ? (
+                      <span>Restoring Stock...</span>
+                    ) : (
+                      <>
+                        <Check className="w-4 h-4" />
+                        Restore {batchReuseGroup.available_quantity} Units
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Reuse Single Item Modal Confirmation ── */}
         {reuseModalItem && (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[1200] flex items-center justify-center p-4 animate-fade-in">
             <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl border border-slate-100 overflow-hidden">
@@ -534,40 +799,42 @@ const Deadstock = () => {
                   </p>
                 </div>
 
-                <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100 text-left text-xs space-y-2 font-medium">
-                  <div className="flex justify-between text-slate-600">
-                    <span>SKU Code:</span>
-                    <span className="font-mono font-bold text-slate-900">{reuseModalItem.sku}</span>
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 text-left text-xs font-medium space-y-1">
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Category:</span>
+                    <span className="font-semibold text-slate-700">{reuseModalItem.category_name}</span>
                   </div>
-                  <div className="flex justify-between text-slate-600">
-                    <span>Category:</span>
-                    <span className="font-bold text-slate-900">{reuseModalItem.category_name}</span>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">SKU Code:</span>
+                    <span className="font-mono font-bold text-slate-800">{reuseModalItem.sku}</span>
                   </div>
-                  <div className="flex justify-between text-slate-600">
-                    <span>Original Price:</span>
-                    <span className="font-mono font-bold text-emerald-600">{fmt(reuseModalItem.original_price)}</span>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Item Value:</span>
+                    <span className="font-mono font-bold text-slate-900">{fmt(reuseModalItem.original_price)}</span>
                   </div>
                 </div>
 
-                <div className="flex gap-3 pt-2">
+                <div className="flex items-center justify-end gap-3 pt-2">
                   <button
-                    onClick={() => setReuseModalItem(null)}
-                    className="flex-1 py-2.5 border border-slate-200 text-slate-700 font-bold text-xs rounded-xl hover:bg-slate-50 transition-colors cursor-pointer"
                     type="button"
+                    onClick={() => setReuseModalItem(null)}
+                    disabled={reuseMutation.isPending}
+                    className="px-4 py-2 text-xs font-bold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors"
                   >
                     Cancel
                   </button>
                   <button
-                    onClick={handleConfirmReuse}
-                    disabled={reuseMutation.isLoading}
-                    className="flex-1 py-2.5 bg-[#0A0F1F] hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
                     type="button"
+                    onClick={handleConfirmReuse}
+                    disabled={reuseMutation.isPending}
+                    className="px-5 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-all shadow-md flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
                   >
-                    {reuseMutation.isLoading ? (
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    {reuseMutation.isPending ? (
+                      <span>Moving to Stock...</span>
                     ) : (
                       <>
-                        <Check className="w-4 h-4 text-emerald-400" /> Move to Inventory
+                        <Check className="w-4 h-4" />
+                        Confirm & Move to Stock
                       </>
                     )}
                   </button>

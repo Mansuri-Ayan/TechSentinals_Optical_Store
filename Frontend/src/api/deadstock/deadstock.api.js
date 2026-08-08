@@ -39,3 +39,13 @@ export const reuseDeadstockApi = async (id) => {
   const response = await api.post(`/deadstock/${id}/reuse`);
   return response.data;
 };
+
+/**
+ * Batch reuse multiple deadstock items (moves quantity back to active inventory).
+ * 
+ * @param {Array<number>} itemIds - List of deadstock item IDs.
+ */
+export const batchReuseDeadstockApi = async (itemIds) => {
+  const response = await api.post('/deadstock/batch-reuse', { item_ids: itemIds });
+  return response.data;
+};

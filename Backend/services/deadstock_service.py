@@ -294,6 +294,37 @@ async def reuse_deadstock(
     return ds_item, inventory
 
 
+async def batch_reuse_deadstock(
+    db: AsyncSession,
+    item_ids: list[int],
+    admin_id: int,
+    user_id: int | None = None,
+    store_id: int | None = None,
+) -> tuple[int, Inventory | None]:
+    """
+    Reuse multiple deadstock items (belonging to the same product or batch) at once:
+    Restores total quantity directly to active store/admin inventory.
+    """
+    reused_count = 0
+    last_inventory = None
+    for item_id in item_ids:
+        try:
+            ds_item, inventory = await reuse_deadstock(
+                db=db,
+                item_id=item_id,
+                admin_id=admin_id,
+                user_id=user_id,
+                store_id=store_id,
+            )
+            reused_count += 1
+            last_inventory = inventory
+        except Exception as e:
+            print(f"Skipping deadstock item {item_id} during batch reuse: {e}")
+            continue
+
+    return reused_count, last_inventory
+
+
 async def list_deadstock_for_pos(
     db: AsyncSession,
     admin_id: int,

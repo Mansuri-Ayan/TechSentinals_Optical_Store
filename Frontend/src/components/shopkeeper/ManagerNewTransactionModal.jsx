@@ -256,10 +256,7 @@ const ManagerNewTransactionModal = ({
               >
                 <option value="request">Inventory Transfer (Request)</option>
                 <option value="send">Inventory Transfer (Send)</option>
-                <option value="purchase">Purchase</option>
                 <option value="damage">Damage</option>
-                <option value="loss">Loss</option>
-                <option value="sale">Sale</option>
                 <option value="return">Return</option>
               </select>
             </div>
