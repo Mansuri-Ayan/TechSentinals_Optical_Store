@@ -433,6 +433,7 @@ const Shopkeeper = () => {
   /* ── Stepper Navigation Click Handlers ── */
   const handleStepClick = (step) => {
     // Only allow clicking to steps that have already been visited / validated
+    if (activeStep === 5) return;
     if (step < activeStep) {
       setActiveStep(step);
     }

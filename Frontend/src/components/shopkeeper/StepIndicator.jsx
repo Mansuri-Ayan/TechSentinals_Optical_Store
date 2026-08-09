@@ -26,7 +26,7 @@ const StepIndicator = ({ activeStep, onStepClick }) => {
         const stepNum = idx + 1;
         const isCompleted = activeStep > stepNum;
         const isActive = activeStep === stepNum;
-        const isClickable = stepNum < activeStep;
+        const isClickable = stepNum < activeStep && activeStep < 5;
 
         return (
           <div

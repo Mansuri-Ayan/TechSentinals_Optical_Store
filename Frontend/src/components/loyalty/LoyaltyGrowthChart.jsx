@@ -8,8 +8,8 @@ const LoyaltyGrowthChart = ({ trends }) => {
     
     return trends.map(t => ({
       label: t.month,
-      awarded: t.points_awarded,
-      redeemed: t.points_redeemed,
+      awarded: t.earned_points !== undefined ? t.earned_points : (t.points_awarded !== undefined ? t.points_awarded : 0),
+      redeemed: t.redeemed_points !== undefined ? t.redeemed_points : (t.points_redeemed !== undefined ? t.points_redeemed : 0),
     }));
   }, [trends]);
 

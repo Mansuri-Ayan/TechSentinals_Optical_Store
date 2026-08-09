@@ -588,24 +588,6 @@ const Sidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) => {
             </NavLink>
           )}
 
-          <NavLink
-            to="/admin/loyalty"
-            title={isCollapsed ? "Loyalty" : undefined}
-            className={({ isActive }) =>
-              `flex items-center ${isCollapsed ? "justify-center px-0" : "px-4"} py-2.5 rounded-xl transition-all duration-200 group ${
-                isActive || location.pathname.startsWith("/admin/loyalty")
-                  ? "bg-emerald-500/10 text-emerald-400 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_0_10px_rgba(16,185,129,0.1)] border border-emerald-500/20"
-                  : "text-slate-400 hover:bg-white/5 hover:text-slate-202 border border-transparent"
-              }`
-            }
-          >
-            <Award
-              className={`w-5 h-5 transition-transform group-hover:scale-110 flex-shrink-0 ${isCollapsed ? "" : "mr-3"}`}
-            />
-            {!isCollapsed && (
-              <span className="font-medium text-sm">Loyalty</span>
-            )}
-          </NavLink>
 
           <NavLink
             to="/admin/bill-template"
