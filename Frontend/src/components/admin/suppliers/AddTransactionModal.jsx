@@ -12,6 +12,7 @@ import { createProductApi } from '../../../api/product/product.api';
 import { addSupplierProductApi } from '../../../api/suppliers/supplier.api';
 import SupplierSelect from '../SupplierSelect';
 import { useSuppliers } from '../../../hooks/useSuppliers';
+import { useAuthStore } from '../../../store/store';
 
 const PAYMENT_METHODS = ['Cash', 'Bank Transfer', 'Cheque', 'UPI', 'Credit'];
 
@@ -46,6 +47,8 @@ const AddTransactionModal = ({ isOpen, defaultProductId, defaultSupplierId, stor
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { stores } = useStores();
   const { brands, createBrandAsync } = useBrands();
+  const { user } = useAuthStore();
+  const isAdmin = user?.role === 'admin';
 
   // Fetch all categories
   const { categories } = useCategories(null, { limit: 100 });
@@ -71,7 +74,7 @@ const AddTransactionModal = ({ isOpen, defaultProductId, defaultSupplierId, stor
     if (isOpen) {
       setForm({
         ...EMPTY,
-        storeId: activeStoreId ? String(activeStoreId) : '',
+        storeId: !isAdmin && user?.store_id ? String(user.store_id) : (activeStoreId ? String(activeStoreId) : ''),
         enterUnitCostPrice: true,
         supplierId: defaultSupplierId ? String(defaultSupplierId) : '',
         method: 'Cash',
@@ -79,7 +82,7 @@ const AddTransactionModal = ({ isOpen, defaultProductId, defaultSupplierId, stor
       setErrors({});
       setIsSubmitting(false);
     }
-  }, [isOpen, activeStoreId, defaultSupplierId]);
+  }, [isOpen, activeStoreId, defaultSupplierId, isAdmin, user?.store_id]);
 
   // Set category and subcategory from defaultProductId once products list is fetched
   useEffect(() => {
@@ -540,7 +543,7 @@ const AddTransactionModal = ({ isOpen, defaultProductId, defaultSupplierId, stor
                   <Store className="w-3.5 h-3.5 text-slate-400" /> Receiving Store / Warehouse <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
-                  <select value={form.storeId} onChange={e => set('storeId', e.target.value)} className={inputCls('storeId')} disabled={isSubmitting}>
+                  <select value={form.storeId} onChange={e => set('storeId', e.target.value)} className={inputCls('storeId')} disabled={isSubmitting || !isAdmin}>
                     <option value="">Select receiving store…</option>
                     <option value="warehouse">Central Warehouse</option>
                     {stores.map(st => <option key={st.id} value={st.id}>{st.store_name || st.name || `Store #${st.id}`}</option>)}

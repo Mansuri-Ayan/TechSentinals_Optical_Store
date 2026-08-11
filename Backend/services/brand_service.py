@@ -73,8 +73,6 @@ async def get_brands_by_admin(
     conditions = [Brand.admin_id == admin_id]
     if store_id is not None:
         conditions.append(or_(Brand.store_id == store_id, Brand.store_id.is_(None)))
-    else:
-        conditions.append(Brand.store_id.is_(None))
     if active_status == "active":
         conditions.append(Brand.is_active.is_(True))
     elif active_status == "inactive":
@@ -90,8 +88,6 @@ async def get_brands_by_admin(
     count_conditions = [Brand.admin_id == admin_id]
     if store_id is not None:
         count_conditions.append(or_(Brand.store_id == store_id, Brand.store_id.is_(None)))
-    else:
-        count_conditions.append(Brand.store_id.is_(None))
     active_stmt = select(sa_func.count(Brand.id)).where(*count_conditions, Brand.is_active.is_(True))
     inactive_stmt = select(sa_func.count(Brand.id)).where(*count_conditions, Brand.is_active.is_(False))
     active_cnt = (await db.execute(active_stmt)).scalar() or 0
@@ -121,7 +117,30 @@ async def get_brands_by_admin(
             "created_at": brand.created_at,
             "updated_at": brand.updated_at,
             "products_count": cnt,
+            "store_id": brand.store_id,
         })
+
+    # Deduplicate by name when admin fetches all (no store_id filter).
+    # Prefer global brands (store_id IS NULL) and keep highest product count.
+    if store_id is None and items:
+        seen = {}
+        for item in items:
+            name_key = item["name"].strip().lower()
+            if name_key not in seen:
+                seen[name_key] = item
+            else:
+                existing = seen[name_key]
+                if existing.get("store_id") is not None and item.get("store_id") is None:
+                    item["products_count"] = max(item["products_count"], existing["products_count"])
+                    seen[name_key] = item
+                else:
+                    existing["products_count"] = max(existing["products_count"], item["products_count"])
+        items = list(seen.values())
+        total = len(items)
+
+    # Remove internal store_id key before returning
+    for item in items:
+        item.pop("store_id", None)
 
     return items, total, active_cnt, inactive_cnt
 

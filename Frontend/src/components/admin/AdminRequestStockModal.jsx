@@ -10,8 +10,15 @@ import { useHasPermission } from '../../hooks/usePermissions';
 const AdminRequestStockModal = ({ isOpen, onClose, product, sourceStore, activeStoreId, onSuccess }) => {
   const { stores } = useStoreStore();
   const { user } = useAuthStore();
-  const { createAdminRequestAsync, isCreatingAdminRequest } = useTransactions(null, {}, false);
+  const { 
+    createAdminRequestAsync, 
+    isCreatingAdminRequest,
+    createManagerRequestAsync,
+    isCreatingManagerRequest
+  } = useTransactions(null, {}, false);
   const canCreateRequest = useHasPermission('inventory:create') || useHasPermission('transactions:create') || ['admin', 'super_admin', 'manager', 'worker', 'optician'].includes(user?.role);
+  const isAdmin = user?.role === 'admin';
+  const isPending = isCreatingAdminRequest || isCreatingManagerRequest;
 
   // Destination option: Only branch stores (Excludes Admin Warehouse 'admin' as destination)
   const destinationStoreOptions = useMemo(() => {
@@ -56,7 +63,12 @@ const AdminRequestStockModal = ({ isOpen, onClose, product, sourceStore, activeS
   const watchedSourceStoreId = watch('source_store_id');
   const watchedTargetStoreId = watch('target_store_id');
 
-  // Filter out the fixed source store from the destination store options so they don't request to itself
+  // Filter out the destination store from the source options
+  const filteredSourceOptions = useMemo(() => {
+    return allLocationOptions.filter(s => String(s.id) !== String(watchedTargetStoreId));
+  }, [allLocationOptions, watchedTargetStoreId]);
+
+  // Filter out the source store from the destination store options
   const filteredDestinationOptions = useMemo(() => {
     return destinationStoreOptions.filter(s => String(s.id) !== String(watchedSourceStoreId));
   }, [destinationStoreOptions, watchedSourceStoreId]);
@@ -109,7 +121,9 @@ const AdminRequestStockModal = ({ isOpen, onClose, product, sourceStore, activeS
       }
 
       let defaultTargetId = '';
-      if (activeStoreId && activeStoreId !== 'admin' && String(activeStoreId) !== defaultSourceId) {
+      if (!isAdmin && user?.store_id) {
+        defaultTargetId = String(user.store_id);
+      } else if (activeStoreId && activeStoreId !== 'admin' && String(activeStoreId) !== defaultSourceId) {
         defaultTargetId = String(activeStoreId);
       } else if (product.owner_id && product.owner_type === 'STORE' && String(product.owner_id) !== defaultSourceId) {
         defaultTargetId = String(product.owner_id);
@@ -127,12 +141,12 @@ const AdminRequestStockModal = ({ isOpen, onClose, product, sourceStore, activeS
         remarks: '',
       });
     }
-  }, [isOpen, product, sourceStore, activeStoreId, reset, destinationStoreOptions, allLocationOptions]);
+  }, [isOpen, product, sourceStore, activeStoreId, reset, destinationStoreOptions, allLocationOptions, isAdmin, user?.store_id]);
 
   if (!isOpen || !product) return null;
 
   const handleCancel = () => {
-    if (isCreatingAdminRequest) return;
+    if (isPending) return;
     reset();
     onClose();
   };
@@ -143,10 +157,10 @@ const AdminRequestStockModal = ({ isOpen, onClose, product, sourceStore, activeS
       return;
     }
 
-    const targetId = data.target_store_id;
+    const targetId = isAdmin ? data.target_store_id : String(user?.store_id);
     const sourceId = data.source_store_id;
     if (!targetId || !sourceId) {
-      toast.error('Please select a destination store.');
+      toast.error('Please select both source and destination.');
       return;
     }
 
@@ -164,17 +178,28 @@ const AdminRequestStockModal = ({ isOpen, onClose, product, sourceStore, activeS
       const toType = 'STORE';
       const toId = Number(targetStore.id);
 
-      const payload = {
-        from_owner_type: fromType,
-        from_owner_id: fromId,
-        to_owner_type: toType,
-        to_owner_id: toId,
-        product_id: product.product_id || product.id,
-        quantity: Number(data.quantity),
-        remarks: data.remarks || null,
-      };
+      if (isAdmin) {
+        const payload = {
+          from_owner_type: fromType,
+          from_owner_id: fromId,
+          to_owner_type: toType,
+          to_owner_id: toId,
+          product_id: product.product_id || product.id,
+          quantity: Number(data.quantity),
+          remarks: data.remarks || null,
+        };
+        await createAdminRequestAsync(payload);
+      } else {
+        const payload = {
+          product_id: product.product_id || product.id,
+          quantity: Number(data.quantity),
+          from_owner_type: fromType,
+          from_owner_id: fromId,
+          remarks: data.remarks || null,
+        };
+        await createManagerRequestAsync(payload);
+      }
 
-      await createAdminRequestAsync(payload);
       onSuccess?.();
       handleCancel();
     } catch (err) {
@@ -199,7 +224,7 @@ const AdminRequestStockModal = ({ isOpen, onClose, product, sourceStore, activeS
               <p className="text-xs text-slate-500 mt-0.5">Submit a pending stock request for destination store approval.</p>
             </div>
           </div>
-          <button type="button" onClick={handleCancel} disabled={isCreatingAdminRequest}
+          <button type="button" onClick={handleCancel} disabled={isPending}
             className="p-1.5 text-slate-400 hover:bg-slate-200 hover:text-slate-700 rounded-full transition-colors disabled:opacity-30">
             <X className="w-5 h-5" />
           </button>
@@ -214,38 +239,52 @@ const AdminRequestStockModal = ({ isOpen, onClose, product, sourceStore, activeS
               <p className="text-slate-800 text-sm font-bold">{product.product_name || product.name}</p>
               <p><span className="text-slate-400 font-medium">SKU:</span> {product.product_sku || product.sku || 'N/A'}</p>
               <p>
-                <span className="text-slate-400 font-medium">Fixed Source Location:</span>{' '}
+                <span className="text-slate-400 font-medium">Source Location:</span>{' '}
                 <span className="text-slate-800 font-bold">{currentSourceLocationName}</span>
               </p>
               <p>
-                <span className="text-slate-400 font-medium">Source Stock:</span>{' '}
+                <span className="text-slate-400 font-medium">Available Source Stock:</span>{' '}
                 <span className="text-emerald-600 font-bold">{currentSourceStock} units</span>
               </p>
             </div>
           </div>
 
-          {/* Fixed Source Location Display */}
+          {/* Source Location Select */}
           <div>
             <label className="block text-sm font-semibold text-slate-700 mb-1.5 flex items-center justify-between">
-              <span>Source Location (From)</span>
-              <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded flex items-center gap-1">
-                <Lock className="w-3 h-3 text-slate-400" /> Fixed
-              </span>
+              <span>Source Location (From) <span className="text-red-500">*</span></span>
+              <span className="text-xs font-bold text-emerald-600">Available: {currentSourceStock} units</span>
             </label>
-            <div className="w-full px-4 py-2.5 bg-slate-100/80 border border-slate-200 rounded-xl font-bold text-slate-800 text-sm flex items-center justify-between cursor-not-allowed">
-              <span>{currentSourceLocationName}</span>
-              <span className="text-xs font-bold text-emerald-600">({currentSourceStock} units)</span>
+            <div className="relative">
+              <select
+                {...register('source_store_id', { required: 'Source is required' })}
+                disabled={isPending}
+                className="w-full px-4 py-2.5 bg-white border border-slate-350 rounded-xl focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 font-semibold text-slate-808 text-sm transition-all cursor-pointer disabled:bg-slate-50 disabled:text-slate-450 appearance-none pr-10"
+              >
+                <option value="">-- Select Source Location --</option>
+                {filteredSourceOptions.map(s => (
+                  <option key={s.id} value={s.id}>{s.store_name}</option>
+                ))}
+              </select>
+              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
             </div>
-            <input type="hidden" {...register('source_store_id', { required: true })} />
+            {errors.source_store_id && <p className="mt-1 text-xs text-red-500 font-medium">{errors.source_store_id.message}</p>}
           </div>
 
           {/* Destination Store Select */}
           <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-1.5">Destination Store (To) <span className="text-red-500">*</span></label>
+            <label className="block text-sm font-semibold text-slate-700 mb-1.5 flex items-center justify-between">
+              <span>Destination Store (To) <span className="text-red-500">*</span></span>
+              {!isAdmin && (
+                <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded flex items-center gap-1">
+                  <Lock className="w-3 h-3 text-slate-400" /> Assigned Store
+                </span>
+              )}
+            </label>
             <div className="relative">
               <select
                 {...register('target_store_id', { required: 'Destination is required' })}
-                disabled={isCreatingAdminRequest || !canCreateRequest}
+                disabled={isPending || !canCreateRequest || !isAdmin}
                 className="w-full px-4 py-2.5 bg-white border border-slate-350 rounded-xl focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 font-semibold text-slate-808 text-sm transition-all cursor-pointer disabled:bg-slate-50 disabled:text-slate-450 appearance-none pr-10"
               >
                 <option value="">-- Select Destination Store --</option>
@@ -253,7 +292,7 @@ const AdminRequestStockModal = ({ isOpen, onClose, product, sourceStore, activeS
                   <option key={s.id} value={s.id}>{s.store_name}</option>
                 ))}
               </select>
-              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+              {isAdmin && <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />}
             </div>
             {errors.target_store_id && <p className="mt-1 text-xs text-red-500 font-medium">{errors.target_store_id.message}</p>}
           </div>
@@ -276,7 +315,7 @@ const AdminRequestStockModal = ({ isOpen, onClose, product, sourceStore, activeS
               })}
               type="number"
               min="1"
-              disabled={isCreatingAdminRequest}
+              disabled={isPending}
               placeholder="e.g. 5"
               className="w-full px-4 py-2.5 bg-white border border-slate-350 rounded-xl focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 font-semibold text-slate-808 text-sm transition-all disabled:bg-slate-50 disabled:text-slate-400"
             />
@@ -289,7 +328,7 @@ const AdminRequestStockModal = ({ isOpen, onClose, product, sourceStore, activeS
             <textarea
               {...register('remarks')}
               rows={2.5}
-              disabled={isCreatingAdminRequest}
+              disabled={isPending}
               placeholder="E.g., Low stock alert, upcoming customer order..."
               className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 font-semibold text-slate-850 text-sm transition-all resize-none"
             />
@@ -300,18 +339,18 @@ const AdminRequestStockModal = ({ isOpen, onClose, product, sourceStore, activeS
             <button
               type="button"
               onClick={handleCancel}
-              disabled={isCreatingAdminRequest}
+              disabled={isPending}
               className="flex-1 py-2.5 bg-white border border-slate-200 text-slate-750 hover:bg-slate-50 hover:border-slate-300 rounded-xl font-bold transition-all text-sm disabled:opacity-50"
             >
               Cancel
             </button>
             <button
               type="submit"
-              disabled={isCreatingAdminRequest}
+              disabled={isPending}
               className="flex-1 py-2.5 bg-[#0A0F1F] text-white hover:bg-slate-805 rounded-xl font-bold transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isCreatingAdminRequest && <Loader2 className="w-4 h-4 animate-spin text-white" />}
-              {isCreatingAdminRequest ? 'Sending Request...' : 'Send Request'}
+              {isPending && <Loader2 className="w-4 h-4 animate-spin text-white" />}
+              {isPending ? 'Sending Request...' : 'Send Request'}
             </button>
           </div>
         </form>

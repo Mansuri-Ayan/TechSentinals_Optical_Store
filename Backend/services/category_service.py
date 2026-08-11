@@ -117,8 +117,6 @@ async def get_categories_by_admin(
     conditions = [Category.admin_id == admin_id]
     if store_id is not None:
         conditions.append(or_(Category.store_id == store_id, Category.store_id.is_(None)))
-    else:
-        conditions.append(Category.store_id.is_(None))
     if active_only:
         conditions.append(Category.is_active.is_(True))
     if search:
@@ -159,7 +157,33 @@ async def get_categories_by_admin(
             "updated_at": cat.updated_at,
             "subcategories_count": sub_cnt,
             "products_count": prod_cnt,
+            "store_id": cat.store_id,
         })
+
+    # Deduplicate by name when admin fetches all (no store_id filter).
+    # Prefer global categories (store_id IS NULL) and aggregate product counts.
+    if store_id is None and items:
+        seen = {}
+        for item in items:
+            name_key = item["name"].strip().lower()
+            if name_key not in seen:
+                seen[name_key] = item
+            else:
+                existing = seen[name_key]
+                # Prefer global (store_id=None) entry
+                if existing.get("store_id") is not None and item.get("store_id") is None:
+                    item["products_count"] = max(item["products_count"], existing["products_count"])
+                    item["subcategories_count"] = max(item["subcategories_count"], existing["subcategories_count"])
+                    seen[name_key] = item
+                else:
+                    existing["products_count"] = max(existing["products_count"], item["products_count"])
+                    existing["subcategories_count"] = max(existing["subcategories_count"], item["subcategories_count"])
+        items = list(seen.values())
+        total = len(items)
+
+    # Remove internal store_id key before returning
+    for item in items:
+        item.pop("store_id", None)
 
     return items, total
 

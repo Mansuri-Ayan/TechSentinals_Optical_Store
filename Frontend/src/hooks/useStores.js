@@ -16,7 +16,7 @@ export const useStores = (params = {}) => {
   const isManagerOrStaff = user && user.role !== 'admin';
 
   const storesQuery = useQuery({
-    queryKey: [storesQueryKey, params],
+    queryKey: ['stores', params],
     queryFn: () => getStoresApi(params),
     staleTime: 1000 * 60 * 5,
     retry: false,
