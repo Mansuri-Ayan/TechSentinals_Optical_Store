@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-toastify';
-import { getSalesApi, deleteSaleApi } from '../api/sales/sales.api';
+import { getSalesApi, cancelSaleApi } from '../api/sales/sales.api';
 
 export const salesQueryKey = 'sales';
 
@@ -83,8 +83,8 @@ export const useSales = (filters = {}) => {
 
   const queryClient = useQueryClient();
 
-  const deleteSaleMutation = useMutation({
-    mutationFn: (saleId) => deleteSaleApi(saleId),
+  const cancelSaleMutation = useMutation({
+    mutationFn: (saleId) => cancelSaleApi(saleId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sales'] });
       queryClient.invalidateQueries({ queryKey: ['labOrders'] });
@@ -94,7 +94,7 @@ export const useSales = (filters = {}) => {
       toast.success('Order cancelled and all inventory rolled back successfully.');
     },
     onError: (err) => {
-      toast.error(err.response?.data?.detail || 'Failed to delete order.');
+      toast.error(err.response?.data?.detail || 'Failed to cancel order.');
     },
   });
 
@@ -109,7 +109,7 @@ export const useSales = (filters = {}) => {
     isFetching: query.isFetching,
     isError: query.isError,
     error: query.error,
-    deleteSaleAsync: deleteSaleMutation.mutateAsync,
-    isDeletingSale: deleteSaleMutation.isPending,
+    cancelSaleAsync: cancelSaleMutation.mutateAsync,
+    isCancellingSale: cancelSaleMutation.isPending,
   };
 };

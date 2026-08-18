@@ -1,9 +1,11 @@
 # Service: brand_service.py
-from sqlalchemy import select, func as sa_func, or_
+from sqlalchemy import select, func as sa_func, or_, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from models.brand import Brand
 from models.product import Product
 from models.inventory import Inventory
+from models.store import Store
+from models.store_brand_override import StoreBrandOverride
 from schemas.brand import BrandCreate, BrandUpdate
 
 
@@ -21,6 +23,29 @@ async def create_brand(
     db.add(brand)
     await db.commit()
     await db.refresh(brand)
+
+    # Auto-provision StoreBrandOverride entries
+    if brand.store_id is not None:
+        sbo = StoreBrandOverride(
+            store_id=brand.store_id,
+            brand_id=brand.id,
+            is_active=True,
+        )
+        db.add(sbo)
+        await db.commit()
+    else:
+        stores_stmt = select(Store.id).where(Store.admin_id == admin_id)
+        store_ids = (await db.execute(stores_stmt)).scalars().all()
+        for s_id in store_ids:
+            sbo = StoreBrandOverride(
+                store_id=s_id,
+                brand_id=brand.id,
+                is_active=True,
+            )
+            db.add(sbo)
+        if store_ids:
+            await db.commit()
+
     return brand
 
 
@@ -73,33 +98,85 @@ async def get_brands_by_admin(
     conditions = [Brand.admin_id == admin_id]
     if store_id is not None:
         conditions.append(or_(Brand.store_id == store_id, Brand.store_id.is_(None)))
-    if active_status == "active":
-        conditions.append(Brand.is_active.is_(True))
-    elif active_status == "inactive":
-        conditions.append(Brand.is_active.is_(False))
+        if active_status == "active":
+            conditions.append(sa_func.coalesce(StoreBrandOverride.is_active, Brand.is_active).is_(True))
+        elif active_status == "inactive":
+            conditions.append(sa_func.coalesce(StoreBrandOverride.is_active, Brand.is_active).is_(False))
+    else:
+        if active_status == "active":
+            conditions.append(Brand.is_active.is_(True))
+        elif active_status == "inactive":
+            conditions.append(Brand.is_active.is_(False))
     if search:
         conditions.append(Brand.name.ilike(f"%{search.strip()}%"))
 
     # ── Total count of matching records ──
-    count_stmt = select(sa_func.count(Brand.id)).where(*conditions)
+    if store_id is not None:
+        count_stmt = (
+            select(sa_func.count(Brand.id))
+            .outerjoin(
+                StoreBrandOverride,
+                and_(StoreBrandOverride.brand_id == Brand.id, StoreBrandOverride.store_id == store_id)
+            )
+            .where(*conditions)
+        )
+    else:
+        count_stmt = select(sa_func.count(Brand.id)).where(*conditions)
     total = (await db.execute(count_stmt)).scalar() or 0
 
     # ── Global count statistics ──
     count_conditions = [Brand.admin_id == admin_id]
     if store_id is not None:
         count_conditions.append(or_(Brand.store_id == store_id, Brand.store_id.is_(None)))
-    active_stmt = select(sa_func.count(Brand.id)).where(*count_conditions, Brand.is_active.is_(True))
-    inactive_stmt = select(sa_func.count(Brand.id)).where(*count_conditions, Brand.is_active.is_(False))
+        active_stmt = (
+            select(sa_func.count(Brand.id))
+            .outerjoin(
+                StoreBrandOverride,
+                and_(StoreBrandOverride.brand_id == Brand.id, StoreBrandOverride.store_id == store_id)
+            )
+            .where(*count_conditions, sa_func.coalesce(StoreBrandOverride.is_active, Brand.is_active).is_(True))
+        )
+        inactive_stmt = (
+            select(sa_func.count(Brand.id))
+            .outerjoin(
+                StoreBrandOverride,
+                and_(StoreBrandOverride.brand_id == Brand.id, StoreBrandOverride.store_id == store_id)
+            )
+            .where(*count_conditions, sa_func.coalesce(StoreBrandOverride.is_active, Brand.is_active).is_(False))
+        )
+    else:
+        active_stmt = select(sa_func.count(Brand.id)).where(*count_conditions, Brand.is_active.is_(True))
+        inactive_stmt = select(sa_func.count(Brand.id)).where(*count_conditions, Brand.is_active.is_(False))
     active_cnt = (await db.execute(active_stmt)).scalar() or 0
     inactive_cnt = (await db.execute(inactive_stmt)).scalar() or 0
 
     # ── Data query with product count ──
-    data_stmt = (
-        select(Brand, sa_func.coalesce(count_sq.c.cnt, 0).label("products_count"))
-        .outerjoin(count_sq, Brand.id == count_sq.c.brand_id)
-        .where(*conditions)
-        .order_by(Brand.name)
-    )
+    if store_id is not None:
+        data_stmt = (
+            select(
+                Brand,
+                sa_func.coalesce(StoreBrandOverride.is_active, Brand.is_active).label("resolved_is_active"),
+                sa_func.coalesce(count_sq.c.cnt, 0).label("products_count")
+            )
+            .outerjoin(
+                StoreBrandOverride,
+                and_(StoreBrandOverride.brand_id == Brand.id, StoreBrandOverride.store_id == store_id)
+            )
+            .outerjoin(count_sq, Brand.id == count_sq.c.brand_id)
+            .where(*conditions)
+            .order_by(Brand.name)
+        )
+    else:
+        data_stmt = (
+            select(
+                Brand,
+                Brand.is_active.label("resolved_is_active"),
+                sa_func.coalesce(count_sq.c.cnt, 0).label("products_count")
+            )
+            .outerjoin(count_sq, Brand.id == count_sq.c.brand_id)
+            .where(*conditions)
+            .order_by(Brand.name)
+        )
 
     if paginate:
         offset = (page - 1) * limit
@@ -108,12 +185,12 @@ async def get_brands_by_admin(
     rows = (await db.execute(data_stmt)).all()
 
     items = []
-    for brand, cnt in rows:
+    for brand, resolved_is_active, cnt in rows:
         items.append({
             "id": brand.id,
             "admin_id": brand.admin_id,
             "name": brand.name,
-            "is_active": brand.is_active,
+            "is_active": resolved_is_active,
             "created_at": brand.created_at,
             "updated_at": brand.updated_at,
             "products_count": cnt,
@@ -149,9 +226,33 @@ async def update_brand(
     db: AsyncSession,
     brand: Brand,
     payload: BrandUpdate,
+    store_id: int | None = None,
 ) -> Brand:
-    """Apply partial updates to a brand."""
+    """Apply partial updates to a brand. If store_id is provided, is_active is updated in the override."""
     update_data = payload.model_dump(exclude_unset=True)
+    
+    # Handle is_active override
+    if "is_active" in update_data and store_id is not None:
+        is_active_val = update_data.pop("is_active")
+        # Upsert in StoreBrandOverride
+        stmt = select(StoreBrandOverride).where(
+            StoreBrandOverride.store_id == store_id,
+            StoreBrandOverride.brand_id == brand.id,
+        )
+        override = (await db.execute(stmt)).scalar_one_or_none()
+        if override:
+            override.is_active = is_active_val
+        else:
+            override = StoreBrandOverride(
+                store_id=store_id,
+                brand_id=brand.id,
+                is_active=is_active_val,
+            )
+            db.add(override)
+        await db.commit()
+        # Set transient attribute for response serialization
+        brand.is_active = is_active_val
+        
     for field, value in update_data.items():
         setattr(brand, field, value)
     await db.commit()
@@ -159,9 +260,31 @@ async def update_brand(
     return brand
 
 
-async def delete_brand(db: AsyncSession, brand: Brand) -> Brand:
-    """Soft-delete a brand by deactivating it."""
-    brand.is_active = False
-    await db.commit()
-    await db.refresh(brand)
+async def delete_brand(
+    db: AsyncSession,
+    brand: Brand,
+    store_id: int | None = None,
+) -> Brand:
+    """Soft-delete a brand by deactivating it. If store_id is provided, deactivates in override."""
+    if store_id is not None:
+        stmt = select(StoreBrandOverride).where(
+            StoreBrandOverride.store_id == store_id,
+            StoreBrandOverride.brand_id == brand.id,
+        )
+        override = (await db.execute(stmt)).scalar_one_or_none()
+        if override:
+            override.is_active = False
+        else:
+            override = StoreBrandOverride(
+                store_id=store_id,
+                brand_id=brand.id,
+                is_active=False,
+            )
+            db.add(override)
+        await db.commit()
+        brand.is_active = False
+    else:
+        brand.is_active = False
+        await db.commit()
+        await db.refresh(brand)
     return brand

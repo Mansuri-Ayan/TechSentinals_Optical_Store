@@ -50,3 +50,13 @@ export const deleteSaleApi = async (saleId) => {
   return response.data;
 };
 
+/**
+ * Cancel a sale (changes status to Cancelled and rolls back stock).
+ * 
+ * @param {number|string} saleId - The sale ID.
+ */
+export const cancelSaleApi = async (saleId) => {
+  const response = await api.post(`/sales/${saleId}/cancel`);
+  return response.data;
+};
+

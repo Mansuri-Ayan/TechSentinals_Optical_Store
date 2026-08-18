@@ -18,7 +18,7 @@ export const useRoleContext = () => {
   if (isPathAdmin) {
     storeId = params.storeId || params.store_id || selectedStore?.id || 'admin';
   } else {
-    storeId = user?.store_id || selectedStore?.id || 'admin';
+    storeId = isAdmin ? (selectedStore?.id || 'admin') : (user?.store_id || 'admin');
   }
 
   const buildPath = (subpath) => {

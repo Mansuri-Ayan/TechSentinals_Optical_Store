@@ -10,6 +10,9 @@ import { useStoreStore } from '../../store/store';
 import Pagination from '../../components/shared/Pagination';
 import InventoryDetailDrawer from '../../components/admin/InventoryDetailDrawer';
 import { useRoleContext } from '../../hooks/useRoleContext';
+import PermissionGuard from '../../components/shared/PermissionGuard';
+import { usePagePermissions } from '../../hooks/usePermissions';
+import ConfirmationModal from '../../components/shared/ConfirmationModal';
 
 const STATUS_CFG = {
   Completed: { color: 'text-emerald-700 bg-emerald-50 border-emerald-200', dot: 'bg-emerald-500' },
@@ -47,6 +50,7 @@ const Sales = () => {
 
   const { storeId, buildPath, showStoreSwitcher, isPathAdmin } = useRoleContext();
   const { selectedStore } = useStoreStore();
+  const perms = usePagePermissions('sales');
 
   const [selectedBranch, setSelectedBranch] = useState(queryBranch || storeId || 'All');
   const [selectedStatus, setSelectedStatus] = useState(queryStatus || 'All');
@@ -57,6 +61,7 @@ const Sales = () => {
   const [dateTo, setDateTo] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedSale, setSelectedSale] = useState(null);
+  const [cancelModalData, setCancelModalData] = useState({ isOpen: false, saleId: null, invoiceNumber: '' });
 
   const { stores } = useStores();
 
@@ -85,7 +90,7 @@ const Sales = () => {
   }, [selectedBranch, selectedStatus, selectedPayment, searchTerm, dateFrom, dateTo]);
 
   // Fetch sales from backend
-  const { sales, total, pages, kpis, isLoading, deleteSaleAsync } = useSales({
+  const { sales, total, pages, kpis, isLoading, cancelSaleAsync } = useSales({
     page: currentPage,
     limit: 8,
     storeId: selectedBranch,
@@ -96,14 +101,12 @@ const Sales = () => {
     hasDue: selectedPayment === 'Remaining' ? true : selectedPayment === 'Paid' ? false : undefined,
   });
 
-  const handleDeleteOrder = async (saleId, invoiceNumber) => {
-    if (window.confirm(`Are you sure you want to delete order ${invoiceNumber || ''}? This will permanently delete the order and restore all inventory stock batches & product units.`)) {
-      try {
-        await deleteSaleAsync(saleId);
-      } catch (err) {
-        // Error handled in hook
-      }
-    }
+  const handleDeleteOrder = (saleId, invoiceNumber) => {
+    setCancelModalData({
+      isOpen: true,
+      saleId,
+      invoiceNumber
+    });
   };
 
   const fmt = (n) => `₹${Number(n).toLocaleString('en-IN')}`;
@@ -368,16 +371,18 @@ const Sales = () => {
                         >
                           <Printer className="w-3.5 h-3.5" />
                         </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteOrder(sale.id, sale.orderId);
-                          }}
-                          className="p-1.5 hover:bg-red-50 text-red-500 hover:text-red-700 rounded-lg transition-colors cursor-pointer inline-flex items-center justify-center border border-red-100"
-                          title="Delete Order & Rollback Stock"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        <PermissionGuard permission="sales:delete">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteOrder(sale.id, sale.orderId);
+                            }}
+                            className="p-1.5 hover:bg-red-50 text-red-500 hover:text-red-700 rounded-lg transition-colors cursor-pointer inline-flex items-center justify-center border border-red-100"
+                            title="Delete Order & Rollback Stock"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </PermissionGuard>
                       </div>
                     </td>
                   </tr>
@@ -413,16 +418,18 @@ const Sales = () => {
                     >
                       <Printer className="w-3.5 h-3.5" />
                     </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDeleteOrder(sale.id, sale.orderId);
-                      }}
-                      className="p-1.5 hover:bg-red-50 text-red-500 hover:text-red-700 rounded-lg transition-colors cursor-pointer border border-red-100 inline-flex items-center justify-center"
-                      title="Delete Order & Rollback Stock"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    <PermissionGuard permission="sales:delete">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteOrder(sale.id, sale.orderId);
+                        }}
+                        className="p-1.5 hover:bg-red-50 text-red-500 hover:text-red-700 rounded-lg transition-colors cursor-pointer border border-red-100 inline-flex items-center justify-center"
+                        title="Delete Order & Rollback Stock"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </PermissionGuard>
                     <StatusBadge status={sale.status} />
                     {sale.is_exchanged && (
                       <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-extrabold text-orange-700 bg-orange-55 border border-orange-200 uppercase tracking-wider">
@@ -478,6 +485,25 @@ const Sales = () => {
       <InventoryDetailDrawer
         item={selectedSale}
         onClose={() => setSelectedSale(null)}
+      />
+
+      {/* Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={cancelModalData.isOpen}
+        onClose={() => setCancelModalData({ isOpen: false, saleId: null, invoiceNumber: '' })}
+        onConfirm={async () => {
+          try {
+            await cancelSaleAsync(cancelModalData.saleId);
+            setCancelModalData({ isOpen: false, saleId: null, invoiceNumber: '' });
+          } catch (err) {
+            // Error handled in hook
+          }
+        }}
+        title="Cancel Order?"
+        message={`Are you sure you want to cancel order ${cancelModalData.invoiceNumber || ''}? This will mark the order as Cancelled and restore all inventory stock batches & product units.`}
+        confirmText="Cancel Order"
+        cancelText="No, Keep Order"
+        type="danger"
       />
 
     </div>

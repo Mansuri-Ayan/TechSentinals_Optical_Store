@@ -6,6 +6,7 @@ from sqlalchemy import (
     ForeignKey,
     DateTime,
     Enum,
+    UniqueConstraint,
     func,
 )
 from sqlalchemy.orm import relationship, validates
@@ -36,6 +37,13 @@ class ProductUnit(Base):
     """
 
     __tablename__ = "product_units"
+    __table_args__ = (
+        # unit_sku is derived from the parent product's SKU, which is now
+        # only unique per-tenant (see uq_products_admin_sku) — scope this to
+        # product_id rather than globally, so two tenants whose products
+        # happen to share a SKU don't collide on generated unit SKUs either.
+        UniqueConstraint("product_id", "unit_sku", name="uq_product_units_product_unit_sku"),
+    )
 
     id = Column(
         BigInteger,
@@ -47,9 +55,8 @@ class ProductUnit(Base):
     unit_sku = Column(
         String(150),
         nullable=False,
-        unique=True,
         index=True,
-        comment="Unique SKU per physical unit (e.g., FRM-RB-001-U0001)",
+        comment="SKU per physical unit, unique per product (e.g., FRM-RB-001-U0001)",
     )
 
     product_id = Column(

@@ -33,15 +33,34 @@ export const useStoreStaff = (storeId, params) => {
     queryClient.invalidateQueries({ queryKey: ['stores', storeId, 'staff'] });
   };
 
+  const handleMutationError = (error, variables, defaultMessage) => {
+    if (error.response?.status === 409 && Array.isArray(error.response?.data?.detail) && variables.setError) {
+      error.response.data.detail.forEach((item) => {
+        let field = item.field;
+        if (field === 'first_name') field = 'firstName';
+        else if (field === 'last_name') field = 'lastName';
+        else if (field === 'joining_date') field = 'joiningDate';
+        else if (field === 'pf_number') field = 'pfNumber';
+        else if (field === 'is_active') field = 'isActive';
+        else if (field === 'employee_code') field = 'employeeCode';
+        
+        variables.setError(field, { type: 'server', message: item.message });
+      });
+    } else {
+      const msg = typeof error.response?.data?.detail === 'string'
+        ? error.response.data.detail
+        : defaultMessage;
+      toast.error(msg);
+    }
+  };
+
   const createStaffMutation = useMutation({
     mutationFn: createStaffApi,
     onSuccess: () => {
       invalidateStaff();
       toast.success('Staff member created successfully.');
     },
-    onError: (error) => {
-      toast.error(error.response?.data?.detail || 'Failed to create staff member.');
-    },
+    onError: (error, variables) => handleMutationError(error, variables, 'Failed to create staff member.'),
   });
 
   const updateStaffMutation = useMutation({
@@ -50,9 +69,7 @@ export const useStoreStaff = (storeId, params) => {
       invalidateStaff();
       toast.success('Staff member updated successfully.');
     },
-    onError: (error) => {
-      toast.error(error.response?.data?.detail || 'Failed to update staff member.');
-    },
+    onError: (error, variables) => handleMutationError(error, variables, 'Failed to update staff member.'),
   });
 
   const deleteStaffMutation = useMutation({

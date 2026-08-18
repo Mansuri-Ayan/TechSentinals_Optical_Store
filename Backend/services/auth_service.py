@@ -2,6 +2,7 @@
 import hashlib
 from datetime import datetime, timezone
 from sqlalchemy import select
+from sqlalchemy.orm import joinedload
 from sqlalchemy.ext.asyncio import AsyncSession
 from core.security import (
     create_access_token,
@@ -41,24 +42,33 @@ async def authenticate_user_by_role(
             return user, "admin"
 
     elif role == "manager":
-        stmt = select(Manager).where(Manager.email == email)
+        stmt = select(Manager).where(Manager.email == email).options(joinedload(Manager.store))
         result = await db.execute(stmt)
         user = result.scalar_one_or_none()
         if user and verify_password(password, user.password_hash) and user.is_active and user.deleted_at is None:
+            # Check if the user's store is still active
+            if not user.store or not user.store.is_active or user.store.deleted_at is not None:
+                return None
             return user, "manager"
 
     elif role == "worker":
-        stmt = select(Worker).where(Worker.email == email)
+        stmt = select(Worker).where(Worker.email == email).options(joinedload(Worker.store))
         result = await db.execute(stmt)
         user = result.scalar_one_or_none()
         if user and verify_password(password, user.password_hash) and user.is_active and user.deleted_at is None:
+            # Check if the user's store is still active
+            if not user.store or not user.store.is_active or user.store.deleted_at is not None:
+                return None
             return user, "worker"
 
     elif role == "optician":
-        stmt = select(Optician).where(Optician.email == email)
+        stmt = select(Optician).where(Optician.email == email).options(joinedload(Optician.store))
         result = await db.execute(stmt)
         user = result.scalar_one_or_none()
         if user and verify_password(password, user.password_hash) and user.is_active and user.deleted_at is None:
+            # Check if the user's store is still active
+            if not user.store or not user.store.is_active or user.store.deleted_at is not None:
+                return None
             return user, "optician"
             
     elif role == "superadmin":
@@ -180,6 +190,20 @@ async def refresh_access_token(
             return None
     elif role_name == "optician":
         stmt = select(Optician).where(Optician.id == user_id)
+        res = await db.execute(stmt)
+        user = res.scalar_one_or_none()
+        if user is None or not user.is_active or user.deleted_at is not None:
+            await db.commit()
+            return None
+    elif role_name == "superadmin":
+        stmt = select(SuperAdmin).where(SuperAdmin.id == user_id)
+        res = await db.execute(stmt)
+        user = res.scalar_one_or_none()
+        if user is None or user.status != "ACTIVE" or user.deleted_at is not None:
+            await db.commit()
+            return None
+    elif role_name == "accountant":
+        stmt = select(Accountant).where(Accountant.id == user_id)
         res = await db.execute(stmt)
         user = res.scalar_one_or_none()
         if user is None or not user.is_active or user.deleted_at is not None:

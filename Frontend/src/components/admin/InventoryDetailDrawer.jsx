@@ -5,14 +5,14 @@ import {
   Store, CheckCircle, AlertTriangle, XCircle, Image as ImageIcon, Sliders,
   User, Users, CreditCard, UserCheck, Calendar, IndianRupee, ShoppingCart,
   Receipt, FileText, RefreshCw, Shield, ThumbsUp, ThumbsDown,
-  Briefcase, Clock, Phone, Mail, Pencil, Printer, Share2, Eye, Sparkles, Beaker, Search, ChevronRight, ChevronDown, List
+  Briefcase, Clock, Phone, Mail, Pencil, Printer, Share2, Eye, Sparkles, Beaker, Search, ChevronRight, ChevronDown, List, Loader2
 } from 'lucide-react';
 import { useCustomer } from '../../hooks/useCustomers';
 import { useBillSettings } from '../../hooks/useBillSettings';
 import { defaultSettings } from '../../utils/billSettings';
 import { addSalePaymentApi } from '../../api/customer/customer.api';
 import { toast } from 'react-toastify';
-import { getSaleBillApi } from '../../api/sales/sales.api';
+import { getSaleBillApi, getSaleApi } from '../../api/sales/sales.api';
 import { getInventoryBatchesApi } from '../../api/inventory/inventory.api';
 
 const statusConfig = {
@@ -128,7 +128,15 @@ const RejectReasonPrompt = ({ onConfirm, onCancel }) => {
    MAIN DRAWER COMPONENT
    Props: item, onClose, onApprove, onReject, isApproving, isRejecting, isLoading, canApprove, canUpdateStatus
 ───────────────────────────────────────────────────────── */
-const InventoryDetailDrawer = ({ item, onClose, onEdit, onRestockSupplier, onApprove, onReject, isApproving, isRejecting, isLoading, onUpdateStatus, labs = [], canApprove = true, canUpdateStatus = true }) => {
+const InventoryDetailDrawer = ({ item: propItem, onClose, onEdit, onRestockSupplier, onApprove, onReject, isApproving, isRejecting, isLoading, onUpdateStatus, labs = [], canApprove = true, canUpdateStatus = true }) => {
+  const [saleData, setSaleData] = useState(null);
+  const [loadingSale, setLoadingSale] = useState(false);
+
+  let item = propItem;
+  if (propItem?.type === 'sales' && saleData) {
+    item = saleData;
+  }
+
   const storeId = item?.store_id || item?.storeId;
   const { settings: fetchedSettings } = useBillSettings(storeId);
   const billSettings = fetchedSettings ? {
@@ -177,6 +185,89 @@ const InventoryDetailDrawer = ({ item, onClose, onEdit, onRestockSupplier, onApp
       setBillHtml('');
     }
   }, [item, activeTab]);
+
+  useEffect(() => {
+    if (propItem && propItem.type === 'sales') {
+      if (propItem.customerName || propItem.customer_name) {
+        const due = Number(propItem.due_amount || propItem.dueAmount || 0);
+        const paid = Number(propItem.paid_amount || propItem.paidAmount || 0);
+        let paymentStatus = propItem.paymentStatus;
+        if (!paymentStatus) {
+          if (due <= 0) paymentStatus = 'Paid';
+          else if (paid > 0) paymentStatus = 'Partially Paid';
+          else paymentStatus = 'Unpaid';
+        }
+        setSaleData({
+          ...propItem,
+          orderId: propItem.orderId || propItem.invoice_number,
+          orderDate: propItem.orderDate || propItem.sale_date,
+          customerName: propItem.customerName || propItem.customer_name,
+          customerPhone: propItem.customerPhone || propItem.customer_phone,
+          customerAddress: propItem.customerAddress || propItem.customer_address,
+          billedOnAccountOf: propItem.billedOnAccountOf || propItem.billed_on_account_of,
+          totalAmount: propItem.totalAmount || propItem.total_amount,
+          dueAmount: propItem.dueAmount || propItem.due_amount,
+          paymentStatus,
+        });
+      } else {
+        setLoadingSale(true);
+        getSaleApi(propItem.id)
+          .then((data) => {
+            let paymentStatus = 'Unpaid';
+            const due = Number(data.due_amount || 0);
+            const paid = Number(data.paid_amount || 0);
+            if (due <= 0) {
+              paymentStatus = 'Paid';
+            } else if (paid > 0) {
+              paymentStatus = 'Partially Paid';
+            }
+
+            const paymentMethod = data.payments && data.payments.length > 0
+              ? data.payments.map(p => p.payment_method).join(' + ')
+              : 'Credit';
+
+            setSaleData({
+              ...data,
+              orderId: data.invoice_number,
+              orderDate: data.sale_date,
+              customerName: data.customer_name,
+              customerPhone: data.customer_phone,
+              customerAddress: data.customer_address,
+              billedOnAccountOf: data.billed_on_account_of,
+              branchName: data.store_name,
+              staffName: data.staff_name,
+              staffCode: data.staff_code,
+              staffRole: data.staff_role,
+              productName: data.product_name,
+              productCategory: data.product_category,
+              productSubcategory: data.product_subcategory,
+              productQuantity: data.product_quantity,
+              productPrice: data.product_price,
+              paymentStatus,
+              paymentMethod,
+              totalAmount: data.total_amount,
+              subtotal: data.subtotal,
+              discountAmount: data.discount_amount,
+              paidAmount: data.paid_amount,
+              dueAmount: data.due_amount,
+              type: 'sales',
+              deliveryDate: data.lab_status ? (data.lab_status === 'Delivered' ? data.updated_at : null) : data.sale_date,
+              labName: data.lab_name,
+              labId: data.lab_id,
+            });
+          })
+          .catch((err) => {
+            console.error("Failed to fetch sale details:", err);
+            toast.error("Failed to load sale details.");
+          })
+          .finally(() => {
+            setLoadingSale(false);
+          });
+      }
+    } else {
+      setSaleData(null);
+    }
+  }, [propItem]);
 
   const [batches, setBatches] = useState([]);
   const [loadingBatches, setLoadingBatches] = useState(false);
@@ -741,7 +832,7 @@ const InventoryDetailDrawer = ({ item, onClose, onEdit, onRestockSupplier, onApp
 
             {/* Footer Actions */}
             <div className="px-5 py-4 bg-white border-t border-slate-100 flex-shrink-0 space-y-4">
-              {onUpdateStatus && (
+              {onUpdateStatus && canUpdateStatus && (
                 <div className="space-y-3">
 
                   {/* Confirmed -> Sent To Lab: must show Lab Partner Selection */}
@@ -1152,6 +1243,13 @@ const InventoryDetailDrawer = ({ item, onClose, onEdit, onRestockSupplier, onApp
 
           {/* Scrollable content */}
           <div className="flex-1 overflow-y-auto hide-scrollbar px-4 py-4">
+            {loadingSale ? (
+              <div className="flex flex-col items-center justify-center py-20 text-slate-550 gap-3 font-sans">
+                <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+                <span className="text-sm font-semibold">Loading sale details...</span>
+              </div>
+            ) : (
+              <>
 
             {/* ── DETAILS TAB CONTENT ── */}
             {activeTab === 'details' && (
@@ -1521,7 +1619,10 @@ const InventoryDetailDrawer = ({ item, onClose, onEdit, onRestockSupplier, onApp
                   </>
                 )}
               </div>
-            )}          </div>
+            )}
+            </>
+          )}
+          </div>
 
           {/* Footer Actions */}
           <div className="px-5 py-4 bg-white border-t border-slate-100 flex-shrink-0 no-print">
@@ -1731,7 +1832,6 @@ const InventoryDetailDrawer = ({ item, onClose, onEdit, onRestockSupplier, onApp
               {/* Always show Recorded By */}
               <DetailRow label="Recorded By" value={item.recordedBy} />
             </Section>
-
           </div>
 
           {/* Footer */}

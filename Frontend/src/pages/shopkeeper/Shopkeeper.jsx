@@ -14,6 +14,7 @@ import { useAuthStore, useStoreStore } from '../../store/store';
 import { toast } from 'react-toastify';
 import NotificationBell from '../../components/shared/NotificationBell';
 import PermissionGuard from '../../components/shared/PermissionGuard';
+import { useHasPermission } from '../../hooks/usePermissions';
 
 const POS_KEYS = {
   step: 'pos_activeStep',
@@ -72,6 +73,7 @@ const Shopkeeper = () => {
   const [paymentInfo, setPaymentInfo] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { user } = useAuthStore();
+  const canCreatePrescription = useHasPermission('prescriptions:create');
 
   /* ── Persist wizard state to localStorage ── */
   useEffect(() => { localStorage.setItem(POS_KEYS.step, JSON.stringify(activeStep)); }, [activeStep]);
@@ -233,6 +235,10 @@ const Shopkeeper = () => {
     const customerId = customer.id || safeParse(POS_KEYS.customer, {}).id;
 
     if (hasPrescription && customerId) {
+      if (!canCreatePrescription) {
+        toast.error('You do not have permission to register optical prescriptions.');
+        return;
+      }
       try {
         const prescriptionPayload = {
           customer_id: Number(customerId),

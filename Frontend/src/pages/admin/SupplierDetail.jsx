@@ -15,6 +15,7 @@ import { useStoreStore } from '../../store/store';
 import { useSupplier, useSupplierProducts, useSuppliers } from '../../hooks/useSuppliers';
 import { usePurchaseOrders } from '../../hooks/usePurchaseOrders';
 import { useRoleContext } from '../../hooks/useRoleContext';
+import PermissionGuard from '../../components/shared/PermissionGuard';
 
 /* ── Helpers ── */
 const fmt = (n) => `₹${Number(n).toLocaleString('en-IN')}`;
@@ -320,27 +321,33 @@ const SupplierDetail = () => {
 
         {/* Header Action Buttons */}
         <div className="flex items-center gap-2 w-full lg:w-auto justify-end flex-wrap sm:flex-nowrap">
-          <button
-            onClick={() => setShowAddTransaction(true)}
-            className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs sm:text-sm font-semibold transition-all shadow-sm hover:shadow-md whitespace-nowrap animate-in fade-in duration-200"
-          >
-            <PackagePlus className="w-4 h-4" />
-            Record Purchase
-          </button>
-          <button
-            onClick={() => setShowEditModal(true)}
-            className="w-10 h-10 flex items-center justify-center bg-white border border-slate-200 rounded-xl text-slate-500 hover:text-amber-600 hover:bg-amber-50 hover:border-amber-200 transition-all shadow-sm flex-shrink-0"
-            title="Edit supplier"
-          >
-            <Edit2 className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => setShowDeleteModal(true)}
-            className="w-10 h-10 flex items-center justify-center bg-white border border-slate-200 rounded-xl text-slate-500 hover:text-red-600 hover:bg-red-50 hover:border-red-200 transition-all shadow-sm flex-shrink-0"
-            title="Delete supplier"
-          >
-            <Trash2 className="w-4 h-4" />
-          </button>
+          <PermissionGuard permission="purchase_orders:create">
+            <button
+              onClick={() => setShowAddTransaction(true)}
+              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs sm:text-sm font-semibold transition-all shadow-sm hover:shadow-md whitespace-nowrap animate-in fade-in duration-200"
+            >
+              <PackagePlus className="w-4 h-4" />
+              Record Purchase
+            </button>
+          </PermissionGuard>
+          <PermissionGuard permission="suppliers:update">
+            <button
+              onClick={() => setShowEditModal(true)}
+              className="w-10 h-10 flex items-center justify-center bg-white border border-slate-200 rounded-xl text-slate-500 hover:text-amber-600 hover:bg-amber-50 hover:border-amber-200 transition-all shadow-sm flex-shrink-0"
+              title="Edit supplier"
+            >
+              <Edit2 className="w-4 h-4" />
+            </button>
+          </PermissionGuard>
+          <PermissionGuard permission="suppliers:delete">
+            <button
+              onClick={() => setShowDeleteModal(true)}
+              className="w-10 h-10 flex items-center justify-center bg-white border border-slate-200 rounded-xl text-slate-500 hover:text-red-600 hover:bg-red-50 hover:border-red-200 transition-all shadow-sm flex-shrink-0"
+              title="Delete supplier"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </PermissionGuard>
         </div>
       </div>
 

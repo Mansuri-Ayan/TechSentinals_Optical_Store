@@ -50,7 +50,7 @@ async def update_bill_settings_admin(
 # --- SHOPKEEPER ROUTES ---
 @router.get("/shopkeeper", response_model=BillSettingsResponse)
 async def get_bill_settings_shopkeeper(
-    current_user = Depends(require_permission("stores:read", "sales:read", "sales:create", "sales:update")),
+    current_user = Depends(require_permission("bill_settings:read")),
     db: AsyncSession = Depends(get_db)
 ):
     store_id = current_user.store_id if hasattr(current_user, "store_id") else None
@@ -69,7 +69,7 @@ async def get_bill_settings_shopkeeper(
 @router.put("/shopkeeper", response_model=BillSettingsResponse)
 async def update_bill_settings_shopkeeper(
     payload: BillSettingsUpdate,
-    current_user = Depends(require_permission("stores:update")),
+    current_user = Depends(require_permission("bill_settings:update")),
     db: AsyncSession = Depends(get_db)
 ):
     store_id = current_user.store_id if hasattr(current_user, "store_id") else None

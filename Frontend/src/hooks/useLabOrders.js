@@ -68,7 +68,7 @@ export const useLabOrders = (filters = {}) => {
             paidAmount: item.paid_amount,
             dueAmount: item.due_amount,
             type: 'lab_order', // Ensures the details drawer shows lab order details
-            status: item.lab_status, // Use backend lab_status for workflow tracking
+            status: item.status === 'Cancelled' ? 'Cancelled' : item.lab_status, // Use Cancelled status if order is cancelled, else lab_status for workflow tracking
             sentDate: item.sent_to_lab_date,
             expectedDeliveryDate: item.expected_delivery_date,
             deliveryDate: item.lab_status === 'Delivered' ? item.updated_at : null,

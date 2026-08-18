@@ -111,7 +111,8 @@ async def update_brand_endpoint(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Brand not found",
         )
-    updated = await update_brand(db, brand, payload)
+    store_id = None if isinstance(current_user, Admin) else getattr(current_user, "store_id", None)
+    updated = await update_brand(db, brand, payload, store_id=store_id)
     return BrandRead.model_validate(updated)
 
 @shopkeeper_brand_router.delete(
@@ -132,5 +133,6 @@ async def delete_brand_endpoint(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Brand not found",
         )
-    deleted = await delete_brand(db, brand)
+    store_id = None if isinstance(current_user, Admin) else getattr(current_user, "store_id", None)
+    deleted = await delete_brand(db, brand, store_id=store_id)
     return BrandRead.model_validate(deleted)

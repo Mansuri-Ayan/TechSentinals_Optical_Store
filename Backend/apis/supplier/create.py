@@ -29,5 +29,13 @@ async def create_supplier_endpoint(
     current_user = Depends(require_permission('suppliers', 'create')),
 ) -> SupplierRead:
     admin_id = get_user_admin_id(current_user)
-    supplier = await create_supplier(db, admin_id=admin_id, payload=payload)
+
+    # Determine store_id for auto-linking
+    from models.admin import Admin
+    if isinstance(current_user, Admin):
+        store_id = getattr(payload, 'store_id', None)
+    else:
+        store_id = getattr(current_user, 'store_id', None)
+
+    supplier = await create_supplier(db, admin_id=admin_id, payload=payload, store_id=store_id)
     return _supplier_to_read(supplier)

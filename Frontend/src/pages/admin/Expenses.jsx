@@ -640,7 +640,7 @@ const Expenses = () => {
         onClose={() => setSelectedExpense(null)}
         onApprove={handleApprove}
         onReject={handleReject}
-        canApprove={perms.canUpdate}
+        canApprove={perms.canApprove}
       />
 
       {/* ── Add Expense Modal ── */}

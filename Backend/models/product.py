@@ -9,6 +9,7 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import relationship, validates
 from sqlalchemy.sql import func
@@ -17,6 +18,12 @@ from db.session import Base
 
 class Product(Base):
     __tablename__ = "products"
+    __table_args__ = (
+        # SKU/barcode only need to be unique within a tenant, not globally —
+        # two unrelated businesses must be able to reuse the same SKU.
+        UniqueConstraint("admin_id", "sku", name="uq_products_admin_sku"),
+        UniqueConstraint("admin_id", "barcode", name="uq_products_admin_barcode"),
+    )
 
     id = Column(
         BigInteger,
@@ -52,16 +59,15 @@ class Product(Base):
     sku = Column(
         String(100),
         nullable=False,
-        unique=True,
         index=True,
-        comment="Stock Keeping Unit — unique product identifier",
+        comment="Stock Keeping Unit — unique per tenant (see uq_products_admin_sku)",
     )
 
     barcode = Column(
         String(100),
         nullable=True,
-        unique=True,
-        comment="Optional barcode (EAN / UPC)",
+        index=True,
+        comment="Optional barcode (EAN / UPC) — unique per tenant (see uq_products_admin_barcode)",
     )
 
     name = Column(

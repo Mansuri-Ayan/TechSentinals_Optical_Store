@@ -93,6 +93,13 @@ async def get_current_user(
                 detail="Manager account is deactivated or suspended",
                 headers={"WWW-Authenticate": "Bearer"},
             )
+        # Check if the user's store is still active
+        if user.store and (not user.store.is_active or user.store.deleted_at is not None):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Your store has been deactivated. Please contact your administrator.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
     elif role_name == "worker":
         from sqlalchemy.orm import joinedload
         stmt = select(Worker).options(joinedload(Worker.store)).where(Worker.id == user_id)
@@ -104,6 +111,13 @@ async def get_current_user(
                 detail="Worker account is deactivated or suspended",
                 headers={"WWW-Authenticate": "Bearer"},
             )
+        # Check if the user's store is still active
+        if user.store and (not user.store.is_active or user.store.deleted_at is not None):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Your store has been deactivated. Please contact your administrator.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
     elif role_name == "optician":
         from sqlalchemy.orm import joinedload
         stmt = select(Optician).options(joinedload(Optician.store)).where(Optician.id == user_id)
@@ -113,6 +127,13 @@ async def get_current_user(
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Optician account is deactivated or suspended",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        # Check if the user's store is still active
+        if user.store and (not user.store.is_active or user.store.deleted_at is not None):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Your store has been deactivated. Please contact your administrator.",
                 headers={"WWW-Authenticate": "Bearer"},
             )
     elif role_name == "superadmin":

@@ -3,7 +3,7 @@ import { Search, User, X, Loader2, UserPlus } from 'lucide-react';
 import { getCustomersApi, quickCreateCustomerApi } from '../../api/customer/customer.api';
 import { toast } from 'react-toastify';
 
-const LoyaltyCustomerSearch = ({ selectedCustomer, onSelectCustomer, onClear, allowQuickCreateButton = false, suggestedCustomers = [] }) => {
+const LoyaltyCustomerSearch = ({ selectedCustomer, onSelectCustomer, onClear, allowQuickCreateButton = false, suggestedCustomers = [], excludeCustomerId }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [results, setResults] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -177,7 +177,7 @@ const LoyaltyCustomerSearch = ({ selectedCustomer, onSelectCustomer, onClear, al
                 <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-widest">Linked Members</span>
               </div>
               <ul className="py-1">
-                {suggestedCustomers.map((c) => (
+                {suggestedCustomers.filter(c => c.id !== excludeCustomerId).map((c) => (
                   <li key={c.id}>
                     <button
                       type="button"
@@ -215,7 +215,7 @@ const LoyaltyCustomerSearch = ({ selectedCustomer, onSelectCustomer, onClear, al
                 <div className="p-3 text-xs text-red-500 text-center">{error}</div>
               ) : (
                 <ul className="py-1">
-                  {results.map((c) => (
+                  {results.filter(c => c.id !== excludeCustomerId).map((c) => (
                     <li key={c.id}>
                       <button
                         type="button"

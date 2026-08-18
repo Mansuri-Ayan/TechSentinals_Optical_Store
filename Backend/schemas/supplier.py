@@ -19,6 +19,7 @@ class SupplierStatusEnum(str, Enum):
 # ── Supplier ───────────────────────────────────────────────────
 
 class SupplierCreate(BaseModel):
+    store_id: int | None = Field(default=None, description="Optional store to link this supplier to")
     company_name: str = Field(..., max_length=255, description="Supplier company name")
     contact_person: str | None = Field(default=None, max_length=200)
     email: str | None = Field(default=None, max_length=255)

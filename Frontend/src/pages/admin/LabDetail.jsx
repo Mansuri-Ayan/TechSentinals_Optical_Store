@@ -12,6 +12,7 @@ import InventoryDetailDrawer from '../../components/admin/InventoryDetailDrawer'
 import { updateSaleApi } from '../../api/customer/customer.api';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-toastify';
+import { usePagePermissions } from '../../hooks/usePermissions';
 
 const ITEMS_PER_PAGE = 6;
 
@@ -20,6 +21,7 @@ const LabDetail = () => {
   const { storeId, buildPath, isPathAdmin } = useRoleContext();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const perms = usePagePermissions('sales');
 
   const [searchInput, setSearchInput] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
@@ -309,6 +311,7 @@ const LabDetail = () => {
         onUpdateStatus={handleUpdateStatus}
         activeTab="queue" // Default mapping
         labs={[lab].filter(Boolean)}
+        canUpdateStatus={perms?.canUpdate !== false}
       />
 
     </div>

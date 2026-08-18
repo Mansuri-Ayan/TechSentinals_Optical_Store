@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Calendar, Package, IndianRupee, CreditCard, Building2, CheckCircle, Clock, XCircle, AlertTriangle, Layers, FileText, Hash, ArrowRightLeft, ShoppingCart, TrendingUp, RotateCcw, Trash2 } from 'lucide-react';
+import PermissionGuard from '../../shared/PermissionGuard';
 
 const TRANSACTION_TYPES = [
   { value: 'Inventory Transfer', icon: ArrowRightLeft, color: 'text-blue-600 bg-blue-50 border-blue-200' },
@@ -275,10 +276,12 @@ const TransactionDetailModal = ({
             Close Details
           </button>
           {!isTransfer && transaction.dueAmount > 0 && onRecordPayment && (
-            <button type="button" onClick={() => onRecordPayment(transaction)}
-              className="px-5 py-2.5 bg-blue-600 text-white rounded-xl font-semibold text-sm hover:bg-blue-700 transition-all shadow-md">
-              Record Payment
-            </button>
+            <PermissionGuard permission="purchase_orders:create">
+              <button type="button" onClick={() => onRecordPayment(transaction)}
+                className="px-5 py-2.5 bg-blue-600 text-white rounded-xl font-semibold text-sm hover:bg-blue-700 transition-all shadow-md">
+                Record Payment
+              </button>
+            </PermissionGuard>
           )}
         </div>
       </div>

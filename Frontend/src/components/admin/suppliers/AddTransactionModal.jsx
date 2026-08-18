@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   X, Package, ChevronDown, Layers, Hash, FileText, Plus, Check, CreditCard, Calendar, IndianRupee, Store, Loader2, Tag
 } from 'lucide-react';
@@ -13,6 +14,7 @@ import { addSupplierProductApi } from '../../../api/suppliers/supplier.api';
 import SupplierSelect from '../SupplierSelect';
 import { useSuppliers } from '../../../hooks/useSuppliers';
 import { useAuthStore } from '../../../store/store';
+import { createCategoryApi, createSubcategoryApi } from '../../../api/category/category.api';
 
 const PAYMENT_METHODS = ['Cash', 'Bank Transfer', 'Cheque', 'UPI', 'Credit'];
 
@@ -39,6 +41,11 @@ const EMPTY = {
   discountPercent: '0.00',
   profitMargin: '',
   supplierId: '',
+
+  isNewCategory: false,
+  newCategoryName: '',
+  isNewSubcategory: false,
+  newSubcategoryName: '',
 };
 
 const AddTransactionModal = ({ isOpen, defaultProductId, defaultSupplierId, storeName, activeStoreId, onClose, onSubmit }) => {
@@ -49,6 +56,7 @@ const AddTransactionModal = ({ isOpen, defaultProductId, defaultSupplierId, stor
   const { brands, createBrandAsync } = useBrands();
   const { user } = useAuthStore();
   const isAdmin = user?.role === 'admin';
+  const queryClient = useQueryClient();
 
   // Fetch all categories
   const { categories } = useCategories(null, { limit: 100 });
@@ -94,8 +102,8 @@ const AddTransactionModal = ({ isOpen, defaultProductId, defaultSupplierId, stor
         const marginVal = sp > 0 ? (((sp - cp) / sp) * 100).toFixed(2) : '';
         setForm(p => ({
           ...p,
-          categoryId: String(prod.category_id),
-          subcategoryId: String(prod.subcategory_id),
+          categoryId: prod.category_id ? String(prod.category_id) : '',
+          subcategoryId: prod.subcategory_id ? String(prod.subcategory_id) : '',
           productId: String(prod.id),
           unitCostPrice: String(cp),
           unitSellingPrice: String(sp),
@@ -118,6 +126,20 @@ const AddTransactionModal = ({ isOpen, defaultProductId, defaultSupplierId, stor
         ...(k === 'categoryId' ? { subcategoryId: '', productId: '' } : {}),
         ...(k === 'subcategoryId' ? { productId: '' } : {})
       };
+
+      if (k === 'isNewCategory' && v) {
+        next.isNewProduct = true;
+        next.isNewSubcategory = true;
+      }
+      if (k === 'isNewSubcategory' && v) {
+        next.isNewProduct = true;
+      }
+      if (k === 'isNewProduct' && !v) {
+        next.isNewCategory = false;
+        next.isNewSubcategory = false;
+        next.newCategoryName = '';
+        next.newSubcategoryName = '';
+      }
 
       // Auto-populate unit price or product default cost if product is selected
       if (k === 'productId' && v && !next.isNewProduct) {
@@ -231,8 +253,20 @@ const AddTransactionModal = ({ isOpen, defaultProductId, defaultSupplierId, stor
   const validate = () => {
     const e = {};
     if (!form.supplierId)    e.supplierId    = 'Supplier is required';
-    if (!form.categoryId)    e.categoryId    = 'Category is required';
-    if (!form.subcategoryId) e.subcategoryId = 'Sub-category is required';
+    
+    // Category & Subcategory Validation
+    if (form.isNewCategory) {
+      if (!form.newCategoryName.trim())    e.newCategoryName = 'Category name is required';
+      if (!form.newSubcategoryName.trim()) e.newSubcategoryName = 'Subcategory name is required';
+    } else {
+      if (!form.categoryId)    e.categoryId    = 'Category is required';
+      
+      if (form.isNewSubcategory) {
+        if (!form.newSubcategoryName.trim()) e.newSubcategoryName = 'Subcategory name is required';
+      } else {
+        if (!form.subcategoryId) e.subcategoryId = 'Sub-category is required';
+      }
+    }
 
     if (form.isNewProduct) {
       if (!form.newProductName.trim()) e.newProductName = 'Product Name is required';
@@ -271,6 +305,31 @@ const AddTransactionModal = ({ isOpen, defaultProductId, defaultSupplierId, stor
 
     setIsSubmitting(true);
     try {
+      let catId = Number(form.categoryId);
+      let subcatId = Number(form.subcategoryId);
+
+      // 1. Create Category inline if requested
+      if (form.isNewCategory) {
+        const catPayload = {
+          name: form.newCategoryName.trim(),
+          description: `Created inline during purchase of ${form.newProductName}`,
+        };
+        const createdCat = await createCategoryApi(catPayload);
+        catId = createdCat.id;
+        queryClient.invalidateQueries({ queryKey: ['categories'] });
+      }
+
+      // 2. Create Subcategory inline if requested
+      if (form.isNewCategory || form.isNewSubcategory) {
+        const subcatPayload = {
+          name: form.newSubcategoryName.trim(),
+          description: `Created inline during purchase of ${form.newProductName}`,
+        };
+        const createdSub = await createSubcategoryApi(catId, subcatPayload);
+        subcatId = createdSub.id;
+        queryClient.invalidateQueries({ queryKey: ['subcategories'] });
+      }
+
       let targetProductId = Number(form.productId);
 
       // If creating a brand-new product inline
@@ -288,8 +347,8 @@ const AddTransactionModal = ({ isOpen, defaultProductId, defaultSupplierId, stor
         }
 
         const productPayload = {
-          category_id: Number(form.categoryId),
-          subcategory_id: Number(form.subcategoryId),
+          category_id: catId,
+          subcategory_id: subcatId,
           brand_id: brandId,
           sku: form.newProductSku.trim().toUpperCase(),
           name: form.newProductName.trim(),
@@ -413,34 +472,95 @@ const AddTransactionModal = ({ isOpen, defaultProductId, defaultSupplierId, stor
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {/* Category */}
                 <div>
-                  <label className="text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
-                    <Layers className="w-3.5 h-3.5 text-slate-400" /> Product Category <span className="text-red-500">*</span>
-                  </label>
-                  <div className="relative">
-                    <select value={form.categoryId} onChange={e => set('categoryId', e.target.value)} className={inputCls('categoryId')} disabled={isSubmitting}>
-                      <option value="">Select category…</option>
-                      {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                    </select>
-                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-semibold text-slate-600 flex items-center gap-1.5">
+                      <Layers className="w-3.5 h-3.5 text-slate-400" /> Product Category <span className="text-red-500">*</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        set('isNewCategory', !form.isNewCategory);
+                        set('newCategoryName', '');
+                        set('categoryId', '');
+                        set('subcategoryId', '');
+                        set('isNewSubcategory', false);
+                      }}
+                      className="text-[10px] font-bold text-blue-600 hover:text-blue-700 underline"
+                      disabled={isSubmitting}
+                    >
+                      {form.isNewCategory ? '← Select Existing' : '+ Create New'}
+                    </button>
                   </div>
-                  {errors.categoryId && <p className="text-xs text-red-500 mt-1">{errors.categoryId}</p>}
+                  
+                  {form.isNewCategory ? (
+                    <div>
+                      <input
+                        type="text"
+                        value={form.newCategoryName}
+                        onChange={e => set('newCategoryName', e.target.value)}
+                        disabled={isSubmitting}
+                        placeholder="Enter new category name…"
+                        className={inputCls('newCategoryName')}
+                      />
+                      {errors.newCategoryName && <p className="text-xs text-red-500 mt-1">{errors.newCategoryName}</p>}
+                    </div>
+                  ) : (
+                    <div className="relative">
+                      <select value={form.categoryId} onChange={e => set('categoryId', e.target.value)} className={inputCls('categoryId')} disabled={isSubmitting}>
+                        <option value="">Select category…</option>
+                        {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      </select>
+                      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                    </div>
+                  )}
+                  {!form.isNewCategory && errors.categoryId && <p className="text-xs text-red-500 mt-1">{errors.categoryId}</p>}
                 </div>
 
                 {/* Sub-category */}
                 <div>
-                  <label className="text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
-                    <Layers className="w-3.5 h-3.5 text-slate-400" /> Sub Category <span className="text-red-500">*</span>
-                  </label>
-                  <div className="relative">
-                    <select value={form.subcategoryId} onChange={e => set('subcategoryId', e.target.value)} className={inputCls('subcategoryId')} disabled={!form.categoryId || isSubmitting}>
-                      <option value="">{form.categoryId ? 'Select sub-category…' : 'Select a category first'}</option>
-                      {subcategories.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                    </select>
-                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-semibold text-slate-600 flex items-center gap-1.5">
+                      <Layers className="w-3.5 h-3.5 text-slate-400" /> Sub Category <span className="text-red-500">*</span>
+                    </label>
+                    {!form.isNewCategory && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          set('isNewSubcategory', !form.isNewSubcategory);
+                          set('newSubcategoryName', '');
+                          set('subcategoryId', '');
+                        }}
+                        className="text-[10px] font-bold text-blue-600 hover:text-blue-700 underline"
+                        disabled={!form.categoryId || isSubmitting}
+                      >
+                        {form.isNewSubcategory ? '← Select Existing' : '+ Create New'}
+                      </button>
+                    )}
                   </div>
-                  {errors.subcategoryId && <p className="text-xs text-red-500 mt-1">{errors.subcategoryId}</p>}
+
+                  {form.isNewCategory || form.isNewSubcategory ? (
+                    <div>
+                      <input
+                        type="text"
+                        value={form.newSubcategoryName}
+                        onChange={e => set('newSubcategoryName', e.target.value)}
+                        disabled={isSubmitting}
+                        placeholder="Enter new subcategory name…"
+                        className={inputCls('newSubcategoryName')}
+                      />
+                      {errors.newSubcategoryName && <p className="text-xs text-red-500 mt-1">{errors.newSubcategoryName}</p>}
+                    </div>
+                  ) : (
+                    <div className="relative">
+                      <select value={form.subcategoryId} onChange={e => set('subcategoryId', e.target.value)} className={inputCls('subcategoryId')} disabled={!form.categoryId || isSubmitting}>
+                        <option value="">{form.categoryId ? 'Select sub-category…' : 'Select a category first'}</option>
+                        {subcategories.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                      </select>
+                      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                    </div>
+                  )}
+                  {(!form.isNewCategory && !form.isNewSubcategory) && errors.subcategoryId && <p className="text-xs text-red-500 mt-1">{errors.subcategoryId}</p>}
                 </div>
               </div>
 

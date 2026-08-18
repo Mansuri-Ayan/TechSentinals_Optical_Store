@@ -1,5 +1,5 @@
 # Service: category_service.py
-from sqlalchemy import select, func as sa_func, or_
+from sqlalchemy import select, func as sa_func, or_, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from models.category import Category
 from models.subcategory import Subcategory
@@ -7,6 +7,8 @@ from models.product import Product
 from models.inventory import Inventory
 from models.store import Store
 from models.store_category_loyalty import StoreCategoryLoyalty
+from models.store_category_override import StoreCategoryOverride
+from models.store_subcategory_override import StoreSubcategoryOverride
 from schemas.category import (
     CategoryCreate, CategoryUpdate,
     SubcategoryCreate, SubcategoryUpdate,
@@ -31,7 +33,7 @@ async def create_category(
     await db.commit()
     await db.refresh(category)
 
-    # Auto-create default 50 points StoreCategoryLoyalty for target stores
+    # Auto-create default 50 points StoreCategoryLoyalty and StoreCategoryOverride for target stores
     if category.store_id is not None:
         scl = StoreCategoryLoyalty(
             store_id=category.store_id,
@@ -40,6 +42,13 @@ async def create_category(
             is_enabled=True,
         )
         db.add(scl)
+        
+        sco = StoreCategoryOverride(
+            store_id=category.store_id,
+            category_id=category.id,
+            is_active=True,
+        )
+        db.add(sco)
         await db.commit()
     else:
         stores_stmt = select(Store.id).where(Store.admin_id == admin_id)
@@ -52,6 +61,13 @@ async def create_category(
                 is_enabled=True,
             )
             db.add(scl)
+            
+            sco = StoreCategoryOverride(
+                store_id=s_id,
+                category_id=category.id,
+                is_active=True,
+            )
+            db.add(sco)
         if store_ids:
             await db.commit()
 
@@ -117,27 +133,59 @@ async def get_categories_by_admin(
     conditions = [Category.admin_id == admin_id]
     if store_id is not None:
         conditions.append(or_(Category.store_id == store_id, Category.store_id.is_(None)))
-    if active_only:
-        conditions.append(Category.is_active.is_(True))
+        if active_only:
+            conditions.append(sa_func.coalesce(StoreCategoryOverride.is_active, Category.is_active).is_(True))
+    else:
+        if active_only:
+            conditions.append(Category.is_active.is_(True))
     if search:
         conditions.append(Category.name.ilike(f"%{search.strip()}%"))
 
     # ── Total count ──
-    count_stmt = select(sa_func.count(Category.id)).where(*conditions)
+    if store_id is not None:
+        count_stmt = (
+            select(sa_func.count(Category.id))
+            .outerjoin(
+                StoreCategoryOverride,
+                and_(StoreCategoryOverride.category_id == Category.id, StoreCategoryOverride.store_id == store_id)
+            )
+            .where(*conditions)
+        )
+    else:
+        count_stmt = select(sa_func.count(Category.id)).where(*conditions)
     total = (await db.execute(count_stmt)).scalar() or 0
 
     # ── Data query ──
-    data_stmt = (
-        select(
-            Category,
-            sa_func.coalesce(sub_sq.c.sub_cnt, 0).label("subcategories_count"),
-            sa_func.coalesce(prod_sq.c.cnt, 0).label("products_count"),
+    if store_id is not None:
+        data_stmt = (
+            select(
+                Category,
+                sa_func.coalesce(StoreCategoryOverride.is_active, Category.is_active).label("resolved_is_active"),
+                sa_func.coalesce(sub_sq.c.sub_cnt, 0).label("subcategories_count"),
+                sa_func.coalesce(prod_sq.c.cnt, 0).label("products_count"),
+            )
+            .outerjoin(
+                StoreCategoryOverride,
+                and_(StoreCategoryOverride.category_id == Category.id, StoreCategoryOverride.store_id == store_id)
+            )
+            .outerjoin(sub_sq, Category.id == sub_sq.c.category_id)
+            .outerjoin(prod_sq, Category.id == prod_sq.c.category_id)
+            .where(*conditions)
+            .order_by(Category.name)
         )
-        .outerjoin(sub_sq, Category.id == sub_sq.c.category_id)
-        .outerjoin(prod_sq, Category.id == prod_sq.c.category_id)
-        .where(*conditions)
-        .order_by(Category.name)
-    )
+    else:
+        data_stmt = (
+            select(
+                Category,
+                Category.is_active.label("resolved_is_active"),
+                sa_func.coalesce(sub_sq.c.sub_cnt, 0).label("subcategories_count"),
+                sa_func.coalesce(prod_sq.c.cnt, 0).label("products_count"),
+            )
+            .outerjoin(sub_sq, Category.id == sub_sq.c.category_id)
+            .outerjoin(prod_sq, Category.id == prod_sq.c.category_id)
+            .where(*conditions)
+            .order_by(Category.name)
+        )
 
     if paginate:
         offset = (page - 1) * limit
@@ -146,13 +194,13 @@ async def get_categories_by_admin(
     rows = (await db.execute(data_stmt)).all()
 
     items = []
-    for cat, sub_cnt, prod_cnt in rows:
+    for cat, resolved_is_active, sub_cnt, prod_cnt in rows:
         items.append({
             "id": cat.id,
             "admin_id": cat.admin_id,
             "name": cat.name,
             "description": cat.description,
-            "is_active": cat.is_active,
+            "is_active": resolved_is_active,
             "created_at": cat.created_at,
             "updated_at": cat.updated_at,
             "subcategories_count": sub_cnt,
@@ -192,9 +240,33 @@ async def update_category(
     db: AsyncSession,
     category: Category,
     payload: CategoryUpdate,
+    store_id: int | None = None,
 ) -> Category:
-    """Apply partial updates to a category."""
+    """Apply partial updates to a category. If store_id is provided, is_active is updated in the override."""
     update_data = payload.model_dump(exclude_unset=True)
+    
+    # Handle is_active override
+    if "is_active" in update_data and store_id is not None:
+        is_active_val = update_data.pop("is_active")
+        # Upsert in StoreCategoryOverride
+        stmt = select(StoreCategoryOverride).where(
+            StoreCategoryOverride.store_id == store_id,
+            StoreCategoryOverride.category_id == category.id,
+        )
+        override = (await db.execute(stmt)).scalar_one_or_none()
+        if override:
+            override.is_active = is_active_val
+        else:
+            override = StoreCategoryOverride(
+                store_id=store_id,
+                category_id=category.id,
+                is_active=is_active_val,
+            )
+            db.add(override)
+        await db.commit()
+        # Set transient attribute for response serialization
+        category.is_active = is_active_val
+        
     for field, value in update_data.items():
         setattr(category, field, value)
     await db.commit()
@@ -202,11 +274,33 @@ async def update_category(
     return category
 
 
-async def delete_category(db: AsyncSession, category: Category) -> Category:
-    """Soft-delete a category by deactivating it."""
-    category.is_active = False
-    await db.commit()
-    await db.refresh(category)
+async def delete_category(
+    db: AsyncSession,
+    category: Category,
+    store_id: int | None = None,
+) -> Category:
+    """Soft-delete a category by deactivating it. If store_id is provided, deactivates in override."""
+    if store_id is not None:
+        stmt = select(StoreCategoryOverride).where(
+            StoreCategoryOverride.store_id == store_id,
+            StoreCategoryOverride.category_id == category.id,
+        )
+        override = (await db.execute(stmt)).scalar_one_or_none()
+        if override:
+            override.is_active = False
+        else:
+            override = StoreCategoryOverride(
+                store_id=store_id,
+                category_id=category.id,
+                is_active=False,
+            )
+            db.add(override)
+        await db.commit()
+        category.is_active = False
+    else:
+        category.is_active = False
+        await db.commit()
+        await db.refresh(category)
     return category
 
 
@@ -226,6 +320,32 @@ async def create_subcategory(
     db.add(subcategory)
     await db.commit()
     await db.refresh(subcategory)
+
+    # Auto-provision StoreSubcategoryOverride entries based on parent category store scoping
+    parent_stmt = select(Category).where(Category.id == category_id)
+    parent = (await db.execute(parent_stmt)).scalar_one_or_none()
+    if parent:
+        if parent.store_id is not None:
+            sso = StoreSubcategoryOverride(
+                store_id=parent.store_id,
+                subcategory_id=subcategory.id,
+                is_active=True,
+            )
+            db.add(sso)
+            await db.commit()
+        else:
+            stores_stmt = select(Store.id).where(Store.admin_id == parent.admin_id)
+            store_ids = (await db.execute(stores_stmt)).scalars().all()
+            for s_id in store_ids:
+                sso = StoreSubcategoryOverride(
+                    store_id=s_id,
+                    subcategory_id=subcategory.id,
+                    is_active=True,
+                )
+                db.add(sso)
+            if store_ids:
+                await db.commit()
+
     return subcategory
 
 
@@ -272,25 +392,56 @@ async def get_subcategories_by_category(
 
     # ── Base conditions ──
     conditions = [Subcategory.category_id == category_id]
-    if active_only:
-        conditions.append(Subcategory.is_active.is_(True))
+    if store_id is not None:
+        if active_only:
+            conditions.append(sa_func.coalesce(StoreSubcategoryOverride.is_active, Subcategory.is_active).is_(True))
+    else:
+        if active_only:
+            conditions.append(Subcategory.is_active.is_(True))
     if search:
         conditions.append(Subcategory.name.ilike(f"%{search.strip()}%"))
 
     # ── Total count ──
-    count_stmt = select(sa_func.count(Subcategory.id)).where(*conditions)
+    if store_id is not None:
+        count_stmt = (
+            select(sa_func.count(Subcategory.id))
+            .outerjoin(
+                StoreSubcategoryOverride,
+                and_(StoreSubcategoryOverride.subcategory_id == Subcategory.id, StoreSubcategoryOverride.store_id == store_id)
+            )
+            .where(*conditions)
+        )
+    else:
+        count_stmt = select(sa_func.count(Subcategory.id)).where(*conditions)
     total = (await db.execute(count_stmt)).scalar() or 0
 
     # ── Data query ──
-    data_stmt = (
-        select(
-            Subcategory,
-            sa_func.coalesce(prod_sq.c.cnt, 0).label("products_count"),
+    if store_id is not None:
+        data_stmt = (
+            select(
+                Subcategory,
+                sa_func.coalesce(StoreSubcategoryOverride.is_active, Subcategory.is_active).label("resolved_is_active"),
+                sa_func.coalesce(prod_sq.c.cnt, 0).label("products_count"),
+            )
+            .outerjoin(
+                StoreSubcategoryOverride,
+                and_(StoreSubcategoryOverride.subcategory_id == Subcategory.id, StoreSubcategoryOverride.store_id == store_id)
+            )
+            .outerjoin(prod_sq, Subcategory.id == prod_sq.c.subcategory_id)
+            .where(*conditions)
+            .order_by(Subcategory.name)
         )
-        .outerjoin(prod_sq, Subcategory.id == prod_sq.c.subcategory_id)
-        .where(*conditions)
-        .order_by(Subcategory.name)
-    )
+    else:
+        data_stmt = (
+            select(
+                Subcategory,
+                Subcategory.is_active.label("resolved_is_active"),
+                sa_func.coalesce(prod_sq.c.cnt, 0).label("products_count"),
+            )
+            .outerjoin(prod_sq, Subcategory.id == prod_sq.c.subcategory_id)
+            .where(*conditions)
+            .order_by(Subcategory.name)
+        )
 
     if paginate:
         offset = (page - 1) * limit
@@ -299,13 +450,13 @@ async def get_subcategories_by_category(
     rows = (await db.execute(data_stmt)).all()
 
     items = []
-    for sub, prod_cnt in rows:
+    for sub, resolved_is_active, prod_cnt in rows:
         items.append({
             "id": sub.id,
             "category_id": sub.category_id,
             "name": sub.name,
             "description": sub.description,
-            "is_active": sub.is_active,
+            "is_active": resolved_is_active,
             "created_at": sub.created_at,
             "updated_at": sub.updated_at,
             "products_count": prod_cnt,
@@ -318,9 +469,33 @@ async def update_subcategory(
     db: AsyncSession,
     subcategory: Subcategory,
     payload: SubcategoryUpdate,
+    store_id: int | None = None,
 ) -> Subcategory:
-    """Apply partial updates to a subcategory."""
+    """Apply partial updates to a subcategory. If store_id is provided, is_active is updated in the override."""
     update_data = payload.model_dump(exclude_unset=True)
+    
+    # Handle is_active override
+    if "is_active" in update_data and store_id is not None:
+        is_active_val = update_data.pop("is_active")
+        # Upsert in StoreSubcategoryOverride
+        stmt = select(StoreSubcategoryOverride).where(
+            StoreSubcategoryOverride.store_id == store_id,
+            StoreSubcategoryOverride.subcategory_id == subcategory.id,
+        )
+        override = (await db.execute(stmt)).scalar_one_or_none()
+        if override:
+            override.is_active = is_active_val
+        else:
+            override = StoreSubcategoryOverride(
+                store_id=store_id,
+                subcategory_id=subcategory.id,
+                is_active=is_active_val,
+            )
+            db.add(override)
+        await db.commit()
+        # Set transient attribute for response serialization
+        subcategory.is_active = is_active_val
+        
     for field, value in update_data.items():
         setattr(subcategory, field, value)
     await db.commit()
@@ -328,9 +503,31 @@ async def update_subcategory(
     return subcategory
 
 
-async def delete_subcategory(db: AsyncSession, subcategory: Subcategory) -> Subcategory:
-    """Soft-delete a subcategory by deactivating it."""
-    subcategory.is_active = False
-    await db.commit()
-    await db.refresh(subcategory)
+async def delete_subcategory(
+    db: AsyncSession,
+    subcategory: Subcategory,
+    store_id: int | None = None,
+) -> Subcategory:
+    """Soft-delete a subcategory by deactivating it. If store_id is provided, deactivates in override."""
+    if store_id is not None:
+        stmt = select(StoreSubcategoryOverride).where(
+            StoreSubcategoryOverride.store_id == store_id,
+            StoreSubcategoryOverride.subcategory_id == subcategory.id,
+        )
+        override = (await db.execute(stmt)).scalar_one_or_none()
+        if override:
+            override.is_active = False
+        else:
+            override = StoreSubcategoryOverride(
+                store_id=store_id,
+                subcategory_id=subcategory.id,
+                is_active=False,
+            )
+            db.add(override)
+        await db.commit()
+        subcategory.is_active = False
+    else:
+        subcategory.is_active = False
+        await db.commit()
+        await db.refresh(subcategory)
     return subcategory

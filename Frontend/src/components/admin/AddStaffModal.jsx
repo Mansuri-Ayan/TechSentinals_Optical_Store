@@ -75,6 +75,7 @@ const AddStaffModal = ({ isOpen, onClose, onSubmitStaff, initialData, isSaving =
     watch,
     setValue,
     reset,
+    setError,
     formState: { errors },
   } = useForm({ defaultValues: getDefaultValues(initialData, storeId) });
 
@@ -130,6 +131,7 @@ const AddStaffModal = ({ isOpen, onClose, onSubmitStaff, initialData, isSaving =
         role: data.role,
         payload: isEditing ? updatePayload : createPayload,
         staff: initialData,
+        setError,
       });
       resetAndClose();
     } catch {
@@ -316,8 +318,9 @@ const AddStaffModal = ({ isOpen, onClose, onSubmitStaff, initialData, isSaving =
                     {...register('pfNumber')}
                     type="text"
                     placeholder="Enter PF Number"
-                    className={inputCls(false)}
+                    className={inputCls(!!errors.pfNumber)}
                   />
+                  <FieldError message={errors.pfNumber?.message} />
                 </div>
 
                 {/* Qualification — optician only */}
@@ -330,8 +333,9 @@ const AddStaffModal = ({ isOpen, onClose, onSubmitStaff, initialData, isSaving =
                       {...register('qualification')}
                       type="text"
                       placeholder="e.g. B.Optom, M.Optom"
-                      className={inputCls(false)}
+                      className={inputCls(!!errors.qualification)}
                     />
+                    <FieldError message={errors.qualification?.message} />
                   </div>
                 )}
 

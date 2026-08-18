@@ -355,14 +355,32 @@ async def get_inventories_by_owner(
         )
         oldest_res = await db.execute(oldest_stmt)
         oldest_rows = oldest_res.scalars().all()
-        oldest_cost_map = {r.product_id: r.purchase_cost for r in oldest_rows}
         oldest_selling_price_map = {r.product_id: r.selling_price for r in oldest_rows}
         oldest_supplier_id_map = {r.product_id: r.supplier_id for r in oldest_rows}
         oldest_supplier_name_map = {r.product_id: r.supplier.company_name if r.supplier else None for r in oldest_rows}
-        
+
+        # "last_purchase_price" should reflect the most recently purchased
+        # batch's cost (what an admin would expect when checking "what am I
+        # currently paying"), not the oldest unsold batch used for FIFO
+        # selling-price/supplier display above — these are different
+        # questions and were previously (incorrectly) answered by the same
+        # oldest-batch query. See docs/BUG_AUDIT.md finding M1.
+        newest_stmt = (
+            select(Inventory)
+            .where(
+                Inventory.product_id.in_(product_ids),
+                *base_conditions_no_prod
+            )
+            .distinct(Inventory.product_id)
+            .order_by(Inventory.product_id, Inventory.id.desc())
+        )
+        newest_res = await db.execute(newest_stmt)
+        newest_rows = newest_res.scalars().all()
+        newest_cost_map = {r.product_id: r.purchase_cost for r in newest_rows}
+
         for r in rows:
             prod = product_map.get(r.product_id)
-            current_batch_cost = oldest_cost_map.get(r.product_id, prod.cost_price if prod else Decimal("0.00"))
+            current_batch_cost = newest_cost_map.get(r.product_id, prod.cost_price if prod else Decimal("0.00"))
             
             from datetime import datetime
             from sqlalchemy.orm.attributes import set_committed_value

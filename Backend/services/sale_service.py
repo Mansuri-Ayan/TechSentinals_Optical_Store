@@ -323,6 +323,15 @@ async def create_sale(
                 rupee_discount_self = res_self["rupee_discount"]
 
             # Validate Other Redemption
+            # Block self-redemption: cannot redeem from the buyer as "other customer"
+            if (payload.loyalty_redeem_other_customer_id and
+                    payload.loyalty_redeem_other_customer_id == customer_id_for_sale):
+                raise HTTPException(
+                    status_code=400,
+                    detail="Cannot redeem points from the same customer who is buying. "
+                           "Use the standard redemption field instead."
+                )
+
             other_customer = None
             if pts_other > 0 and payload.loyalty_redeem_other_customer_id:
                 other_customer = await db.scalar(
@@ -393,7 +402,12 @@ async def create_sale(
             sale.loyalty_points_redeemed = points_redeemed_self + points_redeemed_other
 
             # Adjust sale totals for redemption discount
+            # Folded into discount_amount (not just total_amount) so the invoice
+            # breakdown (subtotal - discount_amount + tax_amount = total_amount)
+            # stays reconciled, and so process_partial_return's later recalculation
+            # doesn't silently drop the redemption discount without refunding points.
             total_discount_from_redemption = rupee_discount_self + rupee_discount_other
+            sale.discount_amount += total_discount_from_redemption
             sale.total_amount -= total_discount_from_redemption
             sale.due_amount = max(Decimal("0"), sale.total_amount - sale.paid_amount)
             if sale.due_amount <= 0:
@@ -584,6 +598,8 @@ async def get_sale(
         select(Sale)
         .options(
             selectinload(Sale.items).selectinload(SaleItem.assigned_units),
+            selectinload(Sale.items).selectinload(SaleItem.product_snapshot),
+            selectinload(Sale.items).selectinload(SaleItem.product),
             selectinload(Sale.payments),
         )
         .where(Sale.id == sale_id)
@@ -625,6 +641,8 @@ async def list_sales(
         # A sale is a lab order if it has an associated lab_status
         conditions.append(Sale.lab_status.is_not(None))
         conditions.append(Sale.lab_status != "Delivered")
+        conditions.append(Sale.lab_status != "Cancelled")
+        conditions.append(Sale.status != SaleStatus.CANCELLED)
         
         if not search:
             if tab == "queue":
@@ -637,10 +655,12 @@ async def list_sales(
         if lab_status_filter and lab_status_filter != "All":
             conditions.append(Sale.lab_status == lab_status_filter)
     elif is_lab_order is False:
-        # For regular sales history: direct sales OR delivered lab orders
+        # For regular sales history: direct sales OR delivered/cancelled lab orders OR cancelled sales
         conditions.append(or_(
             Sale.lab_status.is_(None),
-            Sale.lab_status == "Delivered"
+            Sale.lab_status == "Delivered",
+            Sale.lab_status == "Cancelled",
+            Sale.status == SaleStatus.CANCELLED
         ))
 
         if status_filter:
@@ -751,8 +771,10 @@ async def update_sale(
     await update_bill_for_sale(db, sale.id, commit=False)
     await check_and_update_sales_loss(db, sale.id, commit=False)
     await db.commit()
-    await db.refresh(sale)
-    return sale
+    # Re-fetch (rather than db.refresh) to keep item.product_snapshot/product
+    # eagerly loaded for the response layer — see process_partial_return for
+    # why a plain refresh() breaks serialization here.
+    return await get_sale(db, sale.id)
 
 
 async def cancel_sale(
@@ -897,13 +919,17 @@ async def cancel_sale(
             ))
 
     sale.status = SaleStatus.CANCELLED
+    if sale.lab_status:
+        sale.lab_status = "Cancelled"
     await db.flush()
     from services.bill_service import update_bill_for_sale
     await update_bill_for_sale(db, sale.id, commit=False)
     await check_and_update_sales_loss(db, sale.id, commit=False)
     await db.commit()
-    await db.refresh(sale)
-    return sale
+    # Re-fetch (rather than db.refresh) to keep item.product_snapshot/product
+    # eagerly loaded for the response layer — see process_partial_return for
+    # why a plain refresh() breaks serialization here.
+    return await get_sale(db, sale.id)
 
 
 async def delete_sale(
@@ -1356,11 +1382,14 @@ async def process_partial_return(
         
     if sale.total_amount <= 0:
         sale.status = SaleStatus.REFUNDED
-        
+
     await db.flush()
     from services.bill_service import update_bill_for_sale
     await update_bill_for_sale(db, sale.id, commit=False)
     await check_and_update_sales_loss(db, sale.id, commit=False)
     await db.commit()
-    await db.refresh(sale)
-    return sale
+    # Re-fetch (rather than db.refresh) to keep item.product_snapshot/product
+    # eagerly loaded for the response layer — a plain refresh() expires those
+    # relationships, and re-loading them lazily outside an async-aware context
+    # raises sqlalchemy.exc.MissingGreenlet during response serialization.
+    return await get_sale(db, sale.id)

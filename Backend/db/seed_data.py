@@ -514,8 +514,11 @@ async def seed() -> None:
             ("deadstock", "delete", "Delete Deadstock", True),
             ("deadstock", "read", "Read Deadstock", False),
             ("deadstock", "update", "Update Deadstock", False),
+            ("exchanges", "create", "Create Exchanges", False),
+            ("exchanges", "delete", "Delete Exchanges", True),
+            ("exchanges", "read", "Read Exchanges", False),
+            ("exchanges", "update", "Update Exchanges", False),
             ("expenses", "create", "Create Expenses", False),
-
             ("expenses", "delete", "Delete Expenses", True),
             ("expenses", "read", "Read Expenses", False),
             ("expenses", "update", "Update Expenses", False),
@@ -565,6 +568,7 @@ async def seed() -> None:
             ("workers", "read", "Read Workers", False),
             ("workers", "update", "Update Workers", False),
         ]
+
         for p in PERMISSIONS_SEED:
             stmt = select(Permission).where(Permission.key == f"{p[0]}:{p[1]}")
             perm = (await session.execute(stmt)).scalar_one_or_none()
@@ -586,7 +590,7 @@ async def seed() -> None:
                 "MANAGER": p[0] in ["inventory", "deadstock", "exchanges", "sales", "customers", "loyalty", "products", "brands", "categories", "prescriptions", "repairs", "reports", "expenses", "suppliers", "purchase_orders"] or (p[0] in ["workers", "opticians"] and p[1] in ["read", "create", "update"]),
                 "WORKER": (p[0] in ["sales", "deadstock", "exchanges", "customers", "loyalty", "prescriptions", "products", "brands", "categories"] and p[1] in ["read", "create", "update", "write", "configure"]) or (p[0] in ["inventory", "deadstock"] and p[1] == "read"),
                 "OPTICIAN": (p[0] in ["customers", "deadstock", "exchanges", "prescriptions", "products", "brands", "categories", "loyalty"] and p[1] in ["read", "create", "update", "write", "configure"]) or (p[0] in ["inventory", "deadstock"] and p[1] == "read"),
-                "ACCOUNTANT": (p[0] in ["sales", "reports", "expenses", "deadstock", "exchanges"] and p[1] == "read") or True
+                "ACCOUNTANT": (p[0] in ["sales", "reports", "expenses", "deadstock", "exchanges", "categories", "brands"] and p[1] == "read")
             }
 
             

@@ -106,7 +106,7 @@ const ShopkeeperSidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) =
       {/* Mobile Backdrop Overlay */}
       {isOpen && (
         <div
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 lg:hidden transition-opacity"
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-30 lg:hidden transition-opacity"
           onClick={onClose}
           aria-hidden="true"
         />

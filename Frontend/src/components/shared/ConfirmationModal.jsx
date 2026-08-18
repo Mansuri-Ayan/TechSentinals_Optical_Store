@@ -16,7 +16,7 @@ const ConfirmationModal = ({
 
   const iconMap = {
     warning: <AlertTriangle className="w-6 h-6 text-amber-600" />,
-    danger: <AlertTriangle className="w-6 h-6 text-red-650" />,
+    danger: <AlertTriangle className="w-6 h-6 text-red-600" />,
     info: <Info className="w-6 h-6 text-blue-600" />,
     success: <CheckCircle className="w-6 h-6 text-emerald-600" />
   };
@@ -30,7 +30,7 @@ const ConfirmationModal = ({
 
   const buttonMap = {
     warning: 'bg-amber-600 hover:bg-amber-700 text-white focus:ring-amber-500',
-    danger: 'bg-red-650 hover:bg-red-750 text-white focus:ring-red-500',
+    danger: 'bg-red-600 hover:bg-red-700 text-white focus:ring-red-500',
     info: 'bg-blue-600 hover:bg-blue-700 text-white focus:ring-blue-500',
     success: 'bg-emerald-600 hover:bg-emerald-700 text-white focus:ring-emerald-500'
   };

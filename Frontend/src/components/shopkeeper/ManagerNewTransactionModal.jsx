@@ -31,6 +31,7 @@ const ManagerNewTransactionModal = ({
 }) => {
   const [form, setForm] = useState(MANAGER_EMPTY_FORM);
   const [errors, setErrors] = useState({});
+  const [localSubmitting, setLocalSubmitting] = useState(false);
 
   const categoryStoreId = form.mode === 'request'
     ? (form.targetStore === 'admin' ? 'admin' : (form.targetStore || null))
@@ -123,7 +124,9 @@ const ManagerNewTransactionModal = ({
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validate()) return;
+    if (localSubmitting) return;
 
+    setLocalSubmitting(true);
     try {
       if (form.mode === 'request') {
         const isFromAdmin = form.targetStore === 'admin';
@@ -179,10 +182,13 @@ const ManagerNewTransactionModal = ({
       }
     } catch {
       // Error handled elsewhere
+    } finally {
+      setLocalSubmitting(false);
     }
   };
 
   const handleClose = () => {
+    if (isSubmitting || localSubmitting) return;
     setForm(MANAGER_EMPTY_FORM);
     setErrors({});
     onClose();
@@ -238,7 +244,7 @@ const ManagerNewTransactionModal = ({
               </p>
             </div>
           </div>
-          <button onClick={handleClose} className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors">
+          <button onClick={handleClose} disabled={isSubmitting || localSubmitting} className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors">
             <XIcon className="w-5 h-5" />
           </button>
         </div>
@@ -375,14 +381,14 @@ const ManagerNewTransactionModal = ({
           </div>
 
           <div className="px-5 sm:px-6 py-4 border-t border-slate-100 flex items-center justify-end gap-3 flex-shrink-0 bg-slate-50">
-            <button type="button" onClick={handleClose}
-              className="px-4 py-2 text-sm font-semibold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors">
+            <button type="button" onClick={handleClose} disabled={isSubmitting || localSubmitting}
+              className="px-4 py-2 text-sm font-semibold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors disabled:opacity-50">
               Cancel
             </button>
-            <button type="submit" disabled={isSubmitting}
+            <button type="submit" disabled={isSubmitting || localSubmitting}
               className="px-5 py-2 text-sm font-semibold text-white bg-[#0A0F1F] rounded-xl hover:bg-slate-800 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed">
               <Plus className="w-4 h-4" />
-              {isSubmitting ? 'Submitting...' :
+              {(isSubmitting || localSubmitting) ? 'Submitting...' :
                form.mode === 'request' ? 'Request Stock' :
                form.mode === 'send' ? 'Send Stock' :
                form.mode === 'purchase' ? 'Record Purchase' :

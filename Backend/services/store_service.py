@@ -280,6 +280,19 @@ async def delete_store(db: AsyncSession, store: Store) -> Store:
     """Soft-delete a store by setting deleted_at."""
     store.deleted_at = datetime.now(timezone.utc)
     store.is_active = False
+    
+    # Deactivate all staff of the deleted store
+    from sqlalchemy import update
+    await db.execute(
+        update(Manager).where(Manager.store_id == store.id, Manager.deleted_at.is_(None)).values(is_active=False)
+    )
+    await db.execute(
+        update(Worker).where(Worker.store_id == store.id, Worker.deleted_at.is_(None)).values(is_active=False)
+    )
+    await db.execute(
+        update(Optician).where(Optician.store_id == store.id, Optician.deleted_at.is_(None)).values(is_active=False)
+    )
+    
     await db.commit()
     await db.refresh(store)
     return store

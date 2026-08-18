@@ -4,6 +4,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.deps import require_permission
 from db.session import get_db
 from models.admin import Admin
+from models.manager import Manager
+from models.worker import Worker
+from models.optician import Optician
+from models.sale import StaffType
 from schemas.sale import SaleCreate, SaleRead, SaleItemRead, SalePaymentRead
 from services.sale_service import create_sale
 
@@ -27,16 +31,27 @@ def _payment_to_read(p) -> SalePaymentRead:
     )
 
 
-def _sale_to_read(sale) -> SaleRead:
+def _sale_to_read(sale, staff=None) -> SaleRead:
     customer_name = None
     if sale.customer:
         customer_name = f"{sale.customer.first_name} {sale.customer.last_name or ''}".strip()
+
+    staff_name = staff_code = staff_role = None
+    if staff:
+        staff_name = f"{staff.first_name} {staff.last_name or ''}".strip()
+        staff_code = getattr(staff, "employee_code", None)
+        role_str = staff.role.role if (getattr(staff, "role", None) and getattr(staff.role, "role", None)) else sale.sold_by_type.value
+        staff_role = role_str.title()
+
     return SaleRead(
         **{c.key: getattr(sale, c.key) for c in sale.__table__.columns},
         items=[_item_to_read(i) for i in (sale.items or [])],
         payments=[_payment_to_read(p) for p in (sale.payments or [])],
         store_name=sale.store.store_name if sale.store else None,
         customer_name=customer_name,
+        staff_name=staff_name,
+        staff_code=staff_code,
+        staff_role=staff_role,
     )
 
 
@@ -65,4 +80,13 @@ async def create_sale_endpoint(
                 detail="Access denied: cannot log sales for another store",
             )
     sale = await create_sale(db, admin_id=admin_id, payload=payload)
-    return _sale_to_read(sale)
+
+    staff = None
+    if sale.sold_by_type == StaffType.MANAGER:
+        staff = await db.get(Manager, sale.sold_by_id)
+    elif sale.sold_by_type == StaffType.WORKER:
+        staff = await db.get(Worker, sale.sold_by_id)
+    elif sale.sold_by_type == StaffType.OPTICIAN:
+        staff = await db.get(Optician, sale.sold_by_id)
+
+    return _sale_to_read(sale, staff=staff)

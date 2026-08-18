@@ -47,9 +47,10 @@ async def create_manager_endpoint(
         manager = await create_manager(db, store_id=store_id, payload=payload)
     except Exception as e:
         if "unique" in str(e).lower():
+            from utils.conflict_parser import parse_unique_violation
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="Manager with this email, phone, or employee_code already exists",
+                detail=parse_unique_violation(e, "Manager"),
             )
         raise
     return ManagerRead.model_validate(manager)

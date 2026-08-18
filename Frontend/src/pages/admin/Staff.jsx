@@ -384,12 +384,13 @@ const Staff = () => {
     }
   };
 
-  const handleSubmitStaff = async ({ role, payload, staff: staffMember }) => {
+  const handleSubmitStaff = async ({ role, payload, staff: staffMember, setError }) => {
     if (staffMember) {
       await updateStaffAsync({
         role,
         id: staffMember.id,
         payload,
+        setError,
       });
       return;
     }
@@ -401,6 +402,7 @@ const Staff = () => {
       storeId: targetStoreId,
       role,
       payload: restPayload,
+      setError,
     });
   };
 

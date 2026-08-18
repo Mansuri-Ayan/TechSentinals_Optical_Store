@@ -174,6 +174,7 @@ const ProductCard = ({ item, onViewDetails, onDelete, onEdit, onRequestStock, on
   const isBranchView = storeId && storeId !== "admin";
 
   const perms = usePagePermissions({
+    canUpdate: 'inventory:update',
     canDelete: 'inventory:delete'
   });
 

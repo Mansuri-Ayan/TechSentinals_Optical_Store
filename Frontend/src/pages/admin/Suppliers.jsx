@@ -13,6 +13,7 @@ import { useStoreStore } from '../../store/store';
 import { useSuppliers } from '../../hooks/useSuppliers';
 import { usePurchaseOrders } from '../../hooks/usePurchaseOrders';
 import { useRoleContext } from '../../hooks/useRoleContext';
+import PermissionGuard from '../../components/shared/PermissionGuard';
 
 const ITEMS_PER_PAGE = 12;
 
@@ -105,20 +106,24 @@ const SupplierCard = ({ supplier: s, onClick, onEdit, onDelete }) => (
       className="absolute top-4 right-4 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity"
       onClick={e => e.stopPropagation()}
     >
-      <button
-        onClick={() => onEdit(s)}
-        className="w-8 h-8 flex items-center justify-center bg-white border border-slate-200 rounded-xl shadow-sm text-slate-500 hover:text-amber-600 hover:border-amber-300 hover:bg-amber-50 transition-colors"
-        title="Edit supplier"
-      >
-        <Edit2 className="w-3.5 h-3.5" />
-      </button>
-      <button
-        onClick={() => onDelete(s)}
-        className="w-8 h-8 flex items-center justify-center bg-white border border-slate-200 rounded-xl shadow-sm text-slate-500 hover:text-red-600 hover:border-red-300 hover:bg-red-50 transition-colors"
-        title="Delete supplier"
-      >
-        <Trash2 className="w-3.5 h-3.5" />
-      </button>
+      <PermissionGuard permission="suppliers:update">
+        <button
+          onClick={() => onEdit(s)}
+          className="w-8 h-8 flex items-center justify-center bg-white border border-slate-200 rounded-xl shadow-sm text-slate-500 hover:text-amber-600 hover:border-amber-300 hover:bg-amber-50 transition-colors"
+          title="Edit supplier"
+        >
+          <Edit2 className="w-3.5 h-3.5" />
+        </button>
+      </PermissionGuard>
+      <PermissionGuard permission="suppliers:delete">
+        <button
+          onClick={() => onDelete(s)}
+          className="w-8 h-8 flex items-center justify-center bg-white border border-slate-200 rounded-xl shadow-sm text-slate-500 hover:text-red-600 hover:border-red-300 hover:bg-red-50 transition-colors"
+          title="Delete supplier"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
+      </PermissionGuard>
     </div>
   </div>
 );
@@ -346,13 +351,15 @@ const Suppliers = () => {
                 <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
               </div>
             )}
-            <button
-              onClick={() => setShowAddModal(true)}
-              className="flex items-center gap-2 px-5 py-2.5 bg-[#0A0F1F] text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 flex-shrink-0 justify-center animate-fade-in"
-            >
-              <Plus className="w-4 h-4" />
-              Add Supplier
-            </button>
+            <PermissionGuard permission="suppliers:create">
+              <button
+                onClick={() => setShowAddModal(true)}
+                className="flex items-center gap-2 px-5 py-2.5 bg-[#0A0F1F] text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 flex-shrink-0 justify-center animate-fade-in"
+              >
+                <Plus className="w-4 h-4" />
+                Add Supplier
+              </button>
+            </PermissionGuard>
           </div>
         </div>
       </div>

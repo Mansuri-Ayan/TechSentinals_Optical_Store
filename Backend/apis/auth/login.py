@@ -2,6 +2,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from core.config import get_settings
+from core.rate_limit import limiter
 from db.session import get_db
 from schemas.token import TokenPair
 from schemas.user import UserLogin
@@ -20,14 +21,16 @@ router = APIRouter()
         "Tokens are also set as HttpOnly cookies."
     ),
 )
+@limiter.limit("10/minute")
 async def login(
+    request: Request,
     role: str,
     credentials: UserLogin,
     response: Response,
     db: AsyncSession = Depends(get_db),
 ) -> TokenPair:
     role_norm = role.lower().strip()
-    if role_norm not in ["admin", "manager", "worker", "optician"]:
+    if role_norm not in ["admin", "manager", "worker", "optician", "superadmin", "accountant"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid login role: {role}",

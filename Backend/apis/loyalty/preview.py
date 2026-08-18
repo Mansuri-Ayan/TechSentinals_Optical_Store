@@ -62,6 +62,15 @@ async def calculate_loyalty_preview(
             detail="Customer does not belong to this store's admin"
         )
     
+    # Block self-redemption: cannot redeem from the same customer who is buying
+    if (payload.loyalty_redeem_other_customer_id and
+            payload.loyalty_redeem_other_customer_id == payload.customer_id):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot redeem points from the same customer who is buying. "
+                   "Use the standard redemption field instead."
+        )
+
     if not getattr(loyalty_config, "is_enabled", True):
         return LoyaltyCalculatePreviewResponse(
             customer_current_points=customer.current_points,

@@ -5,6 +5,11 @@ import os
 from alembic.config import Config
 from alembic import command
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
+
 from contextlib import asynccontextmanager
 import os
 import time
@@ -50,15 +55,18 @@ from db.session import engine
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Application startup
+    # NOTE: the selling_price column and staff_type_enum's 'ADMIN' value used
+    # to be applied here via raw ALTER TABLE/TYPE SQL on every boot, bypassing
+    # Alembic. That schema drift is now captured properly as migration
+    # d4e5f6a7b8c9 — run `alembic upgrade head` instead of relying on this
+    # hook. Only the (non-schema) inventory-reactivation data patch remains.
     from sqlalchemy import text
     try:
         async with engine.begin() as conn:
-            await conn.execute(text("ALTER TABLE inventories ADD COLUMN IF NOT EXISTS selling_price NUMERIC(10, 2) DEFAULT NULL;"))
-            await conn.execute(text("ALTER TYPE staff_type_enum ADD VALUE IF NOT EXISTS 'ADMIN';"))
             await conn.execute(text("UPDATE inventories SET is_active = true WHERE is_active = false;"))
-            print("Successfully executed schema migrations for selling_price, staff_type_enum and inventory reactivation!")
+            await conn.execute(text("UPDATE sales SET lab_status = 'Cancelled' WHERE status = 'CANCELLED' AND lab_status IS NOT NULL AND lab_status != 'Cancelled';"))
     except Exception as e:
-        print(f"Skipped schema alter/inventory reactivation: {e}")
+        logging.warning(f"Skipped database reactivation / status fix: {e}")
     yield
     # Application shutdown
     await engine.dispose()
@@ -73,6 +81,14 @@ app = FastAPI(
     version="2.0.0",
     lifespan=lifespan,
 )
+
+from slowapi.errors import RateLimitExceeded
+from slowapi import _rate_limit_exceeded_handler
+from core.rate_limit import limiter
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -99,7 +115,7 @@ async def global_exception_handler(request: Request, exc: Exception):
     logging.error(f"Unhandled error on {request.url.path}: {exc}", exc_info=True)
     return JSONResponse(
         status_code=500,
-        content={"detail": str(exc) or "Internal Server Error"},
+        content={"detail": "Internal Server Error"},
     )
 # ── Register routers ──────────────────────────────────────────
 app.include_router(auth_router)

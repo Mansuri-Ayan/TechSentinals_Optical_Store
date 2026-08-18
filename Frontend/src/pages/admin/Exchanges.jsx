@@ -17,6 +17,8 @@ import { useCategories, useSubcategories } from '../../hooks/useCategories';
 import { getSalesApi } from '../../api/sales/sales.api';
 import { getInventoryApi, getUniversalInventoryApi } from '../../api/inventory/inventory.api';
 import { createExchangeApi, cancelExchangeApi, getExchangeReceiptApi } from '../../api/exchange/exchange.api';
+import PermissionGuard from '../../components/shared/PermissionGuard';
+import ConfirmationModal from '../../components/shared/ConfirmationModal';
 
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 
@@ -54,6 +56,7 @@ const Exchanges = () => {
   const [selectedExchange, setSelectedExchange] = useState(null);
   const [showNewModal, setShowNewModal] = useState(false);
   const [receiptHtml, setReceiptHtml] = useState(null);
+  const [cancelModalData, setCancelModalData] = useState({ isOpen: false, exchangeId: null });
 
   const { stores } = useStores();
 
@@ -127,22 +130,16 @@ const Exchanges = () => {
     }
   };
 
-  const handleCancelExchange = async (exchangeId) => {
-    if (!window.confirm("Are you sure you want to cancel this exchange? This will reverse all inventory and payment movements.")) return;
-    try {
-      await cancelExchangeApi(exchangeId);
-      toast.success("Exchange cancelled successfully.");
-      exchangesQuery.refetch();
-      if (selectedExchange?.id === exchangeId) {
-        setSelectedExchange(null);
-      }
-    } catch (err) {
-      toast.error(err.response?.data?.detail || "Failed to cancel exchange.");
-    }
+  const handleCancelExchange = (exchangeId) => {
+    setCancelModalData({
+      isOpen: true,
+      exchangeId
+    });
   };
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto animate-fade-in font-sans overflow-x-hidden">
+    <PermissionGuard permission="exchanges:read">
+      <div className="p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto animate-fade-in font-sans overflow-x-hidden">
       {/* Breadcrumb + Header */}
       <div className="mb-6 sm:mb-8">
         <div className="flex items-center text-sm text-slate-500 font-medium mb-3 space-x-2">
@@ -292,7 +289,7 @@ const Exchanges = () => {
                       >
                         <Printer className="w-3.5 h-3.5" />
                       </button>
-                      {exc.status === 'COMPLETED' && (
+                      {exc.status === 'COMPLETED' && perms.canDelete && (
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -392,7 +389,31 @@ const Exchanges = () => {
           }}
         />
       )}
-    </div>
+
+      {/* Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={cancelModalData.isOpen}
+        onClose={() => setCancelModalData({ isOpen: false, exchangeId: null })}
+        onConfirm={async () => {
+          try {
+            await cancelExchangeApi(cancelModalData.exchangeId);
+            toast.success("Exchange cancelled successfully.");
+            exchangesQuery.refetch();
+            if (selectedExchange?.id === cancelModalData.exchangeId) {
+              setSelectedExchange(null);
+            }
+          } catch (err) {
+            toast.error(err.response?.data?.detail || "Failed to cancel exchange.");
+          }
+        }}
+        title="Cancel Exchange?"
+        message="Are you sure you want to cancel this exchange? This will reverse all inventory and payment movements."
+        confirmText="Cancel Exchange"
+        cancelText="No, Keep Exchange"
+        type="danger"
+      />
+      </div>
+    </PermissionGuard>
   );
 };
 

@@ -160,9 +160,9 @@ async def partial_return_sale(
     sale_id: int,
     payload: SalePartialReturnRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: Admin = Depends(require_permission("SALES_MANAGE")),
+    current_user: Admin = Depends(require_permission("sales", "delete")),
 ):
-    admin_id = await _get_user_admin_id(current_user, db)
+    admin_id = _get_user_admin_id(current_user)
     sale = await get_sale(db, sale_id)
     if not sale:
         raise HTTPException(

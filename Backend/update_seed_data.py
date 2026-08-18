@@ -4,6 +4,8 @@ pairs = [
     ('brands', 'create'), ('brands', 'delete'), ('brands', 'read'), ('brands', 'update'),
     ('categories', 'create'), ('categories', 'delete'), ('categories', 'read'), ('categories', 'update'),
     ('customers', 'create'), ('customers', 'delete'), ('customers', 'read'), ('customers', 'update'),
+    ('deadstock', 'create'), ('deadstock', 'delete'), ('deadstock', 'read'), ('deadstock', 'update'),
+    ('exchanges', 'create'), ('exchanges', 'delete'), ('exchanges', 'read'), ('exchanges', 'update'),
     ('expenses', 'create'), ('expenses', 'delete'), ('expenses', 'read'), ('expenses', 'update'),
     ('inventory', 'create'), ('inventory', 'read'), ('inventory', 'transfer'), ('inventory', 'update'),
     ('loyalty', 'configure'), ('loyalty', 'read'), ('loyalty', 'write'),
@@ -43,10 +45,10 @@ content = re.sub(r'        PERMISSIONS_SEED = \[.*?\]', new_seed_block, content,
 new_role_defaults_block = """            # Global Roles
             role_defaults = {
                 "ADMIN": True,
-                "MANAGER": p[0] in ["inventory", "sales", "customers", "loyalty", "products", "brands", "categories", "prescriptions", "repairs", "reports", "expenses", "suppliers", "purchase_orders"] or (p[0] in ["workers", "opticians"] and p[1] in ["read", "create", "update"]),
-                "WORKER": p[0] in ["sales", "customers", "loyalty", "prescriptions", "products", "brands", "categories"] and p[1] in ["read", "create", "update", "write", "configure"],
-                "OPTICIAN": p[0] in ["customers", "prescriptions", "products", "brands", "categories", "loyalty"] and p[1] in ["read", "create", "update", "write", "configure"],
-                "ACCOUNTANT": p[0] in ["sales", "reports", "expenses"] and p[1] == "read"
+                "MANAGER": p[0] in ["inventory", "deadstock", "exchanges", "sales", "customers", "loyalty", "products", "brands", "categories", "prescriptions", "repairs", "reports", "expenses", "suppliers", "purchase_orders"] or (p[0] in ["workers", "opticians"] and p[1] in ["read", "create", "update"]),
+                "WORKER": (p[0] in ["sales", "deadstock", "exchanges", "customers", "loyalty", "prescriptions", "products", "brands", "categories"] and p[1] in ["read", "create", "update", "write", "configure"]) or (p[0] in ["inventory", "deadstock"] and p[1] == "read"),
+                "OPTICIAN": (p[0] in ["customers", "deadstock", "exchanges", "prescriptions", "products", "brands", "categories", "loyalty"] and p[1] in ["read", "create", "update", "write", "configure"]) or (p[0] in ["inventory", "deadstock"] and p[1] == "read"),
+                "ACCOUNTANT": (p[0] in ["sales", "reports", "expenses", "deadstock", "exchanges", "categories", "brands"] and p[1] == "read")
             }"""
 
 content = re.sub(r'            # Global Roles.*?            }', new_role_defaults_block, content, flags=re.DOTALL)

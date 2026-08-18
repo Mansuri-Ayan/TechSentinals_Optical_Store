@@ -164,12 +164,56 @@ def _build_role_grants(all_keys: list[str]) -> dict:
 
     admin_granted = list(all_keys)
 
+    # Manager gets everything except stores, managers, permissions, superadmin
+    manager_granted = [
+        k for k in all_keys 
+        if not k.startswith("stores:") 
+        and not k.startswith("managers:") 
+        and not k.startswith("permissions:") 
+        and not k.startswith("superadmin:")
+    ]
+
+    # Worker gets basic POS and shop floor tasks
+    worker_granted = [
+        "customers:create", "customers:read", "customers:update",
+        "sales:create", "sales:read",
+        "inventory:read",
+        "repairs:read",
+        "expenses:create", "expenses:read",
+        "notifications:read",
+        "exchanges:create", "exchanges:read",
+        "deadstock:read", "deadstock:update",
+        "categories:read", "brands:read"
+    ]
+
+    # Optician gets eye exam, prescription, and repairs tasks
+    optician_granted = [
+        "customers:read",
+        "prescriptions:create", "prescriptions:read", "prescriptions:update",
+        "repairs:create", "repairs:read", "repairs:update",
+        "inventory:read",
+        "notifications:read",
+        "exchanges:create", "exchanges:read",
+        "deadstock:read", "deadstock:update",
+        "categories:read", "brands:read"
+    ]
+
+    # Accountant gets financial reporting and ledger access (read-only)
+    accountant_granted = [
+        "reports:read", "reports:export",
+        "sales:read",
+        "expenses:read",
+        "transactions:read",
+        "exchanges:read", "deadstock:read",
+        "categories:read", "brands:read"
+    ]
+
     return {
-        PermissionRoleType.ADMIN:      list(all_keys),
-        PermissionRoleType.MANAGER:    list(all_keys),
-        PermissionRoleType.WORKER:     list(all_keys),
-        PermissionRoleType.OPTICIAN:   list(all_keys),
-        PermissionRoleType.ACCOUNTANT: list(all_keys),
+        PermissionRoleType.ADMIN:      admin_granted,
+        PermissionRoleType.MANAGER:    manager_granted,
+        PermissionRoleType.WORKER:     worker_granted,
+        PermissionRoleType.OPTICIAN:   optician_granted,
+        PermissionRoleType.ACCOUNTANT: accountant_granted,
     }
 
 

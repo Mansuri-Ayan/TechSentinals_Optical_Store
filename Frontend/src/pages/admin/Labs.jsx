@@ -13,6 +13,7 @@ import AddEditLabModal from '../../components/admin/AddEditLabModal';
 import ConfirmationModal from '../../components/shared/ConfirmationModal';
 import { useStoreStore } from '../../store/store';
 import { useLabs } from '../../hooks/useLabs';
+import PermissionGuard from '../../components/shared/PermissionGuard';
 
 const ITEMS_PER_PAGE = 8;
 
@@ -153,20 +154,24 @@ const Labs = () => {
       className: 'w-[100px] text-right',
       render: (row) => (
         <div className="flex items-center justify-end gap-2">
-          <button
-            onClick={(e) => handleEditClick(e, row)}
-            className="w-8 h-8 flex items-center justify-center bg-white border border-slate-205 rounded-xl shadow-sm text-slate-500 hover:text-amber-600 hover:border-amber-300 hover:bg-amber-50 transition-colors"
-            title="Edit Lab"
-          >
-            <Edit2 className="w-3.5 h-3.5" />
-          </button>
-          <button
-            onClick={(e) => handleDelete(e, row.id)}
-            className="w-8 h-8 flex items-center justify-center bg-white border border-slate-205 rounded-xl shadow-sm text-slate-500 hover:text-red-600 hover:border-red-300 hover:bg-red-50 transition-colors"
-            title="Delete Lab"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
+          <PermissionGuard permission="labs:update">
+            <button
+              onClick={(e) => handleEditClick(e, row)}
+              className="w-8 h-8 flex items-center justify-center bg-white border border-slate-205 rounded-xl shadow-sm text-slate-500 hover:text-amber-600 hover:border-amber-300 hover:bg-amber-50 transition-colors"
+              title="Edit Lab"
+            >
+              <Edit2 className="w-3.5 h-3.5" />
+            </button>
+          </PermissionGuard>
+          <PermissionGuard permission="labs:delete">
+            <button
+              onClick={(e) => handleDelete(e, row.id)}
+              className="w-8 h-8 flex items-center justify-center bg-white border border-slate-205 rounded-xl shadow-sm text-slate-500 hover:text-red-600 hover:border-red-300 hover:bg-red-50 transition-colors"
+              title="Delete Lab"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          </PermissionGuard>
         </div>
       )
     }
@@ -196,18 +201,22 @@ const Labs = () => {
         <span className="font-medium text-slate-650 truncate max-w-[200px]">{row.email}</span>
       </div>
       <div className="flex justify-end gap-2 pt-2 border-t border-slate-100" onClick={e => e.stopPropagation()}>
-        <button
-          onClick={(e) => handleEditClick(e, row)}
-          className="flex items-center gap-1 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-600 hover:bg-amber-50 hover:text-amber-600 hover:border-amber-200 transition-all"
-        >
-          <Edit2 className="w-3 h-3" /> Edit
-        </button>
-        <button
-          onClick={(e) => handleDelete(e, row.id)}
-          className="flex items-center gap-1 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-600 hover:bg-red-50 hover:text-red-650 hover:border-red-200 transition-all"
-        >
-          <Trash2 className="w-3 h-3" /> Delete
-        </button>
+        <PermissionGuard permission="labs:update">
+          <button
+            onClick={(e) => handleEditClick(e, row)}
+            className="flex items-center gap-1 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-600 hover:bg-amber-50 hover:text-amber-600 hover:border-amber-200 transition-all"
+          >
+            <Edit2 className="w-3 h-3" /> Edit
+          </button>
+        </PermissionGuard>
+        <PermissionGuard permission="labs:delete">
+          <button
+            onClick={(e) => handleDelete(e, row.id)}
+            className="flex items-center gap-1 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-600 hover:bg-red-50 hover:text-red-650 hover:border-red-200 transition-all"
+          >
+            <Trash2 className="w-3 h-3" /> Delete
+          </button>
+        </PermissionGuard>
       </div>
     </div>
   );
@@ -231,13 +240,15 @@ const Labs = () => {
               Manage optical processing laboratories, contact specifications, and statuses.
             </p>
           </div>
-          <button
-            onClick={() => setModalState({ isOpen: true, item: null })}
-            className="flex items-center gap-2 px-5 py-2.5 bg-[#0A0F1F] text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 flex-shrink-0 justify-center w-full sm:w-auto"
-          >
-            <Plus className="w-4 h-4" />
-            Add Lab Partner
-          </button>
+          <PermissionGuard permission="labs:create">
+            <button
+              onClick={() => setModalState({ isOpen: true, item: null })}
+              className="flex items-center gap-2 px-5 py-2.5 bg-[#0A0F1F] text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 flex-shrink-0 justify-center w-full sm:w-auto"
+            >
+              <Plus className="w-4 h-4" />
+              Add Lab Partner
+            </button>
+          </PermissionGuard>
         </div>
       </div>
 

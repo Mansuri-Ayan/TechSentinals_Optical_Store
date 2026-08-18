@@ -4,7 +4,7 @@ import {
   Search, Store, Clock, Calendar, CheckCircle, AlertTriangle,
   X, Package, User, CreditCard, Truck, ChevronRight, RefreshCw, BarChart3, Trash2
 } from 'lucide-react';
-import { deleteSaleApi } from '../../api/sales/sales.api';
+import { cancelSaleApi } from '../../api/sales/sales.api';
 import { useStoreStore } from '../../store/store';
 import { useLabOrders } from '../../hooks/useLabOrders';
 import { useStores } from '../../hooks/useStores';
@@ -15,6 +15,7 @@ import Pagination from '../../components/shared/Pagination';
 import InventoryDetailDrawer from '../../components/admin/InventoryDetailDrawer';
 import { useLabs } from '../../hooks/useLabs';
 import { usePagePermissions } from '../../hooks/usePermissions';
+import ConfirmationModal from '../../components/shared/ConfirmationModal';
 
 // Status color configurations
 const STATUS_CFG = {
@@ -22,6 +23,7 @@ const STATUS_CFG = {
   'Sent To Lab': { color: 'text-sky-700 bg-sky-50 border-sky-200', dot: 'bg-sky-500' },
   'Ready For Pickup': { color: 'text-emerald-700 bg-emerald-50 border-emerald-200', dot: 'bg-emerald-500' },
   'Delivered': { color: 'text-slate-600 bg-slate-100 border-slate-200', dot: 'bg-slate-400' },
+  'Cancelled': { color: 'text-slate-600 bg-slate-100 border-slate-200', dot: 'bg-slate-400' },
 };
 
 const StatusBadge = ({ status }) => {
@@ -40,7 +42,7 @@ const LabOrders = () => {
   const queryTab = searchParams.get('tab');
 
   const { selectedStore } = useStoreStore();
-  const perms = usePagePermissions('lab_orders');
+  const perms = usePagePermissions('sales');
   const { stores } = useStores();
 
   // 2. Filter States
@@ -52,6 +54,7 @@ const LabOrders = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedOrder, setSelectedOrder] = useState(null);
+  const [cancelModalData, setCancelModalData] = useState({ isOpen: false, orderId: null, invoiceNumber: '' });
 
   const itemsPerPage = 6;
   const queryClient = useQueryClient();
@@ -127,18 +130,12 @@ const LabOrders = () => {
 
 
 
-  const handleDeleteOrder = async (orderId, invoiceNumber) => {
-    if (window.confirm(`Are you sure you want to delete order ${invoiceNumber || ''}? This will permanently delete the order and restore all inventory stock batches & product units.`)) {
-      try {
-        await deleteSaleApi(orderId);
-        queryClient.invalidateQueries({ queryKey: ['labOrders'] });
-        queryClient.invalidateQueries({ queryKey: ['sales'] });
-        queryClient.invalidateQueries({ queryKey: ['inventory'] });
-        toast.success('Order cancelled and all inventory rolled back successfully.');
-      } catch (err) {
-        toast.error(err.response?.data?.detail || 'Failed to delete order.');
-      }
-    }
+  const handleDeleteOrder = (orderId, invoiceNumber) => {
+    setCancelModalData({
+      isOpen: true,
+      orderId,
+      invoiceNumber
+    });
   };
 
   const fmt = (n) => `₹${Number(n).toLocaleString('en-IN')}`;
@@ -544,6 +541,28 @@ const LabOrders = () => {
         activeTab={activeTab}
         labs={labs}
         canUpdateStatus={perms?.canUpdate !== false}
+      />
+
+      {/* Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={cancelModalData.isOpen}
+        onClose={() => setCancelModalData({ isOpen: false, orderId: null, invoiceNumber: '' })}
+        onConfirm={async () => {
+          try {
+            await cancelSaleApi(cancelModalData.orderId);
+            queryClient.invalidateQueries({ queryKey: ['labOrders'] });
+            queryClient.invalidateQueries({ queryKey: ['sales'] });
+            queryClient.invalidateQueries({ queryKey: ['inventory'] });
+            toast.success('Order cancelled and all inventory rolled back successfully.');
+          } catch (err) {
+            toast.error(err.response?.data?.detail || 'Failed to cancel order.');
+          }
+        }}
+        title="Cancel Order?"
+        message={`Are you sure you want to cancel order ${cancelModalData.invoiceNumber || ''}? This will mark the order as Cancelled and restore all inventory stock batches & product units.`}
+        confirmText="Cancel Order"
+        cancelText="No, Keep Order"
+        type="danger"
       />
 
     </div>

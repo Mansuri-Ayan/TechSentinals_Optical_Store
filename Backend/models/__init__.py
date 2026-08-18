@@ -65,3 +65,9 @@ from models.bill import Bill
 from models.exchange import Exchange, ExchangeStatus
 from models.deadstock_item import DeadstockItem, DeadstockStatus
 
+# Scoped overrides
+from models.store_category_override import StoreCategoryOverride
+from models.store_brand_override import StoreBrandOverride
+from models.store_subcategory_override import StoreSubcategoryOverride
+
+

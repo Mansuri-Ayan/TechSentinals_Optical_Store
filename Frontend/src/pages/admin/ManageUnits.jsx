@@ -23,6 +23,7 @@ import InventoryDetailDrawer from '../../components/admin/InventoryDetailDrawer'
 import { useStoreStore, useAuthStore } from '../../store/store';
 import { useRoleContext } from '../../hooks/useRoleContext';
 import { getInventoryBatchesApi, getInventoryApi } from '../../api/inventory/inventory.api';
+import PermissionGuard from '../../components/shared/PermissionGuard';
 import { downloadBarcodePdf } from '../../api/inventory/productUnits.api';
 
 const ITEMS_PER_PAGE = 10;
@@ -614,21 +615,23 @@ const ManageUnits = () => {
                     />
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
                   </div>
-                  <button
-                    onClick={handleDownloadBarcodes}
-                    disabled={isDownloading || (!selectedBatch && Object.keys(selectedUnitsMap).length === 0)}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold border transition-all duration-200 shadow-sm whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed bg-slate-900 text-white border-slate-800 hover:bg-slate-800 active:scale-[0.97]"
-                  >
-                    {isDownloading ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    ) : (
-                      <Download className="w-3.5 h-3.5" />
-                    )}
-                    {Object.keys(selectedUnitsMap).length > 0
-                      ? `Download Selected (${Object.keys(selectedUnitsMap).length})`
-                      : 'Download Barcodes'
-                    }
-                  </button>
+                  <PermissionGuard permission="inventory:read">
+                    <button
+                      onClick={handleDownloadBarcodes}
+                      disabled={isDownloading || (!selectedBatch && Object.keys(selectedUnitsMap).length === 0)}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold border transition-all duration-200 shadow-sm whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed bg-slate-900 text-white border-slate-800 hover:bg-slate-800 active:scale-[0.97]"
+                    >
+                      {isDownloading ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Download className="w-3.5 h-3.5" />
+                      )}
+                      {Object.keys(selectedUnitsMap).length > 0
+                        ? `Download Selected (${Object.keys(selectedUnitsMap).length})`
+                        : 'Download Barcodes'
+                      }
+                    </button>
+                  </PermissionGuard>
                 </div>
               </div>
 

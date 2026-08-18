@@ -24,6 +24,11 @@ export const linkSupplierToStoreApi = async (supplierId, payload) => {
   return response.data;
 };
 
+export const toggleSupplierStoreLinkStatusApi = async (supplierId, storeId) => {
+  const response = await api.patch(`/suppliers/${supplierId}/stores/${storeId}/status`);
+  return response.data;
+};
+
 export const getSupplierByIdApi = async (id) => {
   const response = await api.get(`/suppliers/${id}`);
   return response.data;

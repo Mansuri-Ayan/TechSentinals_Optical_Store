@@ -7,6 +7,8 @@ import {
   Sparkles, FileText, CheckCircle, RefreshCw, Upload, Eye, ShoppingCart, User, CreditCard
 } from 'lucide-react';
 import { toast } from 'react-toastify';
+import PermissionGuard from '../../components/shared/PermissionGuard';
+import { useHasPermission } from '../../hooks/usePermissions';
 
 const COLOR_SWATCHES = [
   { name: 'Emerald', value: '#10B981', bg: 'bg-[#10B981]' },
@@ -21,6 +23,7 @@ export default function BillTemplate() {
   const { storeId: routeStoreId } = useParams();
   const { user } = useAuthStore();
   const storeId = routeStoreId || user?.store_id;
+  const canUpdate = useHasPermission('bill_settings:update');
 
   const { settings: fetchedSettings, isLoading, updateSettingsAsync, isUpdating } = useBillSettings(storeId);
 
@@ -373,24 +376,26 @@ export default function BillTemplate() {
           </div>
 
           {/* Action buttons */}
-          <div className="flex gap-3 pt-3 border-t border-slate-100">
-            <button
-              onClick={handleReset}
-              className="flex-1 py-3 text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl font-bold text-xs uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-1.5"
-              type="button"
-            >
-              <RefreshCw className="w-4 h-4" />
-              Reset Defaults
-            </button>
-            <button
-              onClick={handleSave}
-              className="flex-1 py-3 bg-[#0A0F1F] text-white hover:bg-slate-800 rounded-xl font-bold text-xs uppercase tracking-wider transition-all shadow-md cursor-pointer flex items-center justify-center gap-1.5"
-              type="button"
-            >
-              <CheckCircle className="w-4 h-4 text-emerald-400" />
-              Save Configuration
-            </button>
-          </div>
+          <PermissionGuard permission="bill_settings:update">
+            <div className="flex gap-3 pt-3 border-t border-slate-100">
+              <button
+                onClick={handleReset}
+                className="flex-1 py-3 text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl font-bold text-xs uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                type="button"
+              >
+                <RefreshCw className="w-4 h-4" />
+                Reset Defaults
+              </button>
+              <button
+                onClick={handleSave}
+                className="flex-1 py-3 bg-[#0A0F1F] text-white hover:bg-slate-800 rounded-xl font-bold text-xs uppercase tracking-wider transition-all shadow-md cursor-pointer flex items-center justify-center gap-1.5"
+                type="button"
+              >
+                <CheckCircle className="w-4 h-4 text-emerald-400" />
+                Save Configuration
+              </button>
+            </div>
+          </PermissionGuard>
         </div>
 
         {/* RIGHT COLUMN: LIVE TEMPLATE PREVIEW */}

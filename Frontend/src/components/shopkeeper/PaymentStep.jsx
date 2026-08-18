@@ -379,6 +379,7 @@ const PaymentStep = ({ customer, cart, prescription, onBack, onComplete }) => {
                       Select if this purchase is being paid by or billed to someone else's account.
                     </p>
                     <LoyaltyCustomerSearch 
+                      excludeCustomerId={customer?.id}
                       allowQuickCreateButton={true}
                       selectedCustomer={billingAccountCustomer} 
                       onSelectCustomer={(c) => {
@@ -618,6 +619,7 @@ const PaymentStep = ({ customer, cart, prescription, onBack, onComplete }) => {
                     <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Redeem Another Person's Points</p>
                     <div className="pb-1">
                       <LoyaltyCustomerSearch 
+                        excludeCustomerId={customer?.id}
                         selectedCustomer={loyaltyCustomer} 
                         onSelectCustomer={(c) => {
                           setLoyaltyCustomer(c);

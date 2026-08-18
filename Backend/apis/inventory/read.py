@@ -361,7 +361,7 @@ async def low_stock_items(
     if isinstance(current_user, Admin):
         items = await get_low_stock_items(db, admin_id=current_user.id)
     else:
-        items, _ = await get_inventories_by_owner(
+        result = await get_inventories_by_owner(
             db,
             owner_type="STORE",
             owner_id=current_user.store_id,
@@ -369,6 +369,7 @@ async def low_stock_items(
             stock_status="low_stock",
             paginate=False,
         )
+        items = result["items"]
     return [_inventory_to_read(inv, store_map) for inv in items]
 
 

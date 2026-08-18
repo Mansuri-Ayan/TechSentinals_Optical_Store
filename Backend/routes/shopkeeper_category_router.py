@@ -122,7 +122,8 @@ async def update_category_endpoint(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Category not found",
         )
-    updated = await update_category(db, category, payload)
+    store_id = None if isinstance(current_user, Admin) else getattr(current_user, "store_id", None)
+    updated = await update_category(db, category, payload, store_id=store_id)
     return CategoryRead(
         **{c.key: getattr(updated, c.key) for c in updated.__table__.columns},
         subcategories_count=len(updated.subcategories) if updated.subcategories else 0,
@@ -146,7 +147,8 @@ async def delete_category_endpoint(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Category not found",
         )
-    deleted = await delete_category(db, category)
+    store_id = None if isinstance(current_user, Admin) else getattr(current_user, "store_id", None)
+    deleted = await delete_category(db, category, store_id=store_id)
     return CategoryRead(
         **{c.key: getattr(deleted, c.key) for c in deleted.__table__.columns},
         subcategories_count=len(deleted.subcategories) if deleted.subcategories else 0,
@@ -248,7 +250,9 @@ async def update_subcategory_endpoint(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Subcategory not found",
         )
-    updated = await update_subcategory(db, subcategory, payload)
+    
+    store_id = None if isinstance(current_user, Admin) else getattr(current_user, "store_id", None)
+    updated = await update_subcategory(db, subcategory, payload, store_id=store_id)
     return SubcategoryRead.model_validate(updated)
 
 @shopkeeper_category_router.delete(
@@ -275,5 +279,7 @@ async def delete_subcategory_endpoint(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Subcategory not found",
         )
-    deleted = await delete_subcategory(db, subcategory)
+    
+    store_id = None if isinstance(current_user, Admin) else getattr(current_user, "store_id", None)
+    deleted = await delete_subcategory(db, subcategory, store_id=store_id)
     return SubcategoryRead.model_validate(deleted)

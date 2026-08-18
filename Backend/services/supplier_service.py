@@ -25,15 +25,44 @@ async def create_supplier(
     db: AsyncSession,
     admin_id: int,
     payload: SupplierCreate,
+    store_id: int | None = None,
 ) -> Supplier:
     """Create a new supplier owned by the given admin."""
     supplier = Supplier(
         admin_id=admin_id,
-        **payload.model_dump(),
+        **payload.model_dump(exclude={'store_id'}),
     )
     db.add(supplier)
     await db.commit()
     await db.refresh(supplier)
+
+    # Auto-create SupplierStoreLinks
+    if store_id is not None:
+        # Link to specific store
+        link = SupplierStoreLink(
+            supplier_id=supplier.id,
+            store_id=store_id,
+            is_primary=False,
+            is_active=True,
+        )
+        db.add(link)
+        await db.commit()
+    else:
+        # Admin creating for "All Stores" — link to every store
+        from models.store import Store
+        stores_stmt = select(Store.id).where(Store.admin_id == admin_id, Store.deleted_at.is_(None))
+        store_ids = (await db.execute(stores_stmt)).scalars().all()
+        for s_id in store_ids:
+            link = SupplierStoreLink(
+                supplier_id=supplier.id,
+                store_id=s_id,
+                is_primary=False,
+                is_active=True,
+            )
+            db.add(link)
+        if store_ids:
+            await db.commit()
+
     return supplier
 
 
@@ -64,6 +93,15 @@ async def list_suppliers(
         Supplier.admin_id == admin_id,
         Supplier.deleted_at.is_(None),
     ]
+    if store_id:
+        linked_supplier_ids = (
+            select(SupplierStoreLink.supplier_id)
+            .where(
+                SupplierStoreLink.store_id == store_id,
+                SupplierStoreLink.is_active.is_(True),
+            )
+        )
+        filters.append(Supplier.id.in_(linked_supplier_ids))
     if status_filter:
         filters.append(Supplier.status == status_filter.upper())
     if search:

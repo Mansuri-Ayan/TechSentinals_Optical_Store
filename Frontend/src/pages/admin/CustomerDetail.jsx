@@ -312,7 +312,7 @@ const CustomerDetail = () => {
               Claim Warranty
             </button>
           </PermissionGuard>
-          <PermissionGuard permission="customers:update">
+          <PermissionGuard permission="prescriptions:create">
             <button
               onClick={() => setShowOpticalModal(true)}
               className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs sm:text-sm font-bold transition-all shadow-sm hover:shadow-md hover:-translate-y-0.5 whitespace-nowrap cursor-pointer"
@@ -330,7 +330,7 @@ const CustomerDetail = () => {
               Loyalty Program
             </button>
           </PermissionGuard>
-          <PermissionGuard permission="transactions:create">
+          <PermissionGuard permission="sales:create">
             <button
               onClick={() => setShowOrderModal(true)}
               className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 bg-[#0A0F1F] text-white rounded-xl text-xs sm:text-sm font-bold hover:bg-slate-800 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 whitespace-nowrap cursor-pointer"

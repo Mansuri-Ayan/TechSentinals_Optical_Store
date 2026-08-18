@@ -44,7 +44,7 @@ const Deadstock = () => {
   const { storeId, buildPath, showStoreSwitcher, isPathAdmin } = useRoleContext();
   const { stores } = useStores();
   const perms = usePagePermissions('deadstock');
-  const canUpdate = perms.canUpdate ?? true;
+  const canUpdate = perms.canUpdate ?? false;
 
 
   const [selectedBranch, setSelectedBranch] = useState(storeId || 'All');
