@@ -179,6 +179,13 @@ class ProductSnapshot(Base):
         comment="Warranty duration copied from products.warranty_months",
     )
 
+    gst_percent = Column(
+        Numeric(5, 2),
+        nullable=True,
+        default=None,
+        comment="GST % copied from products.gst_percent at snapshot time",
+    )
+
     image_url = Column(
         Text,
         nullable=True,

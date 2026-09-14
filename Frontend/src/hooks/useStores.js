@@ -56,11 +56,11 @@ export const useStores = (params = {}) => {
     mutationFn: deleteStoreApi,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: storesQueryKey });
-      toast.success('Store deleted successfully.');
+      toast.success('Store deactivated successfully.');
     },
     onError: (error) => {
       const errorMsg =
-        error.response?.data?.detail || 'Failed to delete store.';
+        error.response?.data?.detail || 'Failed to deactivate store.';
       toast.error(errorMsg);
     },
   });

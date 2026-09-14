@@ -43,38 +43,33 @@ async def list_product_units(
     from models.worker import Worker
     from models.optician import Optician
     from models.accountant import Accountant
+    from models.manager import Manager
 
-    is_store_scoped = isinstance(current_user, (Worker, Optician)) or (isinstance(current_user, Accountant) and current_user.store_id is not None)
+    is_store_scoped = isinstance(current_user, (Worker, Optician, Manager)) or (isinstance(current_user, Accountant) and getattr(current_user, "store_id", None) is not None)
 
     if is_store_scoped:
         context_owner_type = OwnerType.STORE
         context_owner_id = current_user.store_id
+        is_owner_filtered = True
+    elif owner_type is not None and owner_id is not None:
+        context_owner_type = owner_type
+        context_owner_id = owner_id
+        is_owner_filtered = True
     else:
-        context_owner_type = owner_type if owner_type else OwnerType.ADMIN
-        context_owner_id = admin_id if context_owner_type == OwnerType.ADMIN else owner_id
+        context_owner_type = None
+        context_owner_id = None
+        is_owner_filtered = False
+
+    # Auto-backfill missing ProductUnit records for requested batch or product
+    from services.product_unit_service import ensure_units_for_batch, ensure_units_for_product
+    if inventory_batch_id:
+        await ensure_units_for_batch(db, inventory_batch_id)
+    elif product_id:
+        await ensure_units_for_product(db, product_id)
 
     if product_id:
         stmt = stmt.where(ProductUnit.product_id == product_id)
-    if inventory_batch_id:
-        if is_store_scoped:
-            batch_check = await db.scalar(
-                select(Inventory).where(
-                    Inventory.id == inventory_batch_id,
-                    Inventory.owner_type == OwnerType.STORE,
-                    Inventory.owner_id == current_user.store_id
-                )
-            )
-            if not batch_check:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Access denied to this inventory batch",
-                )
-        stmt = stmt.where(
-            or_(
-                ProductUnit.inventory_batch_id == inventory_batch_id,
-                ProductUnit.original_batch_id == inventory_batch_id
-            )
-        )
+
     # Handle status and transferred filtering
     is_transferred_filter = False
     cleaned_statuses = []
@@ -85,58 +80,106 @@ async def list_product_units(
             else:
                 cleaned_statuses.append(s)
 
-    # Base conditions for ownership
-    is_owned_by_context = and_(
-        ProductUnit.owner_type == context_owner_type,
-        ProductUnit.owner_id == context_owner_id
-    )
-
     if inventory_batch_id:
-        # We are querying a specific batch: support showing transferred units too!
+        batch = await db.get(Inventory, inventory_batch_id)
+        if not batch:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Batch not found",
+            )
+        if is_store_scoped:
+            if batch.owner_type != OwnerType.STORE or batch.owner_id != current_user.store_id:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Access denied to this inventory batch",
+                )
+
+        stmt = stmt.where(
+            or_(
+                ProductUnit.inventory_batch_id == inventory_batch_id,
+                ProductUnit.original_batch_id == inventory_batch_id,
+            )
+        )
+
+        batch_owner_type = batch.owner_type
+        batch_owner_id = batch.owner_id
+
+        # A unit is transferred relative to this batch if it now belongs to a different batch or owner
+        is_transferred_condition = or_(
+            ProductUnit.inventory_batch_id != inventory_batch_id,
+            ProductUnit.owner_type != batch_owner_type,
+            ProductUnit.owner_id != batch_owner_id,
+        )
+
         if status_filter:
             conditions = []
             if cleaned_statuses:
-                conditions.append(
-                    and_(
-                        ProductUnit.status.in_(cleaned_statuses),
-                        is_owned_by_context
+                # If AVAILABLE is requested, for this batch it means units currently in this batch with status AVAILABLE
+                if 'AVAILABLE' in [s.upper() for s in cleaned_statuses]:
+                    other_statuses = [s for s in cleaned_statuses if s.upper() != 'AVAILABLE']
+                    avail_cond = and_(
+                        ProductUnit.status == UnitStatus.AVAILABLE,
+                        ProductUnit.inventory_batch_id == inventory_batch_id,
                     )
-                )
+                    if other_statuses:
+                        conditions.append(or_(avail_cond, ProductUnit.status.in_(other_statuses)))
+                    else:
+                        conditions.append(avail_cond)
+                else:
+                    conditions.append(ProductUnit.status.in_(cleaned_statuses))
+
             if is_transferred_filter:
-                conditions.append(
-                    or_(
-                        ProductUnit.owner_type != context_owner_type,
-                        ProductUnit.owner_id != context_owner_id
-                    )
-                )
-            
+                conditions.append(is_transferred_condition)
+
             if conditions:
                 stmt = stmt.where(or_(*conditions))
+
     else:
-        # Standard query without specific batch (e.g. searching globally or by owner)
+        # Querying without a specific batch (e.g. "All Batches" mode)
+        is_owned_by_context = (
+            and_(
+                ProductUnit.owner_type == context_owner_type,
+                ProductUnit.owner_id == context_owner_id,
+            )
+            if is_owner_filtered
+            else None
+        )
+
         if status_filter:
             conditions = []
             if cleaned_statuses:
-                if owner_type or owner_id:
+                if is_owner_filtered:
                     conditions.append(
                         and_(
                             ProductUnit.status.in_(cleaned_statuses),
-                            is_owned_by_context
+                            is_owned_by_context,
                         )
                     )
                 else:
                     conditions.append(ProductUnit.status.in_(cleaned_statuses))
+
             if is_transferred_filter:
-                conditions.append(
-                    or_(
-                        ProductUnit.owner_type != context_owner_type,
-                        ProductUnit.owner_id != context_owner_id
+                if is_owner_filtered:
+                    # In store/owner context, transferred means units that came from another original batch
+                    conditions.append(
+                        and_(
+                            is_owned_by_context,
+                            ProductUnit.original_batch_id.isnot(None),
+                            ProductUnit.original_batch_id != ProductUnit.inventory_batch_id,
+                        )
                     )
-                )
+                else:
+                    conditions.append(
+                        and_(
+                            ProductUnit.original_batch_id.isnot(None),
+                            ProductUnit.original_batch_id != ProductUnit.inventory_batch_id,
+                        )
+                    )
+
             if conditions:
                 stmt = stmt.where(or_(*conditions))
         else:
-            if owner_type or owner_id:
+            if is_owner_filtered:
                 stmt = stmt.where(is_owned_by_context)
             
     if search:
@@ -180,8 +223,23 @@ async def list_product_units(
             "sold_at": unit.sold_at,
             "created_at": unit.created_at,
             "updated_at": unit.updated_at,
-            "transferred_to_store_name": store_map.get(unit.owner_id) if unit.owner_type == OwnerType.STORE else None
         }
+
+        is_transferred_away = False
+        if inventory_batch_id and batch:
+            is_transferred_away = (
+                unit.inventory_batch_id != inventory_batch_id or
+                unit.owner_type != batch.owner_type or
+                unit.owner_id != batch.owner_id
+            )
+        elif unit.original_batch_id and unit.original_batch_id != unit.inventory_batch_id:
+            is_transferred_away = True
+
+        transferred_name = None
+        if is_transferred_away:
+            transferred_name = store_map.get(unit.owner_id) if unit.owner_type == OwnerType.STORE else "Admin Warehouse"
+
+        unit_dict["transferred_to_store_name"] = transferred_name
         
         if unit.inventory_batch:
             unit_dict["batch_purchase_date"] = unit.inventory_batch.purchase_date
@@ -233,8 +291,9 @@ async def lookup_product_unit(
         from models.worker import Worker
         from models.optician import Optician
         from models.accountant import Accountant
+        from models.manager import Manager
 
-        is_store_scoped = isinstance(current_user, (Worker, Optician)) or (isinstance(current_user, Accountant) and current_user.store_id is not None)
+        is_store_scoped = isinstance(current_user, (Worker, Optician, Manager)) or (isinstance(current_user, Accountant) and getattr(current_user, "store_id", None) is not None)
         if is_store_scoped:
             if unit.owner_type != OwnerType.STORE or unit.owner_id != current_user.store_id:
                 raise HTTPException(

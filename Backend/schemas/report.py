@@ -26,7 +26,7 @@ class InventoryAlertDetail(BaseModel):
     product_name: str
     sku: str
     current_quantity: int
-    reorder_level: int
+    reorder_level: int | None = None
 
 
 class StoreReportDetails(BaseModel):
@@ -243,4 +243,60 @@ class StaffDetailResponse(BaseModel):
     sales: list[StaffSaleRow]
     expenses: list[StaffExpenseRow]
     sales_trend: list[TrendDataPoint]
+
+
+class StorePerformanceMetric(BaseModel):
+    store_id: int
+    store_name: str
+    sales_count: int
+    revenue: Decimal
+    stock_level: int
+
+
+class TransferRecommendation(BaseModel):
+    source_store_id: int
+    source_store_name: str
+    target_store_id: int
+    target_store_name: str
+    recommended_qty: int
+    reason: str
+
+
+class ProductPerformanceCrossStore(BaseModel):
+    product_id: int
+    product_name: str
+    sku: str
+    category_name: str
+    brand_name: str | None = None
+    cost_price: Decimal
+    selling_price: Decimal
+    unit_margin: Decimal = Decimal("0.00")
+    margin_percent: Decimal = Decimal("0.00")
+    total_units_sold: int = 0
+    total_revenue: Decimal = Decimal("0.00")
+    total_profit: Decimal = Decimal("0.00")
+    total_stock_level: int = 0
+    velocity_status: str = "STEADY"
+    store_metrics: list[StorePerformanceMetric]
+    insights: list[str]
+    transfer_recommendations: list[TransferRecommendation] = []
+
+
+class ProductPerformanceKPIs(BaseModel):
+    total_revenue: Decimal = Decimal("0.00")
+    total_units_sold: int = 0
+    top_product_name: str | None = None
+    top_product_revenue: Decimal = Decimal("0.00")
+    reallocation_opportunities_count: int = 0
+    slow_moving_count: int = 0
+
+
+class ProductPerformanceReportResponse(BaseModel):
+    items: list[ProductPerformanceCrossStore]
+    total: int
+    page: int
+    pages: int
+    limit: int
+    summary_kpis: ProductPerformanceKPIs
+
 

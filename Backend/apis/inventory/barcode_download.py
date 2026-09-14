@@ -90,9 +90,15 @@ async def download_barcode_pdf(
             .order_by(ProductUnit.id.asc())
         )
     else:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Either unit_skus or inventory_batch_id must be provided",
+        # AVAILABLE units for the product across all batches
+        stmt = (
+            select(ProductUnit)
+            .where(
+                ProductUnit.product_id == payload.product_id,
+                ProductUnit.status == UnitStatus.AVAILABLE,
+            )
+            .options(selectinload(ProductUnit.inventory_batch))
+            .order_by(ProductUnit.id.asc())
         )
 
     result = await db.execute(stmt)
@@ -110,8 +116,9 @@ async def download_barcode_pdf(
         from models.worker import Worker
         from models.optician import Optician
         from models.accountant import Accountant
+        from models.manager import Manager
 
-        is_store_scoped = isinstance(current_user, (Worker, Optician)) or (isinstance(current_user, Accountant) and current_user.store_id is not None)
+        is_store_scoped = isinstance(current_user, (Worker, Optician, Manager)) or (isinstance(current_user, Accountant) and getattr(current_user, "store_id", None) is not None)
     else:
         is_store_scoped = False
 

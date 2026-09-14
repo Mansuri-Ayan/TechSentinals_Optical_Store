@@ -184,7 +184,11 @@ const Categories = () => {
             payload: { name: data.name, description: data.description || null, is_active: data.is_active },
           });
         } else {
-          await createSubcategoryAsync({ name: data.name, description: data.description || null });
+          await createSubcategoryAsync({
+            name: data.name,
+            description: data.description || null,
+            store_id: inPageStoreId === 'admin' ? null : Number(inPageStoreId),
+          });
         }
       } else {
         if (data.id) {
@@ -222,6 +226,7 @@ const Categories = () => {
       } else {
         await deleteSubcategoryAsync(confirmModal.id);
       }
+      setConfirmModal({ isOpen: false, id: null, type: null });
     } catch { /* handled by mutation */ }
   }, [confirmModal.id, confirmModal.type, deleteCategoryAsync, deleteSubcategoryAsync]);
 

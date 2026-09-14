@@ -401,7 +401,7 @@ const Stores = () => {
                             <button
                               onClick={(e) => handleDeleteClick(e, store)}
                               className="p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-100 rounded-xl transition-all"
-                              title="Delete branch"
+                              title="Deactivate branch"
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
@@ -441,10 +441,10 @@ const Stores = () => {
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md border border-slate-100 p-6">
             <div className="flex items-center gap-3 text-red-600 mb-3">
               <AlertCircle className="w-6 h-6 flex-shrink-0" />
-              <h3 className="text-lg font-bold text-slate-900">Delete Store Branch</h3>
+              <h3 className="text-lg font-bold text-slate-900">Deactivate Store Branch</h3>
             </div>
             <p className="text-sm text-slate-600 mb-6 leading-relaxed">
-              Are you sure you want to delete <span className="font-bold text-slate-950">{storeToDelete.store_name || storeToDelete.name}</span>? This action is permanent and will delete all associated data rosters and configuration links.
+              Are you sure you want to deactivate <span className="font-bold text-slate-950">{storeToDelete.store_name || storeToDelete.name}</span>? This will mark the store as inactive and disable login access for all staff members associated with this store.
             </p>
             <div className="flex items-center justify-end gap-3">
               <button
@@ -464,10 +464,10 @@ const Stores = () => {
                 {isDeleting ? (
                   <>
                     <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    Deleting...
+                    Deactivating...
                   </>
                 ) : (
-                  'Delete Store'
+                  'Deactivate Store'
                 )}
               </button>
             </div>

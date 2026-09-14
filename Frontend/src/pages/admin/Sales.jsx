@@ -13,14 +13,14 @@ import { useRoleContext } from '../../hooks/useRoleContext';
 import PermissionGuard from '../../components/shared/PermissionGuard';
 import { usePagePermissions } from '../../hooks/usePermissions';
 import ConfirmationModal from '../../components/shared/ConfirmationModal';
+import { useQueryClient } from '@tanstack/react-query';
+import { updateSaleApi } from '../../api/customer/customer.api';
+import { toast } from 'react-toastify';
 
 const STATUS_CFG = {
   Completed: { color: 'text-emerald-700 bg-emerald-50 border-emerald-200', dot: 'bg-emerald-500' },
   Cancelled: { color: 'text-slate-600 bg-slate-100 border-slate-200', dot: 'bg-slate-400' },
   Returned:  { color: 'text-red-700 bg-red-50 border-red-200', dot: 'bg-red-500' },
-  'Lab Pending': { color: 'text-amber-700 bg-amber-50 border-amber-200', dot: 'bg-amber-500' },
-  'Partially Paid': { color: 'text-blue-700 bg-blue-50 border-blue-200', dot: 'bg-blue-500' },
-  'Unpaid': { color: 'text-rose-700 bg-rose-50 border-rose-200', dot: 'bg-rose-500' },
 };
 
 const STATUS_FILTERS = [
@@ -28,9 +28,6 @@ const STATUS_FILTERS = [
   { key: 'Completed', label: 'Completed Orders' },
   { key: 'Cancelled', label: 'Cancelled Orders' },
   { key: 'Returned', label: 'Returned Orders' },
-  { key: 'Lab Pending', label: 'Lab Pending' },
-  { key: 'Partially Paid', label: 'Partially Paid' },
-  { key: 'Unpaid', label: 'Unpaid' },
 ];
 
 const StatusBadge = ({ status }) => {
@@ -101,6 +98,46 @@ const Sales = () => {
     hasDue: selectedPayment === 'Remaining' ? true : selectedPayment === 'Paid' ? false : undefined,
   });
 
+  const queryClient = useQueryClient();
+
+  const handleUpdateStatus = async (id, newStatus, extraData = {}) => {
+    try {
+      const payload = { lab_status: newStatus, ...extraData };
+      if (newStatus === 'Sent To Lab') {
+        payload.sent_to_lab_date = new Date().toISOString().split('T')[0];
+        payload.expected_delivery_date = new Date(Date.now() + 4 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      }
+      await updateSaleApi(id, payload);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['sales'] }),
+        queryClient.invalidateQueries({ queryKey: ['labOrders'] }),
+        queryClient.invalidateQueries({ queryKey: ['saleDrawerDetail'] }),
+      ]);
+      toast.success(`Order status updated to "${newStatus}"`);
+
+      if (selectedSale && selectedSale.id === id) {
+        setSelectedSale(prev => ({
+          ...prev,
+          status: newStatus,
+          lab_status: newStatus,
+          ...extraData,
+        }));
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to update status.');
+    }
+  };
+
+  useEffect(() => {
+    if (selectedSale && sales && sales.length > 0) {
+      const fresh = sales.find(s => s.id === selectedSale.id);
+      if (fresh) {
+        setSelectedSale(fresh);
+      }
+    }
+  }, [sales]);
+
   const handleDeleteOrder = (saleId, invoiceNumber) => {
     setCancelModalData({
       isOpen: true,
@@ -127,7 +164,7 @@ const Sales = () => {
               Sales Records
             </h1>
             <p className="text-slate-500 mt-1.5 text-sm sm:text-base">
-              Track and monitor optical customer sales, pending laboratory orders, and store revenues.
+              Track and monitor optical customer sales, order fulfillment, and store revenues.
             </p>
           </div>
           <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
@@ -141,7 +178,7 @@ const Sales = () => {
           { label: 'Total Revenue', value: fmt(kpis.revenue), icon: DollarSign, color: 'text-emerald-700 bg-emerald-50 border-emerald-100' },
           { label: 'Total Sales Orders', value: kpis.totalOrders, icon: ShoppingCart, color: 'text-blue-700 bg-blue-50 border-blue-100' },
           { label: 'Completed Orders', value: kpis.completed, icon: UserCheck, color: 'text-indigo-700 bg-indigo-50 border-indigo-100' },
-          { label: 'Pending / Lab Orders', value: kpis.active, icon: Clock, color: 'text-amber-700 bg-amber-50 border-amber-100' },
+          { label: 'Payment Due Orders', value: kpis.active, icon: Clock, color: 'text-amber-700 bg-amber-50 border-amber-100' },
         ].map((kpi, idx) => (
           <div key={idx} className={`p-4 sm:p-5 rounded-2xl border bg-white shadow-sm flex items-center justify-between gap-3 ${kpi.color.split(' ').slice(2).join(' ')}`}>
             <div>
@@ -329,7 +366,9 @@ const Sales = () => {
                         <span className="font-semibold text-slate-700">{sale.customerName || 'Direct Customer'}</span>
                       )}
                     </td>
-                    <td className="px-3 py-3 text-xs font-medium text-slate-600 max-w-[160px] truncate">{sale.productName || '—'}</td>
+                    <td className="px-3 py-3 text-xs font-medium text-slate-600 max-w-[160px] truncate">
+                      <div>{sale.productName || '—'}</div>
+                    </td>
                     <td className="px-3 py-3 whitespace-nowrap">
                       <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-slate-50 border border-slate-100 rounded text-[10px] font-semibold text-slate-500">
                         <Store className="w-3 h-3 text-slate-400" />
@@ -345,8 +384,17 @@ const Sales = () => {
                     <td className="px-3 py-3 text-[11px] font-semibold text-slate-500 whitespace-nowrap">{fmtDate(sale.orderDate)}</td>
                     <td className="px-3 py-3 text-xs font-black text-slate-900 whitespace-nowrap">{fmt(sale.total_amount)}</td>
                     <td className="px-3 py-3">
-                      <div className="flex flex-col gap-0.5 items-start">
+                      <div className="flex flex-col gap-1 items-start">
                         <StatusBadge status={sale.status} />
+                        {Number(sale.due_amount ?? sale.dueAmount ?? 0) > 0 ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                            Due: {fmt(sale.due_amount ?? sale.dueAmount)}
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            Paid
+                          </span>
+                        )}
                         {sale.is_exchanged && (
                           <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[8px] font-extrabold text-orange-700 bg-orange-50 border border-orange-200 uppercase tracking-wider">
                             Exchanged
@@ -431,6 +479,15 @@ const Sales = () => {
                       </button>
                     </PermissionGuard>
                     <StatusBadge status={sale.status} />
+                    {Number(sale.due_amount ?? sale.dueAmount ?? 0) > 0 ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                        Due: {fmt(sale.due_amount ?? sale.dueAmount)}
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        Paid
+                      </span>
+                    )}
                     {sale.is_exchanged && (
                       <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-extrabold text-orange-700 bg-orange-55 border border-orange-200 uppercase tracking-wider">
                         Exchanged
@@ -485,6 +542,7 @@ const Sales = () => {
       <InventoryDetailDrawer
         item={selectedSale}
         onClose={() => setSelectedSale(null)}
+        onUpdateStatus={handleUpdateStatus}
       />
 
       {/* Confirmation Modal */}

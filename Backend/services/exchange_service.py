@@ -19,7 +19,11 @@ from services.bill_service import update_bill_for_sale
 from services.product_unit_service import restore_units_from_sale_item, assign_units_to_sale_item
 from models.inventory import OwnerType
 from schemas.exchange import ExchangeCreate
-from services.deadstock_service import create_deadstock_from_exchange, cancel_deadstock_for_exchange
+from services.deadstock_service import (
+    create_deadstock_from_exchange,
+    cancel_deadstock_for_exchange,
+    restock_returned_unit,
+)
 
 
 
@@ -45,16 +49,22 @@ async def _generate_exchange_number(db: AsyncSession, admin_id: int) -> str:
     year = datetime.now(timezone.utc).year
     prefix = f"EXC-{year}-"
     stmt = (
-        select(sa_func.count())
-        .select_from(Exchange)
-        .where(
-            Exchange.admin_id == admin_id,
-            Exchange.exchange_number.like(f"{prefix}%"),
-        )
+        select(Exchange.exchange_number)
+        .where(Exchange.exchange_number.like(f"{prefix}%"))
+        .order_by(Exchange.exchange_number.desc())
+        .limit(1)
     )
     result = await db.execute(stmt)
-    count = result.scalar() or 0
-    return f"{prefix}{count + 1:05d}"
+    last_exc = result.scalar()
+    if last_exc:
+        try:
+            suffix = last_exc.split("-")[-1]
+            next_num = int(suffix) + 1
+        except (ValueError, IndexError):
+            next_num = 1
+    else:
+        next_num = 1
+    return f"{prefix}{next_num:05d}"
 
 
 async def _generate_invoice_number(db: AsyncSession, admin_id: int) -> str:
@@ -62,16 +72,22 @@ async def _generate_invoice_number(db: AsyncSession, admin_id: int) -> str:
     year = datetime.now(timezone.utc).year
     prefix = f"INV-{year}-"
     stmt = (
-        select(sa_func.count())
-        .select_from(Sale)
-        .where(
-            Sale.admin_id == admin_id,
-            Sale.invoice_number.like(f"{prefix}%"),
-        )
+        select(Sale.invoice_number)
+        .where(Sale.invoice_number.like(f"{prefix}%"))
+        .order_by(Sale.invoice_number.desc())
+        .limit(1)
     )
     result = await db.execute(stmt)
-    count = result.scalar() or 0
-    return f"{prefix}{count + 1:05d}"
+    last_inv = result.scalar()
+    if last_inv:
+        try:
+            suffix = last_inv.split("-")[-1]
+            next_num = int(suffix) + 1
+        except (ValueError, IndexError):
+            next_num = 1
+    else:
+        next_num = 1
+    return f"{prefix}{next_num:05d}"
 
 
 async def create_exchange(
@@ -381,15 +397,30 @@ async def create_exchange(
         db.add(exchange)
         await db.flush()
 
-        # Create deadstock entry for returned item
-        await create_deadstock_from_exchange(
-            db=db,
-            exchange=exchange,
-            original_item=original_item,
-            exchange_qty=exchange_qty,
-            admin_id=admin_id,
-            store_id=payload.store_id,
+        # Conditional routing of returned products based on batch expiration
+        from models.inventory import AgingStage
+        original_batch = await db.scalar(
+            select(Inventory).where(Inventory.id == original_item.inventory_id)
         )
+        if original_batch and original_batch.aging_stage == AgingStage.DEAD_STOCK:
+            # Create deadstock entry for returned item (expired/dead stock)
+            await create_deadstock_from_exchange(
+                db=db,
+                exchange=exchange,
+                original_item=original_item,
+                exchange_qty=exchange_qty,
+                admin_id=admin_id,
+                store_id=payload.store_id,
+            )
+        else:
+            # Restock returned item directly back to available inventory
+            await restock_returned_unit(
+                db=db,
+                original_item=original_item,
+                exchange_qty=exchange_qty,
+                admin_id=admin_id,
+                store_id=payload.store_id,
+            )
 
         if idx == 0:
             first_exchange = exchange

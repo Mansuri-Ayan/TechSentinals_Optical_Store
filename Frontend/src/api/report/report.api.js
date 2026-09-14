@@ -15,3 +15,12 @@ export const getAnalysesReportApi = async (params = {}) => {
   const response = await api.get('/reports/analyses', { params });
   return response.data;
 };
+
+/**
+ * Fetch cross-store product performance report.
+ */
+export const getProductPerformanceReportApi = async (params = {}) => {
+  const response = await api.get('/reports/product-performance', { params });
+  return response.data;
+};
+

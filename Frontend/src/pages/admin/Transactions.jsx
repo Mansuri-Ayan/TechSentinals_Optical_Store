@@ -30,7 +30,6 @@ const TRANSACTION_TYPES = [
   { value: 'Inventory Transfer', icon: ArrowRightLeft, color: 'text-blue-600 bg-blue-50 border-blue-200' },
   { value: 'Warehouse Send', icon: ArrowRightLeft, color: 'text-orange-600 bg-orange-50 border-orange-200' },
   { value: 'Warehouse Receive', icon: ArrowRightLeft, color: 'text-cyan-600 bg-cyan-50 border-cyan-200' },
-  { value: 'Sale', icon: ShoppingCart, color: 'text-emerald-600 bg-emerald-50 border-emerald-200' },
   { value: 'Purchase', icon: TrendingUp, color: 'text-purple-600 bg-purple-50 border-purple-200' },
   { value: 'Return', icon: RotateCcw, color: 'text-amber-600 bg-amber-50 border-amber-200' },
   { value: 'Damage', icon: Trash2, color: 'text-red-600 bg-red-50 border-red-200' },
@@ -59,7 +58,7 @@ const TABS = [
 
 // Helper: classify a transaction into a tab
 const classifyTab = (tx) => {
-  if (tx.type === 'Purchase') return 'other';
+  if (tx.type === 'Purchase' || tx.type === 'Sale') return 'other';
   const senderIsAdmin = tx.sender.toLowerCase().includes('admin');
   const receiverIsAdmin = tx.receiver.toLowerCase().includes('admin');
   if (senderIsAdmin && !receiverIsAdmin) return 'admin-to-branch';
@@ -651,12 +650,14 @@ const Transactions = () => {
     transfer_direction: ['admin-to-branch', 'branch-to-branch', 'branch-to-admin'].includes(activeTab)
       ? activeTab.replace(/-/g, '_').toUpperCase()
       : undefined,
+    exclude_sales: true,
   });
 
   const { transactions: allTransactions } = useTransactions(inPageStoreId, {
     limit: 1000,
     search: searchTerm || undefined,
     transaction_type: filterType || undefined,
+    exclude_sales: true,
   });
 
   const mapTransaction = (tx) => {
@@ -704,8 +705,14 @@ const Transactions = () => {
     };
   };
 
-  const transactions = useMemo(() => backendTransactions.map(mapTransaction), [backendTransactions]);
-  const mappedAllTransactions = useMemo(() => allTransactions.map(mapTransaction), [allTransactions]);
+  const transactions = useMemo(
+    () => (backendTransactions || []).filter(tx => tx.transaction_type !== 'SALE').map(mapTransaction),
+    [backendTransactions]
+  );
+  const mappedAllTransactions = useMemo(
+    () => (allTransactions || []).filter(tx => tx.transaction_type !== 'SALE').map(mapTransaction),
+    [allTransactions]
+  );
 
   useEffect(() => {
     if (isPathAdmin && storeId && stores.length > 0) {
@@ -1265,6 +1272,7 @@ const Transactions = () => {
             costPrice: data.costPrice,
             sellingPrice: data.sellingPrice,
             discountPercent: data.discountPercent,
+            lowStockThreshold: data.lowStockThreshold,
           });
           setShowRecordPurchaseModal(false);
         }}

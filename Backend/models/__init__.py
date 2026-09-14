@@ -6,6 +6,7 @@ from models.optician import Optician
 from models.manager import Manager
 from models.refresh_token import RefreshToken
 from models.role import Role
+from models.otp_verification import OTPVerification
 from models.brand import Brand
 from models.category import Category
 from models.subcategory import Subcategory
@@ -14,7 +15,9 @@ from models.frame_product import FrameProduct
 from models.lens_product import LensProduct
 from models.accessory_product import AccessoryProduct
 from models.product_snapshot import ProductSnapshot, ProductType
-from models.inventory import Inventory, OwnerType
+from models.inventory import Inventory, OwnerType, AgingStage
+from models.inventory_config import InventoryConfig
+from models.product_aging_override import ProductAgingOverride
 from models.inventory_transaction import InventoryTransaction, TransactionType
 from models.product_unit import ProductUnit, UnitStatus, UnitSourceType
 
@@ -26,13 +29,17 @@ from models.purchase_order import PurchaseOrder, POStatus
 from models.purchase_order_item import PurchaseOrderItem
 from models.supplier_payment import SupplierPayment, SupplierPaymentMethod
 
-# ── Sales ─────────────────────────────────────────────────────
+# ── Sales & QC ────────────────────────────────────────────────
 from models.customer import Customer, CustomerGender, CustomerMembershipTier
 from models.customer_link import CustomerLink
 from models.prescription import Prescription
 from models.sale import Sale, SaleStatus, StaffType
 from models.sale_item import SaleItem
 from models.sale_payment import SalePayment, SalePaymentMethod
+from models.sale_item_qc_history import SaleItemQCHistory
+from models.qc_damaged_item import QCDamagedItem
+from models.qc_damaged_item_history import QCDamagedItemHistory
+from models.qc_customer_contact_log import QCCustomerContactLog
 
 # ── Loyalty ───────────────────────────────────────────────────
 from models.loyalty_config import LoyaltyConfig
@@ -45,6 +52,8 @@ from models.expense_category import ExpenseCategory
 
 # ── Repair & Services ─────────────────────────────────────────
 from models.repair import Repair, RepairType, RepairStatus, RepairStaffType
+from models.repair_bill import RepairBill
+from models.purchase_order_invoice import PurchaseOrderInvoice
 
 # ── Notifications ─────────────────────────────────────────────
 from models.notification import Notification, NotificationType

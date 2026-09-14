@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import {
   X, ShoppingCart, Package, Tag, Layers, Star,
   ChevronLeft, ChevronRight, CheckCircle, AlertTriangle, XCircle,
-  Store, Truck, Shield, Box, Activity,
+  Store, Truck, Shield, Box, Activity, Workflow,
 } from 'lucide-react';
 import { useProductUnits } from '../../hooks/useProductUnits';
 
@@ -32,10 +32,10 @@ const statusConfig = {
 const getStockStatus = (item) => {
   const qty = item.available_quantity ?? item.quantity ?? 0;
   if (qty === 0) return 'out_of_stock';
-  const threshold = (item.reorder_level && item.reorder_level > 0)
-    ? item.reorder_level
-    : 10;
-  if (qty <= threshold) return 'low_stock';
+  const threshold = item.low_stock_threshold !== undefined && item.low_stock_threshold !== null
+    ? Number(item.low_stock_threshold)
+    : (item.reorder_level && Number(item.reorder_level) > 0 ? Number(item.reorder_level) : null);
+  if (threshold !== null && qty <= threshold) return 'low_stock';
   return 'in_stock';
 };
 
@@ -109,11 +109,12 @@ const ImageCarousel = ({ item }) => {
 
 /* ── Main modal ── */
 const ProductViewModal = ({ item, onClose, onPlaceOrder }) => {
+  const { data: units = [], isLoading: loadingUnits } = useProductUnits({ product_id: item?.id });
+
   if (!item) return null;
 
   const status = getStockStatus(item);
   const sc = statusConfig[status] || statusConfig['in_stock'];
-  const { data: units = [], isLoading: loadingUnits } = useProductUnits({ product_id: item.id });
 
   return createPortal(
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[999] p-3 sm:p-4 animate-fade-in">
@@ -149,18 +150,50 @@ const ProductViewModal = ({ item, onClose, onPlaceOrder }) => {
             </span>
           </div>
 
-          {/* Price */}
-          <div className="flex items-end gap-3 py-3 px-4 bg-gradient-to-r from-emerald-50 to-teal-50 rounded-xl border border-emerald-100">
-            <div>
-              <p className="text-xs text-slate-500 font-semibold mb-0.5">Selling Price</p>
-              <p className="text-3xl font-black text-emerald-700">₹{Number(item.selling_price).toLocaleString()}</p>
-            </div>
-            {item.cost_price && (
-              <div className="pb-1">
-                <p className="text-xs text-slate-400 font-medium line-through">MRP ₹{Number(item.cost_price).toLocaleString()}</p>
+          {/* Price & GST Breakdown Card */}
+          {(() => {
+            const sp = Number(item.selling_price_before_gst ?? item.selling_price) || 0;
+            const rate = item.gst_percent !== null && item.gst_percent !== undefined ? Number(item.gst_percent) : 18;
+            const gstAmt = (item.gst_amount !== undefined && item.gst_amount !== null && (rate === 0 || Number(item.gst_amount) > 0))
+              ? Number(item.gst_amount)
+              : (sp * rate / 100);
+            const spWithGst = (item.selling_price_with_gst !== undefined && item.selling_price_with_gst !== null && (rate === 0 || Number(item.selling_price_with_gst) > sp))
+              ? Number(item.selling_price_with_gst)
+              : (sp + gstAmt);
+            const cp = Number(item.cost_price) || 0;
+
+            return (
+              <div className="p-4 bg-gradient-to-r from-emerald-50/70 via-teal-50/50 to-blue-50/50 rounded-2xl border border-emerald-200/70 space-y-3">
+                <div className="flex items-baseline justify-between flex-wrap gap-2">
+                  <div>
+                    <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider block">Final Retail Price (Incl. GST)</span>
+                    <p className="text-2xl sm:text-3xl font-black text-emerald-700">₹{spWithGst.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                  </div>
+                  {cp > 0 && (
+                    <div className="text-right">
+                      <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">Unit Cost Price</span>
+                      <p className="text-sm font-bold text-slate-700">₹{cp.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 pt-2 border-t border-emerald-200/50 text-xs">
+                  <div className="bg-white/80 p-2 rounded-xl border border-emerald-100">
+                    <span className="text-[10px] text-slate-500 block font-medium">Price Excl. GST</span>
+                    <span className="font-bold text-slate-800">₹{sp.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  </div>
+                  <div className="bg-white/80 p-2 rounded-xl border border-amber-200/70 bg-amber-50/30">
+                    <span className="text-[10px] text-amber-700 block font-medium">GST ({rate}%)</span>
+                    <span className="font-bold text-amber-800">+ ₹{gstAmt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  </div>
+                  <div className="bg-white/80 p-2 rounded-xl border border-emerald-100">
+                    <span className="text-[10px] text-slate-500 block font-medium">Gross Margin</span>
+                    <span className="font-bold text-emerald-700">{sp > 0 ? (((sp - cp) / sp) * 100).toFixed(1) : 0}%</span>
+                  </div>
+                </div>
               </div>
-            )}
-          </div>
+            );
+          })()}
 
           {/* Info grid */}
           <div className="grid grid-cols-2 gap-3">
@@ -204,6 +237,22 @@ const ProductViewModal = ({ item, onClose, onPlaceOrder }) => {
               <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg text-xs font-semibold border border-blue-100">
                 <Shield className="w-3 h-3" />
                 {item.warranty_months} Months Warranty
+              </span>
+            )}
+            {item.sales_workflow_type && (
+              <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border ${
+                item.sales_workflow_type === 'DIRECT_ONLY'
+                  ? 'bg-blue-50 text-blue-700 border-blue-200'
+                  : item.sales_workflow_type === 'ORDER_ONLY'
+                  ? 'bg-purple-50 text-purple-700 border-purple-200'
+                  : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+              }`}>
+                <Workflow className="w-3 h-3" />
+                {item.sales_workflow_type === 'DIRECT_ONLY'
+                  ? '⚡ Instant Direct Sale Only'
+                  : item.sales_workflow_type === 'ORDER_ONLY'
+                  ? '📋 Order-Based Sale Only'
+                  : '⚡📋 Flexible (Both Direct & Order)'}
               </span>
             )}
           </div>

@@ -191,3 +191,21 @@ export const useLoyaltyPreview = () => {
     mutationFn: (payload) => loyaltyApi.calculateLoyaltyPreview(payload)
   });
 };
+
+export const useSendLoyaltyOtp = () => {
+  return useMutation({
+    mutationFn: (payload) => loyaltyApi.sendLoyaltyOtp(payload)
+  });
+};
+
+export const useVerifyLoyaltyOtp = () => {
+  return useMutation({
+    mutationFn: (payload) => loyaltyApi.verifyLoyaltyOtp(payload)
+  });
+};
+
+export const useCheckLoyaltyOtpStatus = () => {
+  return useMutation({
+    mutationFn: (payload) => loyaltyApi.checkLoyaltyOtpStatus(payload)
+  });
+};

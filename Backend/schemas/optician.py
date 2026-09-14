@@ -51,6 +51,8 @@ class OpticianUpdate(BaseModel):
     profile_image: str | None = Field(default=None)
     qualification: str | None = Field(default=None, max_length=255)
     is_active: bool | None = Field(default=None)
+    store_id: int | None = Field(default=None, description="Reassign optician to a different store")
+    role: str | None = Field(default=None, description="Reassign staff member to a different role")
     pf_number: str | None = Field(
         default=None,
         max_length=50,

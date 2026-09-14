@@ -1,4 +1,5 @@
 # API: inventory/create.py
+from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,10 +19,24 @@ router = APIRouter()
 
 
 def _inventory_to_read(inv) -> InventoryRead:
+    product = inv.product
+    selling_price = getattr(inv, "selling_price", None)
+    if selling_price is None and product:
+        selling_price = product.selling_price
+    cost_price = getattr(inv, "last_purchase_price", None)
+    if cost_price is None and product:
+        cost_price = product.cost_price
+
     return InventoryRead(
         **{c.key: getattr(inv, c.key) for c in inv.__table__.columns},
-        product_name=inv.product.name if inv.product else None,
-        product_sku=inv.product.sku if inv.product else None,
+        product_name=product.name if product else None,
+        product_sku=product.sku if product else None,
+        sku=product.sku if product else None,
+        cost_price=cost_price,
+        selling_price=selling_price,
+        price=selling_price,
+        gst_percent=product.gst_percent if (product and product.gst_percent is not None) else Decimal("18.00"),
+        sales_workflow_type=getattr(product, "sales_workflow_type", None) or "BOTH",
     )
 
 

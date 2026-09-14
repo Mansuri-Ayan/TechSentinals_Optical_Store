@@ -31,6 +31,14 @@ class Subcategory(Base):
         comment="FK → categories.id — parent category",
     )
 
+    store_id = Column(
+        BigInteger,
+        ForeignKey("stores.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+        comment="FK → stores.id — owner store of this subcategory (null for admin/global)",
+    )
+
     name = Column(
         String(255),
         nullable=False,

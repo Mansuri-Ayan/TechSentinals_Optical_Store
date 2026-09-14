@@ -26,6 +26,8 @@ export const useAuth = () => {
         // Redirect based on role
         if (userProfile.role === "admin") {
           navigate("/admin/dashboard", { replace: true });
+        } else if (userProfile.role === "superadmin") {
+          navigate("/super-admin/dashboard", { replace: true });
         } else {
           navigate("/shopkeeper", { replace: true });
         }
@@ -54,7 +56,16 @@ export const useAuth = () => {
       clearUser();
       queryClient.clear();
 
-      navigate("/login", { replace: true });
+      const currentPath = window.location.pathname;
+      if (currentPath.startsWith("/super-admin")) {
+        if (currentPath !== "/super-admin/login") {
+          navigate("/super-admin/login", { replace: true });
+        }
+      } else if (currentPath === "/register/admin" || currentPath === "/login") {
+        // Stay on register or login page
+      } else {
+        navigate("/login", { replace: true });
+      }
     },
   });
 

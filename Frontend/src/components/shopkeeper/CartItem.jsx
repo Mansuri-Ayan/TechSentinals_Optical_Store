@@ -34,8 +34,20 @@ const CartItem = ({ item, onRemove, onQtyChange }) => {
         <p className="text-[10px] text-slate-400 font-semibold truncate">
           {product.brand} {selectedColor && `· ${selectedColor}`} {selectedSize && `· ${selectedSize}`}
         </p>
-        <div className="text-xs font-bold text-slate-900 mt-1">
-          ₹{product.selling_price.toLocaleString('en-IN')}
+        <div className="text-xs font-bold text-slate-900 mt-1 flex items-baseline gap-1">
+          {(() => {
+            const spBase = Number(product.selling_price_before_gst ?? product.selling_price) || 0;
+            const r = product.gst_percent !== undefined && product.gst_percent !== null ? Number(product.gst_percent) : 18;
+            const pGst = (product.selling_price_with_gst !== undefined && product.selling_price_with_gst !== null && (r === 0 || Number(product.selling_price_with_gst) > spBase))
+              ? Number(product.selling_price_with_gst)
+              : (spBase * (1 + r / 100));
+            return (
+              <>
+                <span>₹{pGst.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>
+                <span className="text-[8px] font-bold text-emerald-700 bg-emerald-50 px-1 py-0.2 rounded border border-emerald-200">Incl. GST</span>
+              </>
+            );
+          })()}
         </div>
       </div>
 

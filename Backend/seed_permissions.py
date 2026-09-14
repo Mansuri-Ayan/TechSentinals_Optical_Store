@@ -152,6 +152,13 @@ PERMISSION_CATALOG = [
     ("deadstock", "read", "View deadstock", False),
     ("deadstock", "update", "Reuse / Update deadstock", False),
     ("deadstock", "delete", "Delete deadstock", True),
+    # ── Inventory Config ──────────────────────────────────────
+    ("inventory_config", "read", "View inventory configuration", False),
+    ("inventory_config", "update", "Modify inventory configuration", True),
+    # ── Quality Control (QC) ──────────────────────────────────
+    ("qc", "perform", "Perform Quality Control (QC) inspections", False),
+    ("qc", "read", "View QC inspection history and damaged items", False),
+    ("qc", "manage", "Manage damaged item claims and compensation", True),
 ]
 
 
@@ -171,6 +178,7 @@ def _build_role_grants(all_keys: list[str]) -> dict:
         and not k.startswith("managers:") 
         and not k.startswith("permissions:") 
         and not k.startswith("superadmin:")
+        and k != "inventory_config:update"
     ]
 
     # Worker gets basic POS and shop floor tasks
@@ -183,7 +191,8 @@ def _build_role_grants(all_keys: list[str]) -> dict:
         "notifications:read",
         "exchanges:create", "exchanges:read",
         "deadstock:read", "deadstock:update",
-        "categories:read", "brands:read"
+        "categories:read", "brands:read",
+        "qc:perform", "qc:read", "qc:manage"
     ]
 
     # Optician gets eye exam, prescription, and repairs tasks
@@ -195,7 +204,8 @@ def _build_role_grants(all_keys: list[str]) -> dict:
         "notifications:read",
         "exchanges:create", "exchanges:read",
         "deadstock:read", "deadstock:update",
-        "categories:read", "brands:read"
+        "categories:read", "brands:read",
+        "qc:perform", "qc:read", "qc:manage"
     ]
 
     # Accountant gets financial reporting and ledger access (read-only)
@@ -285,6 +295,25 @@ async def seed_permissions():
                     )
                     db.add(grp)
                     grp_count += 1
+        await db.flush()
+
+        # ── 4. Backfill existing admins with overrides ────────
+        from models.admin import Admin
+        from models.admin_role_permission_override import AdminRolePermissionOverride
+        
+        admin_ids = (await db.execute(select(Admin.id))).scalars().all()
+        print(f"  [4/4] Backfilling default overrides for {len(admin_ids)} existing admin(s)...")
+        for admin_id in admin_ids:
+            for role_type, granted_keys in role_grants.items():
+                for key in granted_keys:
+                    if key in perm_map:
+                        override = AdminRolePermissionOverride(
+                            admin_id=admin_id,
+                            role_type=role_type,
+                            permission_id=perm_map[key].id,
+                            is_granted=True,
+                        )
+                        db.add(override)
         await db.flush()
 
         await db.commit()

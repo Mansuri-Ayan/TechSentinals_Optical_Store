@@ -11,6 +11,7 @@ import { useAnalyses } from '../../hooks/useAnalyses';
 import { useChartAnimation } from '../../hooks/useChartAnimation';
 import { useRoleContext } from '../../hooks/useRoleContext';
 
+
 /* ─────────────────────────────────────────────────────────
    PREMIUM WIDGET CARD (STRIPE-LIKE NOTION AESTHETICS)
    ───────────────────────────────────────────────────────── */
@@ -284,6 +285,7 @@ const Analyses = () => {
   const { stores, selectedStore, setSelectedStore } = useStoreStore();
   const [selectedStoreFilter, setSelectedStoreFilter] = useState('All Store');
   const [dateRange, setDateRange] = useState('This Year');
+
 
   // Find active store ID based on selectedStoreFilter name
   const activeStoreId = useMemo(() => {

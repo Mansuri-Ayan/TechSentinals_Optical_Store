@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Calendar, Package, IndianRupee, CreditCard, Building2, CheckCircle, Clock, XCircle, AlertTriangle, Layers, FileText, Hash, ArrowRightLeft, ShoppingCart, TrendingUp, RotateCcw, Trash2 } from 'lucide-react';
 import PermissionGuard from '../../shared/PermissionGuard';
+import POInvoiceModal from '../../shared/POInvoiceModal';
 
 const TRANSACTION_TYPES = [
   { value: 'Inventory Transfer', icon: ArrowRightLeft, color: 'text-blue-600 bg-blue-50 border-blue-200' },
@@ -96,6 +97,7 @@ const TransactionDetailModal = ({
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [decisionReason, setDecisionReason] = useState('');
   const [decisionError, setDecisionError] = useState('');
+  const [showInvoiceModal, setShowInvoiceModal] = useState(false);
 
   useEffect(() => {
     if (transaction) {
@@ -212,7 +214,7 @@ const TransactionDetailModal = ({
             } />
             {!isTransfer && (
               <>
-                <DetailRow label="Total Amount" value={transaction.amount > 0 ? fmt(transaction.amount) : '—'} />
+                <DetailRow label="Total Amount (Incl. GST)" value={transaction.amount > 0 ? fmt(transaction.amount) : '—'} />
                 <DetailRow label="Paid Amount" value={transaction.paidAmount !== undefined ? fmt(transaction.paidAmount) : (transaction.amount > 0 ? fmt(transaction.amount) : '—')} />
                 <DetailRow label="Due Amount" value={transaction.dueAmount !== undefined ? fmt(transaction.dueAmount) : '₹0'} />
                 <DetailRow label="Payment Method" value={transaction.paymentMethod || '—'} />
@@ -220,6 +222,37 @@ const TransactionDetailModal = ({
               </>
             )}
           </Section>
+
+          {/* Invoice Banner Card for Purchase Orders */}
+          {(transaction.rawId || transaction.po_id || transaction.type === 'Purchase') && (
+            <div className="bg-gradient-to-r from-blue-500/10 to-blue-600/5 rounded-2xl border border-blue-200 p-4 shadow-sm flex items-center justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <p className="text-xs font-bold text-blue-900">Supplier Purchase Invoice</p>
+                  {transaction.dueAmount > 0 ? (
+                    <span className="px-2 py-0.5 rounded text-[9px] font-black bg-amber-100 text-amber-800 border border-amber-200">
+                      TEMPORARY
+                    </span>
+                  ) : (
+                    <span className="px-2 py-0.5 rounded text-[9px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200">
+                      FINAL
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] text-blue-700 font-medium mt-0.5">
+                  {transaction.dueAmount > 0 ? 'Temporary invoice with outstanding balance' : 'Final invoice settled in full'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowInvoiceModal(true)}
+                className="px-3.5 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-all shadow-md flex items-center gap-1.5 flex-shrink-0 cursor-pointer"
+              >
+                <FileText className="w-4 h-4" />
+                View Invoice
+              </button>
+            </div>
+          )}
 
           {/* Section 3 - Remarks */}
           {transaction.remarks && (
@@ -272,18 +305,38 @@ const TransactionDetailModal = ({
         {/* Footer */}
         <div className="px-5 py-4 bg-slate-50 border-t border-slate-100 flex-shrink-0 flex gap-3 justify-end items-center">
           <button onClick={onClose}
-            className="px-5 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl font-semibold text-sm hover:bg-slate-50 transition-all shadow-sm">
+            className="px-5 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl font-semibold text-sm hover:bg-slate-50 transition-all shadow-sm cursor-pointer">
             Close Details
           </button>
+          {!isTransfer && (transaction.rawId || transaction.po_id || transaction.type === 'Purchase') && (
+            <button
+              type="button"
+              onClick={() => setShowInvoiceModal(true)}
+              className="px-4 py-2.5 bg-white border border-blue-200 text-blue-700 rounded-xl font-bold text-xs hover:bg-blue-50 transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
+            >
+              <FileText className="w-4 h-4" />
+              View Invoice
+            </button>
+          )}
           {!isTransfer && transaction.dueAmount > 0 && onRecordPayment && (
             <PermissionGuard permission="purchase_orders:create">
               <button type="button" onClick={() => onRecordPayment(transaction)}
-                className="px-5 py-2.5 bg-blue-600 text-white rounded-xl font-semibold text-sm hover:bg-blue-700 transition-all shadow-md">
+                className="px-5 py-2.5 bg-blue-600 text-white rounded-xl font-semibold text-sm hover:bg-blue-700 transition-all shadow-md cursor-pointer">
                 Record Payment
               </button>
             </PermissionGuard>
           )}
         </div>
+
+        {/* PO Invoice Modal */}
+        {showInvoiceModal && (
+          <POInvoiceModal
+            isOpen={showInvoiceModal}
+            onClose={() => setShowInvoiceModal(false)}
+            poId={transaction.rawId || transaction.po_id || transaction.id}
+            invoiceNumber={transaction.id}
+          />
+        )}
       </div>
     </div>,
     document.body

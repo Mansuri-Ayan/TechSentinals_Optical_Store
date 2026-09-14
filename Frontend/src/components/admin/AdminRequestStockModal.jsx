@@ -16,7 +16,9 @@ const AdminRequestStockModal = ({ isOpen, onClose, product, sourceStore, activeS
     createManagerRequestAsync,
     isCreatingManagerRequest
   } = useTransactions(null, {}, false);
-  const canCreateRequest = useHasPermission('inventory:create') || useHasPermission('transactions:create') || ['admin', 'super_admin', 'manager', 'worker', 'optician'].includes(user?.role);
+  const hasInventoryCreate = useHasPermission('inventory:create');
+  const hasTransactionsCreate = useHasPermission('transactions:create');
+  const canCreateRequest = hasInventoryCreate || hasTransactionsCreate || ['admin', 'super_admin', 'manager', 'worker', 'optician'].includes(user?.role);
   const isAdmin = user?.role === 'admin';
   const isPending = isCreatingAdminRequest || isCreatingManagerRequest;
 

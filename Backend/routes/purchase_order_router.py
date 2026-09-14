@@ -5,6 +5,7 @@ from apis.purchase_order.read import router as read_router
 from apis.purchase_order.update import router as update_router
 from apis.purchase_order.receive import router as receive_router
 from apis.purchase_order.payments import router as payments_router
+from apis.purchase_order.invoice import router as invoice_router
 
 purchase_order_router = APIRouter(
     prefix="/purchase-orders",
@@ -16,3 +17,4 @@ purchase_order_router.include_router(read_router)
 purchase_order_router.include_router(update_router)
 purchase_order_router.include_router(receive_router)
 purchase_order_router.include_router(payments_router)
+purchase_order_router.include_router(invoice_router)

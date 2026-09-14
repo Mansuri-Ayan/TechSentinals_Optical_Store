@@ -54,3 +54,12 @@ async def me(
         data["full_name"] = f"{current_user.first_name} {current_user.last_name}"
         data["store_name"] = current_user.store.store_name if current_user.store else None
         return data
+    else:
+        from models.superadmin import SuperAdmin
+        from schemas.superadmin import SuperAdminOut
+        if isinstance(current_user, SuperAdmin):
+            data = SuperAdminOut.model_validate(current_user).model_dump()
+            data["role"] = "superadmin"
+            data["full_name"] = f"{current_user.first_name} {current_user.last_name}"
+            data["store_name"] = "System Administration"
+            return data

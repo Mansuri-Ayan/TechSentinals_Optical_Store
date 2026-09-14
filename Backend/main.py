@@ -45,13 +45,28 @@ from routes.shopkeeper_loyalty_router import router as shopkeeper_loyalty_router
 from routes.lab_router import lab_router
 from routes.exchange_router import exchange_router
 from routes.deadstock_router import deadstock_router
+from routes.inventory_config_router import inventory_config_router
 from apis.permission.me import router as permission_me_router
 from apis.permission.tier2 import router as permission_tier2_router
 from apis.permission.tier3 import router as permission_tier3_router
 from apis.permission.staff_list import router as permission_staff_list_router
 from routes.superadmin_router import superadmin_router
 from apis.bill_settings.operations import router as bill_settings_router
-from db.session import engine
+from db.session import engine, async_session_maker
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
+from services.stock_aging_service import run_aging_evaluation
+
+async def run_daily_aging_job():
+    """Daily scheduled job: evaluate all inventory batch aging stages."""
+    logging.info("Starting scheduled stock aging evaluation...")
+    try:
+        async with async_session_maker() as db:
+            result = await run_aging_evaluation(db)
+            logging.info(f"Scheduled stock aging evaluation finished: {result}")
+    except Exception as e:
+        logging.error(f"Error in scheduled stock aging evaluation: {e}", exc_info=True)
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Application startup
@@ -67,8 +82,21 @@ async def lifespan(app: FastAPI):
             await conn.execute(text("UPDATE sales SET lab_status = 'Cancelled' WHERE status = 'CANCELLED' AND lab_status IS NOT NULL AND lab_status != 'Cancelled';"))
     except Exception as e:
         logging.warning(f"Skipped database reactivation / status fix: {e}")
+
+    # Start the background scheduler
+    scheduler = AsyncIOScheduler()
+    scheduler.add_job(
+        run_daily_aging_job,
+        trigger=CronTrigger(hour=0, minute=0),  # Daily at midnight
+        id="daily_aging_evaluation",
+        replace_existing=True,
+    )
+    scheduler.start()
+    logging.info("Background scheduler started successfully.")
+
     yield
     # Application shutdown
+    scheduler.shutdown()
     await engine.dispose()
 app = FastAPI(
     title="TechSentinals Optical Store API",
@@ -152,6 +180,9 @@ app.include_router(shopkeeper_loyalty_router)
 app.include_router(lab_router)
 app.include_router(exchange_router)
 app.include_router(deadstock_router)
+from routes.qc_router import qc_router
+app.include_router(qc_router)
+app.include_router(inventory_config_router)
 # ── Permissions & SuperAdmin module ───────────────────────────
 app.include_router(permission_me_router)
 app.include_router(permission_tier2_router)

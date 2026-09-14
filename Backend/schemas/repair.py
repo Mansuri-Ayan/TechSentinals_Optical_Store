@@ -15,6 +15,7 @@ class RepairCreate(BaseModel):
     description: str | None = Field(default=None, description="Description of the repair issue")
     estimated_cost: Decimal = Field(default=Decimal("0.00"), ge=0, decimal_places=2, description="Estimated repair cost")
     advance_paid: Decimal = Field(default=Decimal("0.00"), ge=0, decimal_places=2, description="Advance payment collected")
+    payment_method: str | None = Field(default="CASH", description="Payment mode (CASH, CARD, UPI, BANK_TRANSFER, CHEQUE, ONLINE)")
     received_date: date = Field(..., description="Date the item was received")
     estimated_completion_date: date | None = Field(default=None, description="Expected completion date")
     handled_by_type: str | None = Field(default=None, description="Staff type: MANAGER/WORKER/OPTICIAN")
@@ -33,6 +34,7 @@ class RepairUpdate(BaseModel):
     estimated_cost: Decimal | None = Field(default=None, ge=0, decimal_places=2)
     final_cost: Decimal | None = Field(default=None, ge=0, decimal_places=2)
     advance_paid: Decimal | None = Field(default=None, ge=0, decimal_places=2)
+    payment_method: str | None = Field(default=None)
     estimated_completion_date: date | None = Field(default=None)
     completed_date: date | None = Field(default=None)
     handled_by_type: str | None = Field(default=None)
@@ -63,6 +65,7 @@ class RepairRead(BaseModel):
     estimated_cost: Decimal
     final_cost: Decimal | None = None
     advance_paid: Decimal
+    payment_method: str | None = "CASH"
     received_date: date
     estimated_completion_date: date | None = None
     completed_date: date | None = None
@@ -74,11 +77,17 @@ class RepairRead(BaseModel):
     product_unit_id: int | None = None
     unit_sku: str | None = None
 
-    # Denormalized fields
+    # Denormalized & Billing fields
     customer_full_name: str | None = None
     store_name: str | None = None
     sale_invoice_number: str | None = None
     handled_by_name: str | None = None
+    total_cost: Decimal = Decimal("0.00")
+    paid_amount: Decimal = Decimal("0.00")
+    due_amount: Decimal = Decimal("0.00")
+    payment_status: str = "UNPAID"
+    is_final: bool = False
+    invoice_type: str = "TEMPORARY"
 
     model_config = {"from_attributes": True}
 
@@ -97,6 +106,7 @@ class RepairListItem(BaseModel):
     estimated_cost: Decimal
     final_cost: Decimal | None = None
     advance_paid: Decimal
+    payment_method: str | None = "CASH"
     received_date: date
     estimated_completion_date: date | None = None
     completed_date: date | None = None
@@ -105,6 +115,9 @@ class RepairListItem(BaseModel):
     created_at: datetime
     product_unit_id: int | None = None
     unit_sku: str | None = None
+    total_cost: Decimal = Decimal("0.00")
+    paid_amount: Decimal = Decimal("0.00")
+    invoice_type: str = "TEMPORARY"
 
     model_config = {"from_attributes": True}
 

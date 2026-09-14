@@ -1,4 +1,5 @@
 # API: inventory/update.py
+from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from core.deps import require_permission
@@ -11,10 +12,24 @@ router = APIRouter()
 
 
 def _inventory_to_read(inv) -> InventoryRead:
+    product = inv.product
+    selling_price = getattr(inv, "selling_price", None)
+    if selling_price is None and product:
+        selling_price = product.selling_price
+    cost_price = getattr(inv, "last_purchase_price", None)
+    if cost_price is None and product:
+        cost_price = product.cost_price
+
     return InventoryRead(
         **{c.key: getattr(inv, c.key) for c in inv.__table__.columns},
-        product_name=inv.product.name if inv.product else None,
-        product_sku=inv.product.sku if inv.product else None,
+        product_name=product.name if product else None,
+        product_sku=product.sku if product else None,
+        sku=product.sku if product else None,
+        cost_price=cost_price,
+        selling_price=selling_price,
+        price=selling_price,
+        gst_percent=product.gst_percent if (product and product.gst_percent is not None) else Decimal("18.00"),
+        sales_workflow_type=getattr(product, "sales_workflow_type", None) or "BOTH",
     )
 
 
@@ -62,8 +77,9 @@ async def update_inventory_endpoint(
         from models.worker import Worker
         from models.optician import Optician
         from models.accountant import Accountant
+        from models.manager import Manager
 
-        is_store_scoped = isinstance(current_user, (Worker, Optician)) or (isinstance(current_user, Accountant) and current_user.store_id is not None)
+        is_store_scoped = isinstance(current_user, (Worker, Optician, Manager)) or (isinstance(current_user, Accountant) and getattr(current_user, "store_id", None) is not None)
         if is_store_scoped:
             if inv.owner_type != OwnerType.STORE or inv.owner_id != current_user.store_id:
                 raise HTTPException(

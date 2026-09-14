@@ -32,12 +32,14 @@ import Permissions from "../pages/admin/Permissions";
 import PermissionRoute from "../components/shared/PermissionRoute";
 import Exchanges from "../pages/admin/Exchanges";
 import ManageUnits from "../pages/admin/ManageUnits";
+import ProductPerformance from "../pages/shared/ProductPerformance";
 
 import ShopKeeperLayout from "../layouts/ShopKeeperLayout";
 import ShopkeeperDashboard from "../pages/shopkeeper/Dashboard";
 import Shopkeeper from "../pages/shopkeeper/Shopkeeper";
 import Deadstock from "../pages/shopkeeper/Deadstock";
-
+import DamagedItems from "../pages/admin/DamagedItems";
+import ShopkeeperDamagedItems from "../pages/shopkeeper/ShopkeeperDamagedItems";
 
 // Accountant imports
 import AccountantLayout from "../layouts/AccountantLayout";
@@ -51,6 +53,13 @@ import AccountantRefunds from "../pages/accountant/Refunds";
 import AccountantProfitLoss from "../pages/accountant/ProfitLoss";
 import AccountantReports from "../pages/accountant/Reports";
 import AccountantStorePerformance from "../pages/accountant/StorePerformance";
+
+// SuperAdmin / Public Register imports
+import SuperAdminLayout from "../layouts/SuperAdminLayout";
+import SuperAdminLogin from "../pages/superadmin/SuperAdminLogin";
+import SuperAdminDashboard from "../pages/superadmin/SuperAdminDashboard";
+import SuperAdminAdmins from "../pages/superadmin/SuperAdminAdmins";
+import AdminRegister from "../pages/auth/AdminRegister";
 
 // Responsive loading spinner component
 const LoadingSpinner = () => (
@@ -72,6 +81,8 @@ const GuestRoute = ({ children }) => {
       return <Navigate to="/admin/dashboard" replace />;
     } else if (user.role === "accountant") {
       return <Navigate to="/accountant/dashboard" replace />;
+    } else if (user.role === "superadmin") {
+      return <Navigate to="/super-admin/dashboard" replace />;
     } else {
       return <Navigate to="/shopkeeper" replace />;
     }
@@ -115,6 +126,25 @@ const AdminRoute = ({ children }) => {
   return children;
 };
 
+// Route specifically for SuperAdmins
+const SuperAdminRoute = ({ children }) => {
+  const { isAuthenticated, user, isLoading } = useAuthStore();
+
+  if (isLoading) {
+    return <LoadingSpinner />;
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/super-admin/login" replace />;
+  }
+
+  if (user && user.role !== "superadmin") {
+    return <Navigate to="/" replace />;
+  }
+
+  return children;
+};
+
 // Route specifically for Home (Redirects admin to dashboard, others to ProfileHome)
 const HomeRoute = () => {
   const { user, isLoading } = useAuthStore();
@@ -125,6 +155,10 @@ const HomeRoute = () => {
 
   if (user && user.role === "admin") {
     return <Navigate to="/admin/dashboard" replace />;
+  }
+
+  if (user && user.role === "superadmin") {
+    return <Navigate to="/super-admin/dashboard" replace />;
   }
 
   if (user && user.role === "accountant") {
@@ -295,6 +329,8 @@ function AppRouter() {
         <Route path="store/:storeId/exchanges" element={<Exchanges />} />
         <Route path="deadstock" element={<StoreRouteRedirect path="deadstock" />} />
         <Route path="store/:storeId/deadstock" element={<Deadstock />} />
+        <Route path="damaged-items" element={<DamagedItems />} />
+        <Route path="store/:storeId/damaged-items" element={<DamagedItems />} />
 
         <Route
           path="lab-orders"
@@ -314,6 +350,7 @@ function AppRouter() {
         <Route path="labs/:id" element={<LabDetailRedirect />} />
         <Route path="store/:storeId/labs/:id" element={<LabDetail />} />
         <Route path="analyses" element={<Analyses />} />
+        <Route path="product-performance" element={<ProductPerformance />} />
         <Route path="warehouse" element={<Warehouse />} />
         <Route path="stores" element={<Stores />} />
         <Route path="stores/:storeId" element={<StoreDetail />} />
@@ -355,13 +392,15 @@ function AppRouter() {
         <Route index element={<Shopkeeper />} />
         <Route path="dashboard" element={<ShopkeeperDashboard />} />
         <Route path="analyses" element={<PermissionRoute permission="reports:read"><Analyses /></PermissionRoute>} />
+        <Route path="product-performance" element={<PermissionRoute permission="reports:read"><ProductPerformance /></PermissionRoute>} />
         <Route path="customers" element={<PermissionRoute permission="customers:read"><AdminCustomers /></PermissionRoute>} />
         <Route path="customers/:customerId" element={<PermissionRoute permission="customers:read"><AdminCustomerDetail /></PermissionRoute>} />
         <Route path="inventory" element={<PermissionRoute permission="inventory:read"><Inventory /></PermissionRoute>} />
         <Route path="inventory/manage/:productId" element={<PermissionRoute permission="inventory:read"><ManageUnits /></PermissionRoute>} />
         <Route path="sales" element={<PermissionRoute permission="sales:read"><Sales /></PermissionRoute>} />
         <Route path="exchanges" element={<PermissionRoute permission="exchanges:read"><Exchanges /></PermissionRoute>} />
-        <Route path="deadstock" element={<PermissionRoute permission="deadstock:read"><Deadstock /></PermissionRoute>} />
+        <Route path="deadstock" element={<PermissionRoute permission={['deadstock:read', 'qc:read']}><Deadstock /></PermissionRoute>} />
+        <Route path="damaged-items" element={<PermissionRoute permission={['qc:read', 'deadstock:read']}><ShopkeeperDamagedItems /></PermissionRoute>} />
 
 
         <Route path="bill-template" element={<PermissionRoute permission="bill_settings:read"><BillTemplate /></PermissionRoute>} />
@@ -394,6 +433,36 @@ function AppRouter() {
         <Route path="profit-loss" element={<AccountantProfitLoss />} />
         <Route path="reports" element={<AccountantReports />} />
         <Route path="store-performance" element={<AccountantStorePerformance />} />
+      </Route>
+
+      {/* Super Admin Routes */}
+      <Route
+        path="/super-admin/login"
+        element={
+          <GuestRoute>
+            <SuperAdminLogin />
+          </GuestRoute>
+        }
+      />
+      <Route
+        path="/register/admin"
+        element={
+          <GuestRoute>
+            <AdminRegister />
+          </GuestRoute>
+        }
+      />
+      <Route
+        path="/super-admin"
+        element={
+          <SuperAdminRoute>
+            <SuperAdminLayout />
+          </SuperAdminRoute>
+        }
+      >
+        <Route index element={<Navigate to="dashboard" replace />} />
+        <Route path="dashboard" element={<SuperAdminDashboard />} />
+        <Route path="admins" element={<SuperAdminAdmins />} />
       </Route>
 
       {/* Fallback root redirect */}

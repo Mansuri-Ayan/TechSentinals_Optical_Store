@@ -139,5 +139,24 @@ export const loyaltyApi = {
   calculateLoyaltyPreview: async (payload) => {
     const res = await api.post(`/shopkeeper/loyalty/calculate-preview`, payload);
     return res.data;
+  },
+
+  sendLoyaltyOtp: async (payload) => {
+    const res = await api.post(`/shopkeeper/loyalty/otp/send`, payload);
+    return res.data;
+  },
+
+  verifyLoyaltyOtp: async (payload) => {
+    const res = await api.post(`/shopkeeper/loyalty/otp/verify`, payload);
+    return res.data;
+  },
+
+  checkLoyaltyOtpStatus: async (payload) => {
+    const res = await api.post(`/shopkeeper/loyalty/otp/status`, payload);
+    return res.data;
   }
 };
+
+export const sendLoyaltyOtp = loyaltyApi.sendLoyaltyOtp;
+export const verifyLoyaltyOtp = loyaltyApi.verifyLoyaltyOtp;
+export const checkLoyaltyOtpStatus = loyaltyApi.checkLoyaltyOtpStatus;

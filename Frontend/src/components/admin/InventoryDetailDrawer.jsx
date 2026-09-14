@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { createPortal as portal } from 'react-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   X, Package, Tag, Truck, BarChart3, DollarSign, Plus,
-  Store, CheckCircle, AlertTriangle, XCircle, Image as ImageIcon, Sliders,
+  Store, CheckCircle, AlertTriangle, AlertCircle, XCircle, Image as ImageIcon, Sliders,
   User, Users, CreditCard, UserCheck, Calendar, IndianRupee, ShoppingCart,
   Receipt, FileText, RefreshCw, Shield, ThumbsUp, ThumbsDown,
   Briefcase, Clock, Phone, Mail, Pencil, Printer, Share2, Eye, Sparkles, Beaker, Search, ChevronRight, ChevronDown, List, Loader2
@@ -14,6 +15,10 @@ import { addSalePaymentApi } from '../../api/customer/customer.api';
 import { toast } from 'react-toastify';
 import { getSaleBillApi, getSaleApi } from '../../api/sales/sales.api';
 import { getInventoryBatchesApi } from '../../api/inventory/inventory.api';
+import { useQCMutations, useItemQCHistory, useItemContactLogs } from '../../hooks/useQC';
+import { useHasPermission } from '../../hooks/usePermissions';
+import DamagedItemResolutionModal from './qc/DamagedItemResolutionModal';
+
 
 const statusConfig = {
   'in_stock': { label: 'In Stock', color: 'text-emerald-700 bg-emerald-50 border-emerald-200', dot: 'bg-emerald-500', icon: CheckCircle },
@@ -24,10 +29,10 @@ const statusConfig = {
 const getStockStatus = (item) => {
   const qty = item.available_quantity ?? item.quantity ?? 0;
   if (qty === 0) return 'out_of_stock';
-  const threshold = (item.reorder_level && item.reorder_level > 0)
-    ? item.reorder_level
-    : 10;
-  if (qty <= threshold) return 'low_stock';
+  const threshold = item.low_stock_threshold !== undefined && item.low_stock_threshold !== null
+    ? Number(item.low_stock_threshold)
+    : (item.reorder_level && Number(item.reorder_level) > 0 ? Number(item.reorder_level) : null);
+  if (threshold !== null && qty <= threshold) return 'low_stock';
   return 'in_stock';
 };
 
@@ -124,18 +129,98 @@ const RejectReasonPrompt = ({ onConfirm, onCancel }) => {
   );
 };
 
+const formatSaleForDrawer = (data, targetType) => {
+  if (!data) return null;
+  let paymentStatus = 'Unpaid';
+  const due = Number(data.due_amount || 0);
+  const paid = Number(data.paid_amount || 0);
+  if (due <= 0) {
+    paymentStatus = 'Paid';
+  } else if (paid > 0) {
+    paymentStatus = 'Partially Paid';
+  }
+
+  const paymentMethod = data.payments && data.payments.length > 0
+    ? data.payments.map(p => p.payment_method).join(' + ')
+    : 'Credit';
+
+  const effectiveType = targetType || (data.lab_status ? 'lab_order' : 'sales');
+  const effectiveStatus = data.status === 'Cancelled' ? 'Cancelled' : (effectiveType === 'lab_order' ? (data.lab_status || data.status) : data.status);
+
+  return {
+    ...data,
+    orderId: data.invoice_number,
+    orderDate: data.sale_date,
+    customerName: data.customer_name,
+    customerPhone: data.customer_phone,
+    customerAddress: data.customer_address,
+    billedOnAccountOf: data.billed_on_account_of,
+    branchName: data.store_name,
+    staffName: data.staff_name,
+    staffCode: data.staff_code,
+    staffRole: data.staff_role,
+    productName: data.product_name,
+    productCategory: data.product_category,
+    productSubcategory: data.product_subcategory,
+    productQuantity: data.product_quantity,
+    productPrice: data.product_price,
+    paymentStatus,
+    paymentMethod,
+    totalAmount: data.total_amount,
+    subtotal: data.subtotal,
+    discountAmount: data.discount_amount,
+    paidAmount: data.paid_amount,
+    dueAmount: data.due_amount,
+    type: effectiveType,
+    status: effectiveStatus,
+    sentDate: data.sent_to_lab_date,
+    expectedDeliveryDate: data.expected_delivery_date,
+    deliveryDate: data.lab_status === 'Delivered' ? data.updated_at : (data.sale_date || null),
+    labName: data.lab_name,
+    labId: data.lab_id,
+    items: data.items || [],
+  };
+};
+
 /* ─────────────────────────────────────────────────────────
    MAIN DRAWER COMPONENT
    Props: item, onClose, onApprove, onReject, isApproving, isRejecting, isLoading, canApprove, canUpdateStatus
 ───────────────────────────────────────────────────────── */
 const InventoryDetailDrawer = ({ item: propItem, onClose, onEdit, onRestockSupplier, onApprove, onReject, isApproving, isRejecting, isLoading, onUpdateStatus, labs = [], canApprove = true, canUpdateStatus = true }) => {
+  const queryClient = useQueryClient();
   const [saleData, setSaleData] = useState(null);
   const [loadingSale, setLoadingSale] = useState(false);
 
-  let item = propItem;
-  if (propItem?.type === 'sales' && saleData) {
-    item = saleData;
-  }
+  const isSaleOrLabOrder = Boolean(
+    propItem && (
+      propItem.type === 'sales' ||
+      propItem.type === 'lab_order' ||
+      propItem.invoice_number ||
+      propItem.lab_status !== undefined
+    )
+  );
+  const saleId = isSaleOrLabOrder ? (propItem.id || propItem.sale_id) : null;
+
+  const {
+    data: liveSaleRaw,
+    refetch: refetchSaleData,
+  } = useQuery({
+    queryKey: ['saleDrawerDetail', saleId],
+    queryFn: () => getSaleApi(saleId),
+    enabled: Boolean(saleId),
+    staleTime: 0,
+  });
+
+  const item = useMemo(() => {
+    if (!propItem) return null;
+    if (isSaleOrLabOrder && liveSaleRaw) {
+      return formatSaleForDrawer(liveSaleRaw, propItem.type);
+    }
+    if (propItem.type === 'sales' && saleData) {
+      return saleData;
+    }
+    return propItem;
+  }, [propItem, liveSaleRaw, saleData, isSaleOrLabOrder]);
 
   const storeId = item?.store_id || item?.storeId;
   const { settings: fetchedSettings } = useBillSettings(storeId);
@@ -167,6 +252,325 @@ const InventoryDetailDrawer = ({ item: propItem, onClose, onEdit, onRestockSuppl
   const [activeTab, setActiveTab] = useState('details');
   const [billHtml, setBillHtml] = useState('');
   const [loadingBill, setLoadingBill] = useState(false);
+
+  // QC Inspection Modal States
+  const [preLabModalItem, setPreLabModalItem] = useState(null);
+  const [postLabModalItem, setPostLabModalItem] = useState(null);
+  const [contactModalItem, setContactModalItem] = useState(null);
+  const [historyModalItemId, setHistoryModalItemId] = useState(null);
+  const [resolveDamageModalItem, setResolveDamageModalItem] = useState(null);
+
+  const [qcNotes, setQcNotes] = useState('');
+  const [qcOutcome, setQcOutcome] = useState('PASSED');
+  const [qcContactChannel, setQcContactChannel] = useState('PHONE');
+  const [qcCustomerChoice, setQcCustomerChoice] = useState('WAIT_FOR_STOCK');
+
+  const { submitPreLabQC, submitPostLabQC, logCustomerContact, isSubmittingPreLab, isSubmittingPostLab, isLoggingContact } = useQCMutations();
+  const { data: itemQCHistory = [] } = useItemQCHistory(historyModalItemId);
+
+  const canPerformQC = useHasPermission('qc:perform');
+  const canReadQC = useHasPermission('qc:read');
+
+  const renderItemQCSection = (subItem, currentLabStatus) => {
+    const activeLabStatus = currentLabStatus || item?.lab_status || item?.status;
+    if (!item?.lab_status && !currentLabStatus && !item?.is_lab_order) {
+      return null;
+    }
+
+    const qcStatus = subItem.qc_status || 'PENDING_QC_PRE_LAB';
+    const resolutionStatus = subItem.resolution_status;
+    const isDirect = subItem.processing_type === 'DIRECT';
+    const isDamagedOrFailed =
+      Boolean(subItem.damage_type) ||
+      qcStatus?.includes('FAILED') ||
+      qcStatus === 'STOCK_DAMAGE' ||
+      qcStatus === 'LAB_DAMAGE';
+
+    // Strict Stage Separation: Is the order currently dispatched, in lab, or past lab?
+    const isOrderInOrPastLab = !isDirect && Boolean(
+      item?.sent_to_lab_date ||
+      item?.sentDate ||
+      item?.lab_status === 'Sent To Lab' ||
+      item?.lab_status === 'In Lab' ||
+      item?.lab_status === 'In Production' ||
+      item?.lab_status === 'Quality Check' ||
+      item?.lab_status === 'Ready For Pickup' ||
+      item?.lab_status === 'Customer Notified' ||
+      item?.lab_status === 'Delivered' ||
+      activeLabStatus === 'Sent To Lab' ||
+      activeLabStatus === 'In Lab' ||
+      activeLabStatus === 'In Production' ||
+      activeLabStatus === 'Quality Check' ||
+      activeLabStatus === 'Ready For Pickup' ||
+      activeLabStatus === 'Customer Notified' ||
+      activeLabStatus === 'Delivered' ||
+      activeLabStatus === 'Lab Pending' ||
+      qcStatus === 'SENT_TO_LAB' ||
+      qcStatus === 'PENDING_QC_POST_LAB' ||
+      qcStatus === 'QC_PASSED_POST_LAB' ||
+      qcStatus === 'QC_FAILED_POST_LAB' ||
+      qcStatus === 'LAB_DAMAGE'
+    );
+
+    // 1. Unified, human-readable status badge
+    let statusBadge = null;
+    if (qcStatus === 'CANCELLED') {
+      statusBadge = (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-500 border border-slate-200 line-through">
+          Cancelled
+        </span>
+      );
+    } else if (isDirect && (qcStatus === 'DELIVERED' || qcStatus === 'QC_PASSED_PRE_LAB')) {
+      statusBadge = (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+          <CheckCircle className="w-3 h-3 text-emerald-600" />
+          Direct QC Passed
+        </span>
+      );
+    } else if (qcStatus === 'QC_PASSED_POST_LAB' || qcStatus === 'DELIVERED') {
+      statusBadge = (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+          <CheckCircle className="w-3 h-3 text-emerald-600" />
+          QC Passed
+        </span>
+      );
+    } else if (isDamagedOrFailed) {
+      const isLab = subItem.damage_type === 'LAB_DAMAGE' || qcStatus === 'LAB_DAMAGE';
+      statusBadge = (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-rose-50 text-rose-700 border border-rose-200">
+          <AlertTriangle className="w-3 h-3 text-rose-600" />
+          {isLab ? 'Lab Damage' : 'Stock Damaged'}
+        </span>
+      );
+    } else if (subItem.rework_count > 0 || subItem.damage_type === 'FITTING_FAILURE') {
+      statusBadge = (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-50 text-purple-700 border border-purple-200">
+          <RefreshCw className="w-3 h-3 text-purple-600" />
+          Rework #{subItem.rework_count || 1}
+        </span>
+      );
+    } else if (isOrderInOrPastLab) {
+      statusBadge = (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
+          <Clock className="w-3 h-3 text-indigo-600" />
+          In Lab
+        </span>
+      );
+    } else if (qcStatus === 'QC_PASSED_PRE_LAB' || resolutionStatus === 'REPLACED_FROM_STOCK') {
+      statusBadge = (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+          <CheckCircle className="w-3 h-3 text-blue-600" />
+          Pre-Lab Passed
+        </span>
+      );
+    } else {
+      statusBadge = (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+          <Clock className="w-3 h-3 text-amber-600" />
+          {isDirect ? 'Pending Quality Check' : 'Pending QC'}
+        </span>
+      );
+    }
+
+    // 2. Resolution Sub-tag (compact, readable)
+    let resSubTag = null;
+    if (resolutionStatus === 'REPLACED_FROM_STOCK') {
+      resSubTag = (
+        <span className="text-[10px] text-emerald-600 font-semibold flex items-center gap-0.5">
+          <CheckCircle className="w-2.5 h-2.5" /> Replaced (Store Stock)
+        </span>
+      );
+    } else if (resolutionStatus === 'TRANSFER_REQUESTED') {
+      resSubTag = (
+        <span className="text-[10px] text-indigo-600 font-semibold flex items-center gap-0.5">
+          <Truck className="w-2.5 h-2.5" /> Transfer Requested
+        </span>
+      );
+    } else if (resolutionStatus === 'CUSTOMER_DECISION_PENDING') {
+      resSubTag = (
+        <span className="text-[10px] text-amber-600 font-semibold flex items-center gap-0.5">
+          <Clock className="w-2.5 h-2.5" /> Awaiting Customer
+        </span>
+      );
+    } else if (resolutionStatus === 'SUPPLIER_CLAIM_PENDING') {
+      resSubTag = (
+        <span className="text-[10px] text-rose-600 font-semibold flex items-center gap-0.5">
+          <Package className="w-2.5 h-2.5" /> Supplier Reorder
+        </span>
+      );
+    } else if (resolutionStatus === 'RESOLVED' && isDamagedOrFailed) {
+      resSubTag = <span className="text-[10px] text-slate-500 font-medium">Resolved</span>;
+    }
+
+    // 3. Stage-aware Primary Action (at most ONE button)
+    let primaryActionButton = null;
+    if (canPerformQC && qcStatus !== 'CANCELLED') {
+      if (isDamagedOrFailed && (resolutionStatus === 'UNRESOLVED' || resolutionStatus === 'CUSTOMER_DECISION_PENDING')) {
+        primaryActionButton = (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setResolveDamageModalItem(subItem); }}
+            className="px-2 py-0.5 bg-amber-500 hover:bg-amber-600 text-white rounded text-[10px] font-bold cursor-pointer transition-all flex items-center gap-1 shadow-xs"
+            title="Resolve Damaged Item"
+          >
+            <RefreshCw className="w-2.5 h-2.5" />
+            Resolve Damage
+          </button>
+        );
+      } else if (isDirect) {
+        // Direct item: only pre-lab quality check applies; once passed or delivered, no further action
+        if (qcStatus !== 'DELIVERED' && qcStatus !== 'QC_PASSED_PRE_LAB' && resolutionStatus !== 'REPLACED_FROM_STOCK') {
+          primaryActionButton = (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setPreLabModalItem(subItem); setQcNotes(''); }}
+              className="px-2 py-0.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-[10px] font-bold cursor-pointer transition-all flex items-center gap-1 shadow-xs"
+              title="Perform Quality Inspection for Direct Item"
+            >
+              <Shield className="w-2.5 h-2.5 text-blue-200" />
+              Quality Check
+            </button>
+          );
+        }
+      } else if (isOrderInOrPastLab) {
+        // Lab/Post-Lab stage for order items
+        if (qcStatus !== 'QC_PASSED_POST_LAB' && qcStatus !== 'DELIVERED') {
+          primaryActionButton = (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setPostLabModalItem(subItem); setQcNotes(''); setQcOutcome('PASSED'); }}
+              className="px-2 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[10px] font-bold cursor-pointer transition-all flex items-center gap-1 shadow-xs"
+              title="Perform Post-Lab Quality Inspection"
+            >
+              <Beaker className="w-2.5 h-2.5" />
+              Post-Lab QC
+            </button>
+          );
+        }
+      } else {
+        // Pre-Lab stage for order items
+        if (qcStatus !== 'QC_PASSED_PRE_LAB' && resolutionStatus !== 'REPLACED_FROM_STOCK') {
+          primaryActionButton = (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setPreLabModalItem(subItem); setQcNotes(''); }}
+              className="px-2 py-0.5 bg-slate-900 hover:bg-slate-800 text-white rounded text-[10px] font-bold cursor-pointer transition-all flex items-center gap-1 shadow-xs"
+              title="Perform Pre-Lab Quality Check"
+            >
+              <Shield className="w-2.5 h-2.5 text-emerald-400" />
+              Pre-Lab QC
+            </button>
+          );
+        }
+      }
+    }
+
+    const procPill = isDirect ? (
+      <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 shrink-0">
+        ⚡ Instant Direct
+      </span>
+    ) : (
+      <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200 shrink-0">
+        📋 Lab Order
+      </span>
+    );
+
+    return (
+      <div className="mt-1.5 pt-1.5 border-t border-slate-100/80 flex flex-wrap items-center gap-1.5 font-sans">
+        {procPill}
+        {statusBadge}
+        {resSubTag}
+        {primaryActionButton}
+        <div className="flex items-center gap-0.5 ml-auto">
+          <button
+            type="button"
+            title="Log Customer Contact"
+            onClick={(e) => { e.stopPropagation(); setContactModalItem(subItem); setQcNotes(''); }}
+            className="p-1 rounded text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer"
+          >
+            <Phone className="w-3 h-3" />
+          </button>
+          {canReadQC && (
+            <button
+              type="button"
+              title="QC Audit History"
+              onClick={(e) => { e.stopPropagation(); setHistoryModalItemId(subItem.id); }}
+              className="p-1 rounded text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors cursor-pointer"
+            >
+              <FileText className="w-3 h-3" />
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const handlePreLabQCSubmit = async (passed) => {
+    if (!preLabModalItem) return;
+    const targetItem = preLabModalItem;
+    try {
+      await submitPreLabQC({
+        saleItemId: targetItem.id,
+        payload: { passed, notes: qcNotes },
+      });
+      setPreLabModalItem(null);
+      setQcNotes('');
+      await refetchSaleData?.();
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['labOrders'] }),
+        queryClient.invalidateQueries({ queryKey: ['sales'] }),
+      ]);
+      if (!passed) {
+        toast.warning('Damaged item flagged. Opening resolution selector...');
+        setResolveDamageModalItem(targetItem);
+      }
+    } catch (err) {}
+  };
+
+  const handlePostLabQCSubmit = async (e) => {
+    e.preventDefault();
+    if (!postLabModalItem) return;
+    const targetItem = postLabModalItem;
+    try {
+      await submitPostLabQC({
+        saleItemId: targetItem.id,
+        payload: { outcome: qcOutcome, notes: qcNotes },
+      });
+      setPostLabModalItem(null);
+      setQcNotes('');
+      await refetchSaleData?.();
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['labOrders'] }),
+        queryClient.invalidateQueries({ queryKey: ['sales'] }),
+      ]);
+      if (qcOutcome === 'LAB_DAMAGE' || qcOutcome === 'STOCK_DAMAGE') {
+        toast.warning('Post-lab damage recorded. Opening resolution selector...');
+        setResolveDamageModalItem(targetItem);
+      } else if (qcOutcome === 'FITTING_FAILURE') {
+        toast.info('Initiated Rework Cycle. Order returned to Sent To Lab.');
+      }
+      setQcOutcome('PASSED');
+    } catch (err) {}
+  };
+
+
+  const handleContactLogSubmit = async (e) => {
+    e.preventDefault();
+    if (!contactModalItem) return;
+    try {
+      await logCustomerContact({
+        saleItemId: contactModalItem.id,
+        payload: {
+          contact_channel: qcContactChannel,
+          summary_notes: qcNotes,
+          customer_choice: qcCustomerChoice,
+        },
+      });
+      setContactModalItem(null);
+      setQcNotes('');
+      await refetchSaleData?.();
+    } catch (err) {}
+  };
 
   useEffect(() => {
     if (item && item.type === 'sales' && activeTab === 'bill') {
@@ -323,6 +727,250 @@ const InventoryDetailDrawer = ({ item: propItem, onClose, onEdit, onRestockSuppl
   // Hook to fetch customer prescription details for sales bills
   const customerIdForPrescription = item?.type === 'sales' ? item.customer_id : null;
   const { customer: customerDetails } = useCustomer(customerIdForPrescription);
+
+  const renderQCModals = () => (
+    <>
+      {/* Pre-Lab QC Inspection Modal */}
+      {preLabModalItem && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-[3000]">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 border border-slate-100 font-sans">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                <Shield className="w-4 h-4 text-emerald-600" /> Pre-Lab Quality Control Inspection
+              </h3>
+              <button onClick={() => setPreLabModalItem(null)} className="text-slate-400 hover:text-slate-600"><X className="w-4 h-4" /></button>
+            </div>
+            <div className="text-xs space-y-1">
+              <p className="font-bold text-slate-900">{preLabModalItem.product_name || 'Optical Line Item'}</p>
+              <p className="text-[10px] text-slate-400 font-mono">Catalog SKU: {preLabModalItem.product_sku || 'N/A'}</p>
+            </div>
+            <div>
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Inspector Notes</label>
+              <textarea
+                rows={3}
+                value={qcNotes}
+                onChange={(e) => setQcNotes(e.target.value)}
+                placeholder="Enter inspection observations or fault description..."
+                className="w-full px-3 py-2 text-xs font-semibold border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 bg-white"
+              />
+            </div>
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                disabled={isSubmittingPreLab}
+                onClick={() => handlePreLabQCSubmit(false)}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-xs shadow-2xs transition-all cursor-pointer"
+              >
+                {isSubmittingPreLab ? 'Failing...' : 'Flag Stock Damage'}
+              </button>
+              <button
+                type="button"
+                disabled={isSubmittingPreLab}
+                onClick={() => handlePreLabQCSubmit(true)}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs shadow-2xs transition-all cursor-pointer"
+              >
+                {isSubmittingPreLab ? 'Passing...' : 'Pass Pre-Lab QC'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Post-Lab QC Evaluation Modal */}
+      {postLabModalItem && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-[3000]">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 border border-slate-100 font-sans">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                <Beaker className="w-4 h-4 text-blue-600" /> Post-Lab Inspection & Rework Evaluation
+              </h3>
+              <button onClick={() => setPostLabModalItem(null)} className="text-slate-400 hover:text-slate-600"><X className="w-4 h-4" /></button>
+            </div>
+            <form onSubmit={handlePostLabQCSubmit} className="space-y-4 text-xs">
+              <div>
+                <p className="font-bold text-slate-900">{postLabModalItem.product_name || 'Optical Item'}</p>
+                {postLabModalItem.rework_count > 0 && (
+                  <span className="inline-block mt-1 px-2 py-0.5 bg-purple-100 text-purple-800 text-[10px] font-black rounded">
+                    Current Rework Cycle #{postLabModalItem.rework_count}
+                  </span>
+                )}
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Inspection Outcome *</label>
+                <select
+                  value={qcOutcome}
+                  onChange={(e) => setQcOutcome(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-white"
+                >
+                  <option value="PASSED">PASSED (Good quality, ready for delivery)</option>
+                  <option value="FITTING_FAILURE">FITTING FAILURE (Wrong fit/rx - send for rework)</option>
+                  <option value="LAB_DAMAGE">LAB DAMAGE (Chipped/damaged by lab)</option>
+                  <option value="STOCK_DAMAGE">STOCK DAMAGE (Defective frame/lens batch)</option>
+                </select>
+              </div>
+
+              {qcOutcome === 'FITTING_FAILURE' && (
+                <div className="p-3 bg-purple-50 border border-purple-200 rounded-xl space-y-1">
+                  <span className="font-extrabold text-purple-900 flex items-center gap-1.5">
+                    <RefreshCw className="w-3.5 h-3.5 text-purple-600" />
+                    Initiating Rework Cycle #{(postLabModalItem.rework_count || 0) + 1}
+                  </span>
+                  <p className="text-[11px] text-purple-700">
+                    Order and line item will return to the lab for reprocessing with your custom instructions below.
+                  </p>
+                </div>
+              )}
+
+              {qcOutcome === 'LAB_DAMAGE' && (
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl space-y-1">
+                  <span className="font-extrabold text-rose-900 flex items-center gap-1.5">
+                    <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
+                    Lab Liability Loss
+                  </span>
+                  <p className="text-[11px] text-rose-700">
+                    Item will be recorded in Damaged Stock & QC Claims for lab liability recovery. Resolution selector will open to replace the item for the customer order.
+                  </p>
+                </div>
+              )}
+
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                  {qcOutcome === 'FITTING_FAILURE' ? 'Lab Rework Instructions *' : 'Inspection Notes'}
+                </label>
+                <textarea
+                  rows={3}
+                  value={qcNotes}
+                  onChange={(e) => setQcNotes(e.target.value)}
+                  placeholder={
+                    qcOutcome === 'FITTING_FAILURE'
+                      ? 'Specify exact fitting / prescription rework instructions for the lab (e.g. Left axis off by 5 degrees)...'
+                      : 'Enter inspection observations or fault description...'
+                  }
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-white"
+                />
+              </div>
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button type="button" onClick={() => setPostLabModalItem(null)} className="px-4 py-2 border border-slate-200 text-slate-600 rounded-xl font-bold hover:bg-slate-50 cursor-pointer">Cancel</button>
+                <button type="submit" disabled={isSubmittingPostLab} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-2xs transition-all cursor-pointer">
+                  {isSubmittingPostLab ? 'Saving...' : qcOutcome === 'FITTING_FAILURE' ? 'Send for Lab Rework' : 'Submit Post-Lab QC'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Customer Contact Log Modal */}
+      {contactModalItem && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-[3000]">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 border border-slate-100 font-sans">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                <Phone className="w-4 h-4 text-emerald-600" /> Log Customer Contact & Decision
+              </h3>
+              <button onClick={() => setContactModalItem(null)} className="text-slate-400 hover:text-slate-600"><X className="w-4 h-4" /></button>
+            </div>
+            <form onSubmit={handleContactLogSubmit} className="space-y-4 text-xs">
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Contact Channel *</label>
+                <select
+                  value={qcContactChannel}
+                  onChange={(e) => setQcContactChannel(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 bg-white"
+                >
+                  <option value="PHONE">Phone Call (Manual)</option>
+                  <option value="WHATSAPP">WhatsApp Message (Manual)</option>
+                  <option value="EMAIL_SYSTEM">System Email Notification</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Customer Choice (Optional)</label>
+                <select
+                  value={qcCustomerChoice}
+                  onChange={(e) => setQcCustomerChoice(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 bg-white"
+                >
+                  <option value="WAIT_FOR_STOCK">Wait for Stock Arrival</option>
+                  <option value="CHOOSE_DIFFERENT_ITEM">Select Different Item</option>
+                  <option value="CANCEL_ITEM">Cancel Item</option>
+                  <option value="REFUND_ITEM">Refund Item</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Conversation Notes *</label>
+                <textarea
+                  rows={3}
+                  value={qcNotes}
+                  onChange={(e) => setQcNotes(e.target.value)}
+                  placeholder="Enter details of conversation with customer..."
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500/20 bg-white"
+                />
+              </div>
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button type="button" onClick={() => setContactModalItem(null)} className="px-4 py-2 border border-slate-200 text-slate-600 rounded-xl font-bold hover:bg-slate-50 cursor-pointer">Cancel</button>
+                <button type="submit" disabled={isLoggingContact} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-2xs transition-all cursor-pointer">
+                  {isLoggingContact ? 'Saving...' : 'Save Customer Log'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* QC Audit History Modal */}
+      {historyModalItemId && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-[3000]">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 border border-slate-100 font-sans">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                <FileText className="w-4 h-4 text-indigo-600" /> QC Inspection Audit Timeline (Item #{historyModalItemId})
+              </h3>
+              <button onClick={() => setHistoryModalItemId(null)} className="text-slate-400 hover:text-slate-600"><X className="w-4 h-4" /></button>
+            </div>
+            <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
+              {itemQCHistory.length === 0 ? (
+                <p className="text-xs text-slate-400 font-semibold py-4 text-center">No inspection history records found for this item.</p>
+              ) : (
+                itemQCHistory.map((h) => (
+                  <div key={h.id} className="p-3 bg-slate-50 rounded-xl border border-slate-100 text-xs space-y-1">
+                    <div className="flex items-center justify-between font-bold text-slate-800">
+                      <span>{h.inspector_name || `Inspector #${h.inspector_id}`} ({h.inspector_type})</span>
+                      <span className="font-mono text-[10px] text-slate-400">{new Date(h.created_at).toLocaleString('en-IN')}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-[11px] font-semibold text-slate-600">
+                      <span className="px-2 py-0.5 bg-slate-200 rounded text-[10px]">{h.previous_status || 'INIT'}</span>
+                      <span>&rarr;</span>
+                      <span className="px-2 py-0.5 bg-rose-100 text-rose-800 rounded font-black text-[10px]">{h.new_status}</span>
+                    </div>
+                    {h.notes && <p className="text-[11px] text-slate-600 italic pt-1">{h.notes}</p>}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Damaged Item Resolution Selector Modal */}
+      {resolveDamageModalItem && (
+        <DamagedItemResolutionModal
+          isOpen={Boolean(resolveDamageModalItem)}
+          onClose={() => setResolveDamageModalItem(null)}
+          saleItemId={resolveDamageModalItem.id}
+          itemDetails={resolveDamageModalItem}
+          onSuccess={async () => {
+            setResolveDamageModalItem(null);
+            await refetchSaleData?.();
+            await Promise.all([
+              queryClient.invalidateQueries({ queryKey: ['labOrders'] }),
+              queryClient.invalidateQueries({ queryKey: ['sales'] }),
+              queryClient.invalidateQueries({ queryKey: ['inventory'] }),
+            ]);
+          }}
+        />
+      )}
+    </>
+  );
 
   if (!item) return null;
 
@@ -557,7 +1205,14 @@ const InventoryDetailDrawer = ({ item: propItem, onClose, onEdit, onRestockSuppl
         setShowPaymentModal(false);
         setReferenceNumber('');
         setPaymentMethod('CASH');
-        onUpdateStatus(item.id, 'Delivered');
+        if (onUpdateStatus) {
+          await onUpdateStatus(item.id, 'Delivered');
+        }
+        await refetchSaleData?.();
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['labOrders'] }),
+          queryClient.invalidateQueries({ queryKey: ['sales'] }),
+        ]);
       } catch (err) {
         console.error(err);
         toast.error(err.response?.data?.detail || 'Failed to record final payment.');
@@ -566,20 +1221,26 @@ const InventoryDetailDrawer = ({ item: propItem, onClose, onEdit, onRestockSuppl
       }
     };
 
-    const handleAdvanceClick = () => {
+    const handleAdvanceClick = async () => {
       if (nextStatus === 'Sent To Lab') {
         if (!selectedLabId) {
           toast.warning('Please select a spectacles processing lab partner.');
           return;
         }
-        onUpdateStatus(item.id, nextStatus, {
-          lab_id: Number(selectedLabId),
-          lab_name: selectedLabName
-        });
+        if (onUpdateStatus) {
+          await onUpdateStatus(item.id, nextStatus, {
+            lab_id: Number(selectedLabId),
+            lab_name: selectedLabName
+          });
+          refetchSaleData?.();
+        }
       } else if (nextStatus === 'Delivered' && Number(item.dueAmount || 0) > 0) {
         setShowPaymentModal(true);
       } else {
-        onUpdateStatus(item.id, nextStatus);
+        if (onUpdateStatus) {
+          await onUpdateStatus(item.id, nextStatus);
+          refetchSaleData?.();
+        }
       }
     };
 
@@ -587,7 +1248,7 @@ const InventoryDetailDrawer = ({ item: propItem, onClose, onEdit, onRestockSuppl
       <>
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[2000] flex justify-end animate-fade-in font-sans">
           <div className="absolute inset-0" onClick={onClose} aria-hidden />
-          <div className="relative w-full sm:max-w-md h-full bg-slate-50 shadow-2xl flex flex-col animate-slide-up">
+          <div className="relative w-full sm:max-w-xl lg:max-w-2xl h-full bg-slate-50 shadow-2xl flex flex-col animate-slide-up">
 
             {/* Header */}
             <div className="flex items-center justify-between px-5 py-4 bg-white border-b border-slate-100 flex-shrink-0">
@@ -670,59 +1331,82 @@ const InventoryDetailDrawer = ({ item: propItem, onClose, onEdit, onRestockSuppl
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50 font-medium text-slate-700">
-                      {item.items && item.items.map((subItem, idx) => {
-                        const discountStr = subItem.discount_percent > 0
-                          ? `${Number(subItem.discount_percent).toLocaleString('en-IN')}%`
-                          : '₹0.00';
-                        const unitDiscount = (Number(subItem.unit_price) * Number(subItem.discount_percent || 0)) / 100;
-                        const finalUnitPrice = Number(subItem.unit_price) - unitDiscount;
+                      {(() => {
+                        const productCounts = {};
+                        item.items?.forEach((si) => {
+                          const pid = si.product_id || si.productId || 'default';
+                          productCounts[pid] = (productCounts[pid] || 0) + 1;
+                        });
+                        const productIndices = {};
 
-                        return (
-                          <tr key={subItem.id || idx} className="hover:bg-slate-50/50 transition-colors align-top">
-                            <td className="py-3 pr-4 font-semibold text-slate-900">
-                              <div>{subItem.product_name || 'Optical Item'}</div>
-                              <div className="text-[10px] text-slate-450 mt-0.5 font-medium">
-                                Brand: {subItem.product_brand || '—'} &middot; Catalog SKU: {subItem.product_sku || '—'}
-                              </div>
-                              {subItem.unit_skus && subItem.unit_skus.length > 0 && (() => {
-                                const rowKey = `lab-${subItem.id || idx}`;
-                                const isExpanded = !!expandedSkus[rowKey];
-                                return (
-                                  <div className="mt-1.5">
-                                    <button
-                                      onClick={() => toggleSkuExpand(rowKey)}
-                                      className="inline-flex items-center gap-1.5 px-2 py-1 text-[9px] font-bold text-indigo-750 bg-indigo-50 border border-indigo-150 hover:bg-indigo-100/70 active:bg-indigo-150 rounded transition-all cursor-pointer shadow-sm select-none"
-                                    >
-                                      <List className="w-2.5 h-2.5" />
-                                      <span>{subItem.unit_skus.length} Unit SKUs</span>
-                                      <ChevronDown className={`w-2.5 h-2.5 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
-                                    </button>
-                                    {isExpanded && (
-                                      <div className="mt-1.5 flex flex-wrap gap-1 max-w-[280px] bg-slate-50 border border-slate-200/60 p-1.5 rounded-lg animate-fade-in">
-                                        {subItem.unit_skus.map((sku) => (
-                                          <span key={sku} className="inline-flex items-center text-[9px] font-mono font-bold text-indigo-700 bg-white border border-indigo-100 px-1.5 py-0.5 rounded shadow-sm">
-                                            {sku}
-                                          </span>
-                                        ))}
-                                      </div>
-                                    )}
-                                  </div>
-                                );
-                              })()}
-                            </td>
-                            <td className="py-3 px-2 text-slate-550">
-                              <div>{subItem.product_category || '—'}</div>
-                              <div className="text-[10px] text-slate-450 mt-0.5">{subItem.product_subcategory || '—'}</div>
-                            </td>
-                            <td className="py-3 px-2 text-center text-slate-900 font-bold">{subItem.quantity}</td>
-                            <td className="py-3 px-2 text-right text-slate-600">{fmtPrice(subItem.unit_cost)}</td>
-                            <td className="py-3 px-2 text-right text-slate-650">{fmtPrice(subItem.unit_price)}</td>
-                            <td className="py-3 px-2 text-right text-red-500 font-bold">{discountStr}</td>
-                            <td className="py-3 px-2 text-right font-bold text-slate-900">{fmtPrice(finalUnitPrice)}</td>
-                            <td className="py-3 pl-4 text-right font-black text-slate-950">{fmtPrice(subItem.line_total)}</td>
-                          </tr>
-                        );
-                      })}
+                        return item.items && item.items.map((subItem, idx) => {
+                          const pid = subItem.product_id || subItem.productId || 'default';
+                          const totalUnits = productCounts[pid] || 1;
+                          productIndices[pid] = (productIndices[pid] || 0) + 1;
+                          const unitIdx = productIndices[pid];
+                          const unitBadge = totalUnits > 1 ? `Unit ${unitIdx} of ${totalUnits}` : null;
+
+                          const discountStr = subItem.discount_percent > 0
+                            ? `${Number(subItem.discount_percent).toLocaleString('en-IN')}%`
+                            : '₹0.00';
+                          const unitDiscount = (Number(subItem.unit_price) * Number(subItem.discount_percent || 0)) / 100;
+                          const finalUnitPrice = Number(subItem.unit_price) - unitDiscount;
+
+                          return (
+                            <tr key={subItem.id || idx} className="hover:bg-slate-50/50 transition-colors align-top">
+                              <td className="py-3 pr-4 font-semibold text-slate-900">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span>{subItem.product_name || 'Optical Item'}</span>
+                                  {unitBadge && (
+                                    <span className="px-1.5 py-0.2 bg-indigo-50 text-indigo-700 border border-indigo-200 text-[9px] font-mono font-bold rounded">
+                                      {unitBadge}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-[10px] text-slate-450 mt-0.5 font-medium">
+                                  Brand: {subItem.product_brand || '—'} &middot; Catalog SKU: {subItem.product_sku || '—'}
+                                </div>
+                                {subItem.unit_skus && subItem.unit_skus.length > 0 && (() => {
+                                  const rowKey = `lab-${subItem.id || idx}`;
+                                  const isExpanded = !!expandedSkus[rowKey];
+                                  return (
+                                    <div className="mt-1.5">
+                                      <button
+                                        onClick={() => toggleSkuExpand(rowKey)}
+                                        className="inline-flex items-center gap-1.5 px-2 py-1 text-[9px] font-bold text-indigo-750 bg-indigo-50 border border-indigo-150 hover:bg-indigo-100/70 active:bg-indigo-150 rounded transition-all cursor-pointer shadow-sm select-none"
+                                      >
+                                        <List className="w-2.5 h-2.5" />
+                                        <span>{subItem.unit_skus.length} Unit SKUs</span>
+                                        <ChevronDown className={`w-2.5 h-2.5 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
+                                      </button>
+                                      {isExpanded && (
+                                        <div className="mt-1.5 flex flex-wrap gap-1 max-w-[280px] bg-slate-50 border border-slate-200/60 p-1.5 rounded-lg animate-fade-in">
+                                          {subItem.unit_skus.map((sku) => (
+                                            <span key={sku} className="inline-flex items-center text-[9px] font-mono font-bold text-indigo-700 bg-white border border-indigo-100 px-1.5 py-0.5 rounded shadow-sm">
+                                              {sku}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })()}
+                                {renderItemQCSection(subItem, item.lab_status || item.status)}
+                              </td>
+                              <td className="py-3 px-2 text-slate-550">
+                                <div>{subItem.product_category || '—'}</div>
+                                <div className="text-[10px] text-slate-450 mt-0.5">{subItem.product_subcategory || '—'}</div>
+                              </td>
+                              <td className="py-3 px-2 text-center text-slate-900 font-bold">{subItem.quantity}</td>
+                              <td className="py-3 px-2 text-right text-slate-600">{fmtPrice(subItem.unit_cost)}</td>
+                              <td className="py-3 px-2 text-right text-slate-650">{fmtPrice(subItem.unit_price)}</td>
+                              <td className="py-3 px-2 text-right text-red-500 font-bold">{discountStr}</td>
+                              <td className="py-3 px-2 text-right font-bold text-slate-900">{fmtPrice(finalUnitPrice)}</td>
+                              <td className="py-3 pl-4 text-right font-black text-slate-950">{fmtPrice(subItem.line_total)}</td>
+                            </tr>
+                          );
+                        });
+                      })()}
                     </tbody>
                   </table>
                 </div>
@@ -853,7 +1537,7 @@ const InventoryDetailDrawer = ({ item: propItem, onClose, onEdit, onRestockSuppl
                     </div>
                   )}
 
-                  {/* Render the next single transition button */}
+                  {/* Render the next single transition button with QC Gatekeeper Guards */}
                   {(() => {
                     const nextStatuses = {
                       'Confirmed': { key: 'Sent To Lab', label: 'Send to Processing Lab', color: 'bg-amber-600 hover:bg-amber-700 text-white shadow-md' },
@@ -864,38 +1548,80 @@ const InventoryDetailDrawer = ({ item: propItem, onClose, onEdit, onRestockSuppl
                     const next = nextStatuses[item.status];
                     if (!next) return null; // No status updates if already Delivered or others
 
+                    const orderItems = item.items || [];
+                    const unpassedPreLabItems = orderItems.filter(
+                      it => it.qc_status !== 'QC_PASSED_PRE_LAB' && it.qc_status !== 'SENT_TO_LAB' && it.qc_status !== 'DELIVERED' && it.qc_status !== 'CANCELLED'
+                    );
+                    const unpassedPostLabItems = orderItems.filter(
+                      it => it.qc_status !== 'QC_PASSED_POST_LAB' && it.qc_status !== 'DELIVERED' && it.qc_status !== 'CANCELLED'
+                    );
+
+                    const isPreLabBlocked = item.status === 'Confirmed' && unpassedPreLabItems.length > 0;
+                    const isDeliveryBlocked = item.status === 'Ready For Pickup' && unpassedPostLabItems.length > 0;
+
                     return (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (next.key === 'Sent To Lab') {
-                            if (!selectedLabId) {
-                              toast.warning('Please select a spectacles processing lab partner.');
-                              return;
-                            }
-                            onUpdateStatus(item.id, 'Sent To Lab', {
-                              lab_id: Number(selectedLabId),
-                              lab_name: selectedLabName,
-                              sent_to_lab_date: new Date().toISOString().split('T')[0],
-                              expected_delivery_date: new Date(Date.now() + 4 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-                            });
-                          } else if (next.key === 'Delivered') {
-                            if (Number(item.dueAmount || 0) > 0) {
-                              setShowPaymentModal(true);
+                      <div className="space-y-2">
+                        {isPreLabBlocked && (
+                          <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 font-semibold flex items-center gap-2">
+                            <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                            <span>Pre-Lab QC Incomplete: {unpassedPreLabItems.length} item(s) must pass inspection before sending to lab.</span>
+                          </div>
+                        )}
+
+                        {isDeliveryBlocked && (
+                          <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-900 font-bold flex items-center gap-2">
+                            <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0" />
+                            <span>Delivery Blocked: {unpassedPostLabItems.length} line item(s) have not passed Post-Lab QC inspection.</span>
+                          </div>
+                        )}
+
+                        <button
+                          type="button"
+                          disabled={isPreLabBlocked || isDeliveryBlocked}
+                          onClick={async () => {
+                            if (next.key === 'Sent To Lab') {
+                              if (!selectedLabId) {
+                                toast.warning('Please select a spectacles processing lab partner.');
+                                return;
+                              }
+                              if (onUpdateStatus) {
+                                await onUpdateStatus(item.id, 'Sent To Lab', {
+                                  lab_id: Number(selectedLabId),
+                                  lab_name: selectedLabName,
+                                  sent_to_lab_date: new Date().toISOString().split('T')[0],
+                                  expected_delivery_date: new Date(Date.now() + 4 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+                                });
+                                refetchSaleData?.();
+                              }
+                            } else if (next.key === 'Delivered') {
+                              if (Number(item.dueAmount || 0) > 0) {
+                                setShowPaymentModal(true);
+                              } else {
+                                if (onUpdateStatus) {
+                                  await onUpdateStatus(item.id, 'Delivered');
+                                  refetchSaleData?.();
+                                }
+                              }
                             } else {
-                              onUpdateStatus(item.id, 'Delivered');
+                              if (onUpdateStatus) {
+                                await onUpdateStatus(item.id, next.key);
+                                refetchSaleData?.();
+                              }
                             }
-                          } else {
-                            onUpdateStatus(item.id, next.key);
-                          }
-                        }}
-                        className={`w-full py-2.5 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5 ${next.color}`}
-                      >
-                        <RefreshCw className="w-3.5 h-3.5 animate-spin-hover" />
-                        {next.label}
-                      </button>
+                          }}
+                          className={`w-full py-2.5 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5 ${
+                            isPreLabBlocked || isDeliveryBlocked
+                              ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
+                              : next.color
+                          }`}
+                        >
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin-hover" />
+                          {next.label}
+                        </button>
+                      </div>
                     );
                   })()}
+
                 </div>
               )}
               <button onClick={onClose}
@@ -1108,6 +1834,7 @@ const InventoryDetailDrawer = ({ item: propItem, onClose, onEdit, onRestockSuppl
             </div>
           </div>
         )}
+        {renderQCModals()}
       </>,
       document.body
     );
@@ -1172,7 +1899,7 @@ const InventoryDetailDrawer = ({ item: propItem, onClose, onEdit, onRestockSuppl
           }
         `}</style>
 
-        <div id="sales-detail-drawer-content" className="relative w-full sm:max-w-md h-full bg-slate-50 shadow-2xl flex flex-col animate-slide-up">
+        <div id="sales-detail-drawer-content" className="relative w-full sm:max-w-xl lg:max-w-2xl h-full bg-slate-50 shadow-2xl flex flex-col animate-slide-up">
 
           {/* Header */}
           <div className="flex items-center justify-between px-5 py-4 bg-white border-b border-slate-100 flex-shrink-0">
@@ -1327,59 +2054,82 @@ const InventoryDetailDrawer = ({ item: propItem, onClose, onEdit, onRestockSuppl
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-50 font-medium text-slate-700">
-                        {item.items && item.items.map((subItem, idx) => {
-                          const discountStr = subItem.discount_percent > 0
-                            ? `${Number(subItem.discount_percent).toLocaleString('en-IN')}%`
-                            : '₹0.00';
-                          const unitDiscount = (Number(subItem.unit_price) * Number(subItem.discount_percent || 0)) / 100;
-                          const finalUnitPrice = Number(subItem.unit_price) - unitDiscount;
+                        {(() => {
+                          const productCounts = {};
+                          item.items?.forEach((si) => {
+                            const pid = si.product_id || si.productId || 'default';
+                            productCounts[pid] = (productCounts[pid] || 0) + 1;
+                          });
+                          const productIndices = {};
 
-                          return (
-                            <tr key={subItem.id || idx} className="hover:bg-slate-50/50 transition-colors align-top">
-                              <td className="py-3 pr-4 font-semibold text-slate-900">
-                                <div>{subItem.product_name || 'Optical Item'}</div>
-                                <div className="text-[10px] text-slate-455 mt-0.5 font-medium">
-                                  Brand: {subItem.product_brand || '—'} &middot; Catalog SKU: {subItem.product_sku || '—'}
-                                </div>
-                                {subItem.unit_skus && subItem.unit_skus.length > 0 && (() => {
-                                  const rowKey = `sale-${subItem.id || idx}`;
-                                  const isExpanded = !!expandedSkus[rowKey];
-                                  return (
-                                    <div className="mt-1.5">
-                                      <button
-                                        onClick={() => toggleSkuExpand(rowKey)}
-                                        className="inline-flex items-center gap-1.5 px-2 py-1 text-[9px] font-bold text-indigo-750 bg-indigo-50 border border-indigo-150 hover:bg-indigo-100/70 active:bg-indigo-150 rounded transition-all cursor-pointer shadow-sm select-none"
-                                      >
-                                        <List className="w-2.5 h-2.5" />
-                                        <span>{subItem.unit_skus.length} Unit SKUs</span>
-                                        <ChevronDown className={`w-2.5 h-2.5 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
-                                      </button>
-                                      {isExpanded && (
-                                        <div className="mt-1.5 flex flex-wrap gap-1 max-w-[280px] bg-slate-50 border border-slate-200/60 p-1.5 rounded-lg animate-fade-in">
-                                          {subItem.unit_skus.map((sku) => (
-                                            <span key={sku} className="inline-flex items-center text-[9px] font-mono font-bold text-indigo-700 bg-white border border-indigo-100 px-1.5 py-0.5 rounded shadow-sm">
-                                              {sku}
-                                            </span>
-                                          ))}
-                                        </div>
-                                      )}
-                                    </div>
-                                  );
-                                })()}
-                              </td>
-                              <td className="py-3 px-2 text-slate-550">
-                                <div>{subItem.product_category || '—'}</div>
-                                <div className="text-[10px] text-slate-455 mt-0.5">{subItem.product_subcategory || '—'}</div>
-                              </td>
-                              <td className="py-3 px-2 text-center text-slate-900 font-bold">{subItem.quantity}</td>
-                              <td className="py-3 px-2 text-right text-slate-600">{fmtPrice(subItem.unit_cost)}</td>
-                              <td className="py-3 px-2 text-right text-slate-650">{fmtPrice(subItem.unit_price)}</td>
-                              <td className="py-3 px-2 text-right text-red-500 font-bold">{discountStr}</td>
-                              <td className="py-3 px-2 text-right font-bold text-slate-900">{fmtPrice(finalUnitPrice)}</td>
-                              <td className="py-3 pl-4 text-right font-black text-slate-950">{fmtPrice(subItem.line_total)}</td>
-                            </tr>
-                          );
-                        })}
+                          return item.items && item.items.map((subItem, idx) => {
+                            const pid = subItem.product_id || subItem.productId || 'default';
+                            const totalUnits = productCounts[pid] || 1;
+                            productIndices[pid] = (productIndices[pid] || 0) + 1;
+                            const unitIdx = productIndices[pid];
+                            const unitBadge = totalUnits > 1 ? `Unit ${unitIdx} of ${totalUnits}` : null;
+
+                            const discountStr = subItem.discount_percent > 0
+                              ? `${Number(subItem.discount_percent).toLocaleString('en-IN')}%`
+                              : '₹0.00';
+                            const unitDiscount = (Number(subItem.unit_price) * Number(subItem.discount_percent || 0)) / 100;
+                            const finalUnitPrice = Number(subItem.unit_price) - unitDiscount;
+
+                            return (
+                              <tr key={subItem.id || idx} className="hover:bg-slate-50/50 transition-colors align-top">
+                                <td className="py-3 pr-4 font-semibold text-slate-900">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span>{subItem.product_name || 'Optical Item'}</span>
+                                    {unitBadge && (
+                                      <span className="px-1.5 py-0.2 bg-indigo-50 text-indigo-700 border border-indigo-200 text-[9px] font-mono font-bold rounded">
+                                        {unitBadge}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="text-[10px] text-slate-455 mt-0.5 font-medium">
+                                    Brand: {subItem.product_brand || '—'} &middot; Catalog SKU: {subItem.product_sku || '—'}
+                                  </div>
+                                  {subItem.unit_skus && subItem.unit_skus.length > 0 && (() => {
+                                    const rowKey = `sale-${subItem.id || idx}`;
+                                    const isExpanded = !!expandedSkus[rowKey];
+                                    return (
+                                      <div className="mt-1.5">
+                                        <button
+                                          onClick={() => toggleSkuExpand(rowKey)}
+                                          className="inline-flex items-center gap-1.5 px-2 py-1 text-[9px] font-bold text-indigo-750 bg-indigo-50 border border-indigo-150 hover:bg-indigo-100/70 active:bg-indigo-150 rounded transition-all cursor-pointer shadow-sm select-none"
+                                        >
+                                          <List className="w-2.5 h-2.5" />
+                                          <span>{subItem.unit_skus.length} Unit SKUs</span>
+                                          <ChevronDown className={`w-2.5 h-2.5 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
+                                        </button>
+                                        {isExpanded && (
+                                          <div className="mt-1.5 flex flex-wrap gap-1 max-w-[280px] bg-slate-50 border border-slate-200/60 p-1.5 rounded-lg animate-fade-in">
+                                            {subItem.unit_skus.map((sku) => (
+                                              <span key={sku} className="inline-flex items-center text-[9px] font-mono font-bold text-indigo-700 bg-white border border-indigo-100 px-1.5 py-0.5 rounded shadow-sm">
+                                                {sku}
+                                              </span>
+                                            ))}
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })()}
+                                  {renderItemQCSection(subItem, item.lab_status || item.status)}
+                                </td>
+                                <td className="py-3 px-2 text-slate-550">
+                                  <div>{subItem.product_category || '—'}</div>
+                                  <div className="text-[10px] text-slate-455 mt-0.5">{subItem.product_subcategory || '—'}</div>
+                                </td>
+                                <td className="py-3 px-2 text-center text-slate-900 font-bold">{subItem.quantity}</td>
+                                <td className="py-3 px-2 text-right text-slate-600">{fmtPrice(subItem.unit_cost)}</td>
+                                <td className="py-3 px-2 text-right text-slate-650">{fmtPrice(subItem.unit_price)}</td>
+                                <td className="py-3 px-2 text-right text-red-500 font-bold">{discountStr}</td>
+                                <td className="py-3 px-2 text-right font-bold text-slate-900">{fmtPrice(finalUnitPrice)}</td>
+                                <td className="py-3 pl-4 text-right font-black text-slate-950">{fmtPrice(subItem.line_total)}</td>
+                              </tr>
+                            );
+                          });
+                        })()}
                       </tbody>
                     </table>
                   </div>
@@ -1659,6 +2409,7 @@ const InventoryDetailDrawer = ({ item: propItem, onClose, onEdit, onRestockSuppl
             )}
           </div>
         </div>
+        {renderQCModals()}
       </div>,
       document.body
     );
@@ -1951,6 +2702,28 @@ const InventoryDetailDrawer = ({ item: propItem, onClose, onEdit, onRestockSuppl
             <DetailRow label="Quantity" value={item.quantity} />
             <DetailRow label="Reorder Level" value={item.reorder_level} />
             <DetailRow label="Status" value={sc.label} />
+            {item.aging_stage && item.aging_stage !== "NORMAL" && (
+              <DetailRow
+                label="Aging Stage"
+                value={
+                  <span
+                    className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                      item.aging_stage === "STAGE_1"
+                        ? "bg-amber-50 text-amber-700 border-amber-200"
+                        : item.aging_stage === "STAGE_2"
+                        ? "bg-orange-50 text-orange-700 border-orange-200"
+                        : item.aging_stage === "STAGE_3"
+                        ? "bg-rose-50 text-rose-700 border-rose-200"
+                        : "bg-slate-100 text-slate-700 border-slate-300"
+                    }`}
+                  >
+                    {item.aging_stage === "DEAD_STOCK"
+                      ? "Dead Stock"
+                      : `${item.aging_stage} (${item.aging_discount_percent ?? 0}% Off)`}
+                  </span>
+                }
+              />
+            )}
           </Section>
 
           <Section icon={Clock} title="Purchase Batches (FIFO)" color="violet">
@@ -1988,6 +2761,30 @@ const InventoryDetailDrawer = ({ item: propItem, onClose, onEdit, onRestockSuppl
                           <span className="text-slate-500 font-medium">Available Qty:</span>
                           <span className="font-semibold text-slate-800">{batch.available_quantity} / {batch.initial_quantity}</span>
                         </div>
+                        {batch.aging_stage && (
+                          <div className="flex justify-between col-span-2 border-t border-slate-100 pt-1.5 mt-0.5">
+                            <span className="text-slate-500 font-medium">Aging Stage:</span>
+                            <span
+                              className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                                batch.aging_stage === "STAGE_1"
+                                  ? "bg-amber-50 text-amber-700 border-amber-200"
+                                  : batch.aging_stage === "STAGE_2"
+                                  ? "bg-orange-50 text-orange-700 border-orange-200"
+                                  : batch.aging_stage === "STAGE_3"
+                                  ? "bg-rose-50 text-rose-700 border-rose-200"
+                                  : batch.aging_stage === "DEAD_STOCK"
+                                  ? "bg-slate-100 text-slate-700 border-slate-300"
+                                  : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                              }`}
+                            >
+                              {batch.aging_stage === "DEAD_STOCK"
+                                ? "Dead Stock"
+                                : batch.aging_stage === "NORMAL"
+                                ? "Normal"
+                                : `${batch.aging_stage} (${batch.aging_discount_percent ?? 0}% Off)`}
+                            </span>
+                          </div>
+                        )}
                         {batch.store_name && (
                           <div className="flex justify-between col-span-2">
                             <span className="text-slate-500 font-medium">Location:</span>
@@ -2006,29 +2803,59 @@ const InventoryDetailDrawer = ({ item: propItem, onClose, onEdit, onRestockSuppl
             )}
           </Section>
 
-          <Section icon={DollarSign} title="Pricing & Warranty Details" color="rose">
-            <DetailRow label="Cost Price" value={item.cost_price ? `₹${Number(item.cost_price).toLocaleString()}` : null} />
-            <DetailRow label="Selling Price" value={item.selling_price ? `₹${Number(item.selling_price).toLocaleString()}` : null} />
-            {item.discount_percent !== undefined && Number(item.discount_percent) > 0 && (
-              <>
-                <DetailRow label="Default Discount" value={`${item.discount_percent}%`} />
-                <DetailRow
-                  label="Effective Price"
-                  value={
-                    <span className="font-bold text-emerald-700">
-                      {item.selling_price
-                        ? `₹${(Number(item.selling_price) * (1 - Number(item.discount_percent) / 100)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                        : '—'}
-                    </span>
-                  }
-                />
-              </>
-            )}
-            {item.warranty_months !== undefined && Number(item.warranty_months) > 0 && (
-              <DetailRow label="Warranty Duration" value={`${item.warranty_months} Months`} />
-            )}
-            {profit !== null && <DetailRow label="Gross Profit" value={`₹${Number(profit).toLocaleString()}`} />}
-            {margin !== null && <DetailRow label="Margin" value={`${margin}%`} />}
+          <Section icon={DollarSign} title="Pricing & GST Details" color="rose">
+            {(() => {
+              const cp = item.cost_price ? Number(item.cost_price) : 0;
+              const spBeforeGst = Number(item.selling_price_before_gst ?? item.selling_price) || 0;
+              const rate = item.gst_percent !== undefined && item.gst_percent !== null ? Number(item.gst_percent) : 18;
+              const gstAmt = (item.gst_amount !== undefined && item.gst_amount !== null && (rate === 0 || Number(item.gst_amount) > 0))
+                ? Number(item.gst_amount)
+                : (spBeforeGst * rate / 100);
+              const spWithGst = (item.selling_price_with_gst !== undefined && item.selling_price_with_gst !== null && (rate === 0 || Number(item.selling_price_with_gst) > spBeforeGst))
+                ? Number(item.selling_price_with_gst)
+                : (spBeforeGst + gstAmt);
+              const grossProfit = spBeforeGst > 0 && cp > 0 ? (spBeforeGst - cp) : null;
+              const grossMargin = spBeforeGst > 0 && cp > 0 ? (((spBeforeGst - cp) / spBeforeGst) * 100).toFixed(1) : null;
+
+              return (
+                <>
+                  <DetailRow label="Unit Cost Price" value={cp > 0 ? `₹${cp.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'} />
+                  <DetailRow label="Unit Selling Price (Before GST)" value={`₹${spBeforeGst.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} />
+                  <DetailRow label="GST Rate (%)" value={`${rate}%`} />
+                  <DetailRow label="GST Amount" value={`+ ₹${gstAmt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} />
+                  <DetailRow
+                    label="Unit Selling Price (Incl. GST)"
+                    value={
+                      <span className="font-black text-emerald-700">
+                        ₹{spWithGst.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    }
+                  />
+                  {item.discount_percent !== undefined && Number(item.discount_percent) > 0 && (
+                    <>
+                      <DetailRow label="Default Discount" value={`${item.discount_percent}%`} />
+                      <DetailRow
+                        label="Effective Price (Incl. GST & Disc)"
+                        value={
+                          <span className="font-bold text-emerald-700">
+                            ₹{(spWithGst * (1 - Number(item.discount_percent) / 100)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </span>
+                        }
+                      />
+                    </>
+                  )}
+                  {item.warranty_months !== undefined && Number(item.warranty_months) > 0 && (
+                    <DetailRow label="Warranty Duration" value={`${item.warranty_months} Months`} />
+                  )}
+                  {grossProfit !== null && (
+                    <DetailRow label="Gross Profit (Before Tax)" value={`₹${grossProfit.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} />
+                  )}
+                  {grossMargin !== null && (
+                    <DetailRow label="Gross Margin" value={`${grossMargin}%`} />
+                  )}
+                </>
+              );
+            })()}
           </Section>
 
           {item.store && (
@@ -2072,6 +2899,7 @@ const InventoryDetailDrawer = ({ item: propItem, onClose, onEdit, onRestockSuppl
           )}
         </div>
       </div>
+      {renderQCModals()}
     </div>,
     document.body
   );

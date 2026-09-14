@@ -16,12 +16,17 @@ class CategoryCreate(BaseModel):
     store_id: int | None = Field(
         default=None, description="Optional store ID to scope this category"
     )
+    sales_workflow_type: str = Field(
+        default="BOTH",
+        description="Default workflow type: DIRECT_ONLY, ORDER_ONLY, or BOTH"
+    )
 
 
 class CategoryUpdate(BaseModel):
     name: str | None = Field(default=None, max_length=255)
     description: str | None = Field(default=None)
     is_active: bool | None = Field(default=None)
+    sales_workflow_type: str | None = Field(default=None)
 
 
 class CategoryRead(BaseModel):
@@ -31,6 +36,7 @@ class CategoryRead(BaseModel):
     name: str
     description: str | None = None
     is_active: bool
+    sales_workflow_type: str = "BOTH"
     created_at: datetime
     updated_at: datetime
     subcategories_count: int = 0
@@ -49,6 +55,9 @@ class SubcategoryCreate(BaseModel):
         default=None, examples=["Complete rim around the lenses"],
         description="Optional description",
     )
+    store_id: int | None = Field(
+        default=None, description="Optional store ID to scope this subcategory"
+    )
 
 
 class SubcategoryUpdate(BaseModel):
@@ -60,6 +69,7 @@ class SubcategoryUpdate(BaseModel):
 class SubcategoryRead(BaseModel):
     id: int
     category_id: int
+    store_id: int | None = None
     name: str
     description: str | None = None
     is_active: bool

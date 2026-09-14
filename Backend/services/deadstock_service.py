@@ -427,3 +427,64 @@ async def cancel_deadstock_for_exchange(
                 unit.sold_at = sa_func.now()
         await db.delete(item)
     await db.flush()
+
+
+async def restock_returned_unit(
+    db: AsyncSession,
+    original_item: SaleItem,
+    exchange_qty: int,
+    admin_id: int,
+    store_id: int,
+) -> None:
+    """
+    Restore returned unit(s) directly to available inventory (restocked)
+    instead of creating deadstock items, because the batch is not expired.
+    """
+    from models.product_unit import ProductUnit, UnitStatus
+    from models.inventory import Inventory
+    from models.inventory_transaction import InventoryTransaction, TransactionType, TransactionStatus
+
+    # 1. Fetch physical units linked to the original sale item
+    res_units = await db.execute(
+        select(ProductUnit)
+        .where(ProductUnit.sale_item_id == original_item.id)
+        .limit(exchange_qty)
+    )
+    product_units = list(res_units.scalars().all())
+
+    # 2. Fetch the original inventory batch
+    batch = await db.scalar(
+        select(Inventory).where(Inventory.id == original_item.inventory_id)
+    )
+
+    if batch:
+        # Increment quantity
+        batch.quantity += exchange_qty
+        batch.available_quantity += exchange_qty
+        db.add(batch)
+
+        # Create InventoryTransaction(EXCHANGE_IN) for audit trail
+        tx = InventoryTransaction(
+            inventory_id=batch.id,
+            product_id=batch.product_id,
+            owner_type=batch.owner_type,
+            owner_id=batch.owner_id,
+            transaction_type=TransactionType.EXCHANGE_IN,
+            quantity=exchange_qty,
+            unit_price=batch.purchase_cost,
+            total_amount=batch.purchase_cost * exchange_qty,
+            status=TransactionStatus.COMPLETED,
+            remarks=f"Direct restock from exchange of original sale item {original_item.id}",
+        )
+        db.add(tx)
+
+    # 3. Release and restore units
+    for i in range(exchange_qty):
+        if i < len(product_units):
+            unit = product_units[i]
+            unit.status = UnitStatus.AVAILABLE
+            unit.sale_item_id = None
+            unit.sold_at = None
+            db.add(unit)
+
+    await db.flush()

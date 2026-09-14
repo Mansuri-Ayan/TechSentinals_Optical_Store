@@ -78,9 +78,34 @@ async def get_category_endpoint(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Category not found",
         )
+    
+    from sqlalchemy import select, func, or_, and_
+    from models.subcategory import Subcategory
+    from models.store_subcategory_override import StoreSubcategoryOverride
+    
+    sub_stmt = select(func.count(Subcategory.id)).where(
+        Subcategory.category_id == category_id
+    )
+    if not isinstance(current_user, Admin):
+        sub_stmt = sub_stmt.outerjoin(
+            StoreSubcategoryOverride,
+            and_(
+                StoreSubcategoryOverride.subcategory_id == Subcategory.id,
+                StoreSubcategoryOverride.store_id == current_user.store_id
+            )
+        ).where(
+            or_(Subcategory.store_id == current_user.store_id, Subcategory.store_id.is_(None)),
+            func.coalesce(StoreSubcategoryOverride.is_active, Subcategory.is_active).is_(True)
+        )
+    else:
+        sub_stmt = sub_stmt.where(
+            Subcategory.is_active.is_(True)
+        )
+    subcategories_count = (await db.execute(sub_stmt)).scalar() or 0
+
     return CategoryRead(
         **{c.key: getattr(category, c.key) for c in category.__table__.columns},
-        subcategories_count=len(category.subcategories) if category.subcategories else 0,
+        subcategories_count=subcategories_count,
     )
 
 @shopkeeper_category_router.post(
@@ -222,6 +247,8 @@ async def create_subcategory_endpoint(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Category not found",
         )
+    if not isinstance(current_user, Admin):
+        payload.store_id = current_user.store_id
     subcategory = await create_subcategory(db, category_id=category_id, payload=payload)
     return SubcategoryRead.model_validate(subcategory)
 

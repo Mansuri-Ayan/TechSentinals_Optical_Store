@@ -6,9 +6,65 @@ from core.rate_limit import limiter
 from db.session import get_db
 from schemas.token import TokenPair
 from schemas.user import UserLogin
-from services.auth_service import authenticate_user_by_role, create_tokens
+from services.auth_service import authenticate_user, authenticate_user_by_role, create_tokens
 
 router = APIRouter()
+
+
+@router.post(
+    "/login",
+    response_model=TokenPair,
+    summary="Universal staff login",
+    description="Authenticate staff credentials across all roles.",
+)
+@limiter.limit("10/minute")
+async def login_universal(
+    request: Request,
+    credentials: UserLogin,
+    response: Response,
+    db: AsyncSession = Depends(get_db),
+) -> TokenPair:
+    role_to_check = credentials.role.lower().strip() if credentials.role else None
+    if role_to_check:
+        res = await authenticate_user_by_role(db, credentials.email, credentials.password, role_to_check)
+    else:
+        res = await authenticate_user(db, credentials.email, credentials.password)
+
+    if res is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    user, role_name = res
+    token_pair = await create_tokens(db, user, role_name)
+
+    # ── Set cookies ────────────────────────────────────────────
+    settings = get_settings()
+    response.set_cookie(
+        key="access_token",
+        value=token_pair.access_token,
+        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        httponly=settings.COOKIE_HTTPONLY,
+        secure=settings.COOKIE_SECURE,
+        samesite=settings.COOKIE_SAMESITE,
+        domain=settings.COOKIE_DOMAIN,
+        path="/",
+    )
+    response.set_cookie(
+        key="refresh_token",
+        value=token_pair.refresh_token,
+        max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 86400,
+        httponly=settings.COOKIE_HTTPONLY,
+        secure=settings.COOKIE_SECURE,
+        samesite=settings.COOKIE_SAMESITE,
+        domain=settings.COOKIE_DOMAIN,
+        path="/auth",
+    )
+
+    return token_pair
+
 
 
 @router.post(

@@ -3,6 +3,7 @@ from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from sqlalchemy import select, func, desc, and_, Date
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 from models.sale import Sale, StaffType, SaleStatus
 from models.sale_item import SaleItem
 from models.customer import Customer
@@ -130,12 +131,13 @@ async def get_store_report(
         Product.name.label("product_name"),
         Product.sku.label("sku"),
         Inventory.quantity.label("current_quantity"),
-        Inventory.reorder_level.label("reorder_level")
+        Product.low_stock_threshold.label("reorder_level")
     ).join(Product, Product.id == Inventory.product_id) \
      .where(
          Inventory.owner_type == "STORE",
          Inventory.owner_id == store_id,
-         Inventory.quantity <= Inventory.reorder_level
+         Product.low_stock_threshold.is_not(None),
+         Inventory.quantity <= Product.low_stock_threshold
      )
     
     reorder_res = await db.execute(reorder_stmt)
@@ -525,7 +527,7 @@ async def get_dashboard_report(
         cust_count = (await db.execute(select(func.count(Customer.id)).where(Customer.admin_id == admin_id))).scalar() or 0
 
     # Inventory metrics
-    inv_stmt = select(Inventory.quantity, Inventory.reorder_level, Product.cost_price).join(Product, Product.id == Inventory.product_id).where(Product.admin_id == admin_id)
+    inv_stmt = select(Inventory.quantity, Product.low_stock_threshold, Product.cost_price).join(Product, Product.id == Inventory.product_id).where(Product.admin_id == admin_id)
     if store_id:
         inv_stmt = inv_stmt.where(Inventory.owner_type == "STORE", Inventory.owner_id == store_id)
 
@@ -535,11 +537,11 @@ async def get_dashboard_report(
     in_stock_count = 0
     out_of_stock_count = 0
 
-    for qty, reorder, cost in inv_rows:
+    for qty, threshold, cost in inv_rows:
         inventory_val += (qty or 0) * (cost or Decimal("0.00"))
         if qty <= 0:
             out_of_stock_count += 1
-        elif qty <= reorder:
+        elif threshold is not None and qty <= threshold:
             low_stock_count += 1
         else:
             in_stock_count += 1
@@ -807,7 +809,7 @@ async def get_analyses_report(
     stores_count = (await db.execute(select(func.count(Store.id)).where(Store.admin_id == admin_id, Store.is_active.is_(True)))).scalar() or 0
 
     # Inventory valuation
-    inv_stmt = select(Inventory.quantity, Inventory.reorder_level, Product.cost_price).join(Product, Product.id == Inventory.product_id).where(Product.admin_id == admin_id)
+    inv_stmt = select(Inventory.quantity, Product.low_stock_threshold, Product.cost_price).join(Product, Product.id == Inventory.product_id).where(Product.admin_id == admin_id)
     if store_id:
         inv_stmt = inv_stmt.where(Inventory.owner_type == "STORE", Inventory.owner_id == store_id)
 
@@ -817,11 +819,11 @@ async def get_analyses_report(
     in_stock_count = 0
     out_of_stock_count = 0
 
-    for qty, reorder, cost in inv_rows:
+    for qty, threshold, cost in inv_rows:
         inventory_val += (qty or 0) * (cost or Decimal("0.00"))
         if qty <= 0:
             out_of_stock_count += 1
-        elif qty <= reorder:
+        elif threshold is not None and qty <= threshold:
             low_stock_count += 1
         else:
             in_stock_count += 1
@@ -1037,4 +1039,302 @@ async def get_analyses_report(
         brand_revenue_comparison=brand_revenue_comparison,
         monthly_customer_growth=monthly_customer_growth
     )
+
+
+async def get_product_performance_report(
+    db: AsyncSession,
+    admin_id: int,
+    current_user_store_id: int | None = None,
+    search: str | None = None,
+    category_id: int | None = None,
+    brand_id: int | None = None,
+    filter_store_id: int | None = None,
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
+    sort_by: str | None = None,
+    page: int = 1,
+    limit: int = 10,
+) -> tuple[list[dict], int, dict]:
+    """
+    Computes cross-store product sales performance, stock levels, demand insights,
+    financial margins, velocity badges, and stock reallocation transfer recommendations.
+    """
+    from models.frame_product import FrameProduct
+    from models.lens_product import LensProduct
+    from models.sale import Sale, SaleStatus
+    from models.sale_item import SaleItem
+    from models.inventory import Inventory
+    from models.product import Product
+    from models.store import Store
+    from decimal import Decimal
+
+    # 1. Base query for active products of this admin
+    stmt = select(Product).options(
+        selectinload(Product.category),
+        selectinload(Product.brand),
+        selectinload(Product.frame_product),
+        selectinload(Product.lens_product),
+    ).where(Product.admin_id == admin_id, Product.is_active.is_(True))
+
+    if search:
+        search_str = f"%{search.strip()}%"
+        stmt = stmt.where(Product.name.ilike(search_str) | Product.sku.ilike(search_str))
+    if category_id:
+        stmt = stmt.where(Product.category_id == category_id)
+    if brand_id:
+        stmt = stmt.where(Product.brand_id == brand_id)
+        
+    all_matching_products = (await db.execute(stmt)).scalars().all()
+    total = len(all_matching_products)
+
+    # 2. Get all active stores
+    store_stmt = select(Store).where(Store.admin_id == admin_id, Store.deleted_at.is_(None))
+    if filter_store_id:
+        store_stmt = store_stmt.where(Store.id == filter_store_id)
+    stores = (await db.execute(store_stmt)).scalars().all()
+
+    # 3. For each product, aggregate cross-store data
+    raw_results = []
+    total_revenue_accum = Decimal("0.00")
+    total_units_accum = 0
+    reallocation_count_accum = 0
+    slow_moving_count_accum = 0
+
+    for prod in all_matching_products:
+        # Query sales per store for this product with optional date range
+        sales_q = (
+            select(
+                Sale.store_id,
+                func.sum(SaleItem.quantity).label("units_sold"),
+                func.sum(SaleItem.line_total).label("sales_rev")
+            )
+            .join(SaleItem, SaleItem.sale_id == Sale.id)
+            .where(
+                SaleItem.product_id == prod.id,
+                Sale.admin_id == admin_id,
+                Sale.status != SaleStatus.CANCELLED
+            )
+        )
+        if filter_store_id:
+            sales_q = sales_q.where(Sale.store_id == filter_store_id)
+        if date_from:
+            sales_q = sales_q.where(Sale.created_at >= date_from)
+        if date_to:
+            sales_q = sales_q.where(Sale.created_at <= date_to)
+
+        sales_q = sales_q.group_by(Sale.store_id)
+        sales_res = (await db.execute(sales_q)).all()
+        sales_map = {r.store_id: (r.units_sold or 0, r.sales_rev or Decimal("0.00")) for r in sales_res}
+
+        # Query stock level per store from inventories
+        stock_q = (
+            select(Inventory.owner_id, func.sum(Inventory.quantity).label("total_qty"))
+            .where(
+                Inventory.product_id == prod.id,
+                Inventory.owner_type == "STORE",
+                Inventory.owner_id.in_([s.id for s in stores]) if stores else False
+            )
+            .group_by(Inventory.owner_id)
+        )
+        stock_res = (await db.execute(stock_q)).all()
+        stock_map = {r.owner_id: r.total_qty or 0 for r in stock_res}
+
+        # Query Admin Central Warehouse stock
+        admin_stock_q = select(func.sum(Inventory.quantity)).where(
+            Inventory.product_id == prod.id,
+            Inventory.owner_type == "ADMIN",
+            Inventory.owner_id == admin_id
+        )
+        admin_stock = (await db.execute(admin_stock_q)).scalar() or 0
+
+        # Compile metrics for stores
+        store_metrics = []
+        prod_units_sold = 0
+        prod_revenue = Decimal("0.00")
+        prod_stock_level = admin_stock
+
+        for store in stores:
+            sold_qty, rev = sales_map.get(store.id, (0, Decimal("0.00")))
+            stock_qty = stock_map.get(store.id, 0)
+            prod_units_sold += sold_qty
+            prod_revenue += rev
+            prod_stock_level += stock_qty
+
+            store_metrics.append({
+                "store_id": store.id,
+                "store_name": store.store_name,
+                "sales_count": sold_qty,
+                "revenue": rev,
+                "stock_level": stock_qty
+            })
+
+        # Calculate unit margin and total financial stats
+        unit_cost = prod.cost_price or Decimal("0.00")
+        unit_price = prod.selling_price or Decimal("0.00")
+        unit_margin = unit_price - unit_cost
+        margin_pct = (unit_margin / unit_price * Decimal("100")).quantize(Decimal("0.01")) if unit_price > 0 else Decimal("0.00")
+        prod_profit = prod_units_sold * unit_margin
+
+        total_revenue_accum += prod_revenue
+        total_units_accum += prod_units_sold
+
+        # Velocity status classification
+        if prod_stock_level <= 0 and prod_units_sold > 0:
+            velocity_status = "OUT_OF_STOCK"
+        elif prod_units_sold >= 10:
+            velocity_status = "FAST_MOVER"
+        elif prod_units_sold >= 3:
+            velocity_status = "STEADY"
+        elif prod_units_sold > 0:
+            velocity_status = "SLOW_MOVER"
+            slow_moving_count_accum += 1
+        else:
+            velocity_status = "DEAD_STOCK"
+            slow_moving_count_accum += 1
+
+        # Insights and reallocation opportunities
+        insights = []
+        transfer_recs = []
+
+        # Check Admin HQ Warehouse allocation recommendation first
+        if admin_stock >= 2:
+            for m in store_metrics:
+                if m["sales_count"] >= 3 and m["stock_level"] <= 1:
+                    transfer_recs.append({
+                        "source_store_id": admin_id,
+                        "source_store_name": "Admin Central Warehouse (HQ)",
+                        "target_store_id": m["store_id"],
+                        "target_store_name": m["store_name"],
+                        "recommended_qty": min(admin_stock, 5),
+                        "reason": f"Dispatch from HQ: {m['store_name']} has high demand ({m['sales_count']} sold) but low store stock ({m['stock_level']} units)."
+                    })
+                    break
+        
+        other_metrics = [m for m in store_metrics if m["store_id"] != current_user_store_id] if current_user_store_id else store_metrics
+        my_metric = next((m for m in store_metrics if m["store_id"] == current_user_store_id), None) if current_user_store_id else None
+
+        if other_metrics:
+            top_other = max(other_metrics, key=lambda x: x["sales_count"])
+            lowest_other = min(other_metrics, key=lambda x: x["sales_count"])
+            
+            if my_metric:
+                if top_other["sales_count"] >= 5 and my_metric["sales_count"] <= 1:
+                    insights.append(
+                        f"High local demand in {top_other['store_name']} ({top_other['sales_count']} units sold) "
+                        f"compared to your store ({my_metric['sales_count']} units sold)."
+                    )
+                    if my_metric["stock_level"] <= 2 and top_other["stock_level"] >= 4:
+                        rec_qty = min(top_other["stock_level"] - 2, 5)
+                        if rec_qty > 0:
+                            transfer_recs.append({
+                                "source_store_id": top_other["store_id"],
+                                "source_store_name": top_other["store_name"],
+                                "target_store_id": current_user_store_id,
+                                "target_store_name": my_metric["store_name"],
+                                "recommended_qty": rec_qty,
+                                "reason": f"Request stock pull: {top_other['store_name']} has excess inventory ({top_other['stock_level']} units) with high sales volume."
+                            })
+                
+                if my_metric["sales_count"] >= 4 and my_metric["stock_level"] <= 1:
+                    for om in other_metrics:
+                        if om["stock_level"] >= 3 and om["sales_count"] <= 1:
+                            transfer_recs.append({
+                                "source_store_id": om["store_id"],
+                                "source_store_name": om["store_name"],
+                                "target_store_id": current_user_store_id,
+                                "target_store_name": my_metric["store_name"],
+                                "recommended_qty": min(om["stock_level"] - 1, 5),
+                                "reason": f"Pull stock: Your store has high demand; {om['store_name']} has slow-moving stock ({om['stock_level']} units)."
+                            })
+                            break
+            else:
+                if top_other["sales_count"] >= 5 and lowest_other["sales_count"] <= 1:
+                    insights.append(
+                        f"Sales disparity: Strong performance in {top_other['store_name']} ({top_other['sales_count']} sold) "
+                        f"versus slow performance in {lowest_other['store_name']} ({lowest_other['sales_count']} sold)."
+                    )
+                    if lowest_other["stock_level"] >= 4 and top_other["stock_level"] <= 2:
+                        rec_qty = min(lowest_other["stock_level"] - 2, 5)
+                        if rec_qty > 0:
+                            transfer_recs.append({
+                                "source_store_id": lowest_other["store_id"],
+                                "source_store_name": lowest_other["store_name"],
+                                "target_store_id": top_other["store_id"],
+                                "target_store_name": top_other["store_name"],
+                                "recommended_qty": rec_qty,
+                                "reason": f"Reallocate stock: Move {rec_qty} units from slow-selling {lowest_other['store_name']} to high-demand {top_other['store_name']}."
+                            })
+
+        if transfer_recs:
+            reallocation_count_accum += len(transfer_recs)
+
+        if prod.frame_product:
+            fp = prod.frame_product
+            features = []
+            if fp.shape: features.append(f"shape '{fp.shape}'")
+            if fp.material: features.append(f"material '{fp.material}'")
+            if fp.color: features.append(f"color '{fp.color}'")
+            if features:
+                insights.append(f"Attributes ({' & '.join(features[:2])}) correlate with regional style preferences.")
+
+        elif prod.lens_product:
+            lp = prod.lens_product
+            features = []
+            if lp.lens_type: features.append(f"type '{lp.lens_type}'")
+            if lp.coating: features.append(f"coating '{lp.coating}'")
+            if features:
+                insights.append(f"Functional features ({' & '.join(features[:2])}) drive premium sales.")
+
+        if not insights:
+            insights.append("Consistent performance across stores within normal bounds.")
+
+        raw_results.append({
+            "product_id": prod.id,
+            "product_name": prod.name,
+            "sku": prod.sku,
+            "category_name": prod.category.name if prod.category else "Other",
+            "brand_name": prod.brand.name if prod.brand else None,
+            "cost_price": unit_cost,
+            "selling_price": unit_price,
+            "unit_margin": unit_margin,
+            "margin_percent": margin_pct,
+            "total_units_sold": prod_units_sold,
+            "total_revenue": prod_revenue,
+            "total_profit": prod_profit,
+            "total_stock_level": prod_stock_level,
+            "velocity_status": velocity_status,
+            "store_metrics": store_metrics,
+            "insights": insights,
+            "transfer_recommendations": transfer_recs
+        })
+
+    # 4. Sorting
+    if sort_by == "revenue_desc" or not sort_by:
+        raw_results.sort(key=lambda x: (x["total_revenue"], x["total_units_sold"]), reverse=True)
+    elif sort_by == "sales_desc":
+        raw_results.sort(key=lambda x: (x["total_units_sold"], x["total_revenue"]), reverse=True)
+    elif sort_by == "sales_asc":
+        raw_results.sort(key=lambda x: (x["total_units_sold"], x["total_revenue"]))
+    elif sort_by == "margin_desc":
+        raw_results.sort(key=lambda x: (x["margin_percent"], x["total_revenue"]), reverse=True)
+    elif sort_by == "stock_desc":
+        raw_results.sort(key=lambda x: (x["total_stock_level"], x["total_revenue"]), reverse=True)
+
+    # Top performing product
+    top_prod = max(raw_results, key=lambda x: x["total_revenue"]) if raw_results else None
+    summary_kpis = {
+        "total_revenue": total_revenue_accum,
+        "total_units_sold": total_units_accum,
+        "top_product_name": top_prod["product_name"] if top_prod and top_prod["total_revenue"] > 0 else None,
+        "top_product_revenue": top_prod["total_revenue"] if top_prod else Decimal("0.00"),
+        "reallocation_opportunities_count": reallocation_count_accum,
+        "slow_moving_count": slow_moving_count_accum,
+    }
+
+    # Paginate results
+    offset = (page - 1) * limit
+    paginated = raw_results[offset:offset + limit]
+
+    return paginated, total, summary_kpis
+
 

@@ -80,7 +80,7 @@ export const useLabOrders = (filters = {}) => {
       return data;
     },
     placeholderData: (prev) => prev,
-    staleTime: 1000 * 60 * 2, // 2 minutes
+    staleTime: 0,
     retry: false,
   });
 

@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { getAnalysesReportApi } from '../api/report/report.api';
+import { getAnalysesReportApi, getProductPerformanceReportApi } from '../api/report/report.api';
 
 export const analysesQueryKey = ['analyses'];
 
@@ -25,3 +25,17 @@ export const useAnalyses = (storeId = null, dateRange = null) => {
     placeholderData: (prev) => prev,
   });
 };
+
+/**
+ * Hook to fetch product performance report.
+ */
+export const useProductPerformanceReport = (filters = {}) => {
+  return useQuery({
+    queryKey: ['product-performance', filters],
+    queryFn: () => getProductPerformanceReportApi(filters),
+    staleTime: 1000 * 60 * 2, // 2 minutes
+    retry: false,
+    placeholderData: (prev) => prev,
+  });
+};
+

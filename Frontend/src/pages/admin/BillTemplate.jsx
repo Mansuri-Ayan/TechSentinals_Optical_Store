@@ -4,7 +4,7 @@ import { useAuthStore } from '../../store/store';
 import { useBillSettings } from '../../hooks/useBillSettings';
 import { defaultSettings } from '../../utils/billSettings';
 import {
-  Sparkles, FileText, CheckCircle, RefreshCw, Upload, Eye, ShoppingCart, User, CreditCard
+  Sparkles, FileText, CheckCircle, RefreshCw, Upload, Eye, ShoppingCart, User, CreditCard, Wrench
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import PermissionGuard from '../../components/shared/PermissionGuard';
@@ -30,6 +30,7 @@ export default function BillTemplate() {
   const [settings, setSettings] = useState(defaultSettings);
   const [logoPreview, setLogoPreview] = useState(null);
   const [qrPreview, setQrPreview] = useState(null);
+  const [activeTemplateTab, setActiveTemplateTab] = useState('sale');
 
   // Load configuration for this store from API
   useEffect(() => {
@@ -400,9 +401,48 @@ export default function BillTemplate() {
 
         {/* RIGHT COLUMN: LIVE TEMPLATE PREVIEW */}
         <div className="bg-slate-100 border border-slate-200/50 rounded-3xl p-4 sm:p-6 shadow-inner space-y-4">
-          <span className="text-xs font-extrabold text-slate-400 uppercase tracking-widest flex items-center gap-1.5 px-1.5">
-            <FileText className="w-4 h-4 text-slate-500" /> Live Receipt Preview
-          </span>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-1">
+            <span className="text-xs font-extrabold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+              <FileText className="w-4 h-4 text-slate-500" /> Live Receipt Preview
+            </span>
+
+            {/* Template Switcher Tabs */}
+            <div className="flex gap-1 p-1 bg-white rounded-xl border border-slate-200 shadow-sm text-xs font-bold">
+              <button
+                type="button"
+                onClick={() => setActiveTemplateTab('sale')}
+                className={`py-1.5 px-2.5 rounded-lg transition-all flex items-center gap-1 cursor-pointer ${
+                  activeTemplateTab === 'sale'
+                    ? 'bg-[#0A0F1F] text-white shadow'
+                    : 'text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                <ShoppingCart className="w-3 h-3" /> Sale
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTemplateTab('repair')}
+                className={`py-1.5 px-2.5 rounded-lg transition-all flex items-center gap-1 cursor-pointer ${
+                  activeTemplateTab === 'repair'
+                    ? 'bg-amber-600 text-white shadow'
+                    : 'text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                <Wrench className="w-3 h-3" /> Repair
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTemplateTab('po')}
+                className={`py-1.5 px-2.5 rounded-lg transition-all flex items-center gap-1 cursor-pointer ${
+                  activeTemplateTab === 'po'
+                    ? 'bg-indigo-600 text-white shadow'
+                    : 'text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                <CreditCard className="w-3 h-3" /> Supplier PO
+              </button>
+            </div>
+          </div>
 
           <div
             className="bg-white rounded-2xl border border-slate-250 p-5 sm:p-6 space-y-5 text-slate-800 shadow-xl max-w-md mx-auto font-sans"
@@ -422,12 +462,12 @@ export default function BillTemplate() {
                   {settings.headerText}
                 </h2>
                 <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wide mt-0.5">
-                  {settings.subHeaderText}
+                  {activeTemplateTab === 'sale' ? settings.subHeaderText : activeTemplateTab === 'repair' ? 'Repair & Service Bill' : 'B2B Supplier Purchase Invoice'}
                 </p>
               </div>
               <div className="text-right flex-shrink-0">
                 <p className="text-[9px] font-mono font-bold text-slate-800 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded inline-block leading-normal">
-                  INV-2026-0081
+                  {activeTemplateTab === 'sale' ? 'INV-2026-0081' : activeTemplateTab === 'repair' ? 'REP-2026-00042' : 'PO-2026-00015'}
                 </p>
                 <p className="text-[9px] text-slate-400 font-bold mt-1.5">
                   Date: 30 Jun 2026
@@ -435,141 +475,331 @@ export default function BillTemplate() {
               </div>
             </div>
 
-            {/* Billing Summary */}
-            <div className="grid grid-cols-2 gap-4 pb-4 border-b border-slate-100 text-[10px]">
-              <div>
-                <h3 className="text-[8px] font-extrabold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1">
-                  <User className="w-3 h-3" /> Customer Details
-                </h3>
-                <div className="font-semibold text-slate-500 space-y-0.5 leading-tight">
-                  <p className="font-bold text-slate-900">Ayan Mansuri</p>
-                  <p>Phone: 9988776655</p>
-                  <p className="truncate max-w-[150px]">Address: {settings.address || '—'}</p>
-                </div>
-              </div>
-              <div className="text-right">
-                <h3 className="text-[8px] font-extrabold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1 justify-end">
-                  Payment Details
-                </h3>
-                <div className="font-semibold text-slate-500 space-y-0.5 leading-tight">
-                  <p className="font-bold text-slate-900">Paid via: <span style={{ color: settings.themeColor }} className="font-black">UPI</span></p>
-                  <p>Outstanding: ₹0</p>
-                  <p>Status: <span className="inline-flex px-1 rounded bg-emerald-50 text-emerald-700 font-bold border border-emerald-200 text-[8px] leading-none">Paid</span></p>
-                </div>
-              </div>
-            </div>
-
-            {/* Prescription Specifications */}
-            {settings.showPrescription ? (
-              <div className="bg-slate-50 border border-slate-150 rounded-xl p-2.5 text-[10px] space-y-2">
-                <h3 className="text-[8px] font-extrabold text-slate-400 uppercase tracking-widest flex items-center gap-1">
-                  <Eye className="w-3 h-3 text-purple-500" /> Lens & Prescription Specs
-                </h3>
-                <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[9px] font-semibold text-slate-500">
-                  <div>Lens Type: <span className="text-slate-950 font-bold">Progressive (Blue Cut)</span></div>
-                  <div>Frame Pref: <span className="text-slate-950 font-bold">Ray-Ban Wayfarer</span></div>
-                  <div>Doctor Name: <span className="text-slate-950 font-bold">Dr. Sharma</span></div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2 mt-1 pt-1.5 border-t border-slate-200/40">
-                  <div className="bg-white rounded-lg p-1.5 border border-slate-100">
-                    <p className="text-[7px] font-black text-blue-600 uppercase tracking-wider mb-0.5 flex items-center gap-0.5">
-                      <span className="w-1 h-1 rounded-full bg-blue-500" /> OD (Right)
-                    </p>
-                    <div className="grid grid-cols-3 gap-0.5 text-[8px] font-bold text-slate-400">
-                      <div>SPH: <span className="text-slate-800 font-black">-1.50</span></div>
-                      <div>CYL: <span className="text-slate-800 font-black">-0.50</span></div>
-                      <div>AXIS: <span className="text-slate-800 font-black">180</span></div>
+            {/* TAB 1: SALE RECEIPT PREVIEW */}
+            {activeTemplateTab === 'sale' && (
+              <>
+                <div className="grid grid-cols-2 gap-4 pb-4 border-b border-slate-100 text-[10px]">
+                  <div>
+                    <h3 className="text-[8px] font-extrabold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1">
+                      <User className="w-3 h-3" /> Customer Details
+                    </h3>
+                    <div className="font-semibold text-slate-500 space-y-0.5 leading-tight">
+                      <p className="font-bold text-slate-900">Ayan Mansuri</p>
+                      <p>Phone: 9988776655</p>
+                      <p className="truncate max-w-[150px]">Address: {settings.address || '—'}</p>
                     </div>
                   </div>
-                  <div className="bg-white rounded-lg p-1.5 border border-slate-100">
-                    <p className="text-[7px] font-black text-emerald-600 uppercase tracking-wider mb-0.5 flex items-center gap-0.5">
-                      <span className="w-1 h-1 rounded-full bg-emerald-500" /> OS (Left)
-                    </p>
-                    <div className="grid grid-cols-3 gap-0.5 text-[8px] font-bold text-slate-400">
-                      <div>SPH: <span className="text-slate-800 font-black">-1.75</span></div>
-                      <div>CYL: <span className="text-slate-800 font-black">-0.25</span></div>
-                      <div>AXIS: <span className="text-slate-800 font-black">90</span></div>
+                  <div className="text-right">
+                    <h3 className="text-[8px] font-extrabold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1 justify-end">
+                      Payment Details
+                    </h3>
+                    <div className="font-semibold text-slate-500 space-y-0.5 leading-tight">
+                      <p className="font-bold text-slate-900">Paid via: <span style={{ color: settings.themeColor }} className="font-black">UPI</span></p>
+                      <p>Outstanding: ₹0</p>
+                      <p>Status: <span className="inline-flex px-1 rounded bg-emerald-50 text-emerald-700 font-bold border border-emerald-200 text-[8px] leading-none">Paid</span></p>
                     </div>
                   </div>
                 </div>
-              </div>
-            ) : (
-              <div className="bg-slate-50 border border-dashed border-slate-200 rounded-xl p-2 text-center text-[9px] font-bold text-slate-400">
-                Prescription Details Hidden (Disabled)
-              </div>
-            )}
 
-            {/* Particulars Table */}
-            <div className="space-y-1.5">
-              <h3 className="text-[8px] font-extrabold text-slate-400 uppercase tracking-widest flex items-center gap-1">
-                <ShoppingCart className="w-3 h-3" /> Particulars
-              </h3>
-              <div className="border border-slate-100 rounded-xl overflow-hidden text-[10px]">
-                <table className="w-full text-left">
-                  <thead>
-                    <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 font-bold uppercase text-[8px] tracking-wider">
-                      <th className="px-2 py-1">Description</th>
-                      <th className="px-1 py-1 text-center">Qty</th>
-                      <th className="px-2 py-1 text-right">Price</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-50 font-semibold text-slate-700">
-                    <tr className="hover:bg-slate-50/50">
-                      <td className="px-2 py-1.5">
-                        <p className="font-bold text-slate-900">Ray-Ban Wayfarer Classic</p>
-                        <p className="text-[8px] text-slate-400">Model: RB2140 · Black Frame</p>
-                      </td>
-                      <td className="px-1 py-1.5 text-center font-mono">1</td>
-                      <td className="px-2 py-1.5 text-right font-mono">₹4,500</td>
-                    </tr>
-                    <tr className="hover:bg-slate-50/50">
-                      <td className="px-2 py-1.5">
-                        <p className="font-bold text-slate-900">Crizal Prevencia Progressive Lenses</p>
-                        <p className="text-[8px] text-slate-400">Coating: Blue-Cut Anti-Reflective</p>
-                      </td>
-                      <td className="px-1 py-1.5 text-center font-mono">1</td>
-                      <td className="px-2 py-1.5 text-right font-mono">₹3,200</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {/* Calculations and QR Code layout */}
-            <div className="flex gap-4 justify-between items-end border-t border-slate-100 pt-3">
-              {/* Payment QR Code (optional) */}
-              <div className="text-left">
-                {qrPreview ? (
-                  <div className="space-y-1">
-                    <div className="w-16 h-16 border border-slate-200 bg-white rounded-lg p-0.5 flex items-center justify-center">
-                      <img src={qrPreview} alt="QR Pay" className="w-full h-full object-contain" />
+                {settings.showPrescription ? (
+                  <div className="bg-slate-50 border border-slate-150 rounded-xl p-2.5 text-[10px] space-y-2">
+                    <h3 className="text-[8px] font-extrabold text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                      <Eye className="w-3 h-3 text-purple-500" /> Lens & Prescription Specs
+                    </h3>
+                    <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[9px] font-semibold text-slate-500">
+                      <div>Lens Type: <span className="text-slate-950 font-bold">Progressive (Blue Cut)</span></div>
+                      <div>Frame Pref: <span className="text-slate-950 font-bold">Ray-Ban Wayfarer</span></div>
+                      <div>Doctor Name: <span className="text-slate-950 font-bold">Dr. Sharma</span></div>
                     </div>
-                    <span className="text-[7px] font-black text-slate-400 uppercase tracking-wide block text-center">Scan to Pay</span>
+
+                    <div className="grid grid-cols-2 gap-2 mt-1 pt-1.5 border-t border-slate-200/40">
+                      <div className="bg-white rounded-lg p-1.5 border border-slate-100">
+                        <p className="text-[7px] font-black text-blue-600 uppercase tracking-wider mb-0.5 flex items-center gap-0.5">
+                          <span className="w-1 h-1 rounded-full bg-blue-500" /> OD (Right)
+                        </p>
+                        <div className="grid grid-cols-3 gap-0.5 text-[8px] font-bold text-slate-400">
+                          <div>SPH: <span className="text-slate-800 font-black">-1.50</span></div>
+                          <div>CYL: <span className="text-slate-800 font-black">-0.50</span></div>
+                          <div>AXIS: <span className="text-slate-800 font-black">180</span></div>
+                        </div>
+                      </div>
+                      <div className="bg-white rounded-lg p-1.5 border border-slate-100">
+                        <p className="text-[7px] font-black text-emerald-600 uppercase tracking-wider mb-0.5 flex items-center gap-0.5">
+                          <span className="w-1 h-1 rounded-full bg-emerald-500" /> OS (Left)
+                        </p>
+                        <div className="grid grid-cols-3 gap-0.5 text-[8px] font-bold text-slate-400">
+                          <div>SPH: <span className="text-slate-800 font-black">-1.75</span></div>
+                          <div>CYL: <span className="text-slate-800 font-black">-0.25</span></div>
+                          <div>AXIS: <span className="text-slate-800 font-black">90</span></div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 ) : (
-                  <div className="text-[7px] font-bold text-slate-400 italic">No Payment QR</div>
-                )}
-              </div>
-
-              {/* Pricing Breakdown */}
-              <div className="flex flex-col gap-1.5 w-40 text-[10px] font-semibold">
-                <div className="flex justify-between items-center text-slate-500">
-                  <span>Subtotal</span>
-                  <span className="font-mono font-bold">₹7,700</span>
-                </div>
-                {settings.showGst && (
-                  <div className="flex justify-between items-center text-slate-500">
-                    <span>GST (Tax)</span>
-                    <span className="font-mono font-bold">₹0</span>
+                  <div className="bg-slate-50 border border-dashed border-slate-200 rounded-xl p-2 text-center text-[9px] font-bold text-slate-400">
+                    Prescription Details Hidden (Disabled)
                   </div>
                 )}
-                <div className="flex justify-between items-center text-slate-800 font-extrabold border-t border-slate-200/50 pt-1 mt-0.5">
-                  <span>Final Total</span>
-                  <span className="font-mono font-black text-slate-950">₹7,700</span>
+
+                <div className="space-y-1.5">
+                  <h3 className="text-[8px] font-extrabold text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                    <ShoppingCart className="w-3 h-3" /> Particulars
+                  </h3>
+                  <div className="border border-slate-100 rounded-xl overflow-hidden text-[10px]">
+                    <table className="w-full text-left">
+                      <thead>
+                        <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 font-bold uppercase text-[8px] tracking-wider">
+                          <th className="px-2 py-1">Description</th>
+                          <th className="px-1 py-1 text-center">Qty</th>
+                          <th className="px-2 py-1 text-right">Price</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-50 font-semibold text-slate-700">
+                        <tr className="hover:bg-slate-50/50">
+                          <td className="px-2 py-1.5">
+                            <p className="font-bold text-slate-900">Ray-Ban Wayfarer Classic</p>
+                            <p className="text-[8px] text-slate-400">Model: RB2140 · Black Frame</p>
+                          </td>
+                          <td className="px-1 py-1.5 text-center font-mono">1</td>
+                          <td className="px-2 py-1.5 text-right font-mono">₹4,500</td>
+                        </tr>
+                        <tr className="hover:bg-slate-50/50">
+                          <td className="px-2 py-1.5">
+                            <p className="font-bold text-slate-900">Crizal Prevencia Progressive Lenses</p>
+                            <p className="text-[8px] text-slate-400">Coating: Blue-Cut Anti-Reflective</p>
+                          </td>
+                          <td className="px-1 py-1.5 text-center font-mono">1</td>
+                          <td className="px-2 py-1.5 text-right font-mono">₹3,200</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
-              </div>
-            </div>
+
+                <div className="flex gap-4 justify-between items-end border-t border-slate-100 pt-3">
+                  <div className="text-left">
+                    {qrPreview ? (
+                      <div className="space-y-1">
+                        <div className="w-16 h-16 border border-slate-200 bg-white rounded-lg p-0.5 flex items-center justify-center">
+                          <img src={qrPreview} alt="QR Pay" className="w-full h-full object-contain" />
+                        </div>
+                        <span className="text-[7px] font-black text-slate-400 uppercase tracking-wide block text-center">Scan to Pay</span>
+                      </div>
+                    ) : (
+                      <div className="text-[7px] font-bold text-slate-400 italic">No Payment QR</div>
+                    )}
+                  </div>
+
+                  <div className="flex flex-col gap-1.5 w-40 text-[10px] font-semibold">
+                    <div className="flex justify-between items-center text-slate-500">
+                      <span>Subtotal (Before GST)</span>
+                      <span className="font-mono font-bold">₹7,700</span>
+                    </div>
+                    {settings.showGst && (
+                      <div className="flex justify-between items-center text-amber-700">
+                        <span>GST (18% Tax)</span>
+                        <span className="font-mono font-bold">+ ₹1,386</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between items-center text-slate-800 font-extrabold border-t border-slate-200/50 pt-1 mt-0.5">
+                      <span>Final Total (Incl. GST)</span>
+                      <span className="font-mono font-black text-slate-950">₹{settings.showGst ? '9,086' : '7,700'}</span>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* TAB 2: REPAIR BILL PREVIEW */}
+            {activeTemplateTab === 'repair' && (
+              <>
+                <div className="p-2 bg-amber-50 border border-amber-200 rounded-xl text-center">
+                  <span className="text-[9px] font-extrabold text-amber-800 uppercase tracking-wider block">
+                    TEMPORARY REPAIR INVOICE — OUTSTANDING BALANCE: ₹350
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 pb-4 border-b border-slate-100 text-[10px]">
+                  <div>
+                    <h3 className="text-[8px] font-extrabold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1">
+                      <User className="w-3 h-3" /> Customer Details
+                    </h3>
+                    <div className="font-semibold text-slate-500 space-y-0.5 leading-tight">
+                      <p className="font-bold text-slate-900">Rahul Sharma</p>
+                      <p>Phone: 9876543210</p>
+                      <p className="truncate max-w-[150px]">Address: {settings.address || '—'}</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <h3 className="text-[8px] font-extrabold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1 justify-end">
+                      Job Status
+                    </h3>
+                    <div className="font-semibold text-slate-500 space-y-0.5 leading-tight">
+                      <p className="font-bold text-slate-900">Service: <span className="font-black text-blue-600">Frame Repair</span></p>
+                      <p>Method: <span style={{ color: settings.themeColor }} className="font-black">UPI</span></p>
+                      <p>Status: <span className="inline-flex px-1 rounded bg-amber-50 text-amber-700 font-bold border border-amber-200 text-[8px] leading-none">In Progress</span></p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <h3 className="text-[8px] font-extrabold text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                    <Wrench className="w-3 h-3 text-amber-500" /> Repair Particulars
+                  </h3>
+                  <div className="border border-slate-100 rounded-xl overflow-hidden text-[10px]">
+                    <table className="w-full text-left">
+                      <thead>
+                        <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 font-bold uppercase text-[8px] tracking-wider">
+                          <th className="px-2 py-1">Service Description</th>
+                          <th className="px-1 py-1 text-center">Qty</th>
+                          <th className="px-2 py-1 text-right">Amount</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-50 font-semibold text-slate-700">
+                        <tr className="hover:bg-slate-50/50">
+                          <td className="px-2 py-1.5">
+                            <p className="font-bold text-slate-900">Frame Hinge Soldering & Realignment</p>
+                            <p className="text-[8px] text-slate-400">Unit SKU: RB2026001U003 · Right Hinge Repair</p>
+                          </td>
+                          <td className="px-1 py-1.5 text-center font-mono">1</td>
+                          <td className="px-2 py-1.5 text-right font-mono">₹850</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div className="flex gap-4 justify-between items-end border-t border-slate-100 pt-3">
+                  <div className="text-left">
+                    {qrPreview ? (
+                      <div className="space-y-1">
+                        <div className="w-16 h-16 border border-slate-200 bg-white rounded-lg p-0.5 flex items-center justify-center">
+                          <img src={qrPreview} alt="QR Pay" className="w-full h-full object-contain" />
+                        </div>
+                        <span className="text-[7px] font-black text-slate-400 uppercase tracking-wide block text-center">Scan to Pay</span>
+                      </div>
+                    ) : (
+                      <div className="text-[7px] font-bold text-slate-400 italic">No Payment QR</div>
+                    )}
+                  </div>
+
+                  <div className="flex flex-col gap-1.5 w-44 text-[10px] font-semibold">
+                    <div className="flex justify-between items-center text-slate-500">
+                      <span>Total Repair Cost</span>
+                      <span className="font-mono font-bold">₹850</span>
+                    </div>
+                    <div className="flex justify-between items-center text-emerald-600 font-bold">
+                      <span>Advance Paid</span>
+                      <span className="font-mono">₹500</span>
+                    </div>
+                    <div className="flex justify-between items-center text-rose-600 font-extrabold border-t border-slate-200/50 pt-1 mt-0.5">
+                      <span>Balance Due</span>
+                      <span className="font-mono font-black">₹350</span>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* TAB 3: SUPPLIER PURCHASE INVOICE PREVIEW */}
+            {activeTemplateTab === 'po' && (
+              <>
+                <div className="p-2 bg-emerald-50 border border-emerald-200 rounded-xl text-center">
+                  <span className="text-[9px] font-extrabold text-emerald-800 uppercase tracking-wider block">
+                    FINAL PURCHASE INVOICE — PAID IN FULL
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 pb-4 border-b border-slate-100 text-[10px]">
+                  <div>
+                    <h3 className="text-[8px] font-extrabold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1">
+                      <CreditCard className="w-3 h-3" /> Supplier Details
+                    </h3>
+                    <div className="font-semibold text-slate-500 space-y-0.5 leading-tight">
+                      <p className="font-bold text-slate-900">Essilor Optical Pvt Ltd</p>
+                      <p>GSTIN: 27AABCU9603R1ZN</p>
+                      <p className="truncate max-w-[150px]">Mumbai Central Warehouse</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <h3 className="text-[8px] font-extrabold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1 justify-end">
+                      Purchase Order Info
+                    </h3>
+                    <div className="font-semibold text-slate-500 space-y-0.5 leading-tight">
+                      <p className="font-bold text-slate-900">PO #: <span className="font-mono font-bold text-indigo-600">PO-2026-00015</span></p>
+                      <p>Status: <span className="inline-flex px-1 rounded bg-emerald-50 text-emerald-700 font-bold border border-emerald-200 text-[8px] leading-none">Completed</span></p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <h3 className="text-[8px] font-extrabold text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                    <ShoppingCart className="w-3 h-3" /> B2B Product Items
+                  </h3>
+                  <div className="border border-slate-100 rounded-xl overflow-hidden text-[10px]">
+                    <table className="w-full text-left">
+                      <thead>
+                        <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 font-bold uppercase text-[8px] tracking-wider">
+                          <th className="px-2 py-1">Particulars</th>
+                          <th className="px-1 py-1 text-center">Qty</th>
+                          <th className="px-2 py-1 text-right">Line Total</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-50 font-semibold text-slate-700">
+                        <tr className="hover:bg-slate-50/50">
+                          <td className="px-2 py-1.5">
+                            <p className="font-bold text-slate-900">Ray-Ban Wayfarer Frame Stock</p>
+                            <p className="text-[8px] text-slate-400">SKU: RB2140-50 · Unit Cost: ₹2,500</p>
+                          </td>
+                          <td className="px-1 py-1.5 text-center font-mono">10</td>
+                          <td className="px-2 py-1.5 text-right font-mono">₹25,000</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div className="flex gap-4 justify-between items-end border-t border-slate-100 pt-3">
+                  <div className="text-left">
+                    {qrPreview ? (
+                      <div className="space-y-1">
+                        <div className="w-16 h-16 border border-slate-200 bg-white rounded-lg p-0.5 flex items-center justify-center">
+                          <img src={qrPreview} alt="QR Pay" className="w-full h-full object-contain" />
+                        </div>
+                        <span className="text-[7px] font-black text-slate-400 uppercase tracking-wide block text-center">Scan to Pay</span>
+                      </div>
+                    ) : (
+                      <div className="text-[7px] font-bold text-slate-400 italic">No Payment QR</div>
+                    )}
+                  </div>
+
+                  <div className="flex flex-col gap-1.5 w-44 text-[10px] font-semibold">
+                    <div className="flex justify-between items-center text-slate-500">
+                      <span>Subtotal</span>
+                      <span className="font-mono font-bold">₹25,000</span>
+                    </div>
+                    {settings.showGst && (
+                      <div className="flex justify-between items-center text-slate-500">
+                        <span>GST Tax (12%)</span>
+                        <span className="font-mono font-bold">₹3,000</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between items-center text-slate-800 font-extrabold border-t border-slate-200/50 pt-1 mt-0.5">
+                      <span>Grand Total</span>
+                      <span className="font-mono font-black text-slate-950">₹28,000</span>
+                    </div>
+                    <div className="flex justify-between items-center text-emerald-600 font-bold">
+                      <span>Amount Paid</span>
+                      <span className="font-mono font-bold">₹28,000</span>
+                    </div>
+                    <div className="flex justify-between items-center text-slate-600 font-bold">
+                      <span>Outstanding</span>
+                      <span className="font-mono">₹0</span>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
 
             {/* Footer Text */}
             <div className="text-center text-[9px] font-bold text-slate-400 tracking-wide border-t border-slate-50 pt-3 italic">

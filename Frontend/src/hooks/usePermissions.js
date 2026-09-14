@@ -23,18 +23,23 @@ export const useMyPermissions = () => {
 };
 
 export const useHasPermission = (permissionKey) => {
-  const { data } = useMyPermissions();
+  const { data, isLoading } = useMyPermissions();
   const { user } = useAuthStore();
   
-  if (user?.role === 'admin' || user?.role === 'super_admin') return true;
+  const role = user?.role?.toLowerCase();
+  if (role === 'admin' || role === 'super_admin' || role === 'superadmin') return true;
   
-  // Format from API is: permissions[module] = [{key: 'customers:read', is_granted: true}, ...]
-  // Wait, the API returns a dict of modules mapping to arrays of permissions?
-  // Let's check how tier2/me.py formats it. In me.py, we have `permissions: permission_map`.
-  // Wait, I should assume `data?.permissions?.[permissionKey]?.granted` as requested by user OR check if the data format is different.
-  // Actually, I'll use the format the user provided in the prompt, or just `data?.permissions?.[permissionKey]?.granted ?? data?.permissions?.[permissionKey] ?? false`.
-  // Let's write the exact code the user requested, but adding a fallback just in case the backend format is just `data?.permissions?.[permissionKey]` (boolean).
+  if (isLoading || !data) return true;
   
+  if (Array.isArray(permissionKey)) {
+    return permissionKey.some((k) => {
+      const p = data?.permissions?.[k];
+      if (typeof p === 'boolean') return p;
+      if (p && typeof p === 'object') return p.granted ?? p.is_granted ?? false;
+      return false;
+    });
+  }
+
   const perm = data?.permissions?.[permissionKey];
   if (typeof perm === 'boolean') return perm;
   if (perm && typeof perm === 'object') return perm.granted ?? perm.is_granted ?? false;

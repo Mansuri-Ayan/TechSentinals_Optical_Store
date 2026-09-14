@@ -33,10 +33,10 @@ const GRAD_PALETTE = [
 const getStockStatus = (item) => {
   const qty = item.available_quantity ?? item.quantity ?? 0;
   if (qty === 0) return 'out_of_stock';
-  const threshold = (item.reorder_level && item.reorder_level > 0)
-    ? item.reorder_level
-    : 10;
-  if (qty <= threshold) return 'low_stock';
+  const threshold = item.low_stock_threshold !== undefined && item.low_stock_threshold !== null
+    ? Number(item.low_stock_threshold)
+    : (item.reorder_level && Number(item.reorder_level) > 0 ? Number(item.reorder_level) : null);
+  if (threshold !== null && qty <= threshold) return 'low_stock';
   return 'in_stock';
 };
 
@@ -108,7 +108,23 @@ const ProductCard = ({ product }) => {
         </div>
 
         <div className="border-t border-slate-50 mt-auto pt-2 flex items-center justify-between">
-          <span className="text-sm font-bold text-slate-900">₹{product.selling_price.toLocaleString('en-IN')}</span>
+          {(() => {
+            const spBeforeGst = Number(product.selling_price_before_gst ?? product.selling_price) || 0;
+            const rate = product.gst_percent !== undefined && product.gst_percent !== null ? Number(product.gst_percent) : 18;
+            const spWithGst = (product.selling_price_with_gst !== undefined && product.selling_price_with_gst !== null && (rate === 0 || Number(product.selling_price_with_gst) > spBeforeGst))
+              ? Number(product.selling_price_with_gst) 
+              : (spBeforeGst * (1 + rate / 100));
+
+            return (
+              <div className="flex flex-col">
+                <div className="flex items-baseline gap-1">
+                  <span className="text-sm font-black text-slate-900">₹{spWithGst.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>
+                  <span className="text-[8px] font-bold text-emerald-700 bg-emerald-50 px-1 py-0.2 rounded border border-emerald-200">Incl. GST</span>
+                </div>
+                <span className="text-[9px] text-slate-400 font-medium">₹{spBeforeGst.toLocaleString('en-IN')} + {rate}% GST</span>
+              </div>
+            );
+          })()}
           <span className="text-[10px] font-medium text-slate-400">{product.category}</span>
         </div>
       </div>

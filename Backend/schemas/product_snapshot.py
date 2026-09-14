@@ -38,6 +38,7 @@ class ProductSnapshotRead(BaseModel):
     selling_price: Decimal
     discount_percent: Decimal
     warranty_months: int
+    gst_percent: Decimal | None = None
     image_url: str | None = None
 
     # Frame specs

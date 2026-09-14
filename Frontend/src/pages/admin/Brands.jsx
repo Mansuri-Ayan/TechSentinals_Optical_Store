@@ -118,6 +118,7 @@ const Brands = () => {
     if (!confirmModal.brandId) return;
     try {
       await deleteBrandAsync(confirmModal.brandId);
+      setConfirmModal({ isOpen: false, brandId: null });
     } catch {
       // Error handled by mutation
     }

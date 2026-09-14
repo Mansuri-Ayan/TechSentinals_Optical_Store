@@ -49,3 +49,32 @@ export const cancelRepairApi = async (repairId) => {
   const response = await api.delete(`/repairs/${repairId}`);
   return response.data;
 };
+
+/**
+ * Fetch repair bill JSON including HTML content.
+ */
+export const getRepairBillApi = async (repairId) => {
+  const response = await api.get(`/repairs/${repairId}/bill`);
+  return response.data;
+};
+
+/**
+ * Download repair bill PDF file.
+ */
+export const downloadRepairBillApi = async (repairId, repairNumber, isFinal = false) => {
+  const response = await api.get(`/repairs/${repairId}/bill/download`, {
+    responseType: 'blob',
+  });
+  const blob = new Blob([response.data], { type: 'application/pdf' });
+  const url = window.URL.createObjectURL(blob);
+  const prefix = isFinal ? 'Final_Repair_Bill' : 'Temporary_Repair_Bill';
+  const fileName = `${prefix}_${repairNumber || repairId}.pdf`;
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', fileName);
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+};
+

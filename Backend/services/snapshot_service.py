@@ -73,6 +73,7 @@ async def capture_product_snapshot(
         selling_price=product.selling_price,
         discount_percent=product.discount_percent,
         warranty_months=product.warranty_months,
+        gst_percent=product.gst_percent,
         image_url=product.image_url,
     )
 

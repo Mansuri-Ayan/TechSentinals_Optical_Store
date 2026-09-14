@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { LayoutDashboard, LogOut, Glasses, X, Users, Store, Package, ShoppingCart, ChevronLeft, ChevronRight, Wrench, BarChart3, Tag, Layers, Award, ArrowRightLeft, Clock, Warehouse, FileText, Receipt, RefreshCw, Beaker, Archive } from 'lucide-react';
+import { LayoutDashboard, LogOut, Glasses, X, Users, Store, Package, ShoppingCart, ChevronLeft, ChevronRight, Wrench, BarChart3, Tag, Layers, Award, ArrowRightLeft, Clock, Warehouse, FileText, Receipt, RefreshCw, Beaker, Archive, TrendingUp, ShieldAlert } from 'lucide-react';
 
 import { useAuth } from '../../hooks/useAuth';
 import { useAuthStore, useStoreStore } from '../../store/store';
@@ -98,6 +98,7 @@ const ShopkeeperSidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) =
   const hasBillSettingsRead = useHasPermission('bill_settings:read');
   const hasExchangesRead = useHasPermission('exchanges:read');
   const hasDeadstockRead = useHasPermission('deadstock:read');
+  const hasQCRead = useHasPermission('qc:read');
   const hasLabsRead = useHasPermission('labs:read');
 
 
@@ -214,6 +215,22 @@ const ShopkeeperSidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) =
             >
               <BarChart3 className={`w-5 h-5 transition-transform group-hover:scale-110 flex-shrink-0 ${isCollapsed ? '' : 'mr-3'}`} />
               {!isCollapsed && <span className="font-medium text-sm truncate animate-fade-in">Analyses</span>}
+            </NavLink>
+          )}
+
+          {hasReportsRead && (
+            <NavLink
+              to="/shopkeeper/product-performance"
+              title={isCollapsed ? "Product Performance" : undefined}
+              className={({ isActive }) =>
+                `flex items-center ${isCollapsed ? 'justify-center px-0' : 'px-4'} py-2.5 rounded-xl transition-all duration-200 group ${isActive
+                  ? 'bg-emerald-500/10 text-emerald-400 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_0_10px_rgba(16,185,129,0.1)] border border-emerald-500/20'
+                  : 'text-slate-400 hover:bg-white/5 hover:text-slate-205 border border-transparent'
+                }`
+              }
+            >
+              <TrendingUp className={`w-5 h-5 transition-transform group-hover:scale-110 flex-shrink-0 ${isCollapsed ? '' : 'mr-3'}`} />
+              {!isCollapsed && <span className="font-medium text-sm truncate animate-fade-in">Product Performance</span>}
             </NavLink>
           )}
 
@@ -418,6 +435,23 @@ const ShopkeeperSidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) =
             >
               <Archive className={`w-5 h-5 transition-transform group-hover:scale-110 flex-shrink-0 ${isCollapsed ? '' : 'mr-3'}`} />
               {!isCollapsed && <span className="font-medium text-sm truncate animate-fade-in">Deadstock</span>}
+            </NavLink>
+          )}
+
+          {hasQCRead && (
+            <NavLink
+              to="/shopkeeper/damaged-items"
+              title={isCollapsed ? "Damaged / Issue Items" : undefined}
+              className={({ isActive }) => {
+                const isDamagedActive = isActive || location.pathname.startsWith('/shopkeeper/damaged-items');
+                return `flex items-center ${isCollapsed ? 'justify-center px-0' : 'px-4'} py-2.5 rounded-xl transition-all duration-200 group ${isDamagedActive
+                  ? 'bg-rose-500/10 text-rose-400 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_0_10px_rgba(244,63,94,0.1)] border border-rose-500/20'
+                  : 'text-slate-400 hover:bg-white/5 hover:text-slate-205 border border-transparent'
+                }`;
+              }}
+            >
+              <ShieldAlert className={`w-5 h-5 transition-transform group-hover:scale-110 flex-shrink-0 ${isCollapsed ? '' : 'mr-3'}`} />
+              {!isCollapsed && <span className="font-medium text-sm truncate animate-fade-in">Damaged Items</span>}
             </NavLink>
           )}
 

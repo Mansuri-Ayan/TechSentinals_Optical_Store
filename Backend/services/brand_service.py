@@ -231,6 +231,7 @@ async def update_brand(
     """Apply partial updates to a brand. If store_id is provided, is_active is updated in the override."""
     update_data = payload.model_dump(exclude_unset=True)
     
+    is_active_val = None
     # Handle is_active override
     if "is_active" in update_data and store_id is not None:
         is_active_val = update_data.pop("is_active")
@@ -250,13 +251,15 @@ async def update_brand(
             )
             db.add(override)
         await db.commit()
-        # Set transient attribute for response serialization
-        brand.is_active = is_active_val
         
     for field, value in update_data.items():
         setattr(brand, field, value)
     await db.commit()
     await db.refresh(brand)
+    
+    if is_active_val is not None:
+        brand.is_active = is_active_val
+        
     return brand
 
 
@@ -282,6 +285,7 @@ async def delete_brand(
             )
             db.add(override)
         await db.commit()
+        await db.refresh(brand)
         brand.is_active = False
     else:
         brand.is_active = False

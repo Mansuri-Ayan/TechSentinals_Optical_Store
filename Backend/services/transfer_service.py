@@ -1589,6 +1589,7 @@ async def get_transaction_history(
     limit: int = 50,
     offset: int = 0,
     search: str | None = None,
+    exclude_sales: bool = False,
 ) -> tuple[list[InventoryTransaction], int]:
     """Fallback legacy query method, maps to get_transactions_filtered."""
     return await get_transactions_filtered(
@@ -1603,6 +1604,7 @@ async def get_transaction_history(
         search=search,
         limit=limit,
         offset=offset,
+        exclude_sales=exclude_sales,
     )
 
 
@@ -1620,6 +1622,7 @@ async def get_transactions_filtered(
     search: str | None = None,
     limit: int = 50,
     offset: int = 0,
+    exclude_sales: bool = False,
 ) -> tuple[list[InventoryTransaction], int]:
     """
     Fetch transaction history with advanced query filters.
@@ -1660,6 +1663,9 @@ async def get_transactions_filtered(
             TransactionType.STORE_TRANSFER_IN,
         ])
     ]
+
+    if exclude_sales:
+        filters.append(InventoryTransaction.transaction_type != TransactionType.SALE)
 
     if status:
         filters.append(InventoryTransaction.status == status.upper())

@@ -14,7 +14,8 @@ import {
   Tag,
   Store,
   ChevronRight,
-  Download
+  Download,
+  MapPin
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import api from '../../lib/axios';
@@ -29,15 +30,6 @@ import { downloadBarcodePdf } from '../../api/inventory/productUnits.api';
 const ITEMS_PER_PAGE = 10;
 
 const StatusBadge = ({ status, isTransferred, transferredTo }) => {
-  if (isTransferred) {
-    return (
-      <span className="inline-flex items-center gap-1 py-0.5 px-2 rounded-full text-xs font-bold border text-violet-700 bg-violet-50 border-violet-200 shadow-sm">
-        <Store className="w-3.5 h-3.5 flex-shrink-0" />
-        Transferred to {transferredTo || 'Store'}
-      </span>
-    );
-  }
-
   const configs = {
     AVAILABLE: { text: 'Available', style: 'text-emerald-700 bg-emerald-50 border-emerald-200' },
     SOLD: { text: 'Sold', style: 'text-rose-700 bg-rose-50 border-rose-200' },
@@ -50,6 +42,23 @@ const StatusBadge = ({ status, isTransferred, transferredTo }) => {
   };
 
   const config = configs[status] || { text: status, style: 'text-slate-600 bg-slate-50 border-slate-200' };
+
+  if (isTransferred) {
+    return (
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="inline-flex items-center gap-1 py-0.5 px-2 rounded-full text-xs font-bold border text-violet-700 bg-violet-50 border-violet-200 shadow-sm">
+          <Store className="w-3.5 h-3.5 flex-shrink-0" />
+          Transferred to {transferredTo || 'Store'}
+        </span>
+        {status && status !== 'AVAILABLE' && (
+          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold border ${config.style}`}>
+            <span className="w-1.5 h-1.5 rounded-full bg-current" />
+            {config.text}
+          </span>
+        )}
+      </div>
+    );
+  }
 
   return (
     <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold border ${config.style}`}>
@@ -107,16 +116,12 @@ const ManageUnits = () => {
   const [isDownloading, setIsDownloading] = useState(false);
 
   const handleDownloadBarcodes = async () => {
-    if (!selectedBatch && Object.keys(selectedUnitsMap).length === 0) {
-      toast.error('Select a batch or units first');
-      return;
-    }
     setIsDownloading(true);
     try {
       const selectedSkus = Object.keys(selectedUnitsMap);
       const payload = {
         product_id: parseInt(productId),
-        inventory_batch_id: selectedSkus.length > 0 ? null : selectedBatch?.id,
+        inventory_batch_id: selectedSkus.length > 0 ? null : (selectedBatch?.id || null),
         unit_skus: selectedSkus.length > 0 ? selectedSkus : null,
       };
       const response = await downloadBarcodePdf(payload);
@@ -131,7 +136,7 @@ const ManageUnits = () => {
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
-      toast.success(`Barcode PDF downloaded (${selectedSkus.length > 0 ? selectedSkus.length + ' selected' : 'all'} units)`);
+      toast.success(`Barcode PDF downloaded (${selectedSkus.length > 0 ? selectedSkus.length + ' selected' : (selectedBatch ? 'Batch #' + selectedBatch.id : 'All Available')} units)`);
     } catch (err) {
       console.error('Download error:', err);
       toast.error(err.response?.data?.detail || 'Failed to generate barcode PDF');
@@ -238,17 +243,22 @@ const ManageUnits = () => {
   // Drawer for showing sale details
   const [detailItem, setDetailItem] = useState(null);
 
-  // Derive ownerType and ownerId matching backend/inventory page rules
-  const isLocAdmin = isPathAdmin && storeId === 'admin';
-  const ownerType = isLocAdmin ? 'ADMIN' : 'STORE';
-  const ownerId = isLocAdmin ? user?.id : storeId;
+  // Location selection: 'admin' (Admin Warehouse), 'all' (All Locations / Cross-Store), or storeId
+  const initialLocation = urlStoreId || (isPathAdmin ? 'admin' : (contextStoreId ? String(contextStoreId) : 'admin'));
+  const [selectedLocation, setSelectedLocation] = useState(initialLocation);
+
+  const isLocAdmin = selectedLocation === 'admin';
+  const isAllLocations = selectedLocation === 'all';
+  const ownerType = isLocAdmin ? 'ADMIN' : (isAllLocations ? null : 'STORE');
+  const ownerId = isLocAdmin ? user?.id : (isAllLocations ? null : selectedLocation);
 
   // Store name for the header / details banner
   const storeName = useMemo(() => {
     if (isLocAdmin) return 'Admin Warehouse';
-    const match = stores.find(s => String(s.id) === String(storeId));
-    return match ? match.store_name : `Store #${storeId}`;
-  }, [storeId, stores, isLocAdmin]);
+    if (isAllLocations) return 'All Locations (Cross-Store)';
+    const match = stores.find(s => String(s.id) === String(selectedLocation));
+    return match ? match.store_name : `Store #${selectedLocation}`;
+  }, [selectedLocation, stores, isLocAdmin, isAllLocations]);
 
   // Debounce search
   useEffect(() => {
@@ -273,8 +283,8 @@ const ManageUnits = () => {
       try {
         const params = {
           product_id: productId,
-          owner_type: ownerType,
-          owner_id: ownerId,
+          owner_type: isAllLocations ? 'ADMIN' : ownerType,
+          owner_id: isAllLocations ? user?.id : ownerId,
           paginate: false
         };
         const res = await getInventoryApi(params);
@@ -283,7 +293,14 @@ const ManageUnits = () => {
           if (items.length > 0) {
             setInventoryItem(items[0]);
           } else {
-            setError('Inventory record not found for this product and store context.');
+            // Fallback to fetch from admin warehouse or any store
+            const fallbackRes = await getInventoryApi({ product_id: productId, paginate: false });
+            const fallbackItems = Array.isArray(fallbackRes) ? fallbackRes : (fallbackRes?.items || fallbackRes?.data || []);
+            if (fallbackItems.length > 0) {
+              setInventoryItem(fallbackItems[0]);
+            } else {
+              setError('Inventory record not found for this product.');
+            }
           }
         }
       } catch (err) {
@@ -296,20 +313,26 @@ const ManageUnits = () => {
       }
     };
 
-    if (productId && ownerId) {
+    if (productId) {
       fetchInventory();
     }
     return () => { active = false; };
-  }, [productId, ownerType, ownerId]);
+  }, [productId, ownerType, ownerId, isAllLocations, user?.id]);
 
-  // 2. Fetch Batches (using the inventoryItem ID)
+  // 2. Fetch Batches (using the inventoryItem ID or product ID)
   useEffect(() => {
     let active = true;
     const fetchBatches = async () => {
-      if (!inventoryItem?.id) return;
+      if (!productId) return;
       setLoadingBatches(true);
       try {
-        const data = await getInventoryBatchesApi(inventoryItem.id);
+        const invId = inventoryItem?.id || productId;
+        const params = {
+          product_id: productId,
+          owner_type: isAllLocations ? 'ALL' : ownerType,
+          owner_id: isAllLocations ? null : ownerId,
+        };
+        const data = await getInventoryBatchesApi(invId, params);
         if (active) {
           // Sort batches: batches with available_quantity > 0 first (FIFO order by ID ascending),
           // consumed/exhausted batches (available_quantity <= 0) at the bottom (sorted by ID descending)
@@ -342,28 +365,26 @@ const ManageUnits = () => {
 
     fetchBatches();
     return () => { active = false; };
-  }, [inventoryItem]);
+  }, [productId, inventoryItem, selectedLocation, ownerType, ownerId, isAllLocations]);
 
-  // 3. Fetch Units for the selected batch
+  // 3. Fetch Units for the selected batch OR all batches
   useEffect(() => {
     let active = true;
     const fetchUnits = async () => {
       if (showSelectedOnly) {
         return;
       }
-      if (!selectedBatch?.id) {
-        setUnits([]);
-        setTotalUnits(0);
-        setLoadingUnits(false);
-        return;
-      }
       setLoadingUnits(true);
       try {
         const searchParams = new URLSearchParams();
         searchParams.append('product_id', productId);
-        searchParams.append('inventory_batch_id', String(selectedBatch.id));
-        searchParams.append('owner_type', ownerType);
-        searchParams.append('owner_id', String(ownerId));
+        if (selectedBatch?.id) {
+          searchParams.append('inventory_batch_id', String(selectedBatch.id));
+        }
+        if (!isAllLocations && ownerType && ownerId) {
+          searchParams.append('owner_type', ownerType);
+          searchParams.append('owner_id', String(ownerId));
+        }
         searchParams.append('skip', String((currentPage - 1) * ITEMS_PER_PAGE));
         searchParams.append('limit', String(ITEMS_PER_PAGE));
         if (debouncedSearch) {
@@ -396,7 +417,7 @@ const ManageUnits = () => {
 
     fetchUnits();
     return () => { active = false; };
-  }, [productId, selectedBatch, ownerType, ownerId, currentPage, debouncedSearch, activeStatusFilters, showSelectedOnly]);
+  }, [productId, selectedBatch, selectedLocation, ownerType, ownerId, isAllLocations, currentPage, debouncedSearch, activeStatusFilters, showSelectedOnly]);
 
   const handleBack = () => {
     navigate(buildPath('inventory'));
@@ -419,23 +440,51 @@ const ManageUnits = () => {
           <ChevronRight className="w-3 h-3" />
           <span className="text-slate-700">Manage Units</span>
         </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={handleBack}
-            className="p-2 bg-white border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 hover:text-slate-800 transition-all shadow-sm focus:outline-none"
-            title="Go back to Inventory"
-          >
-            <ArrowLeft className="w-4 h-4" />
-          </button>
-          <div>
-            <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
-              <Layers className="w-5.5 h-5.5 text-violet-600" />
-              Manage Serialized Units
-            </h1>
-            <p className="text-xs text-slate-500 font-bold mt-0.5">
-              Viewing batch stock tracking for store: <span className="text-violet-750 font-black">{storeName}</span>
-            </p>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleBack}
+              className="p-2 bg-white border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 hover:text-slate-800 transition-all shadow-sm focus:outline-none"
+              title="Go back to Inventory"
+            >
+              <ArrowLeft className="w-4 h-4" />
+            </button>
+            <div>
+              <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+                <Layers className="w-5.5 h-5.5 text-violet-600" />
+                Manage Serialized Units
+              </h1>
+              <p className="text-xs text-slate-500 font-bold mt-0.5">
+                Viewing stock tracking for: <span className="text-violet-750 font-black">{storeName}</span>
+              </p>
+            </div>
           </div>
+
+          {/* Location Switcher */}
+          {isPathAdmin && (
+            <div className="flex items-center gap-2 self-start sm:self-auto bg-white p-1.5 rounded-2xl border border-slate-200 shadow-sm">
+              <MapPin className="w-4 h-4 text-violet-600 ml-1.5 flex-shrink-0" />
+              <label htmlFor="location-select" className="text-xs font-bold text-slate-500">Location:</label>
+              <select
+                id="location-select"
+                value={selectedLocation}
+                onChange={(e) => {
+                  setSelectedLocation(e.target.value);
+                  setSelectedBatch(null);
+                  setCurrentPage(1);
+                }}
+                className="bg-slate-50 hover:bg-slate-100/80 border border-slate-200 text-slate-800 text-xs font-bold rounded-xl px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 transition-all cursor-pointer"
+              >
+                <option value="admin">🏢 Admin Warehouse</option>
+                <option value="all">🌐 All Locations (Cross-Store)</option>
+                {stores.map((s) => (
+                  <option key={s.id} value={String(s.id)}>
+                    🏪 {s.store_name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
       </div>
 
@@ -469,29 +518,41 @@ const ManageUnits = () => {
                 <div className="flex flex-col gap-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200 uppercase">
-                      {inventoryItem.category}
+                      {inventoryItem.category_name || inventoryItem.category || 'General'}
                     </span>
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-violet-50 text-violet-700 border border-violet-100">
-                      {inventoryItem.subcategory}
+                      {inventoryItem.subcategory_name || inventoryItem.subcategory || 'Standard'}
                     </span>
                   </div>
                   <h2 className="text-base sm:text-lg font-black text-slate-900 leading-tight">
-                    {inventoryItem.product_name}
+                    {inventoryItem.product_name || 'Product'}
                   </h2>
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-0.5 text-xs text-slate-400 font-semibold">
-                    <span>Brand: <strong className="text-slate-600 font-black">{inventoryItem.brand}</strong></span>
-                    <span>SKU: <strong className="text-slate-600 font-mono">{inventoryItem.sku}</strong></span>
-                    <span>Supplier: <strong className="text-slate-600">{inventoryItem.supplier || 'N/A'}</strong></span>
+                    <span>Brand: <strong className="text-slate-600 font-black">{inventoryItem.brand_name || inventoryItem.brand || 'N/A'}</strong></span>
+                    <span>SKU: <strong className="text-slate-600 font-mono">{inventoryItem.product_sku || inventoryItem.sku || 'N/A'}</strong></span>
+                    <span>Supplier: <strong className="text-slate-600">{inventoryItem.supplier_name || inventoryItem.supplier || (batches?.length > 0 && batches[0]?.supplier_name && batches[0]?.supplier_name !== 'N/A' ? batches[0]?.supplier_name : 'N/A')}</strong></span>
                   </div>
                 </div>
                 <div className="flex items-center gap-6 sm:border-l border-slate-100 sm:pl-6">
                   <div className="flex flex-col">
                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Quantity</span>
-                    <span className="text-xl sm:text-2xl font-black text-slate-900">{inventoryItem.quantity} units</span>
+                    <span className="text-xl sm:text-2xl font-black text-slate-900">{isNaN(Number(inventoryItem.quantity)) ? 0 : Number(inventoryItem.quantity)} units</span>
                   </div>
                   <div className="flex flex-col">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Selling Price</span>
-                    <span className="text-xl sm:text-2xl font-black text-slate-950">₹{Number(inventoryItem.selling_price || 0).toLocaleString()}</span>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Selling Price (Incl. GST)</span>
+                    {(() => {
+                      const sp = isNaN(Number(inventoryItem.selling_price)) ? (isNaN(Number(inventoryItem.price)) ? 0 : Number(inventoryItem.price)) : Number(inventoryItem.selling_price);
+                      const rate = inventoryItem.gst_percent !== undefined && inventoryItem.gst_percent !== null ? Number(inventoryItem.gst_percent) : 18;
+                      const spWithGst = (inventoryItem.selling_price_with_gst !== undefined && inventoryItem.selling_price_with_gst !== null && (rate === 0 || Number(inventoryItem.selling_price_with_gst) > sp))
+                        ? Number(inventoryItem.selling_price_with_gst) 
+                        : (sp * (1 + rate / 100));
+                      return (
+                        <>
+                          <span className="text-xl sm:text-2xl font-black text-slate-950">₹{spWithGst.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>
+                          <span className="text-[9px] text-slate-400 font-medium">Base: ₹{sp.toLocaleString('en-IN')}</span>
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
               </>
@@ -513,17 +574,48 @@ const ManageUnits = () => {
                   <Loader2 className="w-6 h-6 animate-spin text-violet-600" />
                   <span className="text-xs font-semibold">Loading batches...</span>
                 </div>
-              ) : batches.length === 0 ? (
-                <div className="text-center py-8 text-slate-400 text-xs font-medium border border-dashed border-slate-200 rounded-xl">
-                  No batches found
-                </div>
               ) : (
                 <div className="py-1.5 px-1 flex flex-col gap-2 max-h-[500px] overflow-y-auto pr-1">
+                  {/* "All Batches" Card */}
+                  <button
+                    onClick={() => {
+                      setSelectedBatch(null);
+                      setCurrentPage(1);
+                    }}
+                    className={`text-left p-3.5 rounded-xl border transition-all flex flex-col gap-1 focus:outline-none ${
+                      selectedBatch === null && !showSelectedOnly
+                        ? 'bg-violet-600/5 border-violet-500 shadow-sm ring-1 ring-violet-500/20'
+                        : 'bg-white border-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between w-full">
+                      <span className="font-bold text-xs text-slate-900 flex items-center gap-1.5">
+                        <Layers className="w-3.5 h-3.5 text-violet-600" />
+                        All Batches
+                      </span>
+                      <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded bg-violet-50 text-violet-700 border border-violet-100">
+                        Overview
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 font-semibold mt-0.5">
+                      Browse all serialized units across all batches
+                    </p>
+                  </button>
+
+                  {batches.length === 0 && (
+                    <div className="text-center py-6 text-slate-400 text-xs font-medium border border-dashed border-slate-200 rounded-xl">
+                      No specific batches found
+                    </div>
+                  )}
+
                   {batches.map((batch) => {
                     const isSelected = selectedBatch?.id === batch.id && !showSelectedOnly;
-                    const isConsumed = batch.available_quantity <= 0;
+                    const availQty = isNaN(Number(batch.available_quantity)) ? 0 : Number(batch.available_quantity);
+                    const initQty = isNaN(Number(batch.initial_quantity)) ? 0 : Number(batch.initial_quantity);
+                    const isConsumed = availQty <= 0;
                     const isCurrent = batch.status === 'Current';
                     const isNext = batch.status === 'Next';
+                    const costPrice = isNaN(Number(batch.purchase_cost)) ? 0 : Number(batch.purchase_cost);
                     
                     return (
                       <button
@@ -551,26 +643,31 @@ const ManageUnits = () => {
                                   ? 'bg-blue-50 text-blue-700 border border-blue-100'
                                   : 'bg-slate-50 text-slate-700 border border-slate-150'
                           }`}>
-                            {isConsumed ? 'Consumed' : batch.status}
+                            {isConsumed ? 'Consumed' : (batch.status || 'Active')}
                           </span>
                         </div>
+                        {batch.store_name && isAllLocations && (
+                          <div className="text-[10px] font-bold text-violet-600 truncate">
+                            📍 {batch.store_name}
+                          </div>
+                        )}
                         <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-semibold">
                           <Calendar className="w-3.5 h-3.5 flex-shrink-0" />
-                          <span>{batch.purchase_date ? new Date(batch.purchase_date).toLocaleDateString(undefined, { dateStyle: 'medium' }) : 'N/A'}</span>
+                          <span>{batch.purchase_date ? new Date(batch.purchase_date).toLocaleDateString(undefined, { dateStyle: 'medium' }) : '—'}</span>
                         </div>
                         <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-semibold">
                           <User className="w-3.5 h-3.5 flex-shrink-0" />
-                          <span className="truncate">{batch.supplier_name}</span>
+                          <span className="truncate">{batch.supplier_name || 'N/A'}</span>
                         </div>
                         <div className="border-t border-slate-100/60 mt-1 pt-2 flex items-center justify-between w-full text-xs">
                           <div className="flex flex-col">
                             <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Cost Price</span>
-                            <span className="font-bold text-slate-800">₹{Number(batch.purchase_cost || 0).toLocaleString()}</span>
+                            <span className="font-bold text-slate-800">₹{costPrice.toLocaleString()}</span>
                           </div>
                           <div className="text-right">
                             <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block">Units Left</span>
                             <span className={`font-black ${isConsumed ? 'text-slate-400' : 'text-slate-800'}`}>
-                              {batch.available_quantity} / {batch.initial_quantity}
+                              {availQty} / {initQty}
                             </span>
                           </div>
                         </div>
@@ -597,7 +694,11 @@ const ManageUnits = () => {
                       <span className="font-mono text-xs text-slate-400 font-bold bg-slate-50 px-2 py-0.5 rounded border">
                         Batch #{selectedBatch.id}
                       </span>
-                    ) : null}
+                    ) : (
+                      <span className="text-xs text-violet-700 font-bold bg-violet-50 px-2 py-0.5 rounded border border-violet-200">
+                        All Batches View
+                      </span>
+                    )}
                   </h3>
                   <p className="text-xs text-slate-500 font-semibold mt-0.5">
                     Browse all individual unit items and check their current status parameters.
@@ -704,6 +805,9 @@ const ManageUnits = () => {
                           />
                         </th>
                         <th className="py-3 px-4">Unit SKU</th>
+                        {(!selectedBatch || isAllLocations) && (
+                          <th className="py-3 px-4">Batch</th>
+                        )}
                         <th className="py-3 px-4">Status</th>
                         <th className="py-3 px-4">Invoice / Reference</th>
                         <th className="py-3 px-4">Manufacturer Serial</th>
@@ -728,10 +832,22 @@ const ManageUnits = () => {
                             <td className="py-3.5 px-4 font-mono font-bold text-slate-800">
                               {unit.unit_sku}
                             </td>
+                            {(!selectedBatch || isAllLocations) && (
+                              <td className="py-3.5 px-4 font-mono text-xs font-bold text-slate-700">
+                                <div>Batch #{unit.inventory_batch_id}</div>
+                                {unit.original_batch_id && unit.original_batch_id !== unit.inventory_batch_id && (
+                                  <div className="text-[10px] font-normal text-slate-400">orig: #{unit.original_batch_id}</div>
+                                )}
+                              </td>
+                            )}
                             <td className="py-3.5 px-4">
                               <StatusBadge 
                                 status={unit.status} 
-                                isTransferred={(unit.owner_type !== ownerType) || (String(unit.owner_id) !== String(ownerId))}
+                                isTransferred={
+                                  selectedBatch 
+                                    ? (unit.inventory_batch_id !== selectedBatch.id || (unit.owner_type !== ownerType) || (String(unit.owner_id) !== String(ownerId)))
+                                    : (Boolean(unit.original_batch_id && unit.original_batch_id !== unit.inventory_batch_id))
+                                }
                                 transferredTo={unit.owner_type === 'ADMIN' ? 'Admin Warehouse' : unit.transferred_to_store_name}
                               />
                             </td>

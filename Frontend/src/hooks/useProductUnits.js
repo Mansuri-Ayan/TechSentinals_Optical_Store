@@ -5,6 +5,7 @@ export const useProductUnits = (params) => {
     return useQuery({
         queryKey: ["productUnits", params],
         queryFn: () => getProductUnits(params),
+        enabled: !!params?.product_id,
     });
 };
 

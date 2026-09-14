@@ -57,5 +57,7 @@ async def create_subcategory_endpoint(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Category not found",
         )
+    if not isinstance(current_user, Admin):
+        payload.store_id = current_user.store_id
     subcategory = await create_subcategory(db, category_id=category_id, payload=payload)
     return SubcategoryRead.model_validate(subcategory)

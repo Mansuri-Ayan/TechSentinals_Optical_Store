@@ -38,7 +38,7 @@ class PurchaseOrderItemCreate(BaseModel):
     )
     quantity_ordered: int = Field(..., ge=1, description="Units to order")
     unit_price: Decimal = Field(..., ge=0, decimal_places=2)
-    tax_percent: Decimal = Field(default=Decimal("0"), ge=0, decimal_places=2)
+    tax_percent: Decimal | None = Field(default=None, ge=0, decimal_places=2)
     discount_percent: Decimal = Field(default=Decimal("0"), ge=0, decimal_places=2)
     notes: str | None = None
 
@@ -52,7 +52,10 @@ class PurchaseOrderItemRead(BaseModel):
     quantity_ordered: int
     quantity_received: int
     unit_price: Decimal
+    unit_cost_price: Decimal | None = None
     tax_percent: Decimal
+    tax_amount: Decimal | None = None
+    unit_cost_with_tax: Decimal | None = None
     discount_percent: Decimal
     line_total: Decimal
     notes: str | None = None
@@ -72,6 +75,15 @@ class PurchaseOrderItemRead(BaseModel):
     @model_validator(mode="after")
     def _fill_from_snapshot(self) -> "PurchaseOrderItemRead":
         """Populate denormalized fields from snapshot when not set explicitly."""
+        if self.unit_cost_price is None:
+            self.unit_cost_price = self.unit_price
+        base_after_disc = self.unit_price * (Decimal("1") - self.discount_percent / Decimal("100"))
+        rate = self.tax_percent or Decimal("0.00")
+        if self.tax_amount is None:
+            self.tax_amount = (base_after_disc * (rate / Decimal("100")) * Decimal(str(self.quantity_ordered))).quantize(Decimal("0.01"))
+        if self.unit_cost_with_tax is None:
+            self.unit_cost_with_tax = (self.unit_price * (Decimal("1") + rate / Decimal("100"))).quantize(Decimal("0.01"))
+
         if self.product_snapshot:
             if self.product_name is None:
                 self.product_name = self.product_snapshot.name

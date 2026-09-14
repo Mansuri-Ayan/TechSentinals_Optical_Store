@@ -106,7 +106,7 @@ async def update_optician(
     payload: OpticianUpdate,
 ) -> Optician:
     """Apply partial updates to an optician."""
-    update_data = payload.model_dump(exclude_unset=True)
+    update_data = payload.model_dump(exclude_unset=True, exclude={"role"})
     for field, value in update_data.items():
         setattr(optician, field, value)
     await db.commit()
@@ -115,8 +115,7 @@ async def update_optician(
 
 
 async def delete_optician(db: AsyncSession, optician: Optician) -> Optician:
-    """Soft-delete an optician by setting deleted_at."""
-    optician.deleted_at = datetime.now(timezone.utc)
+    """Deactivate an optician by setting is_active = False."""
     optician.is_active = False
     await db.commit()
     await db.refresh(optician)

@@ -39,6 +39,9 @@ async def create_product(
         discount_percent=payload.discount_percent,
         warranty_months=payload.warranty_months,
         image_url=payload.image_url,
+        low_stock_threshold=payload.low_stock_threshold,
+        gst_percent=payload.gst_percent,
+        sales_workflow_type=payload.sales_workflow_type or "BOTH",
     )
     db.add(product)
     await db.flush()  # get product.id

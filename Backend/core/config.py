@@ -19,6 +19,19 @@ class Settings(BaseSettings):
     COOKIE_SAMESITE: str = "lax"              # "lax", "strict", or "none"
     COOKIE_HTTPONLY: bool = True               # Prevent JS access
 
+    # ── Email & Gmail OAuth2 configuration ─────────────────────
+    GMAIL_CLIENT_ID: str = ""
+    GMAIL_CLIENT_SECRET: str = ""
+    GMAIL_REFRESH_TOKEN: str = ""
+    GMAIL_USER: str = ""
+
+    # ── OTP Verification configuration ─────────────────────────
+    OTP_LENGTH: int = 6
+    OTP_EXPIRE_MINUTES: int = 10
+    OTP_MAX_ATTEMPTS: int = 5
+    OTP_RESEND_COOLDOWN_SECONDS: int = 60
+    OTP_MAX_RESENDS_PER_HOUR: int = 5
+
     model_config = SettingsConfigDict(
         env_file=str(_ENV_FILE),
         env_file_encoding="utf-8",

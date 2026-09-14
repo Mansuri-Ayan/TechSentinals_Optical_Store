@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useForm } from 'react-hook-form';
 import { X, UserPlus, Camera, Eye, EyeOff, Plus } from 'lucide-react';
@@ -64,6 +64,7 @@ const inputCls = (hasError) =>
 /* ---------- Component ---------- */
 const AddStaffModal = ({ isOpen, onClose, onSubmitStaff, initialData, isSaving = false, storeId, stores = [] }) => {
   const isEditing = Boolean(initialData);
+  const isPathAdmin = window.location.pathname.startsWith('/admin');
   const [imagePreview, setImagePreview] = useState(initialData?.profile_image || null);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -76,12 +77,20 @@ const AddStaffModal = ({ isOpen, onClose, onSubmitStaff, initialData, isSaving =
     setValue,
     reset,
     setError,
+    clearErrors,
     formState: { errors },
   } = useForm({ defaultValues: getDefaultValues(initialData, storeId) });
 
   const watchedRole = watch('role');
   const watchedIsActive = watch('isActive');
   const watchedPassword = watch('password');
+
+  useEffect(() => {
+    if (watchedRole !== 'optician') {
+      setValue('qualification', '');
+      clearErrors('qualification');
+    }
+  }, [watchedRole, setValue, clearErrors]);
 
   if (!isOpen) return null;
 
@@ -122,6 +131,7 @@ const AddStaffModal = ({ isOpen, onClose, onSubmitStaff, initialData, isSaving =
 
     const updatePayload = {
       ...basePayload,
+      role: data.role,
       profile_image: imagePreview || null,
       ...(data.role === 'optician' ? { qualification: data.qualification || null } : {}),
     };
@@ -259,7 +269,7 @@ const AddStaffModal = ({ isOpen, onClose, onSubmitStaff, initialData, isSaving =
                   </label>
                   <select
                     {...register('role', { required: 'Role is required' })}
-                    disabled={isEditing}
+                    disabled={isEditing && !isPathAdmin}
                     className={`${inputCls(!!errors.role)} disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed`}
                   >
                     {roleOptions.map((r) => (
@@ -269,15 +279,15 @@ const AddStaffModal = ({ isOpen, onClose, onSubmitStaff, initialData, isSaving =
                   <FieldError message={errors.role?.message} />
                 </div>
 
-                {/* Assign Store (Visible only in Admin Warehouse mode) */}
-                {storeId === 'admin' && (
+                {/* Assign Store (Visible to Admins) */}
+                {(storeId === 'admin' || isPathAdmin) && (
                   <div>
                     <label className="block text-sm font-semibold text-slate-700 mb-1.5">
                       Assign Store <span className="text-red-500">*</span>
                     </label>
                     <select
                       {...register('store_id', { required: 'Assigning a store is required' })}
-                      disabled={isEditing}
+                      disabled={isEditing && !isPathAdmin}
                       className={`${inputCls(!!errors.store_id)} disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed`}
                     >
                       <option value="">Select Store...</option>

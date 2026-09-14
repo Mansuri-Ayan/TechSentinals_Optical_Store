@@ -21,6 +21,14 @@ class OwnerType(str, enum.Enum):
     STORE = "STORE"
 
 
+class AgingStage(str, enum.Enum):
+    NORMAL = "NORMAL"
+    STAGE_1 = "STAGE_1"
+    STAGE_2 = "STAGE_2"
+    STAGE_3 = "STAGE_3"
+    DEAD_STOCK = "DEAD_STOCK"
+
+
 class Inventory(Base):
     __tablename__ = "inventories"
 
@@ -158,6 +166,28 @@ class Inventory(Base):
         default=True,
         server_default="true",
         comment="Whether this inventory record is active",
+    )
+
+    aging_stage = Column(
+        Enum(AgingStage, name="aging_stage_enum", create_constraint=True),
+        nullable=False,
+        default=AgingStage.NORMAL,
+        server_default="NORMAL",
+        comment="Current aging stage of this inventory batch",
+    )
+
+    aging_discount_percent = Column(
+        Numeric(5, 2),
+        nullable=False,
+        default=0.00,
+        server_default="0.00",
+        comment="Aging-related discount percentage currently applicable",
+    )
+
+    aging_stage_changed_at = Column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="Timestamp when the aging stage was last transitioned",
     )
 
     created_at = Column(

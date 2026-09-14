@@ -172,3 +172,118 @@ async def get_staff_by_store(
         unique_staff = unique_staff[offset : offset + limit]
         
     return unique_staff, total
+
+
+async def transition_staff_role(
+    db: AsyncSession,
+    staff_id: int,
+    current_role: str,
+    target_role: str,
+    update_payload: dict,
+) -> Manager | Worker | Optician:
+    # 1. Get the current staff member
+    if current_role == "manager":
+        staff_model = Manager
+    elif current_role == "worker":
+        staff_model = Worker
+    else:
+        staff_model = Optician
+
+    staff = await db.scalar(
+        select(staff_model).where(staff_model.id == staff_id, staff_model.deleted_at.is_(None))
+    )
+    if not staff:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Staff member not found")
+
+    # 2. Get the target role object
+    role_obj = await db.scalar(select(Role).where(Role.role == target_role))
+    if not role_obj:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Target role not found")
+
+    # 3. Gather fields from current record, overriding with any fields in the update payload
+    first_name = update_payload.get("first_name") or staff.first_name
+    last_name = update_payload.get("last_name") or staff.last_name
+    email = update_payload.get("email") or staff.email
+    phone = update_payload.get("phone") or staff.phone
+    is_active = update_payload.get("is_active") if update_payload.get("is_active") is not None else staff.is_active
+    store_id = update_payload.get("store_id") or staff.store_id
+    pf_number = update_payload.get("pf_number") if "pf_number" in update_payload else staff.pf_number
+    profile_image = update_payload.get("profile_image") if "profile_image" in update_payload else staff.profile_image
+    qualification = update_payload.get("qualification") if "qualification" in update_payload else getattr(staff, "qualification", None)
+
+    # 4. Generate a new employee code for the target role
+    from services.manager_service import _generate_manager_code
+    from services.worker_service import _generate_worker_code
+    from services.optician_service import _generate_optician_code
+
+    if target_role == "manager":
+        employee_code = await _generate_manager_code(db)
+        new_staff = Manager(
+            store_id=store_id,
+            role_id=role_obj.id,
+            first_name=first_name,
+            last_name=last_name,
+            email=email,
+            phone=phone,
+            password_hash=staff.password_hash,
+            employee_code=employee_code,
+            pf_number=pf_number,
+            profile_image=profile_image,
+            joining_date=staff.joining_date,
+            is_active=is_active,
+        )
+    elif target_role == "worker":
+        employee_code = await _generate_worker_code(db)
+        new_staff = Worker(
+            store_id=store_id,
+            role_id=role_obj.id,
+            first_name=first_name,
+            last_name=last_name,
+            email=email,
+            phone=phone,
+            password_hash=staff.password_hash,
+            employee_code=employee_code,
+            pf_number=pf_number,
+            profile_image=profile_image,
+            joining_date=staff.joining_date,
+            is_active=is_active,
+        )
+    else:
+        employee_code = await _generate_optician_code(db)
+        new_staff = Optician(
+            store_id=store_id,
+            role_id=role_obj.id,
+            first_name=first_name,
+            last_name=last_name,
+            email=email,
+            phone=phone,
+            password_hash=staff.password_hash,
+            employee_code=employee_code,
+            pf_number=pf_number,
+            profile_image=profile_image,
+            qualification=qualification,
+            joining_date=staff.joining_date,
+            is_active=is_active,
+        )
+
+    # Add the new staff member
+    db.add(new_staff)
+    
+    # Soft-delete the old staff member
+    staff.deleted_at = datetime.now(timezone.utc)
+    staff.is_active = False
+    
+    await db.commit()
+    
+    # We must refresh the new record and return it loaded with its relationships
+    if target_role == "manager":
+        from services.manager_service import get_manager
+        return await get_manager(db, new_staff.id)
+    elif target_role == "worker":
+        from services.worker_service import get_worker
+        return await get_worker(db, new_staff.id)
+    else:
+        from services.optician_service import get_optician
+        return await get_optician(db, new_staff.id)

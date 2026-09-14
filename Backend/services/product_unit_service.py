@@ -1,5 +1,5 @@
 from typing import Optional, List
-from sqlalchemy import select, func
+from sqlalchemy import select, func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from models.product_unit import ProductUnit, UnitStatus, UnitSourceType
 from models.inventory import OwnerType
@@ -51,6 +51,60 @@ async def create_units_for_batch(
         for sku in skus
     ]
     db.add_all(units)
+
+async def ensure_units_for_batch(db: AsyncSession, inventory_batch_id: int) -> None:
+    """Ensure that ProductUnits exist for an inventory batch. If missing, auto-create them."""
+    from models.inventory import Inventory
+    from models.product import Product
+
+    inv = await db.scalar(select(Inventory).where(Inventory.id == inventory_batch_id))
+    if not inv:
+        return
+
+    target_qty = max(inv.initial_quantity or 0, inv.quantity or 0)
+    if target_qty <= 0:
+        return
+
+    # Count existing units for this batch
+    count_stmt = select(func.count(ProductUnit.id)).where(
+        or_(
+            ProductUnit.inventory_batch_id == inventory_batch_id,
+            ProductUnit.original_batch_id == inventory_batch_id,
+        )
+    )
+    existing_count = (await db.execute(count_stmt)).scalar_one_or_none() or 0
+
+    if existing_count < target_qty:
+        needed = target_qty - existing_count
+        product = await db.scalar(select(Product).where(Product.id == inv.product_id))
+        if product:
+            await create_units_for_batch(
+                db=db,
+                product_id=inv.product_id,
+                product_sku=product.sku,
+                inventory_batch_id=inv.id,
+                count=needed,
+                owner_type=inv.owner_type,
+                owner_id=inv.owner_id,
+                source_type=UnitSourceType.MANUAL_ADD,
+            )
+            await db.commit()
+
+async def ensure_units_for_product(db: AsyncSession, product_id: int) -> None:
+    """Ensure ProductUnits exist for all inventory batches of a product."""
+    from models.inventory import Inventory
+
+    batches = (
+        await db.execute(
+            select(Inventory.id).where(
+                Inventory.product_id == product_id,
+                or_(Inventory.quantity > 0, Inventory.initial_quantity > 0),
+            )
+        )
+    ).scalars().all()
+
+    for batch_id in batches:
+        await ensure_units_for_batch(db, batch_id)
 
 async def _check_units_exist(db: AsyncSession, product_id: Optional[int] = None, sale_item_id: Optional[int] = None) -> bool:
     """Safety Rule 1 check: Return True if any units exist for this product/sale item."""
@@ -191,7 +245,7 @@ async def transfer_units(
 
     for unit in units_to_transfer:
         if unit.original_batch_id is None:
-            unit.original_batch_id = unit.inventory_batch_id
+            unit.original_batch_id = from_batch_id or unit.inventory_batch_id
         unit.owner_type = to_owner_type
         unit.owner_id = to_owner_id
         unit.inventory_batch_id = new_batch_id

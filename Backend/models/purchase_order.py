@@ -213,6 +213,13 @@ class PurchaseOrder(Base):
         cascade="all, delete-orphan",
         lazy="noload",
     )
+    invoice = relationship(
+        "PurchaseOrderInvoice",
+        back_populates="purchase_order",
+        uselist=False,
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
 
     def __repr__(self) -> str:
         return (

@@ -49,20 +49,26 @@ def _compute_line_total(
 
 
 async def _generate_po_number(db: AsyncSession, admin_id: int) -> str:
-    """Auto-generate a sequential PO number like PO-2024-00001."""
+    """Auto-generate a sequential PO number like PO-2026-00001."""
     year = datetime.now(timezone.utc).year
     prefix = f"PO-{year}-"
     stmt = (
-        select(sa_func.count())
-        .select_from(PurchaseOrder)
-        .where(
-            PurchaseOrder.admin_id == admin_id,
-            PurchaseOrder.po_number.like(f"{prefix}%"),
-        )
+        select(PurchaseOrder.po_number)
+        .where(PurchaseOrder.po_number.like(f"{prefix}%"))
+        .order_by(PurchaseOrder.po_number.desc())
+        .limit(1)
     )
     result = await db.execute(stmt)
-    count = result.scalar() or 0
-    return f"{prefix}{count + 1:05d}"
+    last_po = result.scalar()
+    if last_po:
+        try:
+            suffix = last_po.split("-")[-1]
+            next_num = int(suffix) + 1
+        except (ValueError, IndexError):
+            next_num = 1
+    else:
+        next_num = 1
+    return f"{prefix}{next_num:05d}"
 
 
 # ── Create PO ─────────────────────────────────────────────────
@@ -96,16 +102,21 @@ async def create_purchase_order(
     items = []
 
     for item_data in payload.items:
+        tax_percent = item_data.tax_percent
+        if tax_percent is None:
+            from services.gst_service import resolve_gst_percent
+            tax_percent = await resolve_gst_percent(db, item_data.product_id, admin_id)
+
         line_total = _compute_line_total(
             item_data.quantity_ordered,
             item_data.unit_price,
-            item_data.tax_percent,
+            tax_percent,
             item_data.discount_percent,
         )
         base = item_data.unit_price * item_data.quantity_ordered
         discount_amt = base * item_data.discount_percent / Decimal("100")
         after_discount = base - discount_amt
-        tax_amt = after_discount * item_data.tax_percent / Decimal("100")
+        tax_amt = after_discount * tax_percent / Decimal("100")
 
         subtotal += base
         total_discount += discount_amt
@@ -130,7 +141,7 @@ async def create_purchase_order(
             inventory_id=item_data.inventory_id,
             quantity_ordered=item_data.quantity_ordered,
             unit_price=item_data.unit_price,
-            tax_percent=item_data.tax_percent,
+            tax_percent=tax_percent,
             discount_percent=item_data.discount_percent,
             line_total=line_total,
             notes=item_data.notes,
@@ -160,6 +171,11 @@ async def create_purchase_order(
         items=items,
     )
     db.add(po)
+    await db.flush()
+
+    from services.bill_service import update_invoice_for_po
+    await update_invoice_for_po(db, po.id, commit=False)
+
     await db.commit()
     await db.refresh(po)
     return po
@@ -396,6 +412,9 @@ async def receive_goods(
     elif total_received > 0:
         po.status = POStatus.PARTIALLY_RECEIVED
 
+    from services.bill_service import update_invoice_for_po
+    await update_invoice_for_po(db, po.id, commit=False)
+
     await db.commit()
     await db.refresh(po)
     return po
@@ -438,6 +457,9 @@ async def record_supplier_payment(
 
     po.paid_amount += payload.amount
     po.due_amount -= payload.amount
+
+    from services.bill_service import update_invoice_for_po
+    await update_invoice_for_po(db, po.id, commit=False)
 
     await db.commit()
     await db.refresh(payment)

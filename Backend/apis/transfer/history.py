@@ -36,6 +36,7 @@ async def transaction_history_endpoint(
     transaction_type: str | None = Query(None),
     store_id: str | None = Query(None),
     search: str | None = Query(None, description="Search term matching product name or ID"),
+    exclude_sales: bool = Query(False, description="Exclude customer sale transactions"),
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=1000),
     db: AsyncSession = Depends(get_db),
@@ -73,6 +74,7 @@ async def transaction_history_endpoint(
         limit=limit,
         offset=offset,
         search=search,
+        exclude_sales=exclude_sales,
     )
     pages = (total + limit - 1) // limit if limit > 0 else 1
     return PaginatedResponse[TransactionRead](

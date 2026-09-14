@@ -199,3 +199,21 @@ async def clear_admin_role_override(db: AsyncSession, admin_id: int, role_type: 
     if record:
         await db.delete(record)
         await db.commit()
+
+
+async def copy_global_permissions_to_admin(db: AsyncSession, admin_id: int) -> None:
+    """Copy all global role permission defaults to admin-level role overrides for a new admin."""
+    # Query all global permissions
+    stmt = select(GlobalRolePermission)
+    result = await db.execute(stmt)
+    global_perms = result.scalars().all()
+    
+    for gp in global_perms:
+        override = AdminRolePermissionOverride(
+            admin_id=admin_id,
+            role_type=gp.role_type,
+            permission_id=gp.permission_id,
+            is_granted=gp.is_granted
+        )
+        db.add(override)
+    await db.commit()

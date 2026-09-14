@@ -88,6 +88,22 @@ async def authenticate_user_by_role(
     return None
 
 
+async def authenticate_user(
+    db: AsyncSession,
+    email: str,
+    password: str,
+) -> tuple[SuperAdmin | Admin | Accountant | Manager | Worker | Optician, str] | None:
+    """
+    Validate credentials by testing role tables in order (admin, manager, worker, optician, accountant, superadmin).
+    Returns (user, role_name) if found, otherwise None.
+    """
+    for role in ["admin", "manager", "worker", "optician", "accountant", "superadmin"]:
+        res = await authenticate_user_by_role(db, email, password, role)
+        if res:
+            return res
+    return None
+
+
 async def create_tokens(
     db: AsyncSession,
     user: SuperAdmin | Admin | Accountant | Manager | Worker | Optician,

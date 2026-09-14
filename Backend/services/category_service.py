@@ -120,14 +120,36 @@ async def get_categories_by_admin(
         )
 
     # ── Subcategories-count subquery ──
-    sub_sq = (
-        select(
-            Subcategory.category_id,
-            sa_func.count(Subcategory.id).label("sub_cnt"),
+    if store_id is not None:
+        sub_sq = (
+            select(
+                Subcategory.category_id,
+                sa_func.count(Subcategory.id).label("sub_cnt"),
+            )
+            .outerjoin(
+                StoreSubcategoryOverride,
+                and_(
+                    StoreSubcategoryOverride.subcategory_id == Subcategory.id,
+                    StoreSubcategoryOverride.store_id == store_id
+                )
+            )
+            .where(
+                or_(Subcategory.store_id == store_id, Subcategory.store_id.is_(None)),
+                sa_func.coalesce(StoreSubcategoryOverride.is_active, Subcategory.is_active).is_(True)
+            )
+            .group_by(Subcategory.category_id)
+            .subquery()
         )
-        .group_by(Subcategory.category_id)
-        .subquery()
-    )
+    else:
+        sub_sq = (
+            select(
+                Subcategory.category_id,
+                sa_func.count(Subcategory.id).label("sub_cnt"),
+            )
+            .where(Subcategory.is_active.is_(True))
+            .group_by(Subcategory.category_id)
+            .subquery()
+        )
 
     # ── Base conditions ──
     conditions = [Category.admin_id == admin_id]
@@ -245,6 +267,7 @@ async def update_category(
     """Apply partial updates to a category. If store_id is provided, is_active is updated in the override."""
     update_data = payload.model_dump(exclude_unset=True)
     
+    is_active_val = None
     # Handle is_active override
     if "is_active" in update_data and store_id is not None:
         is_active_val = update_data.pop("is_active")
@@ -264,13 +287,15 @@ async def update_category(
             )
             db.add(override)
         await db.commit()
-        # Set transient attribute for response serialization
-        category.is_active = is_active_val
         
     for field, value in update_data.items():
         setattr(category, field, value)
     await db.commit()
     await db.refresh(category)
+    
+    if is_active_val is not None:
+        category.is_active = is_active_val
+        
     return category
 
 
@@ -296,6 +321,7 @@ async def delete_category(
             )
             db.add(override)
         await db.commit()
+        await db.refresh(category)
         category.is_active = False
     else:
         category.is_active = False
@@ -312,8 +338,42 @@ async def create_subcategory(
     payload: SubcategoryCreate,
 ) -> Subcategory:
     """Create a subcategory under the given category."""
+    from fastapi import HTTPException
+    
+    # First, fetch the parent category
+    parent_stmt = select(Category).where(Category.id == category_id)
+    parent = (await db.execute(parent_stmt)).scalar_one_or_none()
+    if not parent:
+        raise HTTPException(
+            status_code=404,
+            detail="Parent category not found."
+        )
+
+    # Perform validation for specific store scoping (Scenario 2 / 3)
+    if payload.store_id is not None:
+        # Check if the parent category belongs to another store
+        if parent.store_id is not None and parent.store_id != payload.store_id:
+            raise HTTPException(
+                status_code=400,
+                detail="Parent category is not available for this store."
+            )
+        # Check if the parent category is deactivated for this store
+        from models.store_category_override import StoreCategoryOverride
+        sco_stmt = select(StoreCategoryOverride.is_active).where(
+            StoreCategoryOverride.category_id == parent.id,
+            StoreCategoryOverride.store_id == payload.store_id
+        )
+        sco_active = (await db.execute(sco_stmt)).scalar()
+        if sco_active is False or (sco_active is None and not parent.is_active):
+            raise HTTPException(
+                status_code=400,
+                detail="Parent category is deactivated for this store."
+            )
+
+    # Create the Subcategory
     subcategory = Subcategory(
         category_id=category_id,
+        store_id=payload.store_id,
         name=payload.name,
         description=payload.description,
     )
@@ -321,30 +381,40 @@ async def create_subcategory(
     await db.commit()
     await db.refresh(subcategory)
 
-    # Auto-provision StoreSubcategoryOverride entries based on parent category store scoping
-    parent_stmt = select(Category).where(Category.id == category_id)
-    parent = (await db.execute(parent_stmt)).scalar_one_or_none()
-    if parent:
-        if parent.store_id is not None:
+    # Provision StoreSubcategoryOverride entries
+    if subcategory.store_id is not None:
+        # Scenario 2 / 3: Specific store
+        sso = StoreSubcategoryOverride(
+            store_id=subcategory.store_id,
+            subcategory_id=subcategory.id,
+            is_active=True,
+        )
+        db.add(sso)
+        await db.commit()
+    else:
+        # Scenario 1: All stores (only if they have the parent category active)
+        from models.store_category_override import StoreCategoryOverride
+        stores_stmt = select(Store.id).where(Store.admin_id == parent.admin_id, Store.deleted_at.is_(None))
+        store_ids = (await db.execute(stores_stmt)).scalars().all()
+        for s_id in store_ids:
+            # Check if parent category is active for this store
+            if parent.store_id is not None and parent.store_id != s_id:
+                continue
+            sco_stmt = select(StoreCategoryOverride.is_active).where(
+                StoreCategoryOverride.category_id == parent.id,
+                StoreCategoryOverride.store_id == s_id
+            )
+            sco_active = (await db.execute(sco_stmt)).scalar()
+            if sco_active is False or (sco_active is None and not parent.is_active):
+                continue
+            
             sso = StoreSubcategoryOverride(
-                store_id=parent.store_id,
+                store_id=s_id,
                 subcategory_id=subcategory.id,
                 is_active=True,
             )
             db.add(sso)
-            await db.commit()
-        else:
-            stores_stmt = select(Store.id).where(Store.admin_id == parent.admin_id)
-            store_ids = (await db.execute(stores_stmt)).scalars().all()
-            for s_id in store_ids:
-                sso = StoreSubcategoryOverride(
-                    store_id=s_id,
-                    subcategory_id=subcategory.id,
-                    is_active=True,
-                )
-                db.add(sso)
-            if store_ids:
-                await db.commit()
+        await db.commit()
 
     return subcategory
 
@@ -393,6 +463,7 @@ async def get_subcategories_by_category(
     # ── Base conditions ──
     conditions = [Subcategory.category_id == category_id]
     if store_id is not None:
+        conditions.append(or_(Subcategory.store_id == store_id, Subcategory.store_id.is_(None)))
         if active_only:
             conditions.append(sa_func.coalesce(StoreSubcategoryOverride.is_active, Subcategory.is_active).is_(True))
     else:
@@ -474,6 +545,7 @@ async def update_subcategory(
     """Apply partial updates to a subcategory. If store_id is provided, is_active is updated in the override."""
     update_data = payload.model_dump(exclude_unset=True)
     
+    is_active_val = None
     # Handle is_active override
     if "is_active" in update_data and store_id is not None:
         is_active_val = update_data.pop("is_active")
@@ -493,13 +565,15 @@ async def update_subcategory(
             )
             db.add(override)
         await db.commit()
-        # Set transient attribute for response serialization
-        subcategory.is_active = is_active_val
         
     for field, value in update_data.items():
         setattr(subcategory, field, value)
     await db.commit()
     await db.refresh(subcategory)
+    
+    if is_active_val is not None:
+        subcategory.is_active = is_active_val
+        
     return subcategory
 
 
@@ -525,6 +599,7 @@ async def delete_subcategory(
             )
             db.add(override)
         await db.commit()
+        await db.refresh(subcategory)
         subcategory.is_active = False
     else:
         subcategory.is_active = False

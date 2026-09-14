@@ -1,4 +1,5 @@
 # API: inventory/read.py
+from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from core.deps import require_permission, get_user_admin_id
@@ -26,26 +27,40 @@ def _inventory_to_read(inv, store_map: dict | None = None) -> InventoryRead:
 
     supplier_id = None
     supplier_name = None
-    if product and product.supplier_products:
+    if getattr(inv, "supplier", None):
+        supplier_id = inv.supplier.id
+        supplier_name = inv.supplier.company_name or getattr(inv.supplier, "name", None)
+    elif product and getattr(product, "supplier_products", None):
         active_sps = [sp for sp in product.supplier_products if sp.is_active and sp.supplier]
         if active_sps:
             supplier_id = active_sps[0].supplier_id
             supplier_name = active_sps[0].supplier.company_name
 
     data = {c.key: getattr(inv, c.key) for c in inv.__table__.columns}
+    brand_val = product.brand.name if product and product.brand else None
+    sku_val = product.sku if product else None
+    cat_val = product.category.name if product and product.category else None
+    subcat_val = product.subcategory.name if product and product.subcategory else None
+    resolved_supplier_name = getattr(inv, "supplier_name", None) or supplier_name or (inv.supplier.company_name if getattr(inv, "supplier", None) else None)
+
     data.update({
         "owner_name": owner_name,
         "product_name": product.name if product else None,
-        "product_sku": product.sku if product else None,
+        "product_sku": sku_val,
+        "sku": sku_val,
         "category_id": product.category_id if product else None,
-        "category_name": product.category.name if product and product.category else None,
+        "category_name": cat_val,
+        "category": cat_val,
         "subcategory_id": product.subcategory_id if product else None,
-        "subcategory_name": product.subcategory.name if product and product.subcategory else None,
+        "subcategory_name": subcat_val,
+        "subcategory": subcat_val,
         "brand_id": product.brand_id if product else None,
-        "brand_name": product.brand.name if product and product.brand else None,
+        "brand_name": brand_val,
+        "brand": brand_val,
         "cost_price": inv.last_purchase_price if inv.last_purchase_price is not None else (product.cost_price if product else None),
         "selling_price": selling_price,
         "price": selling_price,
+        "gst_percent": product.gst_percent if (product and product.gst_percent is not None) else Decimal("18.00"),
         "image_url": product.image_url if product else None,
         "discount_percent": product.discount_percent if product else 0.00,
         "warranty_months": product.warranty_months if product else 0,
@@ -54,7 +69,9 @@ def _inventory_to_read(inv, store_map: dict | None = None) -> InventoryRead:
         "accessory_product": product.accessory_product if product else None,
         "other_stocks": getattr(inv, "other_stocks", []),
         "supplier_id": inv.supplier_id if getattr(inv, "supplier_id", None) is not None else supplier_id,
-        "supplier_name": getattr(inv, "supplier_name", None) or supplier_name,
+        "supplier_name": resolved_supplier_name,
+        "supplier": resolved_supplier_name,
+        "sales_workflow_type": product.sales_workflow_type if (product and getattr(product, "sales_workflow_type", None)) else "BOTH",
     })
     return InventoryRead(**data)
 
@@ -160,6 +177,9 @@ async def list_inventories(
     limit: int = Query(default=20, ge=1, le=100, description="Page size"),
     paginate: bool = Query(default=True, description="Enable pagination"),
     warehouse_only: bool = Query(default=False, description="If true and owner_type is ADMIN, only returns warehouse inventory (no stores)"),
+    aging_stage: str | None = Query(default=None, description="Comma-separated aging stages (NORMAL, STAGE_1, etc.)"),
+    aging_discount: float | None = Query(default=None, description="Filter by exact aging discount %"),
+    has_aging_discount: bool | None = Query(default=None, description="Filter only discounted products"),
     db: AsyncSession = Depends(get_db),
     current_user = Depends(require_permission('inventory', 'read')),
 ) -> InventoryResponse:
@@ -227,6 +247,9 @@ async def list_inventories(
         limit=limit,
         paginate=paginate,
         warehouse_only=warehouse_only,
+        aging_stage=aging_stage,
+        aging_discount=aging_discount,
+        has_aging_discount=has_aging_discount,
     )
     
     await _populate_other_stocks(
@@ -512,20 +535,16 @@ async def universal_search_inventories(
                 and_(
                     local_inv.id.is_not(None),
                     local_inv.available_quantity > 0,
-                    or_(
-                        and_(local_inv.reorder_level > 0, local_inv.available_quantity <= local_inv.reorder_level),
-                        and_(local_inv.reorder_level == 0, local_inv.available_quantity <= 10)
-                    )
+                    Product.low_stock_threshold.is_not(None),
+                    local_inv.available_quantity <= Product.low_stock_threshold
                 )
             )
             stmt_data = stmt_data.where(
                 and_(
                     local_inv.id.is_not(None),
                     local_inv.available_quantity > 0,
-                    or_(
-                        and_(local_inv.reorder_level > 0, local_inv.available_quantity <= local_inv.reorder_level),
-                        and_(local_inv.reorder_level == 0, local_inv.available_quantity <= 10)
-                    )
+                    Product.low_stock_threshold.is_not(None),
+                    local_inv.available_quantity <= Product.low_stock_threshold
                 )
             )
         elif stock_status == "in_stock":
@@ -533,8 +552,8 @@ async def universal_search_inventories(
                 and_(
                     local_inv.id.is_not(None),
                     or_(
-                        and_(local_inv.reorder_level > 0, local_inv.available_quantity > local_inv.reorder_level),
-                        and_(local_inv.reorder_level == 0, local_inv.available_quantity > 10)
+                        Product.low_stock_threshold.is_(None),
+                        local_inv.available_quantity > Product.low_stock_threshold
                     )
                 )
             )
@@ -542,8 +561,8 @@ async def universal_search_inventories(
                 and_(
                     local_inv.id.is_not(None),
                     or_(
-                        and_(local_inv.reorder_level > 0, local_inv.available_quantity > local_inv.reorder_level),
-                        and_(local_inv.reorder_level == 0, local_inv.available_quantity > 10)
+                        Product.low_stock_threshold.is_(None),
+                        local_inv.available_quantity > Product.low_stock_threshold
                     )
                 )
             )
@@ -675,6 +694,7 @@ async def universal_search_inventories(
                 cost_price=p.cost_price,
                 selling_price=p.selling_price,
                 price=p.selling_price,
+                gst_percent=p.gst_percent if p.gst_percent is not None else Decimal("18.00"),
                 image_url=p.image_url,
                 discount_percent=p.discount_percent,
                 warranty_months=p.warranty_months,
@@ -685,14 +705,19 @@ async def universal_search_inventories(
                 quantity=total_quantity,
                 available_quantity=total_available,
                 reorder_level=local_rec.reorder_level if local_rec else 0,
+                low_stock_threshold=p.low_stock_threshold,
                 is_active=local_rec.is_active if local_rec else True,
+                aging_stage=local_rec.aging_stage.value if local_rec and hasattr(local_rec.aging_stage, 'value') else (local_rec.aging_stage if local_rec else "NORMAL"),
+                aging_discount_percent=local_rec.aging_discount_percent if local_rec else Decimal("0.00"),
+                aging_stage_changed_at=local_rec.aging_stage_changed_at if local_rec else None,
                 owner_type=resolved_owner_type,
                 owner_id=resolved_owner_id,
                 owner_name=owner_name,
                 other_stocks=other_stocks,
                 frame_product=p.frame_product,
                 lens_product=p.lens_product,
-                accessory_product=p.accessory_product
+                accessory_product=p.accessory_product,
+                sales_workflow_type=getattr(p, "sales_workflow_type", None) or "BOTH",
             )
         )
 
@@ -779,7 +804,13 @@ async def get_inventory_batches_endpoint(
     else:
         admin_id = get_user_admin_id(current_user)
 
-    if product_id is not None and owner_type is not None and owner_id is not None:
+    is_all_owners = (owner_type is not None and owner_type.upper() == "ALL") and isinstance(current_user, Admin)
+
+    if is_all_owners:
+        resolved_product_id = product_id or inventory_id
+        resolved_owner_type = None
+        resolved_owner_id = None
+    elif product_id is not None and owner_type is not None and owner_id is not None:
         resolved_owner_type = OwnerType[owner_type.upper()]
         resolved_owner_id = owner_id
         resolved_product_id = product_id
@@ -798,8 +829,8 @@ async def get_inventory_batches_endpoint(
         resolved_product_id = inv.product_id
 
     # 2. Check permissions
-    ot_str = resolved_owner_type.value if hasattr(resolved_owner_type, "value") else str(resolved_owner_type)
-    if not isinstance(current_user, Admin):
+    if not is_all_owners and not isinstance(current_user, Admin):
+        ot_str = resolved_owner_type.value if hasattr(resolved_owner_type, "value") else str(resolved_owner_type)
         from models.worker import Worker
         from models.optician import Optician
         from models.accountant import Accountant
@@ -815,15 +846,37 @@ async def get_inventory_batches_endpoint(
                 detail="Access denied to this inventory record",
             )
 
-    batches_stmt = (
-        select(Inventory)
-        .where(
-            Inventory.product_id == resolved_product_id,
-            Inventory.owner_type == resolved_owner_type,
-            Inventory.owner_id == resolved_owner_id,
+    from models.product import Product
+    from sqlalchemy.orm import selectinload
+    from models.supplier_product import SupplierProduct
+
+    batch_options = [
+        selectinload(Inventory.supplier),
+        selectinload(Inventory.product).selectinload(Product.supplier_products).selectinload(SupplierProduct.supplier),
+    ]
+
+    if is_all_owners:
+        batches_stmt = (
+            select(Inventory)
+            .options(*batch_options)
+            .join(Product, Inventory.product_id == Product.id)
+            .where(
+                Inventory.product_id == resolved_product_id,
+                Product.admin_id == admin_id,
+            )
+            .order_by(Inventory.id.asc())
         )
-        .order_by(Inventory.id.asc())
-    )
+    else:
+        batches_stmt = (
+            select(Inventory)
+            .options(*batch_options)
+            .where(
+                Inventory.product_id == resolved_product_id,
+                Inventory.owner_type == resolved_owner_type,
+                Inventory.owner_id == resolved_owner_id,
+            )
+            .order_by(Inventory.id.asc())
+        )
 
     batches_res = await db.execute(batches_stmt)
     batches = list(batches_res.scalars().all())
@@ -849,7 +902,14 @@ async def get_inventory_batches_endpoint(
         else:
             status_str = "Consumed"
 
-        supplier_company = b.supplier.company_name if b.supplier else "N/A"
+        supplier_company = "N/A"
+        if b.supplier and b.supplier.company_name:
+            supplier_company = b.supplier.company_name
+        elif b.product and getattr(b.product, "supplier_products", None):
+            for sp in b.product.supplier_products:
+                if sp.is_active and sp.supplier and sp.supplier.company_name:
+                    supplier_company = sp.supplier.company_name
+                    break
         
         b_ot_str = b.owner_type.value if hasattr(b.owner_type, "value") else str(b.owner_type)
         if b_ot_str == "ADMIN":
@@ -857,13 +917,16 @@ async def get_inventory_batches_endpoint(
         else:
             store_name = store_map.get(b.owner_id, "Unknown Store")
 
+        purchase_cost = float(b.purchase_cost) if b.purchase_cost is not None else float(b.product.cost_price if b.product and b.product.cost_price is not None else 0.0)
+        selling_price = float(b.selling_price) if b.selling_price is not None else float(b.product.selling_price if b.product and b.product.selling_price is not None else 0.0)
+
         resolved_batches.append({
             "id": b.id,
             "purchase_date": b.purchase_date.isoformat() if b.purchase_date else None,
-            "purchase_cost": float(b.purchase_cost),
-            "selling_price": float(b.selling_price) if b.selling_price is not None else float(b.product.selling_price if b.product else 0.00),
-            "initial_quantity": b.initial_quantity,
-            "available_quantity": b.available_quantity,
+            "purchase_cost": purchase_cost,
+            "selling_price": selling_price,
+            "initial_quantity": b.initial_quantity or 0,
+            "available_quantity": b.available_quantity or 0,
             "supplier_name": supplier_company,
             "store_name": store_name,
             "status": status_str,

@@ -7,6 +7,7 @@ import {
   updateRepairApi,
   updateRepairStatusApi,
   cancelRepairApi,
+  getRepairBillApi,
 } from '../api/repair/repair.api';
 import { toast } from 'react-toastify';
 
@@ -38,6 +39,20 @@ export const useRepair = (repairId) => {
     retry: false,
   });
 };
+
+/**
+ * Hook to fetch repair bill JSON / HTML.
+ */
+export const useRepairBill = (repairId) => {
+  return useQuery({
+    queryKey: [...repairsQueryKey, repairId, 'bill'],
+    queryFn: () => getRepairBillApi(repairId),
+    enabled: !!repairId,
+    staleTime: 1000 * 60,
+    retry: false,
+  });
+};
+
 
 /**
  * Hook providing create/update/status/cancel mutations for repairs.

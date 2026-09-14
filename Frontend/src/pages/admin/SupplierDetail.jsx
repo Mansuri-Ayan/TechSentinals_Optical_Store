@@ -217,6 +217,7 @@ const SupplierDetail = () => {
       costPrice: data.costPrice,
       sellingPrice: data.sellingPrice,
       discountPercent: data.discountPercent,
+      lowStockThreshold: data.lowStockThreshold,
     });
 
     setShowAddTransaction(false);

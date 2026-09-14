@@ -26,10 +26,12 @@ import {
   ChevronDown,
   ArrowRightLeft,
   Pencil,
+  Settings,
 } from "lucide-react";
 
 import Pagination from "../../components/shared/Pagination";
 import AddInventoryModal from "../../components/admin/AddInventoryModal";
+import InventoryConfigPanel from "../../components/admin/InventoryConfigPanel";
 import InventoryDetailDrawer from "../../components/admin/InventoryDetailDrawer";
 import ProductViewModal from "../../components/admin/ProductViewModal";
 import PlaceOrderModal from "../../components/admin/PlaceOrderModal";
@@ -126,10 +128,11 @@ const statusConfig = {
 
 const getStockStatus = (item) => {
   const qty = Number(item.available_quantity ?? item.quantity ?? 0);
-  const reorder = Number(item.reorder_level ?? 0);
   if (qty === 0) return "out_of_stock";
-  const threshold = reorder > 0 ? reorder : 10;
-  if (qty <= threshold) return "low_stock";
+  const threshold = item.low_stock_threshold !== undefined && item.low_stock_threshold !== null
+    ? Number(item.low_stock_threshold)
+    : (item.reorder_level && Number(item.reorder_level) > 0 ? Number(item.reorder_level) : null);
+  if (threshold !== null && qty <= threshold) return "low_stock";
   return "in_stock";
 };
 
@@ -275,6 +278,17 @@ const ProductCard = ({ item, onViewDetails, onDelete, onEdit, onRequestStock, on
           >
             {item.subcategory}
           </span>
+          {item.sales_workflow_type && item.sales_workflow_type !== 'BOTH' && (
+            <span
+              className={`self-start inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold border ${
+                item.sales_workflow_type === 'DIRECT_ONLY'
+                  ? 'bg-blue-50 text-blue-700 border-blue-200'
+                  : 'bg-purple-50 text-purple-700 border-purple-200'
+              }`}
+            >
+              {item.sales_workflow_type === 'DIRECT_ONLY' ? '⚡ Instant Direct' : '📋 Lab Required'}
+            </span>
+          )}
           {Number(item.discount_percent) > 0 && (
             <span className="self-start inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold border bg-rose-50 text-rose-700 border-rose-200">
               {item.discount_percent}% Off
@@ -283,6 +297,23 @@ const ProductCard = ({ item, onViewDetails, onDelete, onEdit, onRequestStock, on
           {Number(item.warranty_months) > 0 && (
             <span className="self-start inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold border bg-blue-50 text-blue-700 border-blue-200">
               {item.warranty_months}M Warranty
+            </span>
+          )}
+          {item.aging_stage && item.aging_stage !== "NORMAL" && (
+            <span
+              className={`self-start inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold border ${
+                item.aging_stage === "STAGE_1"
+                  ? "bg-amber-50 text-amber-700 border-amber-200"
+                  : item.aging_stage === "STAGE_2"
+                  ? "bg-orange-50 text-orange-700 border-orange-200"
+                  : item.aging_stage === "STAGE_3"
+                  ? "bg-rose-50 text-rose-700 border-rose-200"
+                  : "bg-slate-100 text-slate-700 border-slate-300"
+              }`}
+            >
+              {item.aging_stage === "DEAD_STOCK"
+                ? "Dead Stock"
+                : `Aging: ${item.aging_discount_percent ?? 0}% Off`}
             </span>
           )}
         </div>
@@ -304,27 +335,42 @@ const ProductCard = ({ item, onViewDetails, onDelete, onEdit, onRequestStock, on
         <div className="border-t border-slate-50 mt-auto pt-2 flex flex-col gap-1 w-full">
           <div className="flex items-center justify-between">
             <div className="flex flex-col">
-              {Number(item.discount_percent) > 0 ? (
-                <>
-                  <span className="text-[11px] text-slate-400 line-through leading-tight">
-                    ₹{Number(item.selling_price).toLocaleString()}
-                  </span>
-                  <span className="text-sm font-bold text-emerald-700">
-                    ₹{(Number(item.selling_price) * (1 - Number(item.discount_percent) / 100)).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
-                  </span>
-                </>
-              ) : (
-                <span className="text-sm font-bold text-slate-900">
-                  ₹{Number(item.selling_price).toLocaleString()}
-                </span>
-              )}
+              {(() => {
+                const spBeforeGst = Number(item.selling_price_before_gst ?? item.selling_price) || 0;
+                const rate = item.gst_percent !== undefined && item.gst_percent !== null ? Number(item.gst_percent) : 18;
+                const gstAmt = (item.gst_amount !== undefined && item.gst_amount !== null && (rate === 0 || Number(item.gst_amount) > 0))
+                  ? Number(item.gst_amount)
+                  : (spBeforeGst * rate / 100);
+                const spWithGst = (item.selling_price_with_gst !== undefined && item.selling_price_with_gst !== null && (rate === 0 || Number(item.selling_price_with_gst) > spBeforeGst))
+                  ? Number(item.selling_price_with_gst)
+                  : (spBeforeGst + gstAmt);
+                const disc = Number(item.discount_percent || 0);
+
+                return (
+                  <>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-sm font-black text-slate-900">
+                        ₹{disc > 0 
+                          ? (spWithGst * (1 - disc / 100)).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })
+                          : spWithGst.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                      </span>
+                      <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-1 py-0.2 rounded border border-emerald-200">
+                        Incl. GST
+                      </span>
+                    </div>
+                    <span className="text-[10px] text-slate-400 font-medium">
+                      Base: ₹{spBeforeGst.toLocaleString()} + {rate}% GST
+                    </span>
+                  </>
+                );
+              })()}
             </div>
             <span className="text-xs text-slate-400 truncate max-w-[90px]">
               {item.supplier}
             </span>
           </div>
           <div className="flex justify-between items-center text-[10px] font-semibold text-slate-500">
-            <span>Current Cost:</span>
+            <span>Cost (CP):</span>
             <span>₹{item.cost_price ? Number(item.cost_price).toLocaleString() : 'N/A'}</span>
           </div>
         </div>
@@ -563,6 +609,7 @@ const Inventory = () => {
   const [preselectedSupplierId, setPreselectedSupplierId] = useState(null);
   const [editItem, setEditItem] = useState(null);
   const [confirmDeleteModal, setConfirmDeleteModal] = useState({ isOpen: false, inventoryId: null });
+  const [showConfigPanel, setShowConfigPanel] = useState(false);
 
   const { suppliers } = useSuppliers("admin");
   const { recordPurchaseAsync } = usePurchaseOrders({
@@ -583,6 +630,7 @@ const Inventory = () => {
       costPrice: data.costPrice,
       sellingPrice: data.sellingPrice,
       discountPercent: data.discountPercent,
+      lowStockThreshold: data.lowStockThreshold,
     });
     setShowRecordPurchase(false);
     setPreselectedProductId(null);
@@ -847,12 +895,15 @@ const Inventory = () => {
           cost_price: Number(data.cost_price),
           selling_price: Number(data.selling_price),
           discount_percent: Number(data.discount_percent || 0),
+          gst_percent: data.gst_percent !== undefined && data.gst_percent !== "" ? Number(data.gst_percent) : null,
           warranty_months: Number(data.warranty_months || 0),
           image_url: data.image || null,
           description: data.description || null,
+          low_stock_threshold: data.reorder_level !== undefined && data.reorder_level !== "" ? Number(data.reorder_level) : null,
           frame_details: data.frame_details || null,
           lens_details: data.lens_details || null,
           accessory_details: data.accessory_details || null,
+          sales_workflow_type: data.sales_workflow_type || "BOTH",
         };
 
         const product = await createProductApi(productPayload);
@@ -908,12 +959,15 @@ const Inventory = () => {
         cost_price: Number(data.cost_price),
         selling_price: Number(data.selling_price),
         discount_percent: Number(data.discount_percent || 0),
+        gst_percent: data.gst_percent !== undefined && data.gst_percent !== "" ? Number(data.gst_percent) : null,
         warranty_months: Number(data.warranty_months || 0),
         description: data.description || null,
         image_url: data.image || null,
+        low_stock_threshold: data.reorder_level !== undefined && data.reorder_level !== "" ? Number(data.reorder_level) : null,
         frame_details: data.frame_details || null,
         lens_details: data.lens_details || null,
         accessory_details: data.accessory_details || null,
+        sales_workflow_type: data.sales_workflow_type || "BOTH",
       };
 
       await updateProductApi(data.product_id, productPayload);
@@ -922,7 +976,7 @@ const Inventory = () => {
       await updateInventoryAsync({
         id: data.id,
         payload: {
-          reorder_level: Number(data.reorder_level),
+          reorder_level: data.reorder_level !== undefined && data.reorder_level !== "" ? Number(data.reorder_level) : 0,
         },
       });
 
@@ -1099,6 +1153,16 @@ const Inventory = () => {
                 <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
               </div>
             )}
+            <PermissionGuard permission="inventory_config:read">
+              <button
+                onClick={() => setShowConfigPanel(true)}
+                className="flex items-center gap-2 px-3.5 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-sm font-semibold hover:bg-slate-50 transition-all shadow-sm flex-shrink-0 cursor-pointer"
+                title="Inventory Configuration & Stock Aging Settings"
+              >
+                <Settings className="w-4 h-4 text-slate-600" />
+                <span className="hidden sm:inline">Settings</span>
+              </button>
+            </PermissionGuard>
             <PermissionGuard permission="inventory:create">
               <button
                 onClick={() => {
@@ -1554,6 +1618,11 @@ const Inventory = () => {
         inventoryItem={editItem}
         onClose={() => setEditItem(null)}
         onSubmit={handleEditItem}
+      />
+
+      <InventoryConfigPanel
+        isOpen={showConfigPanel}
+        onClose={() => setShowConfigPanel(false)}
       />
 
       <ConfirmationModal

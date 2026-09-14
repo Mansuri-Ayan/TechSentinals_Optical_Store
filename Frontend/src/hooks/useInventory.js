@@ -33,6 +33,9 @@ export const useInventory = (storeId, filters = {}) => {
       : {}),
     ...(filters.brand_id ? { brand_id: filters.brand_id } : {}),
     ...(filters.stock_status ? { stock_status: filters.stock_status } : {}),
+    ...(filters.aging_stage ? { aging_stage: filters.aging_stage } : {}),
+    ...(filters.aging_discount !== undefined ? { aging_discount: filters.aging_discount } : {}),
+    ...(filters.has_aging_discount !== undefined ? { has_aging_discount: filters.has_aging_discount } : {}),
   };
 
   // Main paginated query

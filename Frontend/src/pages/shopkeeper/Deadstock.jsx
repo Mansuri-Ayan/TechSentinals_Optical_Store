@@ -14,9 +14,12 @@ import {
   RotateCcw,
   Check,
   ShoppingBag,
+  ShieldAlert,
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { useDeadstock, useReuseDeadstock, useBatchReuseDeadstock } from '../../hooks/useDeadstock';
+import { useDamagedItems } from '../../hooks/useQC';
+import DamagedStockTab from '../../components/admin/DamagedStockTab';
 import { useAuthStore, useStoreStore } from '../../store/store';
 import { useRoleContext } from '../../hooks/useRoleContext';
 import { useStores } from '../../hooks/useStores';
@@ -44,9 +47,10 @@ const Deadstock = () => {
   const { storeId, buildPath, showStoreSwitcher, isPathAdmin } = useRoleContext();
   const { stores } = useStores();
   const perms = usePagePermissions('deadstock');
-  const canUpdate = perms.canUpdate ?? false;
+  const qcPerms = usePagePermissions('qc');
+  const canUpdate = (perms.canUpdate ?? false) || (qcPerms.canUpdate ?? false) || (qcPerms.canManage ?? false);
 
-
+  const [activeMainTab, setActiveMainTab] = useState('deadstock'); // 'deadstock' | 'damaged_stock'
   const [selectedBranch, setSelectedBranch] = useState(storeId || 'All');
   const [activeCategory, setActiveCategory] = useState('All');
   const [activeStatus, setActiveStatus] = useState('All');
@@ -105,6 +109,8 @@ const Deadstock = () => {
     other_count: 0,
     total_count: 0,
   };
+
+  const { total: damagedTotal = 0 } = useDamagedItems({ storeId: effectiveStoreId, limit: 1 });
 
   const groupedItems = useMemo(() => {
     if (!groupByItem) return [];
@@ -171,9 +177,9 @@ const Deadstock = () => {
   const fmt = (n) => `₹${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   return (
-    <PermissionGuard permission="deadstock:read" fallback={
+    <PermissionGuard permission={['deadstock:read', 'qc:read']} fallback={
       <div className="p-8 text-center text-slate-500 font-sans">
-        You do not have permission to view deadstock inventory.
+        You do not have permission to view deadstock inventory or damaged stock.
       </div>
     }>
       <div className="p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto space-y-6 font-sans animate-fade-in overflow-x-hidden">
@@ -189,10 +195,10 @@ const Deadstock = () => {
             <div>
               <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-slate-900 to-slate-600 tracking-tight flex items-center gap-2.5">
                 <Archive className="w-8 h-8 text-amber-500" />
-                Deadstock Inventory
+                Deadstock & Quality Control
               </h1>
               <p className="text-slate-500 mt-1 text-xs sm:text-sm font-medium">
-                Track returned exchange items, move frames & accessories back to active stock, or reuse lenses in POS checkout.
+                Manage deadstock inventory, returned exchanges, and resolve damaged stock claims with suppliers and processing labs.
               </p>
             </div>
 
@@ -210,6 +216,60 @@ const Deadstock = () => {
           </div>
         </div>
 
+        {/* ── Main Tab Navigation: Deadstock vs Damaged Stock & QC Claims ── */}
+        <div className="flex items-center gap-2 border-b border-slate-200/80 pb-px">
+          <button
+            type="button"
+            onClick={() => setActiveMainTab('deadstock')}
+            className={`flex items-center gap-2 pb-3 px-3 border-b-2 font-bold text-sm transition-all cursor-pointer ${
+              activeMainTab === 'deadstock'
+                ? 'border-amber-500 text-amber-600'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <Archive className="w-4 h-4" />
+            <span>Deadstock Inventory</span>
+            <span
+              className={`px-2 py-0.5 rounded-full text-xs font-black ${
+                activeMainTab === 'deadstock' ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-600'
+              }`}
+            >
+              {counts.total_count}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveMainTab('damaged_stock')}
+            className={`flex items-center gap-2 pb-3 px-3 border-b-2 font-bold text-sm transition-all cursor-pointer ${
+              activeMainTab === 'damaged_stock'
+                ? 'border-rose-500 text-rose-600'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <ShieldAlert className="w-4 h-4" />
+            <span>Damaged Stock & QC Claims</span>
+            <span
+              className={`px-2 py-0.5 rounded-full text-xs font-black ${
+                activeMainTab === 'damaged_stock' ? 'bg-rose-100 text-rose-800' : 'bg-slate-100 text-slate-600'
+              }`}
+            >
+              {damagedTotal}
+            </span>
+          </button>
+        </div>
+
+        {activeMainTab === 'damaged_stock' ? (
+          <DamagedStockTab
+            storeId={effectiveStoreId}
+            showStoreSwitcher={showStoreSwitcher}
+            selectedBranch={selectedBranch}
+            onBranchChange={setSelectedBranch}
+            stores={stores}
+            canUpdate={canUpdate}
+          />
+        ) : (
+          <>
         {/* ── KPI Summary Cards ── */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           <div className="bg-white p-4.5 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4 transition-all hover:shadow-md">
@@ -842,6 +902,8 @@ const Deadstock = () => {
               </div>
             </div>
           </div>
+        )}
+          </>
         )}
       </div>
     </PermissionGuard>

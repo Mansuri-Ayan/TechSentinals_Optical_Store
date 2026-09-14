@@ -23,11 +23,13 @@ import {
   UserCheck,
   Clock,
   Award,
+  ShieldAlert,
   Warehouse,
   FileText,
   Beaker,
   Shield,
   RefreshCw,
+  TrendingUp,
 } from "lucide-react";
 import { useAuth } from "../../hooks/useAuth";
 import { useAuthStore, useStoreStore } from "../../store/store";
@@ -116,6 +118,7 @@ const Sidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) => {
   const hasAnalysesRead = useHasPermission('reports:read');
   const hasExchangesRead = useHasPermission('exchanges:read');
   const hasDeadstockRead = useHasPermission('deadstock:read');
+  const hasQCRead = useHasPermission('qc:read');
   const hasLabsRead = useHasPermission('labs:read');
 
   useEffect(() => {
@@ -213,6 +216,9 @@ const Sidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) => {
   const deadstockRoute = currentStore && currentStore.id !== "admin"
     ? `/admin/store/${currentStore.id}/deadstock`
     : "/admin/deadstock";
+  const damagedItemsRoute = currentStore && currentStore.id !== "admin"
+    ? `/admin/store/${currentStore.id}/damaged-items`
+    : "/admin/damaged-items";
 
 
   const handleStoreSelect = (store) => {
@@ -502,6 +508,27 @@ const Sidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) => {
             </NavLink>
           )}
 
+          {hasAnalysesRead && (
+            <NavLink
+              to="/admin/product-performance"
+              title={isCollapsed ? "Product Performance" : undefined}
+              className={({ isActive }) =>
+                `flex items-center ${isCollapsed ? "justify-center px-0" : "px-4"} py-2.5 rounded-xl transition-all duration-200 group ${
+                  isActive
+                    ? "bg-emerald-500/10 text-emerald-400 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_0_10px_rgba(16,185,129,0.1)] border border-emerald-500/20"
+                    : "text-slate-400 hover:bg-white/5 hover:text-slate-202 border border-transparent"
+                }`
+              }
+            >
+              <TrendingUp
+                className={`w-5 h-5 transition-transform group-hover:scale-110 flex-shrink-0 ${isCollapsed ? "" : "mr-3"}`}
+              />
+              {!isCollapsed && (
+                <span className="font-medium text-sm">Product Performance</span>
+              )}
+            </NavLink>
+          )}
+
           {hasStoresRead && (
             <NavLink
               to="/admin/stores"
@@ -656,7 +683,7 @@ const Sidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) => {
             </NavLink>
           )}
 
-          {hasDeadstockRead && (
+          {(hasDeadstockRead || hasQCRead) && (
             <NavLink
               to={deadstockRoute}
               title={isCollapsed ? "Deadstock" : undefined}
@@ -672,6 +699,25 @@ const Sidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) => {
                 className={`w-5 h-5 transition-transform group-hover:scale-110 flex-shrink-0 ${isCollapsed ? "" : "mr-3"}`}
               />
               {!isCollapsed && <span className="font-medium text-sm">Deadstock</span>}
+            </NavLink>
+          )}
+
+          {hasQCRead && (
+            <NavLink
+              to={damagedItemsRoute}
+              title={isCollapsed ? "Damaged / Issue Items" : undefined}
+              className={({ isActive }) =>
+                `flex items-center ${isCollapsed ? "justify-center px-0" : "px-4"} py-2.5 rounded-xl transition-all duration-200 group ${
+                  isActive || location.pathname.includes("/damaged-items")
+                    ? "bg-rose-500/10 text-rose-400 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_0_10px_rgba(244,63,94,0.1)] border border-rose-500/20"
+                    : "text-slate-400 hover:bg-white/5 hover:text-slate-202 border border-transparent"
+                }`
+              }
+            >
+              <ShieldAlert
+                className={`w-5 h-5 transition-transform group-hover:scale-110 flex-shrink-0 ${isCollapsed ? "" : "mr-3"}`}
+              />
+              {!isCollapsed && <span className="font-medium text-sm">Damaged Items</span>}
             </NavLink>
           )}
 

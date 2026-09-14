@@ -1,7 +1,7 @@
 # Schema: admin.py
 from datetime import datetime
 from enum import Enum
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, model_validator
 
 
 class AdminStatusEnum(str, Enum):
@@ -11,17 +11,26 @@ class AdminStatusEnum(str, Enum):
 
 
 class AdminCreate(BaseModel):
-    business_name: str = Field(
-        ..., max_length=255, examples=["Visionary Optics"],
+    business_name: str | None = Field(
+        default=None, max_length=255, examples=["Visionary Optics"],
         description="Name of the optical store business",
     )
-    owner_first_name: str = Field(
-        ..., max_length=100, examples=["Ayan"],
+    owner_first_name: str | None = Field(
+        default=None, max_length=100, examples=["Ayan"],
         description="Owner's first name",
     )
-    owner_last_name: str = Field(
-        ..., max_length=100, examples=["Mansuri"],
+    owner_last_name: str | None = Field(
+        default=None, max_length=100, examples=["Mansuri"],
         description="Owner's last name",
+    )
+    full_name: str | None = Field(
+        default=None, description="Owner's full name alias",
+    )
+    store_name: str | None = Field(
+        default=None, description="Initial store branch name alias",
+    )
+    store_code: str | None = Field(
+        default=None, description="Initial store branch code alias",
     )
     email: str = Field(
         ..., max_length=255, examples=["ayan@optical.store"],
@@ -45,18 +54,59 @@ class AdminCreate(BaseModel):
         default=None, max_length=10, description="PAN card number",
     )
     address: str = Field(
-        ..., examples=["123 MG Road"], description="Full address",
+        default="Main Address", examples=["123 MG Road"], description="Full address",
     )
     city: str = Field(
-        ..., max_length=100, examples=["Mumbai"], description="City name",
+        default="Main City", max_length=100, examples=["Mumbai"], description="City name",
     )
     state: str = Field(
-        ..., max_length=100, examples=["Maharashtra"], description="State name",
+        default="State", max_length=100, examples=["Maharashtra"], description="State name",
     )
     pincode: str = Field(
-        ..., min_length=6, max_length=6, examples=["400001"],
+        default="000000", min_length=6, max_length=6, examples=["400001"],
         description="6-digit pincode",
     )
+    verification_token: str | None = Field(
+        default=None, description="Signed OTP verification token obtained from /auth/otp/verify"
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def preprocess_admin_create(cls, values: dict) -> dict:
+        if not isinstance(values, dict):
+            return values
+
+        # 1. Resolve business_name vs store_name
+        if not values.get("business_name"):
+            values["business_name"] = values.get("store_name") or "Optical Store Business"
+
+        # 2. Resolve owner_first_name / owner_last_name vs full_name
+        full_name = values.get("full_name")
+        first_name = values.get("owner_first_name")
+        last_name = values.get("owner_last_name")
+
+        if (not first_name or not last_name) and full_name:
+            parts = str(full_name).strip().split(maxsplit=1)
+            values["owner_first_name"] = parts[0] if parts else "Admin"
+            values["owner_last_name"] = parts[1] if len(parts) > 1 else "Owner"
+        else:
+            if not values.get("owner_first_name"):
+                values["owner_first_name"] = "Admin"
+            if not values.get("owner_last_name"):
+                values["owner_last_name"] = "Owner"
+
+        # 3. Resolve address, city, state, pincode defaults
+        if not values.get("address"):
+            values["address"] = "Main Address"
+        if not values.get("city"):
+            values["city"] = "Main City"
+        if not values.get("state"):
+            values["state"] = "State"
+        pincode = values.get("pincode")
+        if not pincode or len(str(pincode)) != 6:
+            values["pincode"] = "000000"
+
+        return values
 
 
 class AdminUpdate(BaseModel):

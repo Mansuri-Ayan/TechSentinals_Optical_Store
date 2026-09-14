@@ -6,11 +6,13 @@ decrementing the store's inventory for that product.
 """
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     Column,
     DateTime,
     ForeignKey,
     Integer,
     Numeric,
+    String,
     Text,
     JSON,
 )
@@ -131,6 +133,59 @@ class SaleItem(Base):
         comment="Optional notes for this line item (e.g. custom lens specs)",
     )
 
+    # ── Quality Control (QC) & Workflow Columns ──────────────────
+    processing_type = Column(
+        String(20),
+        nullable=False,
+        default="ORDER",
+        server_default="ORDER",
+        comment="DIRECT or ORDER — resolved at sale creation from product.sales_workflow_type",
+    )
+
+    qc_status = Column(
+        String(50),
+        nullable=False,
+        default="PENDING_QC_PRE_LAB",
+        server_default="PENDING_QC_PRE_LAB",
+        comment="Current per-item QC status (e.g. PENDING_QC_PRE_LAB, QC_PASSED_PRE_LAB, QC_FAILED_PRE_LAB, SENT_TO_LAB, LAB_IN_PROGRESS, RETURNED_FROM_LAB, PENDING_QC_POST_LAB, QC_PASSED_POST_LAB, QC_FAILED_POST_LAB, DELIVERED)",
+    )
+
+    damage_type = Column(
+        String(50),
+        nullable=True,
+        comment="Categorization if QC failed: STOCK_DAMAGE, LAB_DAMAGE, or FITTING_FAILURE",
+    )
+
+    rework_count = Column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+        comment="Number of rework cycles completed for fitting failures",
+    )
+
+    resolution_status = Column(
+        String(50),
+        nullable=False,
+        default="UNRESOLVED",
+        server_default="UNRESOLVED",
+        comment="Resolution tracking: UNRESOLVED, REPLACED_FROM_STOCK, TRANSFER_REQUESTED, REWORK_IN_PROGRESS, SUPPLIER_CLAIM_PENDING, LAB_CLAIM_PENDING, CUSTOMER_DECISION_PENDING, RESOLVED",
+    )
+
+    customer_notified = Column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+        comment="True if customer has been notified regarding item issues or choices",
+    )
+
+    customer_decision = Column(
+        String(50),
+        nullable=True,
+        comment="Customer choice: WAIT_FOR_STOCK, CHOOSE_DIFFERENT_ITEM, REFUND_ITEM",
+    )
+
     created_at = Column(
         DateTime(timezone=True),
         nullable=False,
@@ -167,6 +222,32 @@ class SaleItem(Base):
         "DeadstockItem",
         lazy="selectin",
         foreign_keys="[SaleItem.deadstock_item_id]",
+    )
+    qc_history = relationship(
+        "SaleItemQCHistory",
+        back_populates="sale_item",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+    qc_damaged_records = relationship(
+        "QCDamagedItem",
+        back_populates="sale_item",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+        order_by="desc(QCDamagedItem.id)",
+    )
+
+    @property
+    def qc_damaged_record(self):
+        records = getattr(self, "qc_damaged_records", None)
+        if records:
+            return records[0]
+        return None
+    contact_logs = relationship(
+        "QCCustomerContactLog",
+        back_populates="sale_item",
+        cascade="all, delete-orphan",
+        lazy="selectin",
     )
 
 

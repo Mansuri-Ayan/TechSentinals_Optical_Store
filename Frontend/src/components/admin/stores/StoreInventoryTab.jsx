@@ -9,10 +9,10 @@ const ITEMS_PER_PAGE = 8;
 const getStockStatus = (item) => {
   const qty = item.available_quantity ?? item.quantity ?? 0;
   if (qty === 0) return 'out_of_stock';
-  const threshold = (item.reorder_level && item.reorder_level > 0)
-    ? item.reorder_level
-    : 10;
-  if (qty <= threshold) return 'low_stock';
+  const threshold = item.low_stock_threshold !== undefined && item.low_stock_threshold !== null
+    ? Number(item.low_stock_threshold)
+    : (item.reorder_level && Number(item.reorder_level) > 0 ? Number(item.reorder_level) : null);
+  if (threshold !== null && qty <= threshold) return 'low_stock';
   return 'in_stock';
 };
 

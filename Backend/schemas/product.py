@@ -1,7 +1,7 @@
 # Schema: product.py
 from datetime import datetime
 from decimal import Decimal
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 # ── Type-specific detail schemas ───────────────────────────────
@@ -105,6 +105,17 @@ class ProductCreate(BaseModel):
     image_url: str | None = Field(
         default=None, description="Product image URL",
     )
+    low_stock_threshold: int | None = Field(
+        default=None, ge=0, description="Configurable low stock alert threshold"
+    )
+    gst_percent: Decimal | None = Field(
+        default=None, ge=0, le=100, decimal_places=2,
+        description="Optional product-specific GST rate override (NULL to inherit default)"
+    )
+    sales_workflow_type: str = Field(
+        default="BOTH",
+        description="Sales workflow type: DIRECT_ONLY, ORDER_ONLY, or BOTH"
+    )
 
     # Optional type-specific details — only one should be provided
     frame_details: FrameDetailsCreate | None = None
@@ -124,6 +135,9 @@ class ProductUpdate(BaseModel):
     warranty_months: int | None = Field(default=None, ge=0)
     image_url: str | None = Field(default=None)
     is_active: bool | None = Field(default=None)
+    low_stock_threshold: int | None = Field(default=None, ge=0)
+    gst_percent: Decimal | None = Field(default=None, ge=0, le=100, decimal_places=2)
+    sales_workflow_type: str | None = Field(default=None)
 
     # Optional type-specific detail updates
     frame_details: FrameDetailsCreate | None = None
@@ -142,10 +156,16 @@ class ProductRead(BaseModel):
     brand_id: int | None = None
     cost_price: Decimal
     selling_price: Decimal
+    selling_price_before_gst: Decimal | None = None
+    gst_percent: Decimal | None = None
+    gst_amount: Decimal | None = None
+    selling_price_with_gst: Decimal | None = None
     discount_percent: Decimal = Decimal("0.00")
     warranty_months: int = 0
     image_url: str | None = None
     is_active: bool
+    low_stock_threshold: int | None = None
+    sales_workflow_type: str = "BOTH"
     created_at: datetime
     updated_at: datetime
 
@@ -158,5 +178,18 @@ class ProductRead(BaseModel):
     category_name: str | None = None
     subcategory_name: str | None = None
     brand_name: str | None = None
+
+    @model_validator(mode="after")
+    def _compute_gst_fields(self) -> "ProductRead":
+        if self.selling_price_before_gst is None:
+            self.selling_price_before_gst = self.selling_price
+        rate = self.gst_percent if self.gst_percent is not None else Decimal("18.00")
+        if self.gst_percent is None:
+            self.gst_percent = rate
+        if self.gst_amount is None or (rate > 0 and self.gst_amount == Decimal("0.00")):
+            self.gst_amount = (self.selling_price * rate / Decimal("100")).quantize(Decimal("0.01"))
+        if self.selling_price_with_gst is None or (rate > 0 and self.selling_price_with_gst <= self.selling_price_before_gst):
+            self.selling_price_with_gst = (self.selling_price_before_gst + self.gst_amount).quantize(Decimal("0.01"))
+        return self
 
     model_config = {"from_attributes": True}

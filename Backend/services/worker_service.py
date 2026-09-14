@@ -105,7 +105,7 @@ async def update_worker(
     payload: WorkerUpdate,
 ) -> Worker:
     """Apply partial updates to a worker."""
-    update_data = payload.model_dump(exclude_unset=True)
+    update_data = payload.model_dump(exclude_unset=True, exclude={"role"})
     for field, value in update_data.items():
         setattr(worker, field, value)
     await db.commit()
@@ -114,8 +114,7 @@ async def update_worker(
 
 
 async def delete_worker(db: AsyncSession, worker: Worker) -> Worker:
-    """Soft-delete a worker by setting deleted_at."""
-    worker.deleted_at = datetime.now(timezone.utc)
+    """Deactivate a worker by setting is_active = False."""
     worker.is_active = False
     await db.commit()
     await db.refresh(worker)

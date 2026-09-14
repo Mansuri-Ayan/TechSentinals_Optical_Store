@@ -2,6 +2,7 @@
 from sqlalchemy import select, and_, or_, func as sa_func
 from sqlalchemy.ext.asyncio import AsyncSession
 from models.inventory import Inventory, OwnerType
+from models.product import Product
 from schemas.inventory import InventoryCreate, InventoryUpdate
 from services.product_unit_service import create_units_for_batch
 from models.product_unit import UnitSourceType
@@ -78,7 +79,22 @@ async def create_inventory(
 
 async def get_inventory(db: AsyncSession, inventory_id: int) -> Inventory | None:
     """Fetch a single inventory record by ID."""
-    stmt = select(Inventory).where(Inventory.id == inventory_id)
+    from sqlalchemy.orm import selectinload
+    from models.supplier_product import SupplierProduct
+    stmt = (
+        select(Inventory)
+        .options(
+            selectinload(Inventory.supplier),
+            selectinload(Inventory.product).selectinload(Product.category),
+            selectinload(Inventory.product).selectinload(Product.subcategory),
+            selectinload(Inventory.product).selectinload(Product.brand),
+            selectinload(Inventory.product).selectinload(Product.frame_product),
+            selectinload(Inventory.product).selectinload(Product.lens_product),
+            selectinload(Inventory.product).selectinload(Product.accessory_product),
+            selectinload(Inventory.product).selectinload(Product.supplier_products).selectinload(SupplierProduct.supplier),
+        )
+        .where(Inventory.id == inventory_id)
+    )
     result = await db.execute(stmt)
     return result.scalar_one_or_none()
 
@@ -167,6 +183,9 @@ async def get_inventories_by_owner(
     limit: int = 20,
     paginate: bool = True,
     warehouse_only: bool = False,
+    aging_stage: str | None = None,
+    aging_discount: float | None = None,
+    has_aging_discount: bool | None = None,
 ) -> dict:
     """List inventory records for a given owner with pagination, filtering, and stats.
     
@@ -205,6 +224,22 @@ async def get_inventories_by_owner(
     if brand_id is not None:
         filter_conditions.append(Product.brand_id == brand_id)
 
+    if aging_stage:
+        stages = [s.strip().upper() for s in aging_stage.split(",") if s.strip()]
+        if len(stages) == 1:
+            filter_conditions.append(Inventory.aging_stage == stages[0])
+        elif len(stages) > 1:
+            filter_conditions.append(Inventory.aging_stage.in_(stages))
+
+    if aging_discount is not None:
+        filter_conditions.append(Inventory.aging_discount_percent == Decimal(str(aging_discount)))
+
+    if has_aging_discount is not None:
+        if has_aging_discount:
+            filter_conditions.append(Inventory.aging_discount_percent > 0)
+        else:
+            filter_conditions.append(Inventory.aging_discount_percent == 0)
+
     # ── Stock status conditions ──
     # Aggregated stock status filtering is applied at the group_by/having level rather than pre-aggregation WHERE clause.
 
@@ -216,8 +251,9 @@ async def get_inventories_by_owner(
             Inventory.product_id,
             sa_func.sum(Inventory.quantity).label("total_qty"),
             sa_func.sum(Inventory.available_quantity).label("total_avail"),
-            sa_func.max(Inventory.reorder_level).label("max_reorder")
+            sa_func.max(Product.low_stock_threshold).label("max_threshold")
         )
+        .join(Product, Inventory.product_id == Product.id)
         .where(*base_conditions)
         .group_by(Inventory.product_id)
         .subquery()
@@ -226,10 +262,8 @@ async def get_inventories_by_owner(
     total_products_stmt = select(sa_func.count(stats_subq.c.product_id))
     low_stock_stmt = select(sa_func.count(stats_subq.c.product_id)).where(
         stats_subq.c.total_avail > 0,
-        or_(
-            and_(stats_subq.c.max_reorder > 0, stats_subq.c.total_avail <= stats_subq.c.max_reorder),
-            and_(stats_subq.c.max_reorder == 0, stats_subq.c.total_avail <= 10),
-        )
+        stats_subq.c.max_threshold.is_not(None),
+        stats_subq.c.total_avail <= stats_subq.c.max_threshold
     )
     out_of_stock_stmt = select(sa_func.count(stats_subq.c.product_id)).where(
         stats_subq.c.total_avail == 0
@@ -257,7 +291,7 @@ async def get_inventories_by_owner(
         select(
             Inventory.product_id,
             sa_func.sum(Inventory.available_quantity).label("total_avail"),
-            sa_func.max(Inventory.reorder_level).label("max_reorder")
+            sa_func.max(Product.low_stock_threshold).label("max_threshold")
         )
         .join(Product, Inventory.product_id == Product.id)
         .where(*filter_conditions)
@@ -272,17 +306,15 @@ async def get_inventories_by_owner(
             having_conditions.append(
                 and_(
                     sa_func.sum(Inventory.available_quantity) > 0,
-                    or_(
-                        and_(sa_func.max(Inventory.reorder_level) > 0, sa_func.sum(Inventory.available_quantity) <= sa_func.max(Inventory.reorder_level)),
-                        and_(sa_func.max(Inventory.reorder_level) == 0, sa_func.sum(Inventory.available_quantity) <= 10)
-                    )
+                    sa_func.max(Product.low_stock_threshold).is_not(None),
+                    sa_func.sum(Inventory.available_quantity) <= sa_func.max(Product.low_stock_threshold)
                 )
             )
         elif stock_status == "in_stock":
             having_conditions.append(
                 or_(
-                    and_(sa_func.max(Inventory.reorder_level) > 0, sa_func.sum(Inventory.available_quantity) > sa_func.max(Inventory.reorder_level)),
-                    and_(sa_func.max(Inventory.reorder_level) == 0, sa_func.sum(Inventory.available_quantity) > 10)
+                    sa_func.max(Product.low_stock_threshold).is_(None),
+                    sa_func.sum(Inventory.available_quantity) > sa_func.max(Product.low_stock_threshold)
                 )
             )
             
@@ -301,6 +333,7 @@ async def get_inventories_by_owner(
             sa_func.sum(Inventory.available_quantity).label("total_available_quantity"),
             sa_func.sum(Inventory.reserved_quantity).label("total_reserved_quantity"),
             sa_func.max(Inventory.reorder_level).label("max_reorder_level"),
+            sa_func.max(Product.low_stock_threshold).label("low_stock_threshold"),
             sa_func.min(Inventory.id).label("oldest_id"),
             sa_func.min(Inventory.created_at).label("oldest_created_at"),
             sa_func.max(Inventory.updated_at).label("newest_updated_at")
@@ -403,6 +436,7 @@ async def get_inventories_by_owner(
             )
             set_committed_value(mock_inv, "product", prod)
             mock_inv.supplier_name = oldest_supplier_name_map.get(r.product_id)
+            mock_inv.low_stock_threshold = r.low_stock_threshold
             items.append(mock_inv)
 
     return {
@@ -432,10 +466,10 @@ async def get_low_stock_items(
     store_ids = [row[0] for row in result.fetchall()]
 
     # Build query for low-stock items
-    stmt = select(Inventory).where(
+    stmt = select(Inventory).join(Product, Product.id == Inventory.product_id).where(
         Inventory.is_active.is_(True),
-        Inventory.available_quantity <= Inventory.reorder_level,
-        Inventory.reorder_level > 0,  # only if reorder level is set
+        Product.low_stock_threshold.is_not(None),
+        Inventory.available_quantity <= Product.low_stock_threshold,
     )
 
     # Filter to this admin's inventory (admin warehouse + their stores)

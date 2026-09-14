@@ -12,8 +12,8 @@ router = APIRouter()
 @router.delete(
     "/{store_id}",
     status_code=status.HTTP_200_OK,
-    summary="Delete a store",
-    description="Soft-delete a store owned by the current admin.",
+    summary="Deactivate a store",
+    description="Deactivate a store owned by the current admin (sets is_active=False).",
 )
 async def delete_store_endpoint(
     store_id: int,
@@ -28,4 +28,4 @@ async def delete_store_endpoint(
             detail="Store not found",
         )
     await delete_store(db, store)
-    return {"message": f"Store '{store.store_name}' has been deleted"}
+    return {"message": f"Store '{store.store_name}' has been deactivated"}

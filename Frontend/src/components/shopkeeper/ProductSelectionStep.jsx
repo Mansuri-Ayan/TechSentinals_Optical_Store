@@ -23,9 +23,12 @@ const statusConfig = {
   'Out Of Stock': { color: 'text-red-700 bg-red-50 border-red-200',             dot: 'bg-red-505' },
 };
 
-const getStatus = (qty, reorder) => {
+const getStatus = (qty, threshold, reorder) => {
   if (qty === 0) return 'Out Of Stock';
-  if (qty <= reorder) return 'Low Stock';
+  const limit = threshold !== undefined && threshold !== null
+    ? Number(threshold)
+    : (reorder && Number(reorder) > 0 ? Number(reorder) : null);
+  if (limit !== null && qty <= limit) return 'Low Stock';
   return 'In Stock';
 };
 
@@ -56,7 +59,8 @@ const ProductSelectionStep = ({
   const [activeSubcategory, setActiveSubcategory] = useState('all');
   const [viewProduct, setViewProduct] = useState(null);
   const [showCartModal, setShowCartModal] = useState(false);
-  const [sourceMode, setSourceMode] = useState('inventory'); // 'inventory' | 'deadstock'
+  const [sourceMode, setSourceMode] = useState('inventory'); // 'inventory' | 'discounted' | 'deadstock'
+  const [selectedDiscountFilter, setSelectedDiscountFilter] = useState('all');
 
   // Draggable cart button state and logic
   const [btnPos, setBtnPos] = useState(() => ({
@@ -158,6 +162,8 @@ const ProductSelectionStep = ({
         availableColors,
         availableSizes,
         image: item.image_url,
+        aging_stage: item.aging_stage || 'NORMAL',
+        aging_discount_percent: Number(item.aging_discount_percent) || 0,
       };
     });
   }, [kpiItems]);
@@ -188,9 +194,30 @@ const ProductSelectionStep = ({
     }));
   }, [deadstockItems]);
 
+  const availableDiscounts = useMemo(() => {
+    const discounts = new Set();
+    products.forEach(p => {
+      if (p.aging_discount_percent > 0) {
+        discounts.add(p.aging_discount_percent);
+      }
+    });
+    return Array.from(discounts).sort((a, b) => a - b);
+  }, [products]);
+
   const activeProductList = useMemo(() => {
-    return sourceMode === 'deadstock' ? deadstockProducts : products;
-  }, [sourceMode, deadstockProducts, products]);
+    if (sourceMode === 'deadstock') {
+      return deadstockProducts;
+    } else if (sourceMode === 'discounted') {
+      const discountedList = products.filter(p => p.aging_discount_percent > 0);
+      if (selectedDiscountFilter === 'all') {
+        return discountedList;
+      }
+      return discountedList.filter(p => p.aging_discount_percent === Number(selectedDiscountFilter));
+    } else {
+      // Available Stock (NORMAL stage)
+      return products.filter(p => p.aging_discount_percent === 0);
+    }
+  }, [sourceMode, selectedDiscountFilter, deadstockProducts, products]);
 
 
   // Clamping positioning when resizing or zooming
@@ -340,8 +367,27 @@ const ProductSelectionStep = ({
             }`}
           >
             <Store className="w-3.5 h-3.5 text-blue-500" />
-            Store Inventory
+            Available Stock
           </button>
+          
+          <button
+            type="button"
+            onClick={() => setSourceMode('discounted')}
+            className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3.5 py-1.5 rounded-lg transition-all cursor-pointer ${
+              sourceMode === 'discounted'
+                ? 'bg-orange-50 text-orange-950 border border-orange-300 shadow-sm font-extrabold ring-1 ring-orange-200'
+                : 'text-slate-500 hover:text-orange-800'
+            }`}
+          >
+            <ShoppingBag className="w-3.5 h-3.5 text-orange-600" />
+            Discounted Products
+            {products.filter(p => p.aging_discount_percent > 0).length > 0 && (
+              <span className="px-1.5 py-0.5 rounded-md text-[10px] bg-orange-600 text-white font-black">
+                {products.filter(p => p.aging_discount_percent > 0).length}
+              </span>
+            )}
+          </button>
+
           <button
             type="button"
             onClick={() => setSourceMode('deadstock')}
@@ -352,7 +398,7 @@ const ProductSelectionStep = ({
             }`}
           >
             <Archive className="w-3.5 h-3.5 text-amber-600" />
-            Deadstock Items
+            Dead Stock
             {deadstockProducts.length > 0 && (
               <span className="px-1.5 py-0.5 rounded-md text-[10px] bg-amber-500 text-white font-black">
                 {deadstockProducts.length}
@@ -399,6 +445,43 @@ const ProductSelectionStep = ({
             })}
           </div>
         )}
+
+        {/* Aging Discount Filters */}
+        {sourceMode === 'discounted' && availableDiscounts.length > 0 && (
+          <div className="flex flex-col gap-2 pb-1 border-t border-slate-100 pt-3">
+            <span className="text-xs text-slate-500 font-bold px-1">Filter by Discount Rate:</span>
+            <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar text-xs">
+              <button
+                type="button"
+                onClick={() => setSelectedDiscountFilter('all')}
+                className={`px-3.5 py-1.5 rounded-lg font-bold border transition-all whitespace-nowrap flex-shrink-0 cursor-pointer ${
+                  selectedDiscountFilter === 'all'
+                    ? 'bg-orange-600 text-white border-orange-600 shadow-sm'
+                    : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                All Discounts
+              </button>
+              {availableDiscounts.map((disc) => {
+                const isActive = selectedDiscountFilter === String(disc);
+                return (
+                  <button
+                    key={disc}
+                    type="button"
+                    onClick={() => setSelectedDiscountFilter(String(disc))}
+                    className={`px-3.5 py-1.5 rounded-lg font-bold border transition-all whitespace-nowrap flex-shrink-0 cursor-pointer ${
+                      isActive
+                        ? 'bg-orange-600 text-white border-orange-600 shadow-sm'
+                        : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    {disc}% Off
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Results summary */}
@@ -420,7 +503,7 @@ const ProductSelectionStep = ({
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
           {filteredProducts.map((product) => {
-            const status = getStatus(product.available_quantity, product.reorder_level);
+            const status = getStatus(product.available_quantity, product.low_stock_threshold, product.reorder_level);
             const config = getCategoryConfig(product.category);
             const grad = GRAD_PALETTE[product.id % GRAD_PALETTE.length];
             const sc = statusConfig[status];
@@ -446,10 +529,20 @@ const ProductSelectionStep = ({
                         DEADSTOCK
                       </span>
                     ) : (
-                      <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold border ${sc.color}`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${sc.dot}`} />
-                        {status}
-                      </span>
+                      <>
+                        <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold border ${sc.color}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${sc.dot}`} />
+                          {status}
+                        </span>
+                        {product.aging_discount_percent > 0 && (
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold shadow-sm text-white ${
+                            product.aging_discount_percent <= 15 ? 'bg-amber-500' :
+                            product.aging_discount_percent <= 30 ? 'bg-orange-500' : 'bg-red-500'
+                          }`}>
+                            {product.aging_discount_percent}% OFF
+                          </span>
+                        )}
+                      </>
                     )}
                   </div>
 
@@ -471,7 +564,31 @@ const ProductSelectionStep = ({
                     <span className="font-mono bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100">{product.sku}</span>
                   </div>
                   <div className="border-t border-slate-50 mt-auto pt-2 flex items-center justify-between">
-                    <span className="text-sm font-bold text-slate-900">₹{product.selling_price.toLocaleString('en-IN')}</span>
+                    {(() => {
+                      const spBeforeGst = Number(product.selling_price_before_gst ?? product.selling_price) || 0;
+                      const rate = product.gst_percent !== undefined && product.gst_percent !== null ? Number(product.gst_percent) : 18;
+                      const spWithGst = (product.selling_price_with_gst !== undefined && product.selling_price_with_gst !== null && (rate === 0 || Number(product.selling_price_with_gst) > spBeforeGst))
+                        ? Number(product.selling_price_with_gst) 
+                        : (spBeforeGst * (1 + rate / 100));
+
+                      return product.aging_discount_percent > 0 ? (
+                        <div className="flex flex-col">
+                          <span className="text-[10px] text-slate-400 line-through">₹{spWithGst.toLocaleString('en-IN')}</span>
+                          <span className="text-sm font-bold text-orange-600">₹{Math.round(spWithGst * (1 - product.aging_discount_percent / 100)).toLocaleString('en-IN')}</span>
+                          <span className="text-[9px] text-slate-400 font-medium">Base: ₹{spBeforeGst.toLocaleString('en-IN')} + {rate}% GST</span>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col">
+                          <span className="text-sm font-bold text-slate-900">₹{spWithGst.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>
+                          <span className="text-[9px] text-slate-400 font-medium">Base: ₹{spBeforeGst.toLocaleString('en-IN')} + {rate}% GST</span>
+                        </div>
+                      );
+                    })()}
+                    {product.aging_discount_percent > 0 && (
+                      <span className="text-[9px] font-bold text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded">
+                        Aging: {product.aging_stage.replace('_', ' ')}
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -578,7 +695,19 @@ const ProductSelectionStep = ({
                           <p className="text-[9px] text-slate-400 truncate">
                             {item.selectedColor && `${item.selectedColor}`} {item.selectedSize && `· Size ${item.selectedSize}`}
                           </p>
-                          <p className="text-xs font-black text-slate-900 mt-1">₹{item.product.selling_price.toLocaleString('en-IN')}</p>
+                          {(() => {
+                            const spBase = Number(item.product.selling_price_before_gst ?? item.product.selling_price) || 0;
+                            const r = item.product.gst_percent !== undefined && item.product.gst_percent !== null ? Number(item.product.gst_percent) : 18;
+                            const pGst = (item.product.selling_price_with_gst !== undefined && item.product.selling_price_with_gst !== null && (r === 0 || Number(item.product.selling_price_with_gst) > spBase))
+                              ? Number(item.product.selling_price_with_gst)
+                              : (spBase * (1 + r / 100));
+                            return (
+                              <p className="text-xs font-black text-slate-900 mt-1">
+                                ₹{pGst.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                                <span className="text-[8px] font-bold text-emerald-700 bg-emerald-50 px-1 py-0.2 rounded border border-emerald-200 ml-1">Incl. GST</span>
+                              </p>
+                            );
+                          })()}
                         </div>
 
                         {/* Quantity Editor Inline */}

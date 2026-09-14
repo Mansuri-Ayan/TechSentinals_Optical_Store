@@ -15,3 +15,7 @@ class UserLogin(BaseModel):
         examples=["Admin@123"],
         description="Plain-text password (will be verified against bcrypt hash)",
     )
+    role: str | None = Field(
+        default=None,
+        description="Optional role filter (e.g. admin, manager, worker, optician)",
+    )

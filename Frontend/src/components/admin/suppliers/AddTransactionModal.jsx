@@ -9,7 +9,7 @@ import { useCategories, useSubcategories } from '../../../hooks/useCategories';
 import { useProducts } from '../../../hooks/useProducts';
 import { useStores } from '../../../hooks/useStores';
 import { useBrands } from '../../../hooks/useBrands';
-import { createProductApi } from '../../../api/product/product.api';
+import { createProductApi, updateProductApi } from '../../../api/product/product.api';
 import { addSupplierProductApi } from '../../../api/suppliers/supplier.api';
 import SupplierSelect from '../SupplierSelect';
 import { useSuppliers } from '../../../hooks/useSuppliers';
@@ -23,6 +23,7 @@ const EMPTY = {
   newProductName: '',
   newProductSku: '',
   newBrandName: '',
+  salesWorkflowType: 'BOTH',
   categoryId: '',
   subcategoryId: '',
   productId: '',
@@ -39,6 +40,8 @@ const EMPTY = {
   unitCostPrice: '',
   unitSellingPrice: '',
   discountPercent: '0.00',
+  gstPercent: '',
+  lowStockThreshold: '',
   profitMargin: '',
   supplierId: '',
 
@@ -86,6 +89,7 @@ const AddTransactionModal = ({ isOpen, defaultProductId, defaultSupplierId, stor
         enterUnitCostPrice: true,
         supplierId: defaultSupplierId ? String(defaultSupplierId) : '',
         method: 'Cash',
+        salesWorkflowType: 'BOTH',
       });
       setErrors({});
       setIsSubmitting(false);
@@ -105,9 +109,12 @@ const AddTransactionModal = ({ isOpen, defaultProductId, defaultSupplierId, stor
           categoryId: prod.category_id ? String(prod.category_id) : '',
           subcategoryId: prod.subcategory_id ? String(prod.subcategory_id) : '',
           productId: String(prod.id),
+          salesWorkflowType: prod.sales_workflow_type || 'BOTH',
           unitCostPrice: String(cp),
           unitSellingPrice: String(sp),
           discountPercent: String(prod.discount_percent || 0),
+          gstPercent: prod.gst_percent !== undefined && prod.gst_percent !== null ? String(prod.gst_percent) : '',
+          lowStockThreshold: prod.low_stock_threshold !== undefined && prod.low_stock_threshold !== null ? String(prod.low_stock_threshold) : (prod.reorder_level ? String(prod.reorder_level) : ''),
           profitMargin: marginVal,
           amount: String(cp * (Number(p.quantity) || 1)),
           dueAmount: String(Math.max(0, cp * (Number(p.quantity) || 1) - (Number(p.paidAmount) || 0))),
@@ -150,7 +157,10 @@ const AddTransactionModal = ({ isOpen, defaultProductId, defaultSupplierId, stor
           next.unitCostPrice = String(cp);
           next.unitSellingPrice = String(sp);
           next.discountPercent = String(prod.discount_percent || 0);
+          next.gstPercent = prod.gst_percent !== undefined && prod.gst_percent !== null ? String(prod.gst_percent) : '';
+          next.lowStockThreshold = prod.low_stock_threshold !== undefined && prod.low_stock_threshold !== null ? String(prod.low_stock_threshold) : (prod.reorder_level ? String(prod.reorder_level) : '');
           next.profitMargin = sp > 0 ? (((sp - cp) / sp) * 100).toFixed(2) : '';
+          next.salesWorkflowType = prod.sales_workflow_type || 'BOTH';
           
           if (next.enterUnitCostPrice) {
             next.amount = String(cp * (Number(next.quantity) || 1));
@@ -355,7 +365,10 @@ const AddTransactionModal = ({ isOpen, defaultProductId, defaultSupplierId, stor
           cost_price: Number(form.unitCostPrice),
           selling_price: Number(form.unitSellingPrice),
           discount_percent: Number(form.discountPercent || 0),
+          gst_percent: form.gstPercent !== undefined && form.gstPercent !== '' ? Number(form.gstPercent) : null,
+          low_stock_threshold: form.lowStockThreshold !== undefined && form.lowStockThreshold !== '' ? Number(form.lowStockThreshold) : null,
           description: form.remarks || null,
+          sales_workflow_type: form.salesWorkflowType || 'BOTH',
         };
 
         const newProduct = await createProductApi(productPayload);
@@ -376,6 +389,19 @@ const AddTransactionModal = ({ isOpen, defaultProductId, defaultSupplierId, stor
         }
       }
 
+      // If existing product, update product sales_workflow_type if changed
+      if (!form.isNewProduct && targetProductId && form.salesWorkflowType) {
+        const selectedProd = products.find(p => String(p.id) === String(targetProductId)) || allProducts.find(p => String(p.id) === String(targetProductId));
+        if (selectedProd && selectedProd.sales_workflow_type !== form.salesWorkflowType) {
+          try {
+            await updateProductApi(targetProductId, { sales_workflow_type: form.salesWorkflowType });
+            queryClient.invalidateQueries({ queryKey: ['products'] });
+          } catch (err) {
+            console.error("Failed to update product sales_workflow_type:", err);
+          }
+        }
+      }
+
       await onSubmit({
         supplierId: Number(form.supplierId),
         categoryId: Number(form.categoryId),
@@ -386,13 +412,16 @@ const AddTransactionModal = ({ isOpen, defaultProductId, defaultSupplierId, stor
         amount: Number(form.amount),
         paidAmount: Number(form.paidAmount),
         dueAmount: Number(form.dueAmount),
-        method: form.method,
+        paymentMethod: form.method,
         date: form.date,
         remarks: form.remarks,
         
         costPrice: Number(form.unitCostPrice),
         sellingPrice: Number(form.unitSellingPrice),
         discountPercent: Number(form.discountPercent || 0),
+        taxPercent: form.gstPercent !== undefined && form.gstPercent !== '' ? Number(form.gstPercent) : null,
+        lowStockThreshold: form.lowStockThreshold !== undefined && form.lowStockThreshold !== '' ? Number(form.lowStockThreshold) : null,
+        salesWorkflowType: form.salesWorkflowType || 'BOTH',
       });
 
       handleClose();
@@ -579,6 +608,18 @@ const AddTransactionModal = ({ isOpen, defaultProductId, defaultSupplierId, stor
                       <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                     </div>
                     {errors.productId && <p className="text-xs text-red-500 mt-1">{errors.productId}</p>}
+                    {selectedProduct && (
+                      <div className="mt-2 p-2 bg-slate-50 rounded-lg border border-slate-100 flex items-center justify-between">
+                        <span className="text-[11px] text-slate-500 font-semibold">Sale Processing Type:</span>
+                        <span className="text-xs font-bold text-slate-800 flex items-center gap-1">
+                          {selectedProduct.sales_workflow_type === 'DIRECT_ONLY'
+                            ? '⚡ Instant Direct Sale Only'
+                            : selectedProduct.sales_workflow_type === 'ORDER_ONLY'
+                            ? '📋 Order-Based Sale Only'
+                            : '⚡📋 Both (Direct & Order)'}
+                        </span>
+                      </div>
+                    )}
                   </div>
 
                   <div>
@@ -646,6 +687,26 @@ const AddTransactionModal = ({ isOpen, defaultProductId, defaultSupplierId, stor
                         disabled={isSubmitting} placeholder="e.g. 20" className={inputCls('quantity')} />
                       {errors.quantity && <p className="text-xs text-red-500 mt-1">{errors.quantity}</p>}
                     </div>
+
+                    <div className="md:col-span-2">
+                      <label className="text-xs font-semibold text-slate-600 mb-1 block">Sale Processing Type</label>
+                      <div className="relative">
+                        <select
+                          value={form.salesWorkflowType || 'BOTH'}
+                          onChange={e => set('salesWorkflowType', e.target.value)}
+                          disabled={isSubmitting}
+                          className={inputCls('salesWorkflowType')}
+                        >
+                          <option value="BOTH">⚡📋 Both (Direct & Order)</option>
+                          <option value="DIRECT_ONLY">⚡ Instant Direct Sale Only</option>
+                          <option value="ORDER_ONLY">📋 Order-Based Sale Only</option>
+                        </select>
+                        <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                      </div>
+                      <p className="text-[10px] text-slate-400 mt-1">
+                        Select whether this item is sold off-the-shelf or requires lab processing
+                      </p>
+                    </div>
                   </div>
                 </div>
               )}
@@ -676,7 +737,7 @@ const AddTransactionModal = ({ isOpen, defaultProductId, defaultSupplierId, stor
               {/* Pricing details section */}
               <div className="pt-2 border-t border-slate-100 space-y-3">
                 <div className="flex items-center justify-between">
-                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Unit Pricing</h4>
+                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Unit Pricing & GST</h4>
                   <label className="inline-flex items-center gap-2 cursor-pointer">
                     <input
                       type="checkbox"
@@ -689,7 +750,7 @@ const AddTransactionModal = ({ isOpen, defaultProductId, defaultSupplierId, stor
                   </label>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   {/* Unit Cost Price */}
                   <div>
                     <label className="text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
@@ -708,10 +769,10 @@ const AddTransactionModal = ({ isOpen, defaultProductId, defaultSupplierId, stor
                     {errors.unitCostPrice && <p className="text-xs text-red-500 mt-1">{errors.unitCostPrice}</p>}
                   </div>
 
-                  {/* Unit Selling Price */}
+                  {/* Unit Selling Price Before GST */}
                   <div>
                     <label className="text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
-                      <IndianRupee className="w-3.5 h-3.5 text-slate-400" /> Unit Selling Price (₹) <span className="text-red-500">*</span>
+                      <IndianRupee className="w-3.5 h-3.5 text-slate-400" /> Unit Selling Price Before GST (₹) <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="number"
@@ -726,6 +787,71 @@ const AddTransactionModal = ({ isOpen, defaultProductId, defaultSupplierId, stor
                     {errors.unitSellingPrice && <p className="text-xs text-red-500 mt-1">{errors.unitSellingPrice}</p>}
                   </div>
 
+                  {/* GST Rate (%) */}
+                  <div>
+                    <label className="text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
+                      <Tag className="w-3.5 h-3.5 text-slate-400" /> GST Rate (%)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.01"
+                      disabled={isSubmitting}
+                      value={form.gstPercent}
+                      onChange={(e) => set('gstPercent', e.target.value)}
+                      placeholder="Default (18%)"
+                      className={inputCls('gstPercent')}
+                    />
+                    <p className="text-[10px] text-slate-400 mt-0.5">Leave blank for default (18%)</p>
+                  </div>
+                </div>
+
+                {/* Real-time GST & Selling Price Breakdown Card */}
+                {(() => {
+                  const cp = Number(form.unitCostPrice) || 0;
+                  const spBeforeGst = Number(form.unitSellingPrice) || 0;
+                  const rate = (form.gstPercent !== undefined && form.gstPercent !== '' && !isNaN(Number(form.gstPercent)))
+                    ? Number(form.gstPercent)
+                    : 18;
+                  const gstAmt = (spBeforeGst * (rate / 100));
+                  const spWithGst = spBeforeGst + gstAmt;
+                  const margin = spBeforeGst > 0 ? (((spBeforeGst - cp) / spBeforeGst) * 100).toFixed(1) : 0;
+
+                  return (
+                    <div className="p-3 bg-gradient-to-r from-slate-50 via-emerald-50/20 to-blue-50/20 rounded-xl border border-slate-200/80 space-y-2">
+                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Calculated Selling Price Summary</p>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                        <div className="bg-white p-2 rounded-lg border border-slate-200/60 shadow-2xs">
+                          <span className="text-slate-500 block text-[10px]">Unit Cost Price</span>
+                          <span className="font-bold text-slate-800 text-xs sm:text-sm">₹{cp.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        </div>
+                        <div className="bg-white p-2 rounded-lg border border-slate-200/60 shadow-2xs">
+                          <span className="text-slate-500 block text-[10px]">Selling Price (Excl. GST)</span>
+                          <span className="font-bold text-slate-800 text-xs sm:text-sm">₹{spBeforeGst.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        </div>
+                        <div className="bg-white p-2 rounded-lg border border-amber-200/80 bg-amber-50/30 shadow-2xs">
+                          <span className="text-amber-700 block text-[10px] font-medium">GST ({rate}%)</span>
+                          <span className="font-bold text-amber-800 text-xs sm:text-sm">+ ₹{gstAmt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        </div>
+                        <div className="bg-white p-2 rounded-lg border border-emerald-300 bg-emerald-50/50 shadow-2xs">
+                          <span className="text-emerald-700 block text-[10px] font-bold">Selling Price (Incl. GST)</span>
+                          <span className="font-black text-emerald-800 text-xs sm:text-sm">₹{spWithGst.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        </div>
+                      </div>
+                      {spBeforeGst > 0 && (
+                        <p className="text-[10px] text-slate-500 font-medium flex items-center gap-1.5">
+                          <span>Gross Margin:</span>
+                          <span className={`font-bold ${Number(margin) >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                            {margin}% (₹{(spBeforeGst - cp).toFixed(2)})
+                          </span>
+                        </p>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   {/* Profit Margin (%) */}
                   <div>
                     <label className="text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
@@ -762,6 +888,46 @@ const AddTransactionModal = ({ isOpen, defaultProductId, defaultSupplierId, stor
                     />
                     {errors.discountPercent && <p className="text-xs text-red-500 mt-1">{errors.discountPercent}</p>}
                   </div>
+
+                  {/* Low Stock Threshold */}
+                  <div>
+                    <label className="text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
+                      <Hash className="w-3.5 h-3.5 text-slate-400" /> Low Stock Threshold
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      disabled={isSubmitting}
+                      value={form.lowStockThreshold}
+                      onChange={(e) => set('lowStockThreshold', e.target.value)}
+                      placeholder="e.g. 10 (Optional)"
+                      className={inputCls('lowStockThreshold')}
+                    />
+                    {errors.lowStockThreshold && <p className="text-xs text-red-500 mt-1">{errors.lowStockThreshold}</p>}
+                  </div>
+                </div>
+
+                {/* Sale Processing Type */}
+                <div className="pt-2">
+                  <label className="text-xs font-semibold text-slate-700 mb-1.5 flex items-center gap-1.5">
+                    <Layers className="w-3.5 h-3.5 text-slate-500" /> Sale Processing Type
+                  </label>
+                  <div className="relative">
+                    <select
+                      value={form.salesWorkflowType || 'BOTH'}
+                      onChange={(e) => set('salesWorkflowType', e.target.value)}
+                      disabled={isSubmitting}
+                      className={inputCls('salesWorkflowType')}
+                    >
+                      <option value="BOTH">⚡📋 Both (Direct & Order)</option>
+                      <option value="DIRECT_ONLY">⚡ Instant Direct Sale Only</option>
+                      <option value="ORDER_ONLY">📋 Order-Based Sale Only</option>
+                    </select>
+                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                  </div>
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Select whether this item is sold off-the-shelf or requires lab processing
+                  </p>
                 </div>
               </div>
 

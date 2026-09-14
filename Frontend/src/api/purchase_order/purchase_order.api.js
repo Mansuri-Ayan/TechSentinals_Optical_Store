@@ -32,3 +32,32 @@ export const recordSupplierPaymentApi = async (poId, payload) => {
   const response = await api.post(`/purchase-orders/${poId}/payments`, payload);
   return response.data;
 };
+
+/**
+ * Fetch PO invoice JSON including HTML content.
+ */
+export const getPOInvoiceApi = async (poId) => {
+  const response = await api.get(`/purchase-orders/${poId}/invoice`);
+  return response.data;
+};
+
+/**
+ * Download PO invoice PDF file.
+ */
+export const downloadPOInvoiceApi = async (poId, poNumber, isFinal = false) => {
+  const response = await api.get(`/purchase-orders/${poId}/invoice/download`, {
+    responseType: 'blob',
+  });
+  const blob = new Blob([response.data], { type: 'application/pdf' });
+  const url = window.URL.createObjectURL(blob);
+  const prefix = isFinal ? 'Final_Purchase_Invoice' : 'Temporary_Purchase_Invoice';
+  const fileName = `${prefix}_${poNumber || poId}.pdf`;
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', fileName);
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+};
+

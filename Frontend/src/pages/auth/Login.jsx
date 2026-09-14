@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useForm } from "react-hook-form";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { Mail, Lock, Eye, EyeOff, Shield } from "lucide-react";
 import { toast } from "react-toastify";
 import LoginPageImg from "../../assets/LoginPage.png";
@@ -67,12 +67,12 @@ const Login = () => {
             </h2>
             <p className="mt-2 text-sm text-gray-600">
               Don't have an account?{" "}
-              <a
-                href="#"
+              <Link
+                to="/register/admin"
                 className="font-medium text-emerald-600 hover:text-emerald-500 transition-colors"
               >
                 Create one
-              </a>
+              </Link>
             </p>
           </div>
 

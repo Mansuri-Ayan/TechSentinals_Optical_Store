@@ -10,10 +10,10 @@ const statusConfig = {
 const getStockStatus = (item) => {
   const qty = item.available_quantity ?? item.quantity ?? 0;
   if (qty === 0) return 'out_of_stock';
-  const threshold = (item.reorder_level && item.reorder_level > 0)
-    ? item.reorder_level
-    : 10;
-  if (qty <= threshold) return 'low_stock';
+  const threshold = item.low_stock_threshold !== undefined && item.low_stock_threshold !== null
+    ? Number(item.low_stock_threshold)
+    : (item.reorder_level && Number(item.reorder_level) > 0 ? Number(item.reorder_level) : null);
+  if (threshold !== null && qty <= threshold) return 'low_stock';
   return 'in_stock';
 };
 
@@ -47,10 +47,24 @@ const ProductDetail = ({ product, onAddToCart, isSelectionMode }) => {
 
       {/* Pricing and SKU */}
       <div className="flex items-center justify-between bg-slate-50 border border-slate-100 p-4 rounded-2xl">
-        <div>
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Selling Price</p>
-          <p className="text-2xl font-black text-slate-900 mt-0.5">₹{product.selling_price.toLocaleString('en-IN')}</p>
-        </div>
+        {(() => {
+          const spBeforeGst = Number(product.selling_price_before_gst ?? product.selling_price) || 0;
+          const rate = product.gst_percent !== undefined && product.gst_percent !== null ? Number(product.gst_percent) : 18;
+          const gstAmt = (product.gst_amount !== undefined && product.gst_amount !== null && (rate === 0 || Number(product.gst_amount) > 0))
+            ? Number(product.gst_amount)
+            : (spBeforeGst * rate / 100);
+          const spWithGst = (product.selling_price_with_gst !== undefined && product.selling_price_with_gst !== null && (rate === 0 || Number(product.selling_price_with_gst) > spBeforeGst))
+            ? Number(product.selling_price_with_gst) 
+            : (spBeforeGst + gstAmt);
+
+          return (
+            <div>
+              <p className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider">Selling Price (Incl. GST)</p>
+              <p className="text-2xl font-black text-slate-900 mt-0.5">₹{spWithGst.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+              <p className="text-xs text-slate-500 mt-0.5 font-medium">Base: ₹{spBeforeGst.toLocaleString('en-IN', { minimumFractionDigits: 2 })} + GST ({rate}%): ₹{gstAmt.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
+            </div>
+          );
+        })()}
         <div className="text-right">
           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Product Code (SKU)</p>
           <p className="text-xs font-mono font-bold text-slate-700 bg-white border border-slate-200 px-2 py-1 rounded-lg mt-1 inline-block">{product.sku}</p>

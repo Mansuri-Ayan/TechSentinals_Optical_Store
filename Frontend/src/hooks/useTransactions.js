@@ -36,6 +36,7 @@ export const useTransactions = (storeId, filters = {}, isManager = false) => {
     ...(filters.transfer_direction ? { transfer_direction: filters.transfer_direction } : {}),
     ...(filters.is_request !== undefined ? { is_request: filters.is_request } : {}),
     ...(filters.search ? { search: filters.search } : {}),
+    ...(filters.exclude_sales !== undefined ? { exclude_sales: filters.exclude_sales } : {}),
   };
 
   const query = useQuery({

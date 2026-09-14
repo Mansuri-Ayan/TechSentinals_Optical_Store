@@ -49,7 +49,7 @@ class SaleItemCreate(BaseModel):
     quantity: int = Field(..., ge=1)
     unit_price: Decimal = Field(..., ge=0, decimal_places=2)
     discount_percent: Decimal = Field(default=Decimal("0"), ge=0, le=100, decimal_places=2)
-    tax_percent: Decimal = Field(default=Decimal("0"), ge=0, decimal_places=2)
+    tax_percent: Decimal | None = Field(default=None, ge=0, decimal_places=2)
     notes: str | None = None
     unit_skus: List[str] | None = Field(default=None, description="Optional list of specific unit SKUs assigned")
     deadstock_item_id: int | None = Field(default=None, description="FK → deadstock_items.id if item is from deadstock")
@@ -73,15 +73,27 @@ class SaleItemRead(BaseModel):
     product_id: int
     product_snapshot_id: int | None = None
     inventory_id: int | None = None
-    quantity: int
+    quantity: int = 1
     unit_price: Decimal
+    unit_price_before_gst: Decimal | None = None
     unit_cost: Decimal | None = None
+    total_purchase_cost: Decimal | None = None
     discount_percent: Decimal
     tax_percent: Decimal
+    tax_amount: Decimal | None = None
+    gst_amount: Decimal | None = None
+    unit_price_with_gst: Decimal | None = None
     line_total: Decimal
     notes: str | None = None
     unit_skus: List[str] | None = None
     deadstock_item_id: int | None = None
+    processing_type: str = "ORDER"
+    qc_status: str | None = "PENDING_QC_PRE_LAB"
+    damage_type: str | None = None
+    rework_count: int | None = 0
+    resolution_status: str | None = "UNRESOLVED"
+    customer_notified: bool | None = False
+    customer_decision: str | None = None
     created_at: datetime
 
     updated_at: datetime
@@ -100,6 +112,15 @@ class SaleItemRead(BaseModel):
     @model_validator(mode="after")
     def _fill_from_snapshot(self) -> "SaleItemRead":
         """Populate denormalized fields from snapshot when not set explicitly."""
+        if self.unit_price_before_gst is None:
+            self.unit_price_before_gst = self.unit_price
+        rate = self.tax_percent or Decimal("0.00")
+        if self.gst_amount is None:
+            base_after_disc = self.unit_price * (Decimal("1") - self.discount_percent / Decimal("100"))
+            self.gst_amount = (base_after_disc * (rate / Decimal("100"))).quantize(Decimal("0.01"))
+        if self.unit_price_with_gst is None:
+            self.unit_price_with_gst = (self.unit_price * (Decimal("1") + rate / Decimal("100"))).quantize(Decimal("0.01"))
+
         if self.product_snapshot:
             if self.product_name is None:
                 self.product_name = self.product_snapshot.name
@@ -180,10 +201,11 @@ class SaleCreate(BaseModel):
     sale_date: date = Field(..., description="Date of sale")
     notes: str | None = None
     prescription_id: int | None = None
+    is_direct_sale: bool | None = Field(default=None, description="Explicit override for Direct Sale vs Order-Based Sale")
+    service_notes: str | None = Field(default=None, description="Optional service or adjustment notes")
     discount_amount: Decimal = Field(default=Decimal("0"), ge=0, decimal_places=2)
     deadstock_deduction: Decimal = Field(default=Decimal("0"), ge=0, decimal_places=2, description="Deduction applied for deadstock items")
     items: list[SaleItemCreate] = Field(
-
         ..., min_length=1, description="At least one item",
     )
     payments: list[SalePaymentCreate] = Field(
@@ -200,6 +222,9 @@ class SaleCreate(BaseModel):
     )
     loyalty_redeem_other_customer_id: int | None = Field(
         default=None, description="FK → customers.id of other customer being redeemed",
+    )
+    loyalty_verification_token: str | None = Field(
+        default=None, description="Signed OTP token authorizing loyalty redemption from another customer",
     )
     custom_points: int = Field(
         default=0, ge=0, description="Custom bonus loyalty points to award",

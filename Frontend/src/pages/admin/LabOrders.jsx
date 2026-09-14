@@ -102,8 +102,11 @@ const LabOrders = () => {
         payload.expected_delivery_date = new Date(Date.now() + 4 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]; // +4 days
       }
       await updateSaleApi(id, payload);
-      queryClient.invalidateQueries({ queryKey: ['labOrders'] });
-      queryClient.invalidateQueries({ queryKey: ['sales'] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['labOrders'] }),
+        queryClient.invalidateQueries({ queryKey: ['sales'] }),
+        queryClient.invalidateQueries({ queryKey: ['saleDrawerDetail'] }),
+      ]);
       toast.success(`Order advanced to "${newStatus}"`);
 
       // Sync state for open details drawer if updated
@@ -122,6 +125,16 @@ const LabOrders = () => {
       toast.error('Failed to update status.');
     }
   };
+
+  // Keep open drawer item synced if order data updates in background
+  useEffect(() => {
+    if (selectedOrder && orders && orders.length > 0) {
+      const fresh = orders.find(o => o.id === selectedOrder.id);
+      if (fresh) {
+        setSelectedOrder(fresh);
+      }
+    }
+  }, [orders]);
 
   // Define tab categories
   const queueStatuses = ['Confirmed'];
@@ -375,7 +388,19 @@ const LabOrders = () => {
                           </div>
                         </td>
                         <td className="px-5 py-4 font-bold text-slate-900">{order.customerName}</td>
-                        <td className="px-5 py-4 font-medium text-slate-600 max-w-[150px] truncate">{order.productName}</td>
+                        <td className="px-5 py-4 font-medium text-slate-600 max-w-[150px] truncate">
+                          <div>{order.productName}</div>
+                          {order.items && order.items[0]?.qc_status && (
+                            <span className={`inline-block mt-0.5 px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider ${
+                              order.items[0].qc_status === 'QC_PASSED_POST_LAB' ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' :
+                              order.items[0].qc_status?.includes('FAILED') ? 'bg-rose-100 text-rose-800 border border-rose-200' :
+                              order.items[0].qc_status === 'SENT_TO_LAB' ? 'bg-blue-100 text-blue-800 border border-blue-200' :
+                              'bg-amber-100 text-amber-800 border border-amber-200'
+                            }`}>
+                              QC: {order.items[0].qc_status}
+                            </span>
+                          )}
+                        </td>
                         <td className="px-5 py-4 font-semibold text-slate-700">{order.labName || '—'}</td>
                         <td className="px-5 py-4 text-xs font-semibold text-slate-500 whitespace-nowrap">{order.sentDate ? fmtDate(order.sentDate) : '—'}</td>
                         <td className="px-5 py-4 text-xs font-bold text-slate-800 whitespace-nowrap">{order.expectedDeliveryDate ? fmtDate(order.expectedDeliveryDate) : '—'}</td>
@@ -419,7 +444,19 @@ const LabOrders = () => {
                             {order.billedOnAccountOf ? order.billedOnAccountOf.name : (order.customerName || 'Direct Customer')}
                           </div>
                         </td>
-                        <td className="px-5 py-4 font-medium text-slate-600 max-w-[150px] truncate">{order.productName}</td>
+                        <td className="px-5 py-4 font-medium text-slate-600 max-w-[150px] truncate">
+                          <div>{order.productName}</div>
+                          {order.items && order.items[0]?.qc_status && (
+                            <span className={`inline-block mt-0.5 px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider ${
+                              order.items[0].qc_status === 'QC_PASSED_POST_LAB' ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' :
+                              order.items[0].qc_status?.includes('FAILED') ? 'bg-rose-100 text-rose-800 border border-rose-200' :
+                              order.items[0].qc_status === 'SENT_TO_LAB' ? 'bg-blue-100 text-blue-800 border border-blue-200' :
+                              'bg-amber-100 text-amber-800 border border-amber-200'
+                            }`}>
+                              QC: {order.items[0].qc_status}
+                            </span>
+                          )}
+                        </td>
                         <td className="px-5 py-4 text-xs font-semibold text-slate-500 whitespace-nowrap">{order.branchName || order.storeName}</td>
                         <td className="px-5 py-4 text-xs font-semibold text-slate-500 whitespace-nowrap">{fmtDate(order.orderDate)}</td>
                         <td className="px-5 py-4 text-sm font-black text-slate-900">{fmt(order.totalAmount)}</td>

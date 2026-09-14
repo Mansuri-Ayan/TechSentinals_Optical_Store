@@ -49,12 +49,17 @@ const CompletedStep = ({ customer, cart, prescription, paymentInfo, savedCustome
   const orderDate = savedCustomer?.orders?.[0]?.date || new Date().toISOString().split('T')[0];
 
   const totalAmount = cart.reduce((sum, item) => sum + item.product.selling_price * item.quantity, 0);
+  const agingDiscountTotal = cart.reduce((sum, item) => {
+    const rate = Number(item.product?.aging_discount_percent) || 0;
+    const price = Number(item.product?.selling_price) || 0;
+    return sum + (price * rate / 100) * item.quantity;
+  }, 0);
   const discount = paymentInfo?.discount || 0;
   const loyaltyDiscount = paymentInfo?.loyaltyDiscount || 0;
   const deadstockDeduction = paymentInfo?.deadstockDeduction || 0;
-  const finalAmount = Math.max(0, totalAmount - discount - loyaltyDiscount - deadstockDeduction);
-  const receivedAmount = Number(paymentInfo?.receivedAmount) || finalAmount;
-  const remainingAmount = finalAmount - receivedAmount;
+  const finalAmount = Math.max(0, totalAmount - agingDiscountTotal - discount - loyaltyDiscount - deadstockDeduction);
+  const receivedAmount = paymentInfo?.status === 'Paid' ? finalAmount : (Number(paymentInfo?.receivedAmount) || finalAmount);
+  const remainingAmount = paymentInfo?.status === 'Paid' ? 0 : Math.max(0, finalAmount - receivedAmount);
 
 
 
@@ -305,12 +310,18 @@ const CompletedStep = ({ customer, cart, prescription, paymentInfo, savedCustome
 
               <div className="bg-slate-50/80 border border-slate-100 rounded-2xl p-4 sm:p-5 flex flex-col gap-2.5 max-w-md ml-auto flex-1 w-full">
                 <div className="flex justify-between items-center text-xs text-slate-500 font-bold">
-                  <span>Subtotal</span>
+                  <span>Subtotal (Before GST)</span>
                   <span className="font-mono">₹{totalAmount.toLocaleString('en-IN')}</span>
                 </div>
+                {agingDiscountTotal > 0 && (
+                  <div className="flex justify-between items-center text-xs text-red-500 font-bold">
+                    <span>Stock Aging Discount</span>
+                    <span className="font-mono">- ₹{agingDiscountTotal.toLocaleString('en-IN')}</span>
+                  </div>
+                )}
                 {discount > 0 && (
                   <div className="flex justify-between items-center text-xs text-red-500 font-bold">
-                    <span>Discounts Applied</span>
+                    <span>Direct Discount</span>
                     <span className="font-mono">- ₹{discount.toLocaleString('en-IN')}</span>
                   </div>
                 )}
@@ -328,7 +339,7 @@ const CompletedStep = ({ customer, cart, prescription, paymentInfo, savedCustome
                 )}
 
                 <div className="flex justify-between items-center text-xs text-slate-800 font-extrabold border-t border-slate-200/60 pt-2">
-                  <span>Final Total</span>
+                  <span>Final Total (Incl. GST)</span>
                   <span className="text-sm font-black text-slate-950 font-mono">₹{finalAmount.toLocaleString('en-IN')}</span>
                 </div>
                 <div className="flex justify-between items-center text-xs text-emerald-600 font-extrabold pt-1">

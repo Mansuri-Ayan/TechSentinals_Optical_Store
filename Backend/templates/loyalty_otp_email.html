@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ClearSight ERP - Loyalty Points Redemption Request</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background-color: #f8fafc;
+      color: #0f172a;
+      margin: 0;
+      padding: 0;
+      line-height: 1.6;
+    }
+    .container {
+      max-width: 580px;
+      margin: 40px auto;
+      background: #ffffff;
+      border-radius: 16px;
+      border: 1px solid #e2e8f0;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+      overflow: hidden;
+    }
+    .header {
+      background: #0f172a;
+      padding: 32px 40px;
+      text-align: center;
+    }
+    .header h1 {
+      color: #ffffff;
+      font-size: 24px;
+      font-weight: 800;
+      margin: 0;
+      letter-spacing: -0.5px;
+    }
+    .header span {
+      color: #10b981;
+    }
+    .content {
+      padding: 40px;
+    }
+    .greeting {
+      font-size: 16px;
+      font-weight: 600;
+      color: #334155;
+      margin-bottom: 12px;
+    }
+    .message {
+      font-size: 15px;
+      color: #475569;
+      margin-bottom: 24px;
+    }
+    .details-card {
+      background: #f8fafc;
+      border-radius: 12px;
+      border: 1px solid #e2e8f0;
+      padding: 20px;
+      margin-bottom: 28px;
+    }
+    .details-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-b: 1px solid #f1f5f9;
+      font-size: 14px;
+    }
+    .details-row:last-child {
+      border-bottom: none;
+    }
+    .label {
+      color: #64748b;
+      font-weight: 600;
+    }
+    .value {
+      color: #0f172a;
+      font-weight: 800;
+    }
+    .highlight-value {
+      color: #059669;
+      font-weight: 900;
+    }
+    .otp-box-wrapper {
+      text-align: center;
+      margin: 28px 0;
+      padding: 24px;
+      background: #ecfdf5;
+      border-radius: 12px;
+      border: 1px solid #a7f3d0;
+    }
+    .otp-label {
+      font-size: 12px;
+      font-weight: 700;
+      color: #047857;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 8px;
+    }
+    .otp-code {
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 38px;
+      font-weight: 900;
+      color: #047857;
+      letter-spacing: 8px;
+      user-select: all;
+      -webkit-user-select: all;
+      -moz-user-select: all;
+      cursor: pointer;
+      display: inline-block;
+      padding: 8px 16px;
+      background: #ffffff;
+      border-radius: 8px;
+      border: 1px solid #6ee7b7;
+    }
+    .otp-hint {
+      font-size: 12px;
+      color: #059669;
+      margin-top: 10px;
+      font-weight: 600;
+    }
+    .warning-card {
+      background: #fffbeb;
+      border-left: 4px solid #f59e0b;
+      padding: 16px;
+      border-radius: 8px;
+      margin-bottom: 24px;
+    }
+    .warning-card p {
+      margin: 0;
+      font-size: 13px;
+      color: #92400e;
+      font-weight: 500;
+    }
+    .footer {
+      background: #f8fafc;
+      padding: 24px 40px;
+      border-top: 1px solid #e2e8f0;
+      text-align: center;
+      font-size: 12px;
+      color: #94a3b8;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>ClearSight <span>Optical ERP</span></h1>
+    </div>
+    <div class="content">
+      <div class="greeting">Hello {{ RECIPIENT_NAME }},</div>
+      <div class="message">
+        A request has been initiated to redeem loyalty points from your account. Please review the transaction details below:
+      </div>
+
+      <div class="details-card">
+        <table style="width: 100%; border-collapse: collapse;">
+          <tr style="border-bottom: 1px solid #e2e8f0;">
+            <td style="padding: 10px 0; color: #64748b; font-weight: 600; font-size: 14px;">Points Being Redeemed:</td>
+            <td style="padding: 10px 0; text-align: right; color: #dc2626; font-weight: 800; font-size: 15px;">-{{ POINTS_TO_REDEEM }} points</td>
+          </tr>
+          <tr style="border-bottom: 1px solid #e2e8f0;">
+            <td style="padding: 10px 0; color: #64748b; font-weight: 600; font-size: 14px;">Remaining Points After Redemption:</td>
+            <td style="padding: 10px 0; text-align: right; color: #0f172a; font-weight: 800; font-size: 14px;">{{ REMAINING_POINTS }} points</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px 0; color: #64748b; font-weight: 600; font-size: 14px;">Requested By:</td>
+            <td style="padding: 10px 0; text-align: right; color: #334155; font-weight: 700; font-size: 14px;">{{ REQUESTED_BY }}</td>
+          </tr>
+        </table>
+      </div>
+
+      <div class="otp-box-wrapper">
+        <div class="otp-label">Your Authorization Code</div>
+        <div class="otp-code" id="otp-code">{{ OTP_CODE }}</div>
+        <div class="otp-hint">Tip: Select and copy the code above</div>
+      </div>
+
+      <div class="warning-card">
+        <p>⚠️ <strong>Security Notice:</strong> This code is valid for <strong>10 minutes</strong>. If you did not authorize this redemption request, please do NOT share this code with anyone.</p>
+      </div>
+
+      <div class="message" style="font-size: 13px; color: #64748b;">
+        ClearSight Optical Store staff will never ask for your code unless you are authorizing a point redemption at checkout.
+      </div>
+    </div>
+    <div class="footer">
+      &copy; 2026 ClearSight Optical Store Management Platform. All rights reserved.
+    </div>
+  </div>
+</body>
+</html>

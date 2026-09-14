@@ -105,7 +105,7 @@ async def update_manager(
     payload: ManagerUpdate,
 ) -> Manager:
     """Apply partial updates to a manager."""
-    update_data = payload.model_dump(exclude_unset=True)
+    update_data = payload.model_dump(exclude_unset=True, exclude={"role"})
     for field, value in update_data.items():
         setattr(manager, field, value)
     await db.commit()
@@ -114,8 +114,7 @@ async def update_manager(
 
 
 async def delete_manager(db: AsyncSession, manager: Manager) -> Manager:
-    """Soft-delete a manager by setting deleted_at."""
-    manager.deleted_at = datetime.now(timezone.utc)
+    """Deactivate a manager by setting is_active = False."""
     manager.is_active = False
     await db.commit()
     await db.refresh(manager)

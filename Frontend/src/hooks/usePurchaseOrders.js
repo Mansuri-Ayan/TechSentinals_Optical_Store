@@ -5,10 +5,25 @@ import {
   createPurchaseOrderApi,
   receiveGoodsApi,
   recordSupplierPaymentApi,
+  getPOInvoiceApi,
 } from '../api/purchase_order/purchase_order.api';
 import { updateProductApi } from '../api/product/product.api';
 
 export const purchaseOrdersQueryKey = ['purchaseOrders'];
+
+/**
+ * Hook to fetch PO invoice JSON / HTML.
+ */
+export const usePOInvoice = (poId) => {
+  return useQuery({
+    queryKey: [purchaseOrdersQueryKey, poId, 'invoice'],
+    queryFn: () => getPOInvoiceApi(poId),
+    enabled: !!poId,
+    staleTime: 1000 * 60,
+    retry: false,
+  });
+};
+
 
 /**
  * Hook to retrieve purchase orders with React Query.
@@ -38,13 +53,14 @@ export const usePurchaseOrders = (filters = {}) => {
 
   // Composite mutation to record a complete purchase: create draft PO -> receive goods -> record payment
   const recordPurchaseMutation = useMutation({
-    mutationFn: async ({ supplierId, storeId, productId, quantity, totalAmount, paidAmount, paymentMethod, date, remarks, costPrice, sellingPrice, discountPercent }) => {
+    mutationFn: async ({ supplierId, storeId, productId, quantity, totalAmount, paidAmount, paymentMethod, date, remarks, costPrice, sellingPrice, discountPercent, lowStockThreshold }) => {
       // 0. Update product details if pricing info is provided
-      if (costPrice !== undefined || sellingPrice !== undefined || discountPercent !== undefined) {
+      if (costPrice !== undefined || sellingPrice !== undefined || discountPercent !== undefined || lowStockThreshold !== undefined) {
         const updatePayload = {};
         if (costPrice !== undefined && costPrice !== null) updatePayload.cost_price = Number(costPrice);
         if (sellingPrice !== undefined && sellingPrice !== null) updatePayload.selling_price = Number(sellingPrice);
         if (discountPercent !== undefined && discountPercent !== null) updatePayload.discount_percent = Number(discountPercent);
+        if (lowStockThreshold !== undefined) updatePayload.low_stock_threshold = lowStockThreshold !== null ? Number(lowStockThreshold) : null;
         if (Object.keys(updatePayload).length > 0) {
           try {
             await updateProductApi(productId, updatePayload);

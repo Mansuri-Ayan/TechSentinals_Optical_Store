@@ -48,8 +48,10 @@ const getDefaultItemValues = (storeId = '', preselectedProduct = null) => {
       cost_price: preselectedProduct.cost_price !== undefined ? String(preselectedProduct.cost_price) : '',
       selling_price: preselectedProduct.selling_price !== undefined ? String(preselectedProduct.selling_price) : '',
       discount_percent: preselectedProduct.discount_percent !== undefined ? String(preselectedProduct.discount_percent) : '0.00',
+      gst_percent: preselectedProduct.gst_percent !== undefined && preselectedProduct.gst_percent !== null ? String(preselectedProduct.gst_percent) : '',
       warranty_months: preselectedProduct.warranty_months !== undefined ? String(preselectedProduct.warranty_months) : '0',
       description: preselectedProduct.description || '',
+      sales_workflow_type: preselectedProduct.sales_workflow_type || 'BOTH',
       is_active: true,
       store_id: storeId === 'admin' ? '' : storeId,
       image: preselectedProduct.image || preselectedProduct.image_url || null,
@@ -96,8 +98,10 @@ const getDefaultItemValues = (storeId = '', preselectedProduct = null) => {
     cost_price: '',
     selling_price: '',
     discount_percent: '0.00',
+    gst_percent: '',
     warranty_months: '0',
     description: '',
+    sales_workflow_type: 'BOTH',
     is_active: true,
     store_id: storeId === 'admin' ? '' : storeId,
     image: null,
@@ -342,6 +346,22 @@ const InventoryItemForm = ({
             <FieldError message={itemErrors.brand?.message} />
           </div>
 
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-1.5">Sale Processing Type</label>
+            <select
+              {...register(`items.${index}.sales_workflow_type`)}
+              disabled={isPending}
+              className={inputCls(false)}
+            >
+              <option value="BOTH">⚡📋 Both (Direct & Order)</option>
+              <option value="DIRECT_ONLY">⚡ Instant Direct Sale Only</option>
+              <option value="ORDER_ONLY">📋 Order-Based Sale Only</option>
+            </select>
+            <p className="text-[11px] text-slate-400 mt-1">
+              Select whether this item is sold off-the-shelf or requires lab processing
+            </p>
+          </div>
+
           <div className="sm:col-span-2">
             <input
               type="hidden"
@@ -584,16 +604,15 @@ const InventoryItemForm = ({
           </div>
 
           <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-1.5">Reorder Level <span className="text-red-500">*</span></label>
+            <label className="block text-sm font-semibold text-slate-700 mb-1.5">Low Stock Threshold</label>
             <input
               {...register(`items.${index}.reorder_level`, {
-                required: 'Reorder level is required',
-                min: { value: 1, message: 'Reorder level must be at least 1' },
+                min: { value: 0, message: 'Threshold cannot be negative' },
               })}
               type="number"
-              min="1"
+              min="0"
               disabled={isPending}
-              placeholder="e.g. 10"
+              placeholder="e.g. 10 (Optional)"
               className={inputCls(!!itemErrors.reorder_level)}
             />
             <FieldError message={itemErrors.reorder_level?.message} />
@@ -605,77 +624,154 @@ const InventoryItemForm = ({
 
       {/* 4 – Pricing */}
       <section>
-        <SectionHeading num="4" label="Pricing & Warranty Details" />
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-4">
-          <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-1.5">Cost Price (₹) <span className="text-red-500">*</span></label>
-            <input
-              {...register(`items.${index}.cost_price`, {
-                required: 'Cost price is required',
-                min: { value: 0, message: 'Price cannot be negative' },
-              })}
-              type="number"
-              min="0"
-              step="0.01"
-              disabled={isPending}
-              placeholder="0.00"
-              className={inputCls(!!itemErrors.cost_price)}
-            />
-            <FieldError message={itemErrors.cost_price?.message} />
-          </div>
+        <SectionHeading num="4" label="Pricing & GST Details" />
+        
+        {(() => {
+          const watchedCostPrice = Number(watch(`items.${index}.cost_price`)) || 0;
+          const watchedSellingPrice = Number(watch(`items.${index}.selling_price`)) || 0;
+          const watchedGstRaw = watch(`items.${index}.gst_percent`);
+          const gstRate = (watchedGstRaw !== undefined && watchedGstRaw !== '' && !isNaN(Number(watchedGstRaw))) 
+            ? Number(watchedGstRaw) 
+            : 18;
+          const gstAmount = (watchedSellingPrice * (gstRate / 100));
+          const sellingPriceWithGst = watchedSellingPrice + gstAmount;
+          const marginPercent = watchedSellingPrice > 0 
+            ? (((watchedSellingPrice - watchedCostPrice) / watchedSellingPrice) * 100).toFixed(1)
+            : 0;
 
-          <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-1.5">Selling Price (₹) <span className="text-red-500">*</span></label>
-            <input
-              {...register(`items.${index}.selling_price`, {
-                required: 'Selling price is required',
-                min: { value: 0, message: 'Price cannot be negative' },
-              })}
-              type="number"
-              min="0"
-              step="0.01"
-              disabled={isPending}
-              placeholder="0.00"
-              className={inputCls(!!itemErrors.selling_price)}
-            />
-            <FieldError message={itemErrors.selling_price?.message} />
-          </div>
+          return (
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-4 gap-y-4">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+                    Unit Cost Price (₹) <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    {...register(`items.${index}.cost_price`, {
+                      required: 'Cost price is required',
+                      min: { value: 0, message: 'Price cannot be negative' },
+                    })}
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    disabled={isPending}
+                    placeholder="0.00"
+                    className={inputCls(!!itemErrors.cost_price)}
+                  />
+                  <FieldError message={itemErrors.cost_price?.message} />
+                </div>
 
-          <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-1.5">Discount (%)</label>
-            <input
-              {...register(`items.${index}.discount_percent`, {
-                min: { value: 0, message: 'Discount cannot be negative' },
-                max: { value: 99.99, message: 'Discount cannot be 100% or more. Max is 99.99%' },
-                validate: v => Number(v) < 100 || 'Discount cannot be 100% — product cannot be free',
-              })}
-              type="number"
-              min="0"
-              max="99.99"
-              step="0.01"
-              disabled={isPending}
-              placeholder="0.00"
-              className={inputCls(!!itemErrors.discount_percent)}
-            />
-            <FieldError message={itemErrors.discount_percent?.message} />
-          </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+                    Unit Selling Price Before GST (₹) <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    {...register(`items.${index}.selling_price`, {
+                      required: 'Selling price is required',
+                      min: { value: 0, message: 'Price cannot be negative' },
+                    })}
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    disabled={isPending}
+                    placeholder="0.00"
+                    className={inputCls(!!itemErrors.selling_price)}
+                  />
+                  <FieldError message={itemErrors.selling_price?.message} />
+                </div>
 
-          <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-1.5">Warranty (Months)</label>
-            <input
-              {...register(`items.${index}.warranty_months`, {
-                min: { value: 0, message: 'Warranty cannot be negative' },
-                validate: v => v === '' || Number.isInteger(Number(v)) || 'Enter a whole number',
-              })}
-              type="number"
-              min="0"
-              disabled={isPending}
-              placeholder="0"
-              className={inputCls(!!itemErrors.warranty_months)}
-            />
-            <FieldError message={itemErrors.warranty_months?.message} />
-          </div>
-        </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+                    GST Rate (%)
+                  </label>
+                  <input
+                    {...register(`items.${index}.gst_percent`, {
+                      min: { value: 0, message: 'GST rate cannot be negative' },
+                      max: { value: 100, message: 'GST rate cannot exceed 100%' },
+                    })}
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.01"
+                    disabled={isPending}
+                    placeholder="Default (18%)"
+                    className={inputCls(!!itemErrors.gst_percent)}
+                  />
+                  <p className="text-[10px] text-slate-400 mt-1">Leave blank to use admin default GST (18%)</p>
+                  <FieldError message={itemErrors.gst_percent?.message} />
+                </div>
+              </div>
+
+              {/* Real-time GST & Selling Price Breakdown Card */}
+              <div className="mt-4 p-3.5 bg-gradient-to-r from-slate-50 via-emerald-50/20 to-blue-50/20 rounded-xl border border-slate-200/80">
+                <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">Calculated Price Summary</p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                  <div className="bg-white p-2.5 rounded-lg border border-slate-200/60 shadow-2xs">
+                    <span className="text-slate-500 block text-[11px]">Unit Cost Price</span>
+                    <span className="font-bold text-slate-800 text-sm">₹{watchedCostPrice.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  </div>
+                  <div className="bg-white p-2.5 rounded-lg border border-slate-200/60 shadow-2xs">
+                    <span className="text-slate-500 block text-[11px]">Selling Price (Excl. GST)</span>
+                    <span className="font-bold text-slate-800 text-sm">₹{watchedSellingPrice.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  </div>
+                  <div className="bg-white p-2.5 rounded-lg border border-amber-200/80 bg-amber-50/30 shadow-2xs">
+                    <span className="text-amber-700 block text-[11px] font-medium">GST ({gstRate}%)</span>
+                    <span className="font-bold text-amber-800 text-sm">+ ₹{gstAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  </div>
+                  <div className="bg-white p-2.5 rounded-lg border border-emerald-300 bg-emerald-50/50 shadow-2xs">
+                    <span className="text-emerald-700 block text-[11px] font-bold">Selling Price (Incl. GST)</span>
+                    <span className="font-black text-emerald-800 text-sm">₹{sellingPriceWithGst.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  </div>
+                </div>
+                {watchedSellingPrice > 0 && (
+                  <p className="text-[11px] text-slate-500 font-medium mt-2 flex items-center gap-1.5">
+                    <span>Gross Profit Margin (before tax):</span>
+                    <span className={`font-bold ${Number(marginPercent) >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                      {marginPercent}% (₹{(watchedSellingPrice - watchedCostPrice).toFixed(2)})
+                    </span>
+                  </p>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-4 mt-4">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1.5">Discount (%)</label>
+                  <input
+                    {...register(`items.${index}.discount_percent`, {
+                      min: { value: 0, message: 'Discount cannot be negative' },
+                      max: { value: 99.99, message: 'Discount cannot be 100% or more. Max is 99.99%' },
+                      validate: v => Number(v) < 100 || 'Discount cannot be 100% — product cannot be free',
+                    })}
+                    type="number"
+                    min="0"
+                    max="99.99"
+                    step="0.01"
+                    disabled={isPending}
+                    placeholder="0.00"
+                    className={inputCls(!!itemErrors.discount_percent)}
+                  />
+                  <FieldError message={itemErrors.discount_percent?.message} />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1.5">Warranty (Months)</label>
+                  <input
+                    {...register(`items.${index}.warranty_months`, {
+                      min: { value: 0, message: 'Warranty cannot be negative' },
+                      validate: v => v === '' || Number.isInteger(Number(v)) || 'Enter a whole number',
+                    })}
+                    type="number"
+                    min="0"
+                    disabled={isPending}
+                    placeholder="0"
+                    className={inputCls(!!itemErrors.warranty_months)}
+                  />
+                  <FieldError message={itemErrors.warranty_months?.message} />
+                </div>
+              </div>
+            </>
+          );
+        })()}
       </section>
 
       <div className="border-t border-slate-100" />

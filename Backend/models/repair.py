@@ -160,6 +160,14 @@ class Repair(Base):
         comment="Advance payment received at drop-off",
     )
 
+    payment_method = Column(
+        String(50),
+        nullable=True,
+        default="CASH",
+        server_default="CASH",
+        comment="Payment method (CASH, CARD, UPI, BANK_TRANSFER, CHEQUE, ONLINE)",
+    )
+
     received_date = Column(
         Date,
         nullable=False,
@@ -237,6 +245,13 @@ class Repair(Base):
         "ProductUnit",
         lazy="selectin",
         foreign_keys="[Repair.product_unit_id]",
+    )
+    bill = relationship(
+        "RepairBill",
+        back_populates="repair",
+        uselist=False,
+        cascade="all, delete-orphan",
+        lazy="selectin",
     )
 
     def __repr__(self) -> str:

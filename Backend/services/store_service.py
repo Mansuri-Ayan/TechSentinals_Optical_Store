@@ -1,6 +1,6 @@
 # Service: store_service.py
 from datetime import datetime, timezone, timedelta
-from sqlalchemy import desc, select, func, and_, or_
+from sqlalchemy import desc, select, update, func, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from models.store import Store
 from models.manager import Manager
@@ -276,9 +276,10 @@ async def update_store(
     return store
 
 
-async def delete_store(db: AsyncSession, store: Store) -> Store:
-    """Soft-delete a store by setting deleted_at."""
-    store.deleted_at = datetime.now(timezone.utc)
+async def delete_store(db: AsyncSession, store: Store, soft_delete: bool = False) -> Store:
+    """Deactivate a store by setting is_active = False. Set deleted_at if soft_delete is True."""
+    if soft_delete:
+        store.deleted_at = datetime.now(timezone.utc)
     store.is_active = False
     
     # Deactivate all staff of the deleted store

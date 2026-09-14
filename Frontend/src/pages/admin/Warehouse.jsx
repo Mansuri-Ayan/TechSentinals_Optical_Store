@@ -396,6 +396,7 @@ const Warehouse = () => {
       frame_details: data.frame_details || null,
       lens_details: data.lens_details || null,
       accessory_details: data.accessory_details || null,
+      sales_workflow_type: data.sales_workflow_type || "BOTH",
     };
 
     const product = await createProductApi(productPayload);
@@ -438,6 +439,7 @@ const Warehouse = () => {
       costPrice: data.costPrice,
       sellingPrice: data.sellingPrice,
       discountPercent: data.discountPercent,
+      lowStockThreshold: data.lowStockThreshold,
     });
     setShowRecordPurchase(false);
     setPreselectedProductId(null);

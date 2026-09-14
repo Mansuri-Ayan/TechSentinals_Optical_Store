@@ -59,6 +59,14 @@ class Category(Base):
         comment="Whether the category is currently active",
     )
 
+    sales_workflow_type = Column(
+        String(50),
+        nullable=False,
+        default="BOTH",
+        server_default="BOTH",
+        comment="Default workflow eligibility for products in this category: DIRECT_ONLY, ORDER_ONLY, or BOTH",
+    )
+
     created_at = Column(
         DateTime(timezone=True),
         nullable=False,

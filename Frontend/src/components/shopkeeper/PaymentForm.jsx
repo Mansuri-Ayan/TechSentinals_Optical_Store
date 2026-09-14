@@ -1,50 +1,71 @@
 import { useEffect } from 'react';
 import { Coins, Smartphone, CreditCard, CheckCircle2, Clock, AlertCircle, Sparkles } from 'lucide-react';
 
+const safeNum = (val) => {
+  const n = Number(val);
+  return isNaN(n) || val === null || val === undefined ? 0 : n;
+};
+
+const safeFmt = (val) => {
+  return safeNum(val).toLocaleString('en-IN');
+};
+
 const PaymentForm = ({
   subtotal,
+  gstTotal = 0,
   discount,
   onDiscountChange,
-  payment,
+  totalAmount,
+  payment = {},
+  onChange,
   onPaymentChange,
   loyaltyDiscount = 0,
 }) => {
-  const totalDiscount = (Number(discount) || 0) + (Number(loyaltyDiscount) || 0);
-  const finalAmount = Math.max(0, subtotal - totalDiscount);
+  const handlePaymentUpdate = onChange || onPaymentChange || (() => {});
 
-  // Synchronize payment amounts when finalAmount changes
+  const calculatedSubtotal = safeNum(subtotal);
+  const calculatedGst = safeNum(gstTotal);
+  const calculatedDiscount = safeNum(discount);
+  const calculatedLoyalty = safeNum(loyaltyDiscount);
+
+  // Determine final net payable amount safely
+  const finalPayable = (totalAmount !== undefined && totalAmount !== null && !isNaN(Number(totalAmount)))
+    ? Number(totalAmount)
+    : Math.max(0, calculatedSubtotal - calculatedDiscount - calculatedLoyalty + calculatedGst);
+
+  // Synchronize payment amounts whenever finalPayable changes
   useEffect(() => {
     let received = payment.receivedAmount;
     let remaining = payment.remainingAmount;
 
     if (payment.status === 'Paid') {
-      received = finalAmount;
+      received = finalPayable;
       remaining = 0;
     } else if (payment.status === 'Unpaid') {
       received = 0;
-      remaining = finalAmount;
+      remaining = finalPayable;
     } else if (payment.status === 'Partial') {
       if (payment.receivedAmount === '') {
         received = '';
-        remaining = finalAmount;
+        remaining = finalPayable;
       } else {
-        const curRec = Number(payment.receivedAmount) || 0;
-        received = Math.min(finalAmount, curRec);
-        remaining = Math.max(0, finalAmount - received);
+        const curRec = safeNum(payment.receivedAmount);
+        received = Math.min(finalPayable, curRec);
+        remaining = Math.max(0, finalPayable - received);
       }
     }
 
     if (received !== payment.receivedAmount || remaining !== payment.remainingAmount) {
-      onPaymentChange(prev => ({
+      handlePaymentUpdate(prev => ({
         ...prev,
         receivedAmount: received,
         remainingAmount: remaining,
       }));
     }
-  }, [finalAmount]);
+  }, [finalPayable]);
 
   const handleMethodChange = (method) => {
-    onPaymentChange({
+    handlePaymentUpdate({
       ...payment,
       method,
       upiId: method === 'UPI' ? payment.upiId : '',
@@ -55,16 +76,16 @@ const PaymentForm = ({
     let received = payment.receivedAmount;
     let remaining = payment.remainingAmount;
     if (status === 'Paid') {
-      received = finalAmount;
+      received = finalPayable;
       remaining = 0;
     } else if (status === 'Unpaid') {
       received = 0;
-      remaining = finalAmount;
+      remaining = finalPayable;
     } else if (status === 'Partial') {
-      received = Math.round(finalAmount / 2);
-      remaining = finalAmount - received;
+      received = Math.round(finalPayable / 2);
+      remaining = finalPayable - received;
     }
-    onPaymentChange({
+    handlePaymentUpdate({
       ...payment,
       status,
       receivedAmount: received,
@@ -74,17 +95,16 @@ const PaymentForm = ({
 
   const handleReceivedAmountChange = (val) => {
     if (val === '') {
-      onPaymentChange({
+      handlePaymentUpdate({
         ...payment,
         receivedAmount: '',
-        remainingAmount: finalAmount,
+        remainingAmount: finalPayable,
       });
       return;
     }
-    const num = Number(val);
-    // Allow user to type beyond limits temporarily without clamping, let validation handle it
-    const remaining = Math.max(0, finalAmount - num);
-    onPaymentChange({
+    const num = safeNum(val);
+    const remaining = Math.max(0, finalPayable - num);
+    handlePaymentUpdate({
       ...payment,
       receivedAmount: val,
       remainingAmount: remaining,
@@ -92,7 +112,7 @@ const PaymentForm = ({
   };
 
   const handleUpiIdChange = (upiId) => {
-    onPaymentChange({
+    handlePaymentUpdate({
       ...payment,
       upiId,
     });
@@ -102,7 +122,7 @@ const PaymentForm = ({
     'w-full px-3.5 py-2.5 text-xs font-semibold border rounded-xl focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 border-slate-200 placeholder:text-slate-400 bg-white transition-all';
 
   return (
-    <div className="space-y-6 font-sans">
+    <div className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm space-y-6 font-sans">
       <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
         <CreditCard className="w-5 h-5 text-blue-500" />
         <h3 className="text-sm font-extrabold text-slate-850 uppercase tracking-wider">
@@ -110,53 +130,64 @@ const PaymentForm = ({
         </h3>
       </div>
 
-      {/* Pricing Form Row: Discount and totals */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-slate-50 p-4 sm:p-5 rounded-2xl border border-slate-150">
+      {/* Pricing Summary & Manual Discount Input */}
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-slate-50 p-4 sm:p-5 rounded-2xl border border-slate-150">
         <div>
-          <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">
-            Subtotal
+          <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5 truncate">
+            Subtotal (Before GST)
           </label>
-          <div className="text-sm font-bold text-slate-700 bg-slate-100/80 px-3.5 py-2.5 rounded-xl border border-slate-200 border-dashed">
-            ₹{subtotal.toLocaleString('en-IN')}
+          <div className="text-sm font-bold text-slate-700 bg-slate-100/80 px-3 py-2.5 rounded-xl border border-slate-200 border-dashed truncate">
+            ₹{safeFmt(calculatedSubtotal)}
           </div>
         </div>
 
         <div>
-          <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5 flex items-center gap-1">
+          <label className="text-[10px] font-bold text-amber-700 uppercase tracking-wider block mb-1.5 truncate">
+            GST (Tax)
+          </label>
+          <div className="text-sm font-bold text-amber-800 bg-amber-50 px-3 py-2.5 rounded-xl border border-amber-200 truncate">
+            + ₹{safeFmt(calculatedGst)}
+          </div>
+        </div>
+
+        <div>
+          <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5 flex items-center gap-1 truncate">
             <Sparkles className="w-3.5 h-3.5 text-blue-500" /> Discount (₹)
           </label>
           <input
             type="number"
             min="0"
-            max={subtotal}
+            max={calculatedSubtotal || finalPayable}
             value={discount === '' || discount === null || discount === undefined ? '' : discount}
             onChange={(e) => {
               const val = e.target.value;
-              onDiscountChange(val === '' ? '' : Math.min(subtotal, Math.max(0, Number(val))));
+              if (onDiscountChange) {
+                onDiscountChange(val === '' ? '' : Math.min(calculatedSubtotal || finalPayable, Math.max(0, Number(val))));
+              }
             }}
-            placeholder="Enter discount amount"
+            placeholder="0"
             className={`${inputCls} font-bold text-slate-800 focus:border-blue-500 focus:ring-blue-500/10`}
           />
         </div>
 
         <div>
-          <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">
-            Final Amount
+          <label className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider block mb-1.5 truncate">
+            Net Payable (Incl. GST)
           </label>
-          <div className="text-sm font-black text-slate-900 bg-white px-3.5 py-2.5 rounded-xl border border-slate-200 shadow-sm">
-            ₹{finalAmount.toLocaleString('en-IN')}
+          <div className="text-sm font-black text-emerald-900 bg-white px-3 py-2.5 rounded-xl border border-emerald-300 shadow-sm truncate">
+            ₹{safeFmt(finalPayable)}
           </div>
         </div>
       </div>
 
-      {/* Loyalty Discount Display */}
-      {loyaltyDiscount > 0 && (
+      {/* Loyalty Discount Banner */}
+      {calculatedLoyalty > 0 && (
         <div className="flex items-center justify-between px-4 py-2.5 bg-emerald-50 border border-emerald-100 rounded-xl">
           <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider flex items-center gap-1.5">
             <Sparkles className="w-3.5 h-3.5 text-emerald-500" />
             Loyalty Points Discount
           </span>
-          <span className="text-xs font-black text-emerald-700">- ₹{loyaltyDiscount.toLocaleString('en-IN')}</span>
+          <span className="text-xs font-black text-emerald-700">- ₹{safeFmt(calculatedLoyalty)}</span>
         </div>
       )}
 
@@ -272,7 +303,7 @@ const PaymentForm = ({
             <input
               type="number"
               min="0"
-              max={finalAmount}
+              max={finalPayable}
               value={payment.receivedAmount === '' || payment.receivedAmount === null || payment.receivedAmount === undefined ? '' : payment.receivedAmount}
               disabled={payment.status === 'Paid' || payment.status === 'Unpaid'}
               onChange={(e) => handleReceivedAmountChange(e.target.value)}
@@ -289,12 +320,12 @@ const PaymentForm = ({
             </label>
             <div
               className={`text-xs font-bold px-3.5 py-2.5 rounded-xl border border-dashed text-center flex items-center justify-center h-10 ${
-                payment.remainingAmount > 0
+                safeNum(payment.remainingAmount) > 0
                   ? 'bg-amber-50 border-amber-200 text-amber-700 font-extrabold'
                   : 'bg-emerald-50 border-emerald-200 text-emerald-700 font-extrabold'
               }`}
             >
-              ₹{(payment.remainingAmount || 0).toLocaleString('en-IN')}
+              ₹{safeFmt(payment.remainingAmount)}
             </div>
           </div>
         </div>

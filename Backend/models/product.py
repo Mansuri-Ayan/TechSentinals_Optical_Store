@@ -1,4 +1,5 @@
 # Model: product.py
+from decimal import Decimal
 from sqlalchemy import (
     BigInteger,
     Boolean,
@@ -124,6 +125,44 @@ class Product(Base):
         default=True,
         server_default="true",
         comment="Whether the product is currently active",
+    )
+
+    low_stock_threshold = Column(
+        Integer,
+        nullable=True,
+        comment="Low stock threshold for this product",
+    )
+
+    gst_percent = Column(
+        Numeric(5, 2),
+        nullable=True,
+        default=None,
+        comment="Custom GST rate percentage override for this product (NULL to inherit default)",
+    )
+
+    @property
+    def selling_price_before_gst(self) -> Decimal:
+        return Decimal(str(self.selling_price)) if self.selling_price is not None else Decimal("0.00")
+
+    @property
+    def gst_amount(self) -> Decimal:
+        if self.selling_price is None:
+            return Decimal("0.00")
+        rate = Decimal(str(self.gst_percent)) if self.gst_percent is not None else Decimal("18.00")
+        return (Decimal(str(self.selling_price)) * rate / Decimal("100")).quantize(Decimal("0.01"))
+
+    @property
+    def selling_price_with_gst(self) -> Decimal:
+        if self.selling_price is None:
+            return Decimal("0.00")
+        return (self.selling_price_before_gst + self.gst_amount).quantize(Decimal("0.01"))
+
+    sales_workflow_type = Column(
+        String(50),
+        nullable=False,
+        default="BOTH",
+        server_default="BOTH",
+        comment="Workflow eligibility: DIRECT_ONLY, ORDER_ONLY, or BOTH",
     )
 
     created_at = Column(

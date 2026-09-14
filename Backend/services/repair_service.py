@@ -56,11 +56,32 @@ def _build_repair_read_dict(repair: Repair) -> dict:
     sale_invoice_number = repair.sale.invoice_number if repair.sale else None
     unit_sku = repair.product_unit.unit_sku if repair.product_unit else None
 
+    total_cost = Decimal(str(repair.final_cost if repair.final_cost is not None else (repair.estimated_cost or 0)))
+    if repair.is_warranty:
+        total_cost = Decimal("0.00")
+
+    paid_amount = Decimal(str(repair.advance_paid or 0))
+    due_amount = max(Decimal("0.00"), total_cost - paid_amount)
+    is_final = (due_amount <= Decimal("0.00"))
+
+    if due_amount <= Decimal("0.00"):
+        payment_status = "PAID"
+    elif paid_amount > Decimal("0.00"):
+        payment_status = "PARTIALLY_PAID"
+    else:
+        payment_status = "UNPAID"
+
     return {
         "customer_full_name": customer_full_name,
         "store_name": store_name,
         "sale_invoice_number": sale_invoice_number,
         "unit_sku": unit_sku,
+        "total_cost": total_cost,
+        "paid_amount": paid_amount,
+        "due_amount": due_amount,
+        "payment_status": payment_status,
+        "is_final": is_final,
+        "invoice_type": "FINAL" if is_final else "TEMPORARY",
     }
 
 
@@ -105,6 +126,7 @@ async def create_repair(
         description=payload.description,
         estimated_cost=payload.estimated_cost if not payload.is_warranty else Decimal("0.00"),
         advance_paid=payload.advance_paid,
+        payment_method=payload.payment_method or "CASH",
         received_date=payload.received_date,
         estimated_completion_date=payload.estimated_completion_date,
         handled_by_type=payload.handled_by_type,
@@ -120,6 +142,9 @@ async def create_repair(
         if unit:
             unit.status = UnitStatus.IN_REPAIR
             unit.repair_id = repair.id
+
+    from services.bill_service import update_bill_for_repair
+    await update_bill_for_repair(db, repair.id, commit=False)
 
     await db.commit()
     await db.refresh(repair)
@@ -236,6 +261,9 @@ async def update_repair(
                 unit.status = UnitStatus.IN_REPAIR
                 unit.repair_id = repair.id
 
+    from services.bill_service import update_bill_for_repair
+    await update_bill_for_repair(db, repair.id, commit=False)
+
     await db.commit()
     await db.refresh(repair)
     return repair
@@ -262,6 +290,9 @@ async def update_repair_status(
         if unit:
             unit.status = UnitStatus.IN_REPAIR
             unit.repair_id = repair.id
+
+    from services.bill_service import update_bill_for_repair
+    await update_bill_for_repair(db, repair.id, commit=False)
 
     await db.commit()
     await db.refresh(repair)

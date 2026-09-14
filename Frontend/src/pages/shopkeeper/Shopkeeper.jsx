@@ -326,17 +326,32 @@ const Shopkeeper = () => {
           inventory_id: realInventoryId,
           deadstock_item_id: realDeadstockId,
           quantity: Number(item.quantity) || 1,
-          unit_price: Number(item.product.selling_price) || 0,
-          discount_percent: 0,
-          tax_percent: 0,
+          unit_price: Number(item.product.selling_price_before_gst ?? item.product.selling_price) || 0,
+          discount_percent: Number(item.product.aging_discount_percent) || 0,
+          tax_percent: item.product.gst_percent !== undefined && item.product.gst_percent !== null ? Number(item.product.gst_percent) : null,
           unit_skus: item.unit_skus ? item.unit_skus.split(',').map(s => s.trim()).filter(Boolean) : null,
         };
       });
 
-      const subtotal = cart.reduce((sum, item) => sum + item.product.selling_price * item.quantity, 0);
+      const subtotal = cart.reduce((sum, item) => sum + (Number(item.product?.selling_price_before_gst ?? item.product?.selling_price) || 0) * item.quantity, 0);
+      const agingDiscountAmt = cart.reduce((sum, item) => {
+        const rate = Number(item.product?.aging_discount_percent) || 0;
+        const price = Number(item.product?.selling_price_before_gst ?? item.product?.selling_price) || 0;
+        return sum + (price * rate / 100) * item.quantity;
+      }, 0);
       const discountAmt = Number(discount) || 0;
       const loyaltyDiscountAmt = Number(loyaltyData.loyaltyDiscount) || 0;
-      const finalAmount = Math.max(0, subtotal - discountAmt - loyaltyDiscountAmt - deadstockDeductionAmt);
+      const baseAfterDisc = Math.max(0, subtotal - agingDiscountAmt - discountAmt - loyaltyDiscountAmt - deadstockDeductionAmt);
+
+      const gstAmt = cart.reduce((sum, item) => {
+        const price = Number(item.product?.selling_price_before_gst ?? item.product?.selling_price) || 0;
+        const agingRate = Number(item.product?.aging_discount_percent) || 0;
+        const afterAging = price * (1 - agingRate / 100);
+        const gstRate = item.product?.gst_percent !== undefined && item.product?.gst_percent !== null ? Number(item.product.gst_percent) : 18;
+        return sum + (afterAging * (gstRate / 100)) * item.quantity;
+      }, 0);
+
+      const finalAmount = Math.max(0, baseAfterDisc + gstAmt);
 
       let paidAmount = 0;
       if (payment.status === 'Paid') {
@@ -362,6 +377,7 @@ const Shopkeeper = () => {
         sold_by_id: soldById,
         sale_date: new Date().toISOString().split('T')[0],
         prescription_id: prescription?.id ? Number(prescription.id) : null,
+        is_direct_sale: loyaltyData.isDirectSale !== undefined ? loyaltyData.isDirectSale : null,
         notes: prescription?.notes || null,
         items: saleItems,
         payments: payments,
@@ -372,9 +388,10 @@ const Shopkeeper = () => {
         loyalty_awarded_to_customer_id: loyaltyData.loyalty_awarded_to_customer_id ? Number(loyaltyData.loyalty_awarded_to_customer_id) : null,
         loyalty_redeem_customer_id: loyaltyData.loyalty_redeem_customer_id ? Number(loyaltyData.loyalty_redeem_customer_id) : null,
         loyalty_redeem_other_customer_id: loyaltyData.loyalty_redeem_other_customer_id ? Number(loyaltyData.loyalty_redeem_other_customer_id) : null,
-        points_to_redeem: (loyaltyData.pointsToRedeemSelf || 0) + (loyaltyData.pointsToRedeemOther || 0),
+        points_to_redeem: loyaltyData.pointsToRedeemSelf || 0,
         points_to_redeem_self: loyaltyData.pointsToRedeemSelf || 0,
         points_to_redeem_other: loyaltyData.pointsToRedeemOther || 0,
+        loyalty_verification_token: loyaltyData.loyaltyVerificationToken || null,
         custom_points: loyaltyData.customPoints || 0,
         category_points_enabled_override: loyaltyData.categoryPointsEnabled !== false,
         price_points_enabled_override: loyaltyData.pricePointsEnabled !== false,

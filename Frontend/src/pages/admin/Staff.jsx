@@ -29,7 +29,8 @@ import {
 } from "lucide-react";
 import AddStaffModal from "../../components/admin/AddStaffModal";
 import Pagination from "../../components/shared/Pagination";
-import { useStoreStore } from "../../store/store";
+import ConfirmationModal from "../../components/shared/ConfirmationModal";
+import { useStoreStore, useAuthStore } from "../../store/store";
 import { useStoreStaff } from "../../hooks/useStaff";
 import { getWorkerById, getOpticianById, getManagerById } from "../../api/staff/staff.api";
 import PermissionGuard from "../../components/shared/PermissionGuard";
@@ -226,6 +227,7 @@ const Staff = () => {
   const { storeId, buildPath, showStoreSwitcher, isPathAdmin } = useRoleContext();
   const navigate = useNavigate();
   const { stores, selectedStore, setSelectedStore } = useStoreStore();
+  const { user: currentUser } = useAuthStore();
   const [inPageStoreId, setInPageStoreId] = useState(storeId);
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -236,6 +238,7 @@ const Staff = () => {
   const [showAddStaff, setShowAddStaff] = useState(false);
   const [selectedStaff, setSelectedStaff] = useState(null);
   const [drawerLoading, setDrawerLoading] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState({ isOpen: false, person: null });
   const ITEMS_PER_PAGE = 20;
 
   const perms = usePagePermissions({
@@ -374,20 +377,24 @@ const Staff = () => {
       : statusFilter === "active"
         ? "border-emerald-200 text-emerald-700 bg-emerald-50/50"
         : "border-red-200 text-red-700 bg-red-50/50";
-  const handleDelete = async (e, person) => {
+  const handleDelete = (e, person) => {
     e.stopPropagation();
-    if (window.confirm(`Are you sure you want to delete ${person.name}?`)) {
-      await deleteStaffAsync({
-        role: person.role,
-        id: person.id,
-      });
-    }
+    setDeleteConfirm({ isOpen: true, person });
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteConfirm.person) return;
+    await deleteStaffAsync({
+      role: deleteConfirm.person.role,
+      id: deleteConfirm.person.id,
+    });
+    setDeleteConfirm({ isOpen: false, person: null });
   };
 
   const handleSubmitStaff = async ({ role, payload, staff: staffMember, setError }) => {
     if (staffMember) {
       await updateStaffAsync({
-        role,
+        role: staffMember.role,
         id: staffMember.id,
         payload,
         setError,
@@ -665,7 +672,7 @@ const Staff = () => {
                       </div>
 
                       <div className="md:w-auto flex items-center space-x-1 md:space-x-2 md:opacity-0 group-hover:opacity-100 transition-opacity ml-auto md:ml-0">
-                        {perms.canUpdate && (
+                        {(perms.canUpdate || (currentUser && String(currentUser.id) === String(person.id) && currentUser.role?.toLowerCase() === person.role?.toLowerCase())) && (
                           <button
                             onClick={(e) => { e.stopPropagation(); setEditingStaff(person); }}
                             className="p-2 md:p-2.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg md:rounded-xl transition-colors"
@@ -754,6 +761,18 @@ const Staff = () => {
         staff={selectedStaff}
         onClose={() => setSelectedStaff(null)}
         isLoading={drawerLoading}
+      />
+
+      {/* Confirm Deactivate Modal */}
+      <ConfirmationModal
+        isOpen={deleteConfirm.isOpen}
+        onClose={() => setDeleteConfirm({ isOpen: false, person: null })}
+        onConfirm={handleConfirmDelete}
+        type="danger"
+        title="Deactivate Staff Member?"
+        message={`Are you sure you want to deactivate ${deleteConfirm.person?.name || "this staff member"}? They will no longer be able to log in, but will remain listed as inactive in the directory.`}
+        confirmText="Deactivate"
+        cancelText="Cancel"
       />
     </div>
   );

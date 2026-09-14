@@ -5,7 +5,7 @@ split payments, cancellation with inventory reversal.
 """
 from datetime import datetime, timezone
 from decimal import Decimal
-from sqlalchemy import select, func as sa_func
+from sqlalchemy import select, update, func as sa_func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from fastapi import HTTPException, status
@@ -54,20 +54,26 @@ def _compute_line_total(
 
 
 async def _generate_invoice_number(db: AsyncSession, admin_id: int) -> str:
-    """Auto-generate a sequential invoice number like INV-2024-00001."""
+    """Auto-generate a sequential invoice number like INV-2026-00001."""
     year = datetime.now(timezone.utc).year
     prefix = f"INV-{year}-"
     stmt = (
-        select(sa_func.count())
-        .select_from(Sale)
-        .where(
-            Sale.admin_id == admin_id,
-            Sale.invoice_number.like(f"{prefix}%"),
-        )
+        select(Sale.invoice_number)
+        .where(Sale.invoice_number.like(f"{prefix}%"))
+        .order_by(Sale.invoice_number.desc())
+        .limit(1)
     )
     result = await db.execute(stmt)
-    count = result.scalar() or 0
-    return f"{prefix}{count + 1:05d}"
+    last_inv = result.scalar()
+    if last_inv:
+        try:
+            suffix = last_inv.split("-")[-1]
+            next_num = int(suffix) + 1
+        except (ValueError, IndexError):
+            next_num = 1
+    else:
+        next_num = 1
+    return f"{prefix}{next_num:05d}"
 
 
 # ── Create Sale ───────────────────────────────────────────────
@@ -107,16 +113,21 @@ async def create_sale(
         if product.category and product.category.name.lower() == "lenses":
             has_lenses = True
 
+        tax_percent = item_data.tax_percent
+        if tax_percent is None:
+            from services.gst_service import resolve_gst_percent
+            tax_percent = await resolve_gst_percent(db, item_data.product_id, admin_id)
+
         line_total = _compute_line_total(
             item_data.quantity,
             item_data.unit_price,
-            item_data.tax_percent,
+            tax_percent,
             item_data.discount_percent,
         )
         base = item_data.unit_price * item_data.quantity
         discount_amt = base * item_data.discount_percent / Decimal("100")
         after_discount = base - discount_amt
-        tax_amt = after_discount * item_data.tax_percent / Decimal("100")
+        tax_amt = after_discount * tax_percent / Decimal("100")
 
         subtotal += base
         total_discount += discount_amt
@@ -125,20 +136,45 @@ async def create_sale(
         # Capture an immutable snapshot of the product at sale time
         snapshot = await capture_product_snapshot(db, product)
 
-        sale_item = SaleItem(
-            product_id=item_data.product_id,
-            product_snapshot_id=snapshot.id,
-            inventory_id=item_data.inventory_id,
-            deadstock_item_id=getattr(item_data, "deadstock_item_id", None),
-            quantity=item_data.quantity,
-            unit_price=item_data.unit_price,
-            unit_cost=product.cost_price,  # snapshot at sale time
-            discount_percent=item_data.discount_percent,
-            tax_percent=item_data.tax_percent,
-            line_total=line_total,
-            notes=item_data.notes,
-        )
-        sale_items.append((sale_item, product, snapshot, item_data))
+        # For optical orders (where each physical unit requires individual lab processing & QC inspection),
+        # expand quantity > 1 into individual 1-unit items so QC is strictly tracked at the item level.
+        if not getattr(payload, "is_direct_sale", False) and item_data.quantity > 1:
+            unit_line_total = (line_total / Decimal(str(item_data.quantity))).quantize(Decimal("0.01"))
+            remaining_line_total = line_total
+            for u_idx in range(item_data.quantity):
+                is_last = (u_idx == item_data.quantity - 1)
+                cur_line_total = remaining_line_total if is_last else unit_line_total
+                remaining_line_total -= cur_line_total
+
+                sale_item = SaleItem(
+                    product_id=item_data.product_id,
+                    product_snapshot_id=snapshot.id,
+                    inventory_id=item_data.inventory_id,
+                    deadstock_item_id=getattr(item_data, "deadstock_item_id", None),
+                    quantity=1,
+                    unit_price=item_data.unit_price,
+                    unit_cost=product.cost_price,  # snapshot at sale time
+                    discount_percent=item_data.discount_percent,
+                    tax_percent=tax_percent,
+                    line_total=cur_line_total,
+                    notes=item_data.notes,
+                )
+                sale_items.append((sale_item, product, snapshot, item_data))
+        else:
+            sale_item = SaleItem(
+                product_id=item_data.product_id,
+                product_snapshot_id=snapshot.id,
+                inventory_id=item_data.inventory_id,
+                deadstock_item_id=getattr(item_data, "deadstock_item_id", None),
+                quantity=item_data.quantity,
+                unit_price=item_data.unit_price,
+                unit_cost=product.cost_price,  # snapshot at sale time
+                discount_percent=item_data.discount_percent,
+                tax_percent=tax_percent,
+                line_total=line_total,
+                notes=item_data.notes,
+            )
+            sale_items.append((sale_item, product, snapshot, item_data))
 
     # Validate manual discount amount
     if payload.discount_amount > subtotal:
@@ -155,7 +191,6 @@ async def create_sale(
 
     total_amount = (subtotal - total_discount + total_tax).quantize(Decimal("0.01"))
 
-
     # Unpack items tuple — service builds (SaleItem, Product, ProductSnapshot, SaleItemCreate) quads
     sale_items_unpacked = [si for si, _p, _s, _d in sale_items]
 
@@ -163,10 +198,14 @@ async def create_sale(
     sale_payments: list[SalePayment] = []
     paid_amount = Decimal("0")
     loyalty_points_redeemed = 0
+    is_full_payment_claim = False
 
     for pay_data in payload.payments:
         if pay_data.payment_method == SalePaymentMethod.LOYALTY_POINTS:
             loyalty_points_redeemed += int(pay_data.amount)
+
+        if getattr(pay_data, "remarks", "") == "Full payment":
+            is_full_payment_claim = True
 
         sale_payment = SalePayment(
             amount=pay_data.amount,
@@ -177,15 +216,20 @@ async def create_sale(
         sale_payments.append(sale_payment)
         paid_amount += pay_data.amount
 
-    due_amount = (total_amount - paid_amount).quantize(Decimal("0.01"))
-
-    # Determine status
-    if due_amount <= 0:
+    if is_full_payment_claim or paid_amount >= total_amount:
+        paid_amount = total_amount
+        due_amount = Decimal("0.00")
         sale_status = SaleStatus.COMPLETED
-    elif paid_amount > 0:
-        sale_status = SaleStatus.PARTIALLY_PAID
+        if sale_payments and is_full_payment_claim:
+            sale_payments[0].amount = total_amount
     else:
-        sale_status = SaleStatus.PENDING
+        due_amount = (total_amount - paid_amount).quantize(Decimal("0.01"))
+        if due_amount <= 0:
+            sale_status = SaleStatus.COMPLETED
+        elif paid_amount > 0:
+            sale_status = SaleStatus.PARTIALLY_PAID
+        else:
+            sale_status = SaleStatus.PENDING
 
     customer_id_for_sale = payload.customer_id
 
@@ -251,7 +295,56 @@ async def create_sale(
         if active_pres:
             prescription_id = active_pres.id
 
-    initial_lab_status = "Confirmed"
+    # Determine initial_lab_status (Direct Sale vs Order-Based Sale)
+    is_direct = getattr(payload, "is_direct_sale", None)
+    if is_direct is True:
+        for _si, p, _s, _d in sale_items:
+            if getattr(p, "sales_workflow_type", "BOTH") == "ORDER_ONLY":
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Product '{p.name}' is marked as Order-Based Sale only and cannot be sold via Instant Direct Sale."
+                )
+        initial_lab_status = None
+    elif is_direct is False:
+        initial_lab_status = "Confirmed"
+    else:
+        has_order_only = any(
+            (p.category and p.category.name.lower() == "lenses") or
+            getattr(p, "sales_workflow_type", "BOTH") == "ORDER_ONLY"
+            for _si, p, _s, _d in sale_items
+        )
+        if has_lenses or has_order_only or payload.prescription_id:
+            initial_lab_status = "Confirmed"
+        else:
+            initial_lab_status = None
+
+    # Resolve per-item processing_type and initial qc_status
+    for sale_item, p, _s, _d in sale_items:
+        p_wf = getattr(p, "sales_workflow_type", "BOTH")
+        is_lens = bool(p.category and p.category.name.lower() == "lenses")
+
+        if p_wf == "DIRECT_ONLY":
+            item_proc = "DIRECT"
+        elif p_wf == "ORDER_ONLY" or is_lens:
+            item_proc = "ORDER"
+        else:
+            # BOTH: follows cart/order-level processing
+            item_proc = "ORDER" if initial_lab_status is not None else "DIRECT"
+
+        sale_item.processing_type = item_proc
+
+        if initial_lab_status is None:
+            # Pure Direct Sale: bypasses lab & QC pipeline, delivered immediately on checkout
+            sale_item.qc_status = "DELIVERED"
+            sale_item.resolution_status = "RESOLVED"
+        else:
+            # Order-Based or Mixed Order: all items start at PENDING_QC_PRE_LAB for inspection.
+            # Direct items bypass lab once QC check passes!
+            sale_item.qc_status = "PENDING_QC_PRE_LAB"
+            sale_item.resolution_status = "UNRESOLVED"
+
+    if initial_lab_status is None and due_amount <= 0:
+        sale_status = SaleStatus.COMPLETED
 
     sale = Sale(
         invoice_number=invoice_number,
@@ -305,9 +398,9 @@ async def create_sale(
             points_redeemed_other = 0
 
             pts_self = payload.points_to_redeem_self
-            if pts_self == 0 and payload.points_to_redeem > 0:
-                pts_self = payload.points_to_redeem
             pts_other = payload.points_to_redeem_other
+            if pts_self == 0 and pts_other == 0 and payload.points_to_redeem > 0:
+                pts_self = payload.points_to_redeem
 
             # Validate Self Redemption
             if pts_self > 0:
@@ -334,6 +427,19 @@ async def create_sale(
 
             other_customer = None
             if pts_other > 0 and payload.loyalty_redeem_other_customer_id:
+                # ── OTP Verification Guard for Other Customer Points ────────
+                from services.loyalty_otp_service import verify_loyalty_token
+                is_otp_valid = verify_loyalty_token(
+                    payload.loyalty_verification_token,
+                    payload.loyalty_redeem_other_customer_id,
+                    pts_other,
+                )
+                if not is_otp_valid:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Loyalty points redemption for another customer requires valid OTP verification from the account owner.",
+                    )
+
                 other_customer = await db.scalar(
                     select(Customer).where(Customer.id == payload.loyalty_redeem_other_customer_id)
                 )
@@ -345,10 +451,17 @@ async def create_sale(
                     sale_total=total_amount,
                     config=config
                 )
-                if not res_other["valid"]:
-                    raise HTTPException(status_code=400, detail=f"Other redemption error: {res_other['error']}")
                 points_redeemed_other = res_other["points_redeemed"]
                 rupee_discount_other = res_other["rupee_discount"]
+
+                # Mark OTP record as used so token cannot be reused for a future sale
+                if payload.loyalty_verification_token:
+                    from models.otp_verification import OTPVerification
+                    await db.execute(
+                        update(OTPVerification)
+                        .where(OTPVerification.verification_token == payload.loyalty_verification_token)
+                        .values(is_used=True)
+                    )
 
             # Apply combined capping logic
             max_discount_pct = getattr(config, "max_redemption_percentage", 100)
@@ -605,7 +718,41 @@ async def get_sale(
         .where(Sale.id == sale_id)
     )
     result = await db.execute(stmt)
-    return result.scalar_one_or_none()
+    sale = result.scalar_one_or_none()
+    if sale and sale.lab_status:
+        needs_split = any(item.quantity > 1 for item in sale.items)
+        if needs_split:
+            for item in list(sale.items):
+                if item.quantity > 1:
+                    orig_qty = item.quantity
+                    orig_total = item.line_total
+                    unit_total = (orig_total / Decimal(str(orig_qty))).quantize(Decimal("0.01"))
+                    item.quantity = 1
+                    item.line_total = orig_total - (unit_total * Decimal(str(orig_qty - 1)))
+                    db.add(item)
+                    for _ in range(orig_qty - 1):
+                        new_item = SaleItem(
+                            sale_id=sale.id,
+                            product_id=item.product_id,
+                            product_snapshot_id=item.product_snapshot_id,
+                            inventory_id=item.inventory_id,
+                            deadstock_item_id=item.deadstock_item_id,
+                            quantity=1,
+                            unit_price=item.unit_price,
+                            unit_cost=item.unit_cost,
+                            discount_percent=item.discount_percent,
+                            tax_percent=item.tax_percent,
+                            line_total=unit_total,
+                            notes=item.notes,
+                            processing_type=getattr(item, "processing_type", "ORDER") or "ORDER",
+                            qc_status="PENDING_QC_PRE_LAB",
+                            resolution_status="UNRESOLVED",
+                        )
+                        db.add(new_item)
+            await db.commit()
+            result = await db.execute(stmt)
+            sale = result.scalar_one_or_none()
+    return sale
 
 
 async def list_sales(
@@ -759,12 +906,51 @@ async def update_sale(
                 detail="Delivered lab orders cannot be reverted to a pending status."
             )
 
+        # QC Gatekeeper: Verify all items have passed QC for this stage transition
+        new_lab_status = update_data["lab_status"]
+        if new_lab_status == "Delivered":
+            stmt_items = select(SaleItem).where(SaleItem.sale_id == sale.id)
+            items = (await db.execute(stmt_items)).scalars().all()
+            for it in items:
+                if getattr(it, "processing_type", "ORDER") == "DIRECT":
+                    if it.qc_status not in ("QC_PASSED_PRE_LAB", "DELIVERED", "CANCELLED"):
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail=f"Cannot deliver order: Direct-sale item #{it.id} has QC status '{it.qc_status}'. All direct items must complete Quality Check first.",
+                        )
+                else:
+                    if it.qc_status not in ("QC_PASSED_POST_LAB", "DELIVERED", "CANCELLED"):
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail=f"Cannot deliver order: Item #{it.id} has QC status '{it.qc_status}'. All items must pass Post-Lab QC first.",
+                        )
+            for it in items:
+                if it.qc_status in ("QC_PASSED_POST_LAB", "QC_PASSED_PRE_LAB"):
+                    it.qc_status = "DELIVERED"
+
+        elif new_lab_status == "Sent To Lab":
+            stmt_items = select(SaleItem).where(SaleItem.sale_id == sale.id)
+            items = (await db.execute(stmt_items)).scalars().all()
+            for it in items:
+                if getattr(it, "processing_type", "ORDER") == "DIRECT":
+                    # Direct sale items bypass the lab workflow entirely
+                    continue
+                if it.qc_status not in ("QC_PASSED_PRE_LAB", "SENT_TO_LAB", "DELIVERED", "CANCELLED"):
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Cannot send order to lab: Item #{it.id} has QC status '{it.qc_status}'. All items must pass Pre-Lab QC first.",
+                    )
+            for it in items:
+                if getattr(it, "processing_type", "ORDER") != "DIRECT" and it.qc_status == "QC_PASSED_PRE_LAB":
+                    it.qc_status = "SENT_TO_LAB"
+
     for field, value in update_data.items():
         setattr(sale, field, value)
         
     if "lab_status" in update_data and update_data["lab_status"] == "Delivered":
         if sale.due_amount <= 0:
             sale.status = SaleStatus.COMPLETED
+
 
     await db.flush()
     from services.bill_service import update_bill_for_sale
