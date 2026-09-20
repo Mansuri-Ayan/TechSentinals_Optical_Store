@@ -59,3 +59,29 @@ export const deleteStoreApi = async (id) => {
   const response = await api.delete(`/stores/${id}/`);
   return response.data;
 };
+
+export const setMainStoreApi = async (id) => {
+  const response = await api.patch(`/stores/${id}/set-main`);
+  return response.data;
+};
+
+export const getWarehouseInfoApi = async () => {
+  const response = await api.get('/settings/warehouse-info');
+  return response.data;
+};
+
+export const checkWarehouseStockApi = async () => {
+  const response = await api.get('/settings/warehouse-stock-check');
+  return response.data;
+};
+
+export const disableWarehouseApi = async (targetStoreId) => {
+  const response = await api.post('/settings/disable-warehouse', { target_store_id: targetStoreId });
+  return response.data;
+};
+
+export const enableWarehouseApi = async () => {
+  const response = await api.patch('/settings/warehouse', { warehouse_enabled: true });
+  return response.data;
+};
+

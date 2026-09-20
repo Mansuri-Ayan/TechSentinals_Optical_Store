@@ -146,3 +146,22 @@ class AdminRead(BaseModel):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class AdminWarehouseToggle(BaseModel):
+    warehouse_enabled: bool
+
+
+class DisableWarehouseRequest(BaseModel):
+    target_store_id: int = Field(
+        ..., description="Store to transfer all warehouse stock to"
+    )
+
+
+class WarehouseInfo(BaseModel):
+    warehouse_enabled: bool
+    owner_type: str
+    owner_id: int
+    store_id: int | None = None
+    label: str
+    is_dedicated_warehouse: bool

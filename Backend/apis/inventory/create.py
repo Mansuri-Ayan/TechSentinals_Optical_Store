@@ -61,9 +61,14 @@ async def create_inventory_endpoint(
     """
     admin_id = get_user_admin_id(current_user)
 
-    # 1. Tenant security check
+    from services.warehouse_resolver import resolve_warehouse
+    wh = await resolve_warehouse(db, admin_id)
+
+    # 1. Tenant security check & warehouse resolution
     if payload.owner_type == OwnerType.ADMIN or payload.owner_type == "ADMIN":
-        payload_admin_id = payload.owner_id
+        payload.owner_type = OwnerType[wh["owner_type"]]
+        payload.owner_id = wh["owner_id"]
+        payload_admin_id = admin_id
     else:
         store = await db.scalar(select(Store).where(Store.id == payload.owner_id))
         if not store:

@@ -126,16 +126,18 @@ async def _populate_other_stocks(
         other_stocks = []
         # 1. Admin Warehouse
         if not (resolved_owner_type == "ADMIN" and resolved_owner_id == admin_id):
-            admin_totals = inv_totals.get((item.product_id, "ADMIN", admin_id), {"qty": 0, "avail": 0})
-            other_stocks.append(
-                StoreStockRead(
-                    store_id=admin_id,
-                    store_name="Admin Warehouse",
-                    owner_type="ADMIN",
-                    quantity=admin_totals["qty"],
-                    available_quantity=admin_totals["avail"]
+            admin_obj = await db.get(Admin, admin_id)
+            if admin_obj and admin_obj.warehouse_enabled:
+                admin_totals = inv_totals.get((item.product_id, "ADMIN", admin_id), {"qty": 0, "avail": 0})
+                other_stocks.append(
+                    StoreStockRead(
+                        store_id=admin_id,
+                        store_name="Admin Warehouse",
+                        owner_type="ADMIN",
+                        quantity=admin_totals["qty"],
+                        available_quantity=admin_totals["avail"]
+                    )
                 )
-            )
         # 2. Store Branches
         for s_id, s_name in store_map.items():
             if resolved_owner_type == "STORE" and resolved_owner_id == s_id:
@@ -196,6 +198,10 @@ async def list_inventories(
     stores_res = await db.execute(stores_stmt)
     store_map = {row[0]: row[1] for row in stores_res.fetchall()}
 
+    from services.warehouse_resolver import resolve_warehouse
+    from services.store_service import get_main_store
+    wh = await resolve_warehouse(db, admin_id)
+
     if not isinstance(current_user, Admin):
         from models.worker import Worker
         from models.optician import Optician
@@ -208,11 +214,11 @@ async def list_inventories(
             owner_type = "STORE"
             owner_id = current_user.store_id
         else:
-            # Manager or business-level Accountant: allow querying their own admin warehouse or any store under the same admin
+            # Manager or business-level Accountant: allow querying their own warehouse or any store under the same admin
             requested_owner_type = owner_type.upper()
             if requested_owner_type == "ADMIN":
-                # Manager querying admin warehouse — force owner_id to their admin
-                owner_id = admin_id
+                owner_type = wh["owner_type"]
+                owner_id = wh["owner_id"]
             elif requested_owner_type == "STORE":
                 if owner_id is None:
                     # Default to their own store
@@ -231,6 +237,14 @@ async def list_inventories(
             else:
                 owner_type = "STORE"
                 owner_id = current_user.store_id
+    else:
+        # Admin querying
+        if owner_type.upper() == "ADMIN":
+            owner_type = wh["owner_type"]
+            owner_id = wh["owner_id"]
+        elif owner_type.upper() == "STORE" and owner_id is None:
+            main_store = await get_main_store(db, admin_id)
+            owner_id = main_store.id if main_store else None
 
     result_dict = await get_inventories_by_owner(
         db,
@@ -320,10 +334,13 @@ async def list_warehouse_inventories(
     stores_res = await db.execute(stores_stmt)
     store_map = {row[0]: row[1] for row in stores_res.fetchall()}
 
+    from services.warehouse_resolver import resolve_warehouse
+    wh = await resolve_warehouse(db, admin_id)
+
     result_dict = await get_inventories_by_owner(
         db,
-        owner_type="ADMIN",
-        owner_id=admin_id,
+        owner_type=wh["owner_type"],
+        owner_id=wh["owner_id"],
         active_only=active_only,
         search=search,
         category_id=category_id,
@@ -333,7 +350,7 @@ async def list_warehouse_inventories(
         page=page,
         limit=limit,
         paginate=paginate,
-        warehouse_only=True,
+        warehouse_only=wh["is_dedicated_warehouse"],
     )
     
     await _populate_other_stocks(
@@ -341,8 +358,8 @@ async def list_warehouse_inventories(
         result_dict["items"],
         admin_id=admin_id,
         store_map=store_map,
-        resolved_owner_type="ADMIN",
-        resolved_owner_id=admin_id,
+        resolved_owner_type=wh["owner_type"],
+        resolved_owner_id=wh["owner_id"],
     )
 
     return InventoryResponse(
@@ -464,12 +481,16 @@ async def universal_search_inventories(
                             detail="Access denied to this store's inventory",
                         )
     else:
-        if resolved_owner_id is None:
-            if resolved_owner_type == "ADMIN":
-                resolved_owner_id = admin_id
-            else:
-                # Default to admin ID or first store
-                resolved_owner_id = admin_id
+        from services.warehouse_resolver import resolve_warehouse
+        from services.store_service import get_main_store
+        wh = await resolve_warehouse(db, admin_id)
+
+        if resolved_owner_type == "ADMIN":
+            resolved_owner_type = wh["owner_type"]
+            resolved_owner_id = wh["owner_id"]
+        elif resolved_owner_id is None:
+            main_store = await get_main_store(db, admin_id)
+            resolved_owner_id = main_store.id if main_store else admin_id
 
     # Fetch store details for mapping
     stores_stmt = select(Store.id, Store.store_name).where(Store.admin_id == admin_id)
@@ -633,8 +654,8 @@ async def universal_search_inventories(
         # Calculate other stocks (include all other stores and the warehouse under the same admin, even with 0 stock)
         other_stocks = []
         
-        # 1. Admin Warehouse (if not current local context)
-        if not (resolved_owner_type == "ADMIN" and resolved_owner_id == admin_id):
+        # 1. Admin Warehouse (if dedicated warehouse enabled and not current local context)
+        if wh["is_dedicated_warehouse"] and not (resolved_owner_type == "ADMIN" and resolved_owner_id == admin_id):
             admin_qty = sum(inv.quantity for inv in p_invs if inv.owner_type == "ADMIN" and inv.owner_id == admin_id and inv.is_active)
             admin_avail = sum(inv.available_quantity for inv in p_invs if inv.owner_type == "ADMIN" and inv.owner_id == admin_id and inv.is_active)
             other_stocks.append(
@@ -811,8 +832,14 @@ async def get_inventory_batches_endpoint(
         resolved_owner_type = None
         resolved_owner_id = None
     elif product_id is not None and owner_type is not None and owner_id is not None:
-        resolved_owner_type = OwnerType[owner_type.upper()]
-        resolved_owner_id = owner_id
+        if owner_type.upper() == "ADMIN":
+            from services.warehouse_resolver import resolve_warehouse
+            wh = await resolve_warehouse(db, admin_id)
+            resolved_owner_type = OwnerType[wh["owner_type"]]
+            resolved_owner_id = wh["owner_id"]
+        else:
+            resolved_owner_type = OwnerType[owner_type.upper()]
+            resolved_owner_id = owner_id
         resolved_product_id = product_id
     else:
         # Fallback to fetching reference inventory row
@@ -834,11 +861,16 @@ async def get_inventory_batches_endpoint(
         from models.worker import Worker
         from models.optician import Optician
         from models.accountant import Accountant
+        from services.warehouse_resolver import resolve_warehouse
 
         is_store_scoped = isinstance(current_user, (Worker, Optician)) or (isinstance(current_user, Accountant) and current_user.store_id is not None)
 
+        wh = await resolve_warehouse(db, admin_id)
         is_own_store = ot_str == "STORE" and resolved_owner_id == current_user.store_id
-        is_warehouse = ot_str == "ADMIN" and resolved_owner_id == admin_id and not is_store_scoped
+        is_warehouse = (
+            (ot_str == wh["owner_type"] and resolved_owner_id == wh["owner_id"])
+            or (ot_str == "ADMIN" and resolved_owner_id == admin_id)
+        ) and not is_store_scoped
 
         if not (is_own_store or is_warehouse):
             raise HTTPException(

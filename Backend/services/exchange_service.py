@@ -45,7 +45,7 @@ def _compute_line_total(
 
 
 async def _generate_exchange_number(db: AsyncSession, admin_id: int) -> str:
-    """Auto-generate a sequential exchange number like EXC-2026-00001."""
+    """Auto-generate a unique sequential exchange number like EXC-2026-00001."""
     year = datetime.now(timezone.utc).year
     prefix = f"EXC-{year}-"
     stmt = (
@@ -55,20 +55,32 @@ async def _generate_exchange_number(db: AsyncSession, admin_id: int) -> str:
         .limit(1)
     )
     result = await db.execute(stmt)
-    last_exc = result.scalar()
+    last_exc = result.scalar_one_or_none()
+
+    next_seq = 1
     if last_exc:
         try:
-            suffix = last_exc.split("-")[-1]
-            next_num = int(suffix) + 1
+            suffix = last_exc.split(prefix)[-1]
+            next_seq = int(suffix) + 1
         except (ValueError, IndexError):
-            next_num = 1
-    else:
-        next_num = 1
-    return f"{prefix}{next_num:05d}"
+            count_stmt = select(sa_func.count()).select_from(Exchange).where(
+                Exchange.exchange_number.like(f"{prefix}%")
+            )
+            next_seq = (await db.execute(count_stmt)).scalar_one() + 1
+
+    while True:
+        candidate = f"{prefix}{next_seq:05d}"
+        exists_stmt = select(sa_func.count()).select_from(Exchange).where(
+            Exchange.exchange_number == candidate
+        )
+        exists = (await db.execute(exists_stmt)).scalar_one()
+        if exists == 0:
+            return candidate
+        next_seq += 1
 
 
 async def _generate_invoice_number(db: AsyncSession, admin_id: int) -> str:
-    """Auto-generate a sequential invoice number like INV-2026-00001."""
+    """Auto-generate a unique sequential invoice number like INV-2026-00001."""
     year = datetime.now(timezone.utc).year
     prefix = f"INV-{year}-"
     stmt = (
@@ -78,16 +90,28 @@ async def _generate_invoice_number(db: AsyncSession, admin_id: int) -> str:
         .limit(1)
     )
     result = await db.execute(stmt)
-    last_inv = result.scalar()
+    last_inv = result.scalar_one_or_none()
+
+    next_seq = 1
     if last_inv:
         try:
-            suffix = last_inv.split("-")[-1]
-            next_num = int(suffix) + 1
+            suffix = last_inv.split(prefix)[-1]
+            next_seq = int(suffix) + 1
         except (ValueError, IndexError):
-            next_num = 1
-    else:
-        next_num = 1
-    return f"{prefix}{next_num:05d}"
+            count_stmt = select(sa_func.count()).select_from(Sale).where(
+                Sale.invoice_number.like(f"{prefix}%")
+            )
+            next_seq = (await db.execute(count_stmt)).scalar_one() + 1
+
+    while True:
+        candidate = f"{prefix}{next_seq:05d}"
+        exists_stmt = select(sa_func.count()).select_from(Sale).where(
+            Sale.invoice_number == candidate
+        )
+        exists = (await db.execute(exists_stmt)).scalar_one()
+        if exists == 0:
+            return candidate
+        next_seq += 1
 
 
 async def create_exchange(

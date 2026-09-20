@@ -3,21 +3,36 @@ import { createPortal } from 'react-dom';
 import { useForm } from 'react-hook-form';
 import { toast } from 'react-toastify';
 import { X, ArrowRightLeft, Loader2, Info } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import { useStoreStore, useAuthStore } from '../../store/store';
 import { useInventory } from '../../hooks/useInventory';
 import { createTransferApi } from '../../api/transactions/transaction.api';
+import { getWarehouseInfoApi } from '../../api/stores/store.api';
 
-const WarehouseTransferModal = ({ isOpen, onClose, defaultProduct, onSuccess }) => {
+const WarehouseTransferModal = ({ isOpen, onClose, defaultProduct, onSuccess, warehouseInfo: propWarehouseInfo }) => {
   const { user } = useAuthStore();
   const { stores } = useStoreStore();
-  const [direction, setDirection] = useState('send'); // 'send' (Admin -> Store) or 'pull' (Store -> Admin)
+  const [direction, setDirection] = useState('send'); // 'send' (Warehouse -> Store) or 'pull' (Store -> Warehouse)
   const [selectedStoreId, setSelectedStoreId] = useState('');
   const [isPending, setIsPending] = useState(false);
 
-  // Filter out the 'admin' pseudo store for branch select dropdown
+  const { data: fetchedWhInfo } = useQuery({
+    queryKey: ['warehouse-info'],
+    queryFn: getWarehouseInfoApi,
+    enabled: !propWarehouseInfo && isOpen,
+  });
+  const warehouseInfo = propWarehouseInfo || fetchedWhInfo;
+  const label = warehouseInfo?.label || 'Warehouse';
+  const isDedicated = warehouseInfo?.is_dedicated_warehouse ?? true;
+
+  // Filter out the 'admin' pseudo store and main store (if warehouse is disabled) for branch select dropdown
   const branchStores = useMemo(() => {
-    return stores.filter(s => s.id !== 'admin' && s.store_name !== 'All Store' && s.name !== 'All Store');
-  }, [stores]);
+    return stores.filter(s => {
+      if (s.id === 'admin' || s.store_name === 'All Store' || s.name === 'All Store') return false;
+      if (!isDedicated && s.id === warehouseInfo?.owner_id) return false;
+      return true;
+    });
+  }, [stores, isDedicated, warehouseInfo]);
 
   const {
     register,
@@ -39,10 +54,10 @@ const WarehouseTransferModal = ({ isOpen, onClose, defaultProduct, onSuccess }) 
   // Determine source store ID to fetch inventories
   const sourceStoreId = useMemo(() => {
     if (direction === 'send') {
-      return 'admin';
+      return isDedicated ? 'admin' : (warehouseInfo?.owner_id || null);
     }
     return selectedStoreId || null;
-  }, [direction, selectedStoreId]);
+  }, [direction, selectedStoreId, isDedicated, warehouseInfo]);
 
   // Fetch inventory items from the source store/warehouse
   const { kpiItems, isLoading: isLoadingInventory } = useInventory(sourceStoreId, { paginate: false });
@@ -102,10 +117,10 @@ const WarehouseTransferModal = ({ isOpen, onClose, defaultProduct, onSuccess }) 
 
     setIsPending(true);
     try {
-      const fromType = direction === 'send' ? 'ADMIN' : 'STORE';
-      const fromId = direction === 'send' ? (user?.id || 1) : Number(selectedStoreId);
-      const toType = direction === 'send' ? 'STORE' : 'ADMIN';
-      const toId = direction === 'send' ? Number(selectedStoreId) : (user?.id || 1);
+      const fromType = direction === 'send' ? (isDedicated ? 'ADMIN' : 'STORE') : 'STORE';
+      const fromId = direction === 'send' ? (isDedicated ? (user?.id || 1) : warehouseInfo?.owner_id) : Number(selectedStoreId);
+      const toType = direction === 'send' ? 'STORE' : (isDedicated ? 'ADMIN' : 'STORE');
+      const toId = direction === 'send' ? Number(selectedStoreId) : (isDedicated ? (user?.id || 1) : warehouseInfo?.owner_id);
 
       const payload = {
         from_owner_type: fromType,
@@ -139,8 +154,8 @@ const WarehouseTransferModal = ({ isOpen, onClose, defaultProduct, onSuccess }) 
               <ArrowRightLeft className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-slate-900">Warehouse Transfer</h2>
-              <p className="text-xs text-slate-500 mt-0.5">Move stock between warehouse and store branches.</p>
+              <h2 className="text-lg font-bold text-slate-900">{label} Transfer</h2>
+              <p className="text-xs text-slate-500 mt-0.5">Move stock between {label.toLowerCase()} and store branches.</p>
             </div>
           </div>
           <button type="button" onClick={handleCancel} disabled={isPending}
@@ -169,7 +184,7 @@ const WarehouseTransferModal = ({ isOpen, onClose, defaultProduct, onSuccess }) 
                     : 'text-slate-500 hover:text-slate-800'
                 }`}
               >
-                Send to Store (Warehouse → Store)
+                Send to Store ({label} → Store)
               </button>
               <button
                 type="button"
@@ -185,7 +200,7 @@ const WarehouseTransferModal = ({ isOpen, onClose, defaultProduct, onSuccess }) 
                     : 'text-slate-500 hover:text-slate-800'
                 }`}
               >
-                Pull from Store (Store → Warehouse)
+                Pull from Store (Store → {label})
               </button>
             </div>
           </div>

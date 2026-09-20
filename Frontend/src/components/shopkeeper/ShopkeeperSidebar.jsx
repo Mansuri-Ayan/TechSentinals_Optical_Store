@@ -6,6 +6,8 @@ import { useAuth } from '../../hooks/useAuth';
 import { useAuthStore, useStoreStore } from '../../store/store';
 import { useHasPermission } from '../../hooks/usePermissions';
 import { useStores } from '../../hooks/useStores';
+import { useQuery } from '@tanstack/react-query';
+import { getWarehouseInfoApi } from '../../api/stores/store.api';
 
 const ShopkeeperSidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) => {
   const [width, setWidth] = useState(() => {
@@ -66,15 +68,23 @@ const ShopkeeperSidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) =
   const { setStores } = useStoreStore();
   const { stores: fetchedStores } = useStores({ page: 1, limit: 100 });
 
+  const { data: warehouseInfo } = useQuery({
+    queryKey: ['warehouse-info'],
+    queryFn: getWarehouseInfoApi,
+  });
+  const isDedicated = warehouseInfo?.is_dedicated_warehouse ?? true;
+
   useEffect(() => {
     if (fetchedStores) {
-      const allStores = [
-        { id: "admin", store_name: "Admin Warehouse" },
-        ...fetchedStores,
-      ];
+      const storeList = Array.isArray(fetchedStores)
+        ? fetchedStores
+        : (fetchedStores.items || []);
+      const allStores = isDedicated
+        ? [{ id: "admin", store_name: "Admin Warehouse" }, ...storeList]
+        : [...storeList];
       setStores(allStores);
     }
-  }, [fetchedStores, setStores]);
+  }, [fetchedStores, isDedicated, setStores]);
 
   const hasInventoryRead = useHasPermission('inventory:read');
   const hasSalesRead = useHasPermission('sales:read');

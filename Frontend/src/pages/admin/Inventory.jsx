@@ -52,6 +52,8 @@ import { addSupplierProductApi } from "../../api/suppliers/supplier.api";
 import PermissionGuard from "../../components/shared/PermissionGuard";
 import { usePagePermissions } from "../../hooks/usePermissions";
 import { useRoleContext } from "../../hooks/useRoleContext";
+import { useQuery } from "@tanstack/react-query";
+import { getWarehouseInfoApi } from "../../api/stores/store.api";
 
 /* ─────────────────────────────────────────────────────────
    DYNAMIC STYLING MAPS
@@ -174,7 +176,14 @@ const ProductCard = ({ item, onViewDetails, onDelete, onEdit, onRequestStock, on
   const [showOtherStock, setShowOtherStock] = useState(false);
 
   const { storeId } = useRoleContext();
-  const isBranchView = storeId && storeId !== "admin";
+  const { data: warehouseInfo } = useQuery({
+    queryKey: ['warehouse-info'],
+    queryFn: getWarehouseInfoApi,
+  });
+  const isDedicated = warehouseInfo?.is_dedicated_warehouse ?? true;
+  const centralStoreId = isDedicated ? "admin" : (warehouseInfo?.store_id ? String(warehouseInfo.store_id) : null);
+  const isCentral = !storeId || storeId === "admin" || (centralStoreId && String(storeId) === String(centralStoreId));
+  const isBranchView = !isCentral;
 
   const perms = usePagePermissions({
     canUpdate: 'inventory:update',
@@ -381,18 +390,20 @@ const ProductCard = ({ item, onViewDetails, onDelete, onEdit, onRequestStock, on
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  const whStock = item.other_stocks?.find((s) => s.owner_type === "ADMIN");
+                  const whStock = isDedicated
+                    ? item.other_stocks?.find((s) => s.owner_type === "ADMIN")
+                    : item.other_stocks?.find((s) => String(s.store_id) === String(warehouseInfo?.store_id));
                   const source = whStock
                     ? {
-                      store_id: "admin",
-                      store_name: "Admin Warehouse",
-                      owner_type: "ADMIN",
+                      store_id: isDedicated ? "admin" : (warehouseInfo?.store_id || "admin"),
+                      store_name: isDedicated ? "Admin Warehouse" : (warehouseInfo?.label || "Main Store"),
+                      owner_type: isDedicated ? "ADMIN" : "STORE",
                       available_quantity: whStock.available_quantity,
                     }
                     : {
-                      store_id: "admin",
-                      store_name: "Admin Warehouse",
-                      owner_type: "ADMIN",
+                      store_id: isDedicated ? "admin" : (warehouseInfo?.store_id || "admin"),
+                      store_name: isDedicated ? "Admin Warehouse" : (warehouseInfo?.label || "Main Store"),
+                      owner_type: isDedicated ? "ADMIN" : "STORE",
                       available_quantity: 0,
                     };
                   onRequestStock(item, source);
@@ -573,6 +584,12 @@ const Inventory = () => {
     navigate(path);
   };
 
+  const { data: warehouseInfo } = useQuery({
+    queryKey: ['warehouse-info'],
+    queryFn: getWarehouseInfoApi,
+  });
+  const isDedicated = warehouseInfo?.is_dedicated_warehouse ?? true;
+
   /* Filters & Pagination states */
   const [inPageStoreId, setInPageStoreId] = useState(storeId);
   const [searchTerm, setSearchTerm] = useState("");
@@ -693,6 +710,18 @@ const Inventory = () => {
   useEffect(() => {
     setInPageStoreId(storeId);
   }, [storeId]);
+
+  useEffect(() => {
+    if (!isDedicated && (storeId === 'admin' || inPageStoreId === 'admin')) {
+      const targetId = warehouseInfo?.store_id || stores.find((s) => s.is_main_store)?.id || (stores[0]?.id !== 'admin' ? stores[0]?.id : null);
+      if (targetId) {
+        setInPageStoreId(String(targetId));
+        if (storeId === 'admin') {
+          navigate(`/admin/store/${targetId}/inventory`, { replace: true });
+        }
+      }
+    }
+  }, [isDedicated, storeId, inPageStoreId, warehouseInfo, stores, navigate]);
 
   useEffect(() => {
     setUniversalSearch(false);
@@ -1144,7 +1173,7 @@ const Inventory = () => {
                   onChange={(e) => setInPageStoreId(e.target.value)}
                   className="pl-9 pr-10 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-sm font-semibold focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 shadow-sm appearance-none cursor-pointer"
                 >
-                  <option value="admin">Admin Warehouse</option>
+                  {isDedicated && <option value="admin">Admin Warehouse</option>}
                   {stores.filter(s => s.id !== 'admin' && s.store_name !== 'All Store' && s.name !== 'All Store').map(s => (
                     <option key={s.id} value={s.id}>{s.store_name}</option>
                   ))}
@@ -1603,8 +1632,8 @@ const Inventory = () => {
         isOpen={showRecordPurchase}
         defaultProductId={preselectedProductId}
         defaultSupplierId={preselectedSupplierId}
-        storeName={inPageStoreId === 'all' || inPageStoreId === 'admin' ? "Warehouse" : "Store"}
-        activeStoreId={inPageStoreId === 'all' || inPageStoreId === 'admin' ? "warehouse" : inPageStoreId}
+        storeName={inPageStoreId === 'all' || (isDedicated && inPageStoreId === 'admin') ? "Warehouse" : (selectedStore?.store_name || "Store")}
+        activeStoreId={inPageStoreId === 'all' || (isDedicated && inPageStoreId === 'admin') ? "warehouse" : inPageStoreId}
         onClose={() => {
           setShowRecordPurchase(false);
           setPreselectedProductId(null);

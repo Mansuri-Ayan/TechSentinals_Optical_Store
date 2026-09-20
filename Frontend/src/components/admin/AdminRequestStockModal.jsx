@@ -3,13 +3,24 @@ import { createPortal } from 'react-dom';
 import { useForm } from 'react-hook-form';
 import { toast } from 'react-toastify';
 import { X, ArrowRightLeft, Loader2, Info, ChevronDown, Lock } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import { useStoreStore, useAuthStore } from '../../store/store';
 import { useTransactions } from '../../hooks/useTransactions';
 import { useHasPermission } from '../../hooks/usePermissions';
+import { getWarehouseInfoApi } from '../../api/stores/store.api';
 
-const AdminRequestStockModal = ({ isOpen, onClose, product, sourceStore, activeStoreId, onSuccess }) => {
+const AdminRequestStockModal = ({ isOpen, onClose, product, sourceStore, activeStoreId, onSuccess, warehouseInfo: propWarehouseInfo }) => {
   const { stores } = useStoreStore();
   const { user } = useAuthStore();
+
+  const { data: fetchedWhInfo } = useQuery({
+    queryKey: ['warehouse-info'],
+    queryFn: getWarehouseInfoApi,
+    enabled: !propWarehouseInfo && isOpen,
+  });
+  const warehouseInfo = propWarehouseInfo || fetchedWhInfo;
+  const warehouseLabel = warehouseInfo?.label || 'Central Warehouse';
+
   const { 
     createAdminRequestAsync, 
     isCreatingAdminRequest,
@@ -37,14 +48,14 @@ const AdminRequestStockModal = ({ isOpen, onClose, product, sourceStore, activeS
   const allLocationOptions = useMemo(() => {
     return stores.map(s => {
       if (s.id === 'admin') {
-        return { id: 'admin', store_name: 'Admin Warehouse', owner_type: 'ADMIN' };
+        return { id: 'admin', store_name: warehouseLabel, owner_type: 'ADMIN' };
       }
       return { id: s.id, owner_type: 'STORE', store_name: s.store_name || s.name };
     }).filter(s => {
       const isAllStore = s.store_name === 'All Store' || s.name === 'All Store';
       return !isAllStore;
     });
-  }, [stores]);
+  }, [stores, warehouseLabel]);
 
   const {
     register,
@@ -210,7 +221,7 @@ const AdminRequestStockModal = ({ isOpen, onClose, product, sourceStore, activeS
     }
   };
 
-  const currentSourceLocationName = allLocationOptions.find(s => String(s.id) === String(watchedSourceStoreId))?.store_name || 'Admin Warehouse';
+  const currentSourceLocationName = allLocationOptions.find(s => String(s.id) === String(watchedSourceStoreId))?.store_name || warehouseLabel;
 
   return createPortal(
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[1200] p-3 sm:p-4 animate-fade-in font-sans">

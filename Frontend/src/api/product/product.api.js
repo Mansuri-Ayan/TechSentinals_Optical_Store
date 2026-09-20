@@ -23,6 +23,10 @@ export const getProductsApi = async (params = {}) => {
  * @param {Object} payload - Product update payload
  */
 export const updateProductApi = async (id, payload) => {
+  if (!id || id === 'undefined') {
+    console.warn(`[updateProductApi] Skipping update: Invalid product id "${id}"`);
+    return null;
+  }
   const response = await api.put(`/products/${id}`, payload);
   return response.data;
 };

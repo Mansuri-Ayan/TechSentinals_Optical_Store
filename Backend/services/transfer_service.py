@@ -793,6 +793,11 @@ async def create_pending_request_service(
     admin_id = store.admin_id
 
     from_owner_type = from_owner_type.upper()
+    from services.warehouse_resolver import resolve_warehouse
+    wh = await resolve_warehouse(db, admin_id)
+    if from_owner_type == "ADMIN" and not wh["is_dedicated_warehouse"]:
+        from_owner_type = "STORE"
+        from_owner_id = wh["owner_id"]
 
     async with db.begin_nested():
         if from_owner_type == "ADMIN":
@@ -1812,9 +1817,12 @@ async def get_warehouse_transactions(
     Only returns transactions that mutated or occurred on the warehouse inventory.
     """
     # 1. Get warehouse inventory IDs
+    from services.warehouse_resolver import resolve_warehouse
+    wh = await resolve_warehouse(db, admin_id)
+
     warehouse_inv_stmt = select(Inventory.id).where(
-        Inventory.owner_type == OwnerType.ADMIN,
-        Inventory.owner_id == admin_id
+        Inventory.owner_type == wh["owner_type"],
+        Inventory.owner_id == wh["owner_id"]
     )
     warehouse_inv_res = await db.execute(warehouse_inv_stmt)
     warehouse_inv_ids = [row[0] for row in warehouse_inv_res.fetchall()]

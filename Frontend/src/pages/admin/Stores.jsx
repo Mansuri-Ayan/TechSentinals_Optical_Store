@@ -2,13 +2,19 @@ import { useState, useMemo, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Store, Search, Plus, ChevronRight, Edit2, Trash2,
-  Users, IndianRupee, MapPin, Phone, Filter, X as XIcon, CheckCircle, AlertCircle
+  Users, IndianRupee, MapPin, Phone, Filter, X as XIcon, CheckCircle, AlertCircle,
+  Crown, Warehouse
 } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'react-toastify';
 import { useStores } from '../../hooks/useStores';
 import { useStoreStore } from '../../store/store';
 import AddStoreModal from '../../components/admin/AddStoreModal';
+import DisableWarehouseModal from '../../components/admin/DisableWarehouseModal';
+import SwitchMainStoreModal from '../../components/admin/SwitchMainStoreModal';
 import Pagination from '../../components/shared/Pagination';
 import PermissionGuard from '../../components/shared/PermissionGuard';
+import { getWarehouseInfoApi, enableWarehouseApi } from '../../api/stores/store.api';
 
 const indianStates = [
   'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh',
@@ -35,6 +41,46 @@ const Stores = () => {
   const [storeToEdit, setStoreToEdit] = useState(null);
   const [storeToDelete, setStoreToDelete] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showDisableModal, setShowDisableModal] = useState(false);
+  const [showSwitchMainModal, setShowSwitchMainModal] = useState(false);
+  const [switchTargetStore, setSwitchTargetStore] = useState(null);
+  const queryClient = useQueryClient();
+
+  const { data: warehouseInfo, isLoading: isLoadingWhInfo } = useQuery({
+    queryKey: ['warehouse-info'],
+    queryFn: getWarehouseInfoApi,
+  });
+
+  const handleToggleWarehouse = async () => {
+    if (warehouseInfo?.warehouse_enabled) {
+      setShowDisableModal(true);
+    } else {
+      try {
+        await enableWarehouseApi();
+        queryClient.invalidateQueries({ queryKey: ['warehouse-info'] });
+        queryClient.invalidateQueries({ queryKey: ['stores'] });
+        queryClient.invalidateQueries({ queryKey: ['inventory'] });
+        toast.success('Central Warehouse enabled successfully.');
+      } catch (err) {
+        toast.error(err.response?.data?.detail || 'Failed to enable warehouse.');
+      }
+    }
+  };
+
+  const handleOpenSwitchModal = (store = null, e = null) => {
+    if (e) e.stopPropagation();
+    setSwitchTargetStore(store);
+    setShowSwitchMainModal(true);
+  };
+
+  const handleSwitchMainSuccess = (newMainStore) => {
+    queryClient.invalidateQueries({ queryKey: ['stores'] });
+    queryClient.invalidateQueries({ queryKey: ['warehouse-info'] });
+    queryClient.invalidateQueries({ queryKey: ['inventory'] });
+    if (!warehouseInfo?.warehouse_enabled && newMainStore) {
+      setSelectedStore(newMainStore);
+    }
+  };
 
   // Debounced search
   useEffect(() => {
@@ -55,10 +101,19 @@ const Stores = () => {
 
   const { stores, total, pages, isLoadingStores, isStoresError, deleteStoreAsync } = useStores(filters);
   
-  // Unfiltered call for Total Stores count
-  const { total: overallTotal } = useStores({ paginate: false });
+  // Unfiltered call for Total Stores count and list for Switch Main modal
+  const { stores: allStoresRaw, total: overallTotal } = useStores({ paginate: false });
   // Active branches call
   const { total: activeTotal } = useStores({ status: 'ACTIVE', paginate: false });
+
+  const allActiveStores = useMemo(() => {
+    const list = Array.isArray(allStoresRaw) ? allStoresRaw : (allStoresRaw?.items || []);
+    return list.filter(s => s.is_active && !s.deleted_at && s.id !== 'admin' && s.store_name !== 'All Store' && s.name !== 'All Store');
+  }, [allStoresRaw]);
+
+  const currentMainStore = useMemo(() => {
+    return allActiveStores.find(s => s.is_main_store) || stores.find(s => s.is_main_store) || null;
+  }, [allActiveStores, stores]);
 
   const handleAddClick = () => {
     setStoreToEdit(null);
@@ -73,6 +128,10 @@ const Stores = () => {
 
   const handleDeleteClick = (e, store) => {
     e.stopPropagation();
+    if (store.is_main_store) {
+      toast.warning('Cannot delete the Main Store. Please designate another store as Main Store first.');
+      return;
+    }
     setStoreToDelete(store);
   };
 
@@ -183,6 +242,104 @@ const Stores = () => {
             </div>
           );
         })}
+      </div>
+
+      {/* ── Central Inventory & Distribution Configuration Card ── */}
+      <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white rounded-2xl p-5 sm:p-6 mb-6 shadow-md border border-slate-700/60">
+        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
+          
+          {/* Left: Info & Status */}
+          <div className="space-y-3 flex-1">
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-xl bg-white/10 flex items-center justify-center text-amber-400 border border-white/10 shrink-0">
+                <Warehouse className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-bold text-base text-white flex items-center gap-2">
+                  Central Inventory & Store Management
+                </h3>
+                <p className="text-xs text-slate-400">
+                  Configure stock distribution routing, purchase order destination, and retail store identities
+                </p>
+              </div>
+            </div>
+
+            {/* Badges / Active Configuration Status */}
+            <div className="flex flex-wrap items-center gap-2.5 pt-0.5">
+              {/* Warehouse Mode Badge */}
+              <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-800/90 border border-slate-700 text-xs">
+                <span className="text-slate-400 font-medium">Warehouse Mode:</span>
+                <span className={`font-bold flex items-center gap-1.5 ${
+                  warehouseInfo?.warehouse_enabled ? 'text-emerald-400' : 'text-amber-400'
+                }`}>
+                  <span className={`w-2 h-2 rounded-full ${warehouseInfo?.warehouse_enabled ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+                  {warehouseInfo?.warehouse_enabled ? 'Dedicated Warehouse' : 'Main Store Hub'}
+                </span>
+              </div>
+
+              {/* Main Store Badge */}
+              <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-800/90 border border-slate-700 text-xs">
+                <span className="text-slate-400 font-medium">Designated Main Store:</span>
+                <span className="font-bold text-amber-300 flex items-center gap-1">
+                  <Crown className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                  {currentMainStore ? (currentMainStore.store_name || currentMainStore.name) : (warehouseInfo?.label || 'Not Assigned')}
+                </span>
+              </div>
+            </div>
+
+            {/* Dynamic Contextual Hint */}
+            <p className="text-xs text-slate-300 leading-relaxed max-w-3xl">
+              {warehouseInfo?.warehouse_enabled ? (
+                <>
+                  Dedicated central warehouse is <span className="text-emerald-400 font-semibold">Active</span>. All central purchase orders and stock allocations route through the admin warehouse. The Main Store acts as your primary flagship store.
+                </>
+              ) : (
+                <>
+                  Dedicated warehouse is <span className="text-amber-400 font-semibold">Disabled</span>. <span className="text-amber-300 font-bold">{currentMainStore?.store_name || currentMainStore?.name || warehouseInfo?.label || 'The Main Store'}</span> is serving as the <span className="text-white font-semibold">Central Stock Hub</span> for all branch transfers and purchase orders.
+                </>
+              )}
+            </p>
+          </div>
+
+          {/* Right: Distinct Controls */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full lg:w-auto border-t lg:border-t-0 pt-4 lg:pt-0 border-slate-700/60 shrink-0">
+            
+            {/* Control 1: Dedicated Warehouse Toggle */}
+            <div className="bg-slate-800/90 border border-slate-700/90 rounded-xl px-3.5 py-2.5 flex items-center justify-between gap-4">
+              <div className="text-left">
+                <p className="text-xs font-bold text-white">Dedicated Warehouse</p>
+                <p className="text-[10px] text-slate-400 font-medium">
+                  {warehouseInfo?.warehouse_enabled ? 'Independent depot' : 'Off (Main Store Hub)'}
+                </p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer" title={warehouseInfo?.warehouse_enabled ? 'Click to disable dedicated warehouse' : 'Click to enable dedicated warehouse'}>
+                <input
+                  type="checkbox"
+                  checked={Boolean(warehouseInfo?.warehouse_enabled)}
+                  onChange={handleToggleWarehouse}
+                  disabled={isLoadingWhInfo}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+              </label>
+            </div>
+
+            {/* Control 2: Switch Main Store Button */}
+            <PermissionGuard permission="stores:update">
+              <button
+                type="button"
+                onClick={() => handleOpenSwitchModal(null)}
+                className="bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 hover:border-amber-500/50 text-amber-300 rounded-xl px-4 py-3 flex items-center justify-center gap-2 transition-all text-xs font-bold shadow-xs hover:shadow-md cursor-pointer"
+                title="Change or reassign which store is designated as the Main Store"
+              >
+                <Crown className="w-4 h-4 fill-amber-400 text-amber-400 shrink-0" />
+                <span>Switch Main Store</span>
+              </button>
+            </PermissionGuard>
+
+          </div>
+
+        </div>
       </div>
 
       {/* ── Search + Filter Bar ── */}
@@ -324,7 +481,18 @@ const Stores = () => {
                             {name[0]?.toUpperCase()}
                           </div>
                           <div>
-                            <p className="font-bold text-slate-950 group-hover:text-blue-600 transition-colors">{name}</p>
+                            <div className="flex items-center gap-2">
+                              <p className="font-bold text-slate-950 group-hover:text-blue-600 transition-colors">{name}</p>
+                              {store.is_main_store && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200 shadow-sm" title="Primary / Main Store">
+                                  <Crown className="w-3 h-3 text-amber-500 fill-amber-500" />
+                                  Main Store
+                                  {!warehouseInfo?.warehouse_enabled && (
+                                    <span className="text-[10px] text-amber-600 font-semibold">(Central Hub)</span>
+                                  )}
+                                </span>
+                              )}
+                            </div>
                             <p className="text-xs text-slate-400 mt-0.5">{store.email}</p>
                           </div>
                         </div>
@@ -380,28 +548,53 @@ const Stores = () => {
 
                       {/* Actions */}
                       <td className="px-6 py-4 whitespace-nowrap" onClick={e => e.stopPropagation()}>
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-2">
+                          {/* Main Store Indicator or Set as Main button */}
+                          {store.is_main_store ? (
+                            <span
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200 shadow-2xs"
+                              title="Currently designated as your Main Store"
+                            >
+                              <Crown className="w-3.5 h-3.5 fill-amber-500 text-amber-600 shrink-0" />
+                              <span>Main Store</span>
+                            </span>
+                          ) : store.is_active ? (
+                            <PermissionGuard permission="stores:update">
+                              <button
+                                type="button"
+                                onClick={(e) => handleOpenSwitchModal(store, e)}
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold text-slate-700 hover:text-amber-800 bg-white hover:bg-amber-50 border border-slate-200 hover:border-amber-300 transition-all shadow-2xs group/btn cursor-pointer"
+                                title={`Designate ${store.store_name || store.name} as Main Store`}
+                              >
+                                <Crown className="w-3.5 h-3.5 text-slate-400 group-hover/btn:text-amber-500 group-hover/btn:fill-amber-400 shrink-0 transition-colors" />
+                                <span>Set as Main</span>
+                              </button>
+                            </PermissionGuard>
+                          ) : null}
+
                           <button
                             onClick={() => handleRowClick(store)}
                             className="p-2 text-slate-500 hover:text-blue-600 hover:bg-blue-50 border border-transparent hover:border-blue-100 rounded-xl transition-all"
-                            title="View dashboard"
+                            title="View store dashboard"
                           >
                             <ChevronRight className="w-4 h-4" />
                           </button>
+
                           <PermissionGuard permission="stores:update">
                             <button
                               onClick={(e) => handleEditClick(e, store)}
                               className="p-2 text-slate-500 hover:text-amber-600 hover:bg-amber-50 border border-transparent hover:border-amber-100 rounded-xl transition-all"
-                              title="Edit branch"
+                              title="Edit store"
                             >
                               <Edit2 className="w-4 h-4" />
                             </button>
                           </PermissionGuard>
+
                           <PermissionGuard permission="stores:delete">
                             <button
                               onClick={(e) => handleDeleteClick(e, store)}
                               className="p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-100 rounded-xl transition-all"
-                              title="Deactivate branch"
+                              title="Deactivate store"
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
@@ -433,6 +626,34 @@ const Stores = () => {
         isOpen={showModal}
         onClose={() => setShowModal(false)}
         storeToEdit={storeToEdit}
+      />
+
+      <DisableWarehouseModal
+        isOpen={showDisableModal}
+        onClose={() => setShowDisableModal(false)}
+        stores={allActiveStores}
+        onSuccess={(targetStoreId) => {
+          queryClient.invalidateQueries({ queryKey: ['warehouse-info'] });
+          queryClient.invalidateQueries({ queryKey: ['stores'] });
+          queryClient.invalidateQueries({ queryKey: ['inventory'] });
+          const target = allActiveStores.find(s => String(s.id) === String(targetStoreId)) || allActiveStores.find(s => s.is_main_store) || allActiveStores[0];
+          if (target && target.id !== 'admin') {
+            setSelectedStore(target);
+          }
+        }}
+      />
+
+      <SwitchMainStoreModal
+        isOpen={showSwitchMainModal}
+        onClose={() => {
+          setShowSwitchMainModal(false);
+          setSwitchTargetStore(null);
+        }}
+        allStores={allActiveStores}
+        currentMainStore={currentMainStore}
+        targetStore={switchTargetStore}
+        isWarehouseDisabled={!warehouseInfo?.warehouse_enabled}
+        onSuccess={handleSwitchMainSuccess}
       />
 
       {/* ── Delete Confirmation Modal ── */}

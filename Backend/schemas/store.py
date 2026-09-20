@@ -71,6 +71,7 @@ class StoreRead(BaseModel):
     pincode: str
     gst_number: str | None = None
     is_active: bool
+    is_main_store: bool = False
     created_at: datetime
     updated_at: datetime
     

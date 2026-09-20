@@ -90,6 +90,15 @@ class Store(Base):
         comment="Whether the store is currently active",
     )
 
+    is_main_store = Column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+        comment="Whether this is the Admin's designated Main Store. "
+                "Only one store per Admin can be True.",
+    )
+
     created_at = Column(
         DateTime(timezone=True),
         nullable=False,

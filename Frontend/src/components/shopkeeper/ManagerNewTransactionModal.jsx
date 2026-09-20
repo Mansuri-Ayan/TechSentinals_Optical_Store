@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useCategories } from '../../hooks/useCategories';
 import { useProducts } from '../../hooks/useProducts';
 import { getInventoryApi } from '../../api/inventory/inventory.api';
+import { getWarehouseInfoApi } from '../../api/stores/store.api';
 
 const MANAGER_EMPTY_FORM = {
   mode: 'request', // 'request', 'send', 'purchase', 'damage', 'loss', 'sale', 'return'
@@ -52,9 +53,20 @@ const ManagerNewTransactionModal = ({
 
   const ownInventoryItems = (ownInventoryData?.items || []).filter(item => (item.available_quantity || 0) > 0);
 
+  const { data: warehouseInfo } = useQuery({
+    queryKey: ['warehouse-info'],
+    queryFn: getWarehouseInfoApi,
+  });
+  const isDedicated = warehouseInfo?.is_dedicated_warehouse ?? true;
+  const defaultRequestTarget = isDedicated ? 'admin' : (warehouseInfo?.store_id ? String(warehouseInfo.store_id) : '');
+
   // If mode is 'request', fetch source inventory (Admin Warehouse or sister store)
-  const sourceOwnerType = form.targetStore === 'admin' ? 'ADMIN' : 'STORE';
-  const sourceOwnerId = form.targetStore === 'admin' ? 1 : Number(form.targetStore);
+  const sourceOwnerType = form.targetStore === 'admin'
+    ? (isDedicated ? 'ADMIN' : 'STORE')
+    : 'STORE';
+  const sourceOwnerId = form.targetStore === 'admin'
+    ? (isDedicated ? 1 : (warehouseInfo?.store_id || 1))
+    : Number(form.targetStore);
   const { data: sourceInventoryData, isLoading: isLoadingSourceInventory } = useQuery({
     queryKey: ['inventory', sourceOwnerType, sourceOwnerId],
     queryFn: () => getInventoryApi({
@@ -76,10 +88,13 @@ const ManagerNewTransactionModal = ({
 
   useEffect(() => {
     if (isOpen) {
-      setForm(MANAGER_EMPTY_FORM);
+      setForm({
+        ...MANAGER_EMPTY_FORM,
+        targetStore: defaultRequestTarget,
+      });
       setErrors({});
     }
-  }, [isOpen]);
+  }, [isOpen, defaultRequestTarget]);
 
   if (!isOpen) return null;
 
@@ -87,7 +102,7 @@ const ManagerNewTransactionModal = ({
     setForm(prev => ({
       ...prev,
       [key]: val,
-      ...(key === 'mode' ? { product: '', quantity: '', targetStore: val === 'request' ? 'admin' : '', purchasePrice: '', categoryId: '' } : {}),
+      ...(key === 'mode' ? { product: '', quantity: '', targetStore: val === 'request' ? defaultRequestTarget : '', purchasePrice: '', categoryId: '' } : {}),
       ...(key === 'categoryId' ? { product: '' } : {}),
       ...(key === 'targetStore' ? { product: '', categoryId: '' } : {}),
     }));
@@ -283,7 +298,7 @@ const ManagerNewTransactionModal = ({
                 </label>
                 <select value={form.targetStore} onChange={e => set('targetStore', e.target.value)} className={inputCls('targetStore')}>
                   <option value="">Select store/warehouse...</option>
-                  <option value="admin">Admin Warehouse</option>
+                  {isDedicated && <option value="admin">Admin Warehouse</option>}
                   {otherStores.map(st => (
                     <option key={st.id} value={String(st.id)}>{st.store_name || st.name || `Store #${st.id}`}</option>
                   ))}

@@ -52,6 +52,7 @@ from apis.permission.tier3 import router as permission_tier3_router
 from apis.permission.staff_list import router as permission_staff_list_router
 from routes.superadmin_router import superadmin_router
 from apis.bill_settings.operations import router as bill_settings_router
+from routes.settings_router import settings_router
 from db.session import engine, async_session_maker
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -190,4 +191,5 @@ app.include_router(permission_tier3_router)
 app.include_router(permission_staff_list_router)
 app.include_router(superadmin_router)
 app.include_router(bill_settings_router, prefix="/bill-settings", tags=["Bill Settings"])
+app.include_router(settings_router)
 

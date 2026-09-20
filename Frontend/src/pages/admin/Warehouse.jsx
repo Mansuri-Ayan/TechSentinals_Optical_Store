@@ -25,6 +25,7 @@ import { getWarehouseTransactionsApi } from "../../api/transactions/transaction.
 import { createProductApi } from "../../api/product/product.api";
 import { useSuppliers } from "../../hooks/useSuppliers";
 import { useQuery } from "@tanstack/react-query";
+import { getWarehouseInfoApi } from "../../api/stores/store.api";
 import PermissionGuard from '../../components/shared/PermissionGuard';
 import { usePagePermissions } from '../../hooks/usePermissions';
 import { useRoleContext } from '../../hooks/useRoleContext';
@@ -118,7 +119,6 @@ const Warehouse = () => {
   const { storeId, buildPath, showStoreSwitcher, isPathAdmin } = useRoleContext();
   const { user } = useAuthStore();
   const { selectedStore } = useStoreStore();
-  const isBranchView = !isPathAdmin || (selectedStore && selectedStore.id !== "admin");
   const [searchParams, setSearchParams] = useSearchParams();
 
   const queryCategoryId = searchParams.get("category_id");
@@ -133,6 +133,18 @@ const Warehouse = () => {
   });
 
   const [activeTab, setActiveTab] = useState("catalog");
+
+  /* Warehouse Info */
+  const { data: warehouseInfo } = useQuery({
+    queryKey: ['warehouse-info'],
+    queryFn: getWarehouseInfoApi,
+  });
+  const warehouseLabel = warehouseInfo?.label || "Central Warehouse";
+  const isDedicated = warehouseInfo?.is_dedicated_warehouse ?? true;
+
+  const centralStoreId = isDedicated ? "admin" : (warehouseInfo?.store_id || warehouseInfo?.owner_id);
+  const isCentralSelected = !selectedStore || selectedStore.id === "admin" || (centralStoreId && String(selectedStore.id) === String(centralStoreId));
+  const isBranchView = !isPathAdmin || !isCentralSelected;
 
   /* Filters & Pagination states for Inventory */
   const [searchTerm, setSearchTerm] = useState("");
@@ -169,9 +181,9 @@ const Warehouse = () => {
   const handleRequestStockClick = (item) => {
     setRequestProduct(item);
     setRequestSourceStore({
-      store_id: 'admin',
-      store_name: "Admin Warehouse",
-      owner_type: "ADMIN",
+      store_id: isDedicated ? 'admin' : (warehouseInfo?.store_id || warehouseInfo?.owner_id),
+      store_name: warehouseLabel,
+      owner_type: warehouseInfo?.owner_type || (isDedicated ? "ADMIN" : "STORE"),
       available_quantity: item.quantity,
     });
     setRequestModalOpen(true);
@@ -291,10 +303,10 @@ const Warehouse = () => {
       brand: item.brand_name || item.brand,
       image: item.image_url || item.image,
       quantity: item.available_quantity,
-      store: "Central Warehouse",
+      store: warehouseLabel,
       supplier: "Supplier Catalog",
     }));
-  }, [items]);
+  }, [items, warehouseLabel]);
 
   const detailItemFormatted = useMemo(() => {
     if (!detailItem) return null;
@@ -306,10 +318,10 @@ const Warehouse = () => {
       brand: detailItem.brand_name || detailItem.brand,
       image: detailItem.image_url || detailItem.image,
       quantity: detailItem.available_quantity,
-      store: "Central Warehouse",
+      store: warehouseLabel,
       supplier: "Supplier Catalog",
     };
-  }, [detailItem]);
+  }, [detailItem, warehouseLabel]);
 
   /* KPI Calculations */
   const inStockCount = useMemo(
@@ -402,8 +414,8 @@ const Warehouse = () => {
     const product = await createProductApi(productPayload);
 
     await createInventoryAsync({
-      owner_type: "ADMIN",
-      owner_id: user?.id,
+      owner_type: warehouseInfo?.owner_type || (isDedicated ? "ADMIN" : "STORE"),
+      owner_id: warehouseInfo?.owner_id || (isDedicated ? (user?.id || 1) : warehouseInfo?.store_id),
       product_id: product.id,
       quantity: Number(data.quantity),
       reorder_level: Number(data.reorder_level),
@@ -424,11 +436,9 @@ const Warehouse = () => {
   };
 
   const handleWarehousePOInsert = async (data) => {
-    // Dynamically insert supplier record purchase
-    const defaultSupplierId = suppliers && suppliers.length > 0 ? suppliers[0].id : data.categoryId;
     await recordPurchaseAsync({
-      supplierId: defaultSupplierId,
-      storeId: 'warehouse',
+      supplierId: Number(data.supplierId),
+      storeId: isDedicated ? 'warehouse' : (warehouseInfo?.store_id || 'warehouse'),
       productId: data.productId,
       quantity: data.quantity,
       totalAmount: data.amount,
@@ -469,14 +479,21 @@ const Warehouse = () => {
         </div>
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
           <div>
-            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
+            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2 flex-wrap">
               <Store className="w-8 h-8 text-emerald-500" />
-              Central Warehouse
+              {warehouseLabel}
+              {!isDedicated && (
+                <span className="px-2.5 py-0.5 rounded-lg text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 shadow-sm">
+                  Main Store Hub
+                </span>
+              )}
             </h1>
             <p className="text-slate-500 mt-1 text-sm sm:text-base font-medium">
               {isBranchView
-                ? `View central warehouse stock and request items for ${selectedStore?.store_name || "your store branch"}.`
-                : "Manage central inventory, track logistics across branches, and record supplier transactions."}
+                ? `View central stock and request items for ${selectedStore?.store_name || "your store branch"}.`
+                : (isDedicated
+                    ? "Manage central inventory, track logistics across branches, and record supplier transactions."
+                    : `Managing central stock via ${warehouseLabel}. Stock transfers and orders route through this store.`)}
             </p>
           </div>
           {!isBranchView && (
@@ -902,6 +919,7 @@ const Warehouse = () => {
       <WarehouseTransferModal
         isOpen={showTransferModal}
         defaultProduct={transferTargetProduct}
+        warehouseInfo={warehouseInfo}
         onClose={() => {
           setShowTransferModal(false);
           setTransferTargetProduct(null);
@@ -934,8 +952,8 @@ const Warehouse = () => {
         isOpen={showRecordPurchase}
         defaultProductId={preselectedProductId}
         supplierName="Supplier"
-        storeName="Warehouse"
-        activeStoreId="warehouse"
+        storeName={warehouseLabel}
+        activeStoreId={isDedicated ? "warehouse" : String(warehouseInfo?.store_id || "warehouse")}
         onClose={() => {
           setShowRecordPurchase(false);
           setPreselectedProductId(null);
@@ -963,6 +981,7 @@ const Warehouse = () => {
 
       <AdminRequestStockModal
         isOpen={requestModalOpen}
+        warehouseInfo={warehouseInfo}
         onClose={() => {
           setRequestModalOpen(false);
           setRequestProduct(null);

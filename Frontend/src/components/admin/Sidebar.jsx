@@ -35,6 +35,8 @@ import { useAuth } from "../../hooks/useAuth";
 import { useAuthStore, useStoreStore } from "../../store/store";
 import { useStores } from "../../hooks/useStores";
 import { useHasPermission } from "../../hooks/usePermissions";
+import { useQuery } from "@tanstack/react-query";
+import { getWarehouseInfoApi } from "../../api/stores/store.api";
 
 const Sidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) => {
   const { stores, selectedStore, setSelectedStore, setStores } =
@@ -121,22 +123,40 @@ const Sidebar = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) => {
   const hasQCRead = useHasPermission('qc:read');
   const hasLabsRead = useHasPermission('labs:read');
 
+  const { data: warehouseInfo } = useQuery({
+    queryKey: ['warehouse-info'],
+    queryFn: getWarehouseInfoApi,
+  });
+  const isDedicated = warehouseInfo?.is_dedicated_warehouse ?? true;
+
   useEffect(() => {
     if (fetchedStores) {
-      const allStores = [
-        { id: "admin", store_name: "Admin Warehouse" },
-        ...(fetchedStores.items || fetchedStores || []),
-      ];
+      const storeList = Array.isArray(fetchedStores)
+        ? fetchedStores
+        : (fetchedStores.items || []);
+      const allStores = isDedicated
+        ? [{ id: "admin", store_name: "Admin Warehouse" }, ...storeList]
+        : [...storeList];
       setStores(allStores);
     }
-  }, [fetchedStores, setStores]);
+  }, [fetchedStores, isDedicated, setStores]);
 
-  // Set default selected store
+  // Set default selected store or reconcile when warehouse mode changes
   useEffect(() => {
-    if (!selectedStore && stores.length > 0) {
-      setSelectedStore(stores[0]);
+    if (stores.length > 0) {
+      if (!selectedStore) {
+        const defaultStore = !isDedicated
+          ? (stores.find((s) => s.is_main_store) || stores[0])
+          : stores[0];
+        setSelectedStore(defaultStore);
+      } else if (!isDedicated && selectedStore.id === "admin") {
+        const mainStore = stores.find((s) => s.is_main_store) || stores[0];
+        if (mainStore) {
+          setSelectedStore(mainStore);
+        }
+      }
     }
-  }, [stores, selectedStore, setSelectedStore]);
+  }, [stores, selectedStore, isDedicated, setSelectedStore]);
 
   const getInitials = (name) => {
     if (!name) return "AM";

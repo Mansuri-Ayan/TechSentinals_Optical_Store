@@ -5,7 +5,7 @@ from core.deps import require_permission, get_user_admin_id
 from db.session import get_db
 from models.admin import Admin
 from schemas.store import StoreRead, StoreUpdate
-from services.store_service import get_store, update_store
+from services.store_service import get_store, update_store, set_main_store
 
 router = APIRouter()
 
@@ -31,3 +31,19 @@ async def update_store_endpoint(
         )
     updated = await update_store(db, store, payload)
     return StoreRead.model_validate(updated)
+
+
+@router.patch(
+    "/{store_id}/set-main",
+    response_model=StoreRead,
+    summary="Set a store as the Main Store",
+    description="Designate this store as the Admin's Main Store. Unsets any previous Main Store.",
+)
+async def set_main_store_endpoint(
+    store_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user = Depends(require_permission('stores', 'update')),
+) -> StoreRead:
+    admin_id = get_user_admin_id(current_user)
+    store = await set_main_store(db, admin_id, store_id)
+    return StoreRead.model_validate(store)

@@ -70,6 +70,16 @@ async def create_store(
         )
         db.add(default_scl)
 
+    # If this is the Admin's first store, auto-designate as Main Store
+    existing_count_stmt = select(func.count()).select_from(Store).where(
+        Store.admin_id == admin_id,
+        Store.deleted_at.is_(None),
+        Store.id != new_store.id,
+    )
+    existing_count = (await db.execute(existing_count_stmt)).scalar_one()
+    if existing_count == 0:
+        new_store.is_main_store = True
+
     await db.commit()
     await db.refresh(new_store) # Refresh to load relationships
     return new_store
@@ -278,6 +288,14 @@ async def update_store(
 
 async def delete_store(db: AsyncSession, store: Store, soft_delete: bool = False) -> Store:
     """Deactivate a store by setting is_active = False. Set deleted_at if soft_delete is True."""
+    from fastapi import HTTPException
+    if store.is_main_store:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot delete the Main Store. "
+                   "Designate another store as Main Store first."
+        )
+
     if soft_delete:
         store.deleted_at = datetime.now(timezone.utc)
     store.is_active = False
@@ -294,6 +312,49 @@ async def delete_store(db: AsyncSession, store: Store, soft_delete: bool = False
         update(Optician).where(Optician.store_id == store.id, Optician.deleted_at.is_(None)).values(is_active=False)
     )
     
+    await db.commit()
+    await db.refresh(store)
+    return store
+
+
+async def get_main_store(db: AsyncSession, admin_id: int) -> Store | None:
+    """Fetch the Admin's designated Main Store."""
+    stmt = select(Store).where(
+        Store.admin_id == admin_id,
+        Store.is_main_store.is_(True),
+        Store.deleted_at.is_(None),
+    )
+    result = await db.execute(stmt)
+    return result.scalar_one_or_none()
+
+
+async def set_main_store(
+    db: AsyncSession,
+    admin_id: int,
+    store_id: int,
+) -> Store:
+    """Designate a store as the Admin's Main Store. Unsets any previous Main Store."""
+    from fastapi import HTTPException
+    from sqlalchemy import update
+    
+    store = await get_store(db, store_id)
+    if store is None or store.admin_id != admin_id:
+        raise HTTPException(status_code=404, detail="Store not found")
+    if not store.is_active or store.deleted_at is not None:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot designate an inactive or deleted store as Main Store"
+        )
+    
+    # Unset current main store
+    await db.execute(
+        update(Store)
+        .where(Store.admin_id == admin_id, Store.is_main_store.is_(True))
+        .values(is_main_store=False)
+    )
+    
+    # Set new main store
+    store.is_main_store = True
     await db.commit()
     await db.refresh(store)
     return store

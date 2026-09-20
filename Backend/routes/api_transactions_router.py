@@ -165,8 +165,21 @@ async def create_admin_transaction(
     """Create a transaction directly as Admin (Auto-completed)."""
     from_type = payload.from_owner_type.upper()
     to_type = payload.to_owner_type.upper()
+    from_id = payload.from_owner_id
+    to_id = payload.to_owner_id
 
-    if from_type == to_type and payload.from_owner_id == payload.to_owner_id:
+    from services.warehouse_resolver import resolve_warehouse
+    wh = await resolve_warehouse(db, current_admin.id)
+
+    if from_type == "ADMIN" and not wh["is_dedicated_warehouse"]:
+        from_type = "STORE"
+        from_id = wh["owner_id"]
+
+    if to_type == "ADMIN" and not wh["is_dedicated_warehouse"]:
+        to_type = "STORE"
+        to_id = wh["owner_id"]
+
+    if from_type == to_type and from_id == to_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Source and destination must be different",
@@ -175,8 +188,8 @@ async def create_admin_transaction(
     if from_type == "ADMIN" and to_type == "STORE":
         txn_out, txn_in = await admin_to_store_transfer(
             db=db,
-            admin_id=payload.from_owner_id,
-            store_id=payload.to_owner_id,
+            admin_id=from_id,
+            store_id=to_id,
             product_id=payload.product_id,
             quantity=payload.quantity,
             created_by=current_admin.id,
@@ -185,8 +198,8 @@ async def create_admin_transaction(
     elif from_type == "STORE" and to_type == "ADMIN":
         txn_out, txn_in = await store_to_admin_transfer(
             db=db,
-            admin_id=payload.to_owner_id,
-            store_id=payload.from_owner_id,
+            admin_id=to_id,
+            store_id=from_id,
             product_id=payload.product_id,
             quantity=payload.quantity,
             created_by=current_admin.id,
@@ -196,8 +209,8 @@ async def create_admin_transaction(
     elif from_type == "STORE" and to_type == "STORE":
         txn_out, txn_in = await store_to_store_transfer(
             db=db,
-            from_store_id=payload.from_owner_id,
-            to_store_id=payload.to_owner_id,
+            from_store_id=from_id,
+            to_store_id=to_id,
             product_id=payload.product_id,
             quantity=payload.quantity,
             created_by=current_admin.id,
@@ -224,8 +237,17 @@ async def create_admin_transfer_request(
     """
     from_type = payload.from_owner_type.upper()
     to_type = payload.to_owner_type.upper()
+    from_id = payload.from_owner_id
+    to_id = payload.to_owner_id
 
-    if from_type == to_type and payload.from_owner_id == payload.to_owner_id:
+    from services.warehouse_resolver import resolve_warehouse
+    wh = await resolve_warehouse(db, current_admin.id)
+
+    if from_type == "ADMIN" and not wh["is_dedicated_warehouse"]:
+        from_type = "STORE"
+        from_id = wh["owner_id"]
+
+    if from_type == to_type and from_id == to_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Source and destination must be different",
@@ -241,11 +263,11 @@ async def create_admin_transfer_request(
     txn_out, txn_in = await create_pending_request_service(
         db=db,
         manager_user_id=current_admin.id,
-        manager_store_id=payload.to_owner_id,
+        manager_store_id=to_id,
         product_id=payload.product_id,
         quantity=payload.quantity,
         from_owner_type=from_type,
-        from_owner_id=payload.from_owner_id,
+        from_owner_id=from_id,
         remarks=payload.remarks,
     )
     return [_txn_to_read(txn_out), _txn_to_read(txn_in)]

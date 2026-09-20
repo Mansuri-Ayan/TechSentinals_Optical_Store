@@ -53,13 +53,35 @@ export const usePurchaseOrders = (filters = {}) => {
 
   // Composite mutation to record a complete purchase: create draft PO -> receive goods -> record payment
   const recordPurchaseMutation = useMutation({
-    mutationFn: async ({ supplierId, storeId, productId, quantity, totalAmount, paidAmount, paymentMethod, date, remarks, costPrice, sellingPrice, discountPercent, lowStockThreshold }) => {
+    mutationFn: async (params) => {
+      const item = params.items?.[0];
+      const supplierId = params.supplierId || item?.supplierId;
+      const storeId = params.storeId;
+      const productId = params.productId ?? item?.productId ?? item?.product_id;
+      const quantity = params.quantity ?? item?.quantityOrdered ?? item?.quantity ?? item?.quantity_ordered;
+      const costPrice = params.costPrice ?? item?.unitPrice ?? item?.unit_price;
+      const sellingPrice = params.sellingPrice ?? item?.sellingPrice ?? item?.selling_price;
+      const discountPercent = params.discountPercent ?? item?.discountPercent ?? item?.discount_percent;
+      const lowStockThreshold = params.lowStockThreshold ?? item?.lowStockThreshold ?? item?.low_stock_threshold;
+      const totalAmount = params.totalAmount ?? params.amount ?? (Number(quantity) * Number(costPrice));
+      const paidAmount = params.paidAmount ?? 0;
+      const paymentMethod = params.paymentMethod || params.method || 'Cash';
+      const date = params.date || params.orderDate || new Date().toISOString().split('T')[0];
+      const remarks = params.remarks || params.notes || '';
+
+      if (!productId || isNaN(Number(productId))) {
+        throw new Error('Valid Product ID is required to record purchase.');
+      }
+      if (!quantity || isNaN(Number(quantity)) || Number(quantity) <= 0) {
+        throw new Error('Valid quantity (>= 1) is required.');
+      }
+
       // 0. Update product details if pricing info is provided
-      if (costPrice !== undefined || sellingPrice !== undefined || discountPercent !== undefined || lowStockThreshold !== undefined) {
+      if (productId && (costPrice !== undefined || sellingPrice !== undefined || discountPercent !== undefined || lowStockThreshold !== undefined)) {
         const updatePayload = {};
-        if (costPrice !== undefined && costPrice !== null) updatePayload.cost_price = Number(costPrice);
-        if (sellingPrice !== undefined && sellingPrice !== null) updatePayload.selling_price = Number(sellingPrice);
-        if (discountPercent !== undefined && discountPercent !== null) updatePayload.discount_percent = Number(discountPercent);
+        if (costPrice !== undefined && costPrice !== null && !isNaN(Number(costPrice))) updatePayload.cost_price = Number(costPrice);
+        if (sellingPrice !== undefined && sellingPrice !== null && !isNaN(Number(sellingPrice))) updatePayload.selling_price = Number(sellingPrice);
+        if (discountPercent !== undefined && discountPercent !== null && !isNaN(Number(discountPercent))) updatePayload.discount_percent = Number(discountPercent);
         if (lowStockThreshold !== undefined) updatePayload.low_stock_threshold = lowStockThreshold !== null ? Number(lowStockThreshold) : null;
         if (Object.keys(updatePayload).length > 0) {
           try {
@@ -72,7 +94,10 @@ export const usePurchaseOrders = (filters = {}) => {
       }
 
       // 1. Create the Purchase Order
-      const unitPrice = totalAmount / quantity;
+      const unitPrice = costPrice !== undefined && !isNaN(Number(costPrice))
+        ? Number(costPrice)
+        : (Number(totalAmount) / Number(quantity));
+
       const poPayload = {
         supplier_id: Number(supplierId),
         store_id: (storeId === 'warehouse' || storeId === -1 || !storeId) ? null : Number(storeId),

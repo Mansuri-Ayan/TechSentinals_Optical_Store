@@ -49,7 +49,7 @@ def _compute_line_total(
 
 
 async def _generate_po_number(db: AsyncSession, admin_id: int) -> str:
-    """Auto-generate a sequential PO number like PO-2026-00001."""
+    """Auto-generate a unique sequential PO number like PO-2026-00001."""
     year = datetime.now(timezone.utc).year
     prefix = f"PO-{year}-"
     stmt = (
@@ -59,16 +59,28 @@ async def _generate_po_number(db: AsyncSession, admin_id: int) -> str:
         .limit(1)
     )
     result = await db.execute(stmt)
-    last_po = result.scalar()
+    last_po = result.scalar_one_or_none()
+
+    next_seq = 1
     if last_po:
         try:
-            suffix = last_po.split("-")[-1]
-            next_num = int(suffix) + 1
+            suffix = last_po.split(prefix)[-1]
+            next_seq = int(suffix) + 1
         except (ValueError, IndexError):
-            next_num = 1
-    else:
-        next_num = 1
-    return f"{prefix}{next_num:05d}"
+            count_stmt = select(sa_func.count()).select_from(PurchaseOrder).where(
+                PurchaseOrder.po_number.like(f"{prefix}%")
+            )
+            next_seq = (await db.execute(count_stmt)).scalar_one() + 1
+
+    while True:
+        candidate = f"{prefix}{next_seq:05d}"
+        exists_stmt = select(sa_func.count()).select_from(PurchaseOrder).where(
+            PurchaseOrder.po_number == candidate
+        )
+        exists = (await db.execute(exists_stmt)).scalar_one()
+        if exists == 0:
+            return candidate
+        next_seq += 1
 
 
 # ── Create PO ─────────────────────────────────────────────────
@@ -151,10 +163,14 @@ async def create_purchase_order(
     total_amount = (subtotal - total_discount + total_tax).quantize(Decimal("0.01"))
     due_date = payload.order_date + timedelta(days=supplier.credit_days or 0)
 
+    from services.warehouse_resolver import resolve_warehouse
+    wh = await resolve_warehouse(db, admin_id)
+    effective_store_id = payload.store_id if payload.store_id is not None else wh["store_id"]
+
     po = PurchaseOrder(
         po_number=po_number,
         admin_id=admin_id,
-        store_id=payload.store_id,
+        store_id=effective_store_id,
         supplier_id=payload.supplier_id,
         status=POStatus.DRAFT,
         order_date=payload.order_date,
@@ -237,7 +253,12 @@ async def list_purchase_orders(
         stmt = stmt.where(PurchaseOrder.supplier_id == supplier_id)
     if store_id is not None:
         if store_id == -1:
-            stmt = stmt.where(PurchaseOrder.store_id.is_(None))
+            from services.warehouse_resolver import resolve_warehouse
+            wh = await resolve_warehouse(db, admin_id)
+            if wh["is_dedicated_warehouse"]:
+                stmt = stmt.where(PurchaseOrder.store_id.is_(None))
+            else:
+                stmt = stmt.where(PurchaseOrder.store_id == wh["store_id"])
         else:
             stmt = stmt.where(PurchaseOrder.store_id == store_id)
     if status_filter:

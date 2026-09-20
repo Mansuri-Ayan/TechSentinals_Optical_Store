@@ -2,10 +2,14 @@ import { useState, useMemo, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import {
   ChevronRight, MapPin, Phone, Mail, FileText, CheckCircle, XCircle,
-  IndianRupee, ShoppingBag, Users, AlertCircle, ArrowLeft
+  IndianRupee, ShoppingBag, Users, AlertCircle, ArrowLeft, Crown
 } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
-import { getStoreByIdApi } from '../../api/stores/store.api';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { getStoreByIdApi, getWarehouseInfoApi } from '../../api/stores/store.api';
+import PermissionGuard from '../../components/shared/PermissionGuard';
+import SwitchMainStoreModal from '../../components/admin/SwitchMainStoreModal';
+import { useStores } from '../../hooks/useStores';
+import { useStoreStore } from '../../store/store';
 
 // Import Tab Components
 import StoreOverview from '../../components/admin/stores/StoreOverview';
@@ -31,6 +35,9 @@ const TABS = [
 const StoreDetail = () => {
   const { storeId } = useParams();
   const [activeTab, setActiveTab] = useState('overview');
+  const [showSwitchMainModal, setShowSwitchMainModal] = useState(false);
+  const queryClient = useQueryClient();
+  const { setSelectedStore } = useStoreStore();
 
   // Staff Search State (Moved here to prevent focus loss in child)
   const [staffSearchInput, setStaffSearchInput] = useState('');
@@ -66,6 +73,31 @@ const StoreDetail = () => {
     queryFn: () => getStoreByIdApi(storeId),
     retry: false,
   });
+
+  const { data: warehouseInfo } = useQuery({
+    queryKey: ['warehouse-info'],
+    queryFn: getWarehouseInfoApi,
+  });
+
+  const { stores: allStoresRaw } = useStores({ paginate: false });
+  const allActiveStores = useMemo(() => {
+    const list = Array.isArray(allStoresRaw) ? allStoresRaw : (allStoresRaw?.items || []);
+    return list.filter(s => s.is_active && !s.deleted_at && s.id !== 'admin' && s.store_name !== 'All Store' && s.name !== 'All Store');
+  }, [allStoresRaw]);
+
+  const currentMainStore = useMemo(() => {
+    return allActiveStores.find(s => s.is_main_store) || null;
+  }, [allActiveStores]);
+
+  const handleSwitchMainSuccess = (newMainStore) => {
+    queryClient.invalidateQueries({ queryKey: ['store', storeId] });
+    queryClient.invalidateQueries({ queryKey: ['stores'] });
+    queryClient.invalidateQueries({ queryKey: ['warehouse-info'] });
+    queryClient.invalidateQueries({ queryKey: ['inventory'] });
+    if (!warehouseInfo?.warehouse_enabled && newMainStore) {
+      setSelectedStore(newMainStore);
+    }
+  };
 
   const formatRupee = (num) => {
     return new Intl.NumberFormat('en-IN', {
@@ -166,11 +198,32 @@ const StoreDetail = () => {
               {storeName[0]?.toUpperCase()}
             </div>
             <div>
-              <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
+              <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2 flex-wrap">
                 {storeName}
                 <span className="text-xs font-mono font-bold text-slate-500 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-md self-center">
                   {storeCode}
                 </span>
+                {store.is_main_store ? (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 shadow-sm">
+                    <Crown className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+                    Main Store
+                    {!warehouseInfo?.warehouse_enabled && (
+                      <span className="text-[10px] text-amber-600 font-semibold">(Central Hub)</span>
+                    )}
+                  </span>
+                ) : store.is_active ? (
+                  <PermissionGuard permission="stores:update">
+                    <button
+                      type="button"
+                      onClick={() => setShowSwitchMainModal(true)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-semibold text-slate-700 hover:text-amber-800 bg-white hover:bg-amber-50 border border-slate-200 hover:border-amber-300 transition-all shadow-2xs group/btn cursor-pointer"
+                      title="Make this store the designated Main Store"
+                    >
+                      <Crown className="w-3.5 h-3.5 text-slate-400 group-hover/btn:text-amber-500 group-hover/btn:fill-amber-400 shrink-0 transition-colors" />
+                      <span>Set as Main Store</span>
+                    </button>
+                  </PermissionGuard>
+                ) : null}
               </h1>
               <p className="text-slate-500 text-sm mt-0.5 flex items-center gap-1">
                 <MapPin className="w-3.5 h-3.5 text-slate-400" />
@@ -266,6 +319,17 @@ const StoreDetail = () => {
       <div className="min-h-[400px]">
         {renderTabContent()}
       </div>
+
+      {/* ── Switch Main Store Modal ── */}
+      <SwitchMainStoreModal
+        isOpen={showSwitchMainModal}
+        onClose={() => setShowSwitchMainModal(false)}
+        allStores={allActiveStores}
+        currentMainStore={currentMainStore}
+        targetStore={store}
+        isWarehouseDisabled={!warehouseInfo?.warehouse_enabled}
+        onSuccess={handleSwitchMainSuccess}
+      />
 
     </div>
   );

@@ -137,6 +137,15 @@ class Admin(Base):
         comment="Account status: ACTIVE, INACTIVE, or SUSPENDED",
     )
 
+    warehouse_enabled = Column(
+        Boolean,
+        nullable=False,
+        default=True,
+        server_default="true",
+        comment="Whether the separate warehouse feature is enabled. "
+                "When False, Main Store acts as warehouse.",
+    )
+
     last_login_at = Column(
         DateTime(timezone=True),
         nullable=True,
