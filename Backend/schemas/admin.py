@@ -161,7 +161,7 @@ class DisableWarehouseRequest(BaseModel):
 class WarehouseInfo(BaseModel):
     warehouse_enabled: bool
     owner_type: str
-    owner_id: int
+    owner_id: int | None = None
     store_id: int | None = None
     label: str
     is_dedicated_warehouse: bool

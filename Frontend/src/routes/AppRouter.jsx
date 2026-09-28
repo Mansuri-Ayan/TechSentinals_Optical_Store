@@ -59,6 +59,11 @@ import SuperAdminLayout from "../layouts/SuperAdminLayout";
 import SuperAdminLogin from "../pages/superadmin/SuperAdminLogin";
 import SuperAdminDashboard from "../pages/superadmin/SuperAdminDashboard";
 import SuperAdminAdmins from "../pages/superadmin/SuperAdminAdmins";
+import SuperAdminAdminDetail from "../pages/superadmin/SuperAdminAdminDetail";
+import SuperAdminAnalytics from "../pages/superadmin/SuperAdminAnalytics";
+import SuperAdminStores from "../pages/superadmin/SuperAdminStores";
+import SuperAdminGlobalPermissions from "../pages/superadmin/SuperAdminGlobalPermissions";
+import SuperAdminSettings from "../pages/superadmin/SuperAdminSettings";
 import AdminRegister from "../pages/auth/AdminRegister";
 
 // Responsive loading spinner component
@@ -462,7 +467,12 @@ function AppRouter() {
       >
         <Route index element={<Navigate to="dashboard" replace />} />
         <Route path="dashboard" element={<SuperAdminDashboard />} />
+        <Route path="analytics" element={<SuperAdminAnalytics />} />
         <Route path="admins" element={<SuperAdminAdmins />} />
+        <Route path="admins/:id" element={<SuperAdminAdminDetail />} />
+        <Route path="stores" element={<SuperAdminStores />} />
+        <Route path="permissions" element={<SuperAdminGlobalPermissions />} />
+        <Route path="settings" element={<SuperAdminSettings />} />
       </Route>
 
       {/* Fallback root redirect */}

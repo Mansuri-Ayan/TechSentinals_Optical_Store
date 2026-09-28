@@ -39,10 +39,35 @@ async def resolve_warehouse(db: AsyncSession, admin_id: int) -> dict:
     else:
         main_store = await get_main_store(db, admin_id)
         if not main_store:
-            raise HTTPException(
-                status_code=400,
-                detail="No Main Store designated. Cannot resolve warehouse."
-            )
+            from sqlalchemy import select
+            from models.store import Store
+
+            stmt = select(Store).where(
+                Store.admin_id == admin_id,
+                Store.deleted_at.is_(None),
+                Store.is_active.is_(True),
+            ).order_by(Store.created_at.asc())
+            fallback_store = (await db.execute(stmt)).scalars().first()
+            if fallback_store:
+                fallback_store.is_main_store = True
+                await db.commit()
+                await db.refresh(fallback_store)
+                return {
+                    "owner_type": "STORE",
+                    "owner_id": fallback_store.id,
+                    "store_id": fallback_store.id,
+                    "label": fallback_store.store_name,
+                    "is_dedicated_warehouse": False,
+                }
+
+            return {
+                "owner_type": "STORE",
+                "owner_id": None,
+                "store_id": None,
+                "label": "Not Assigned",
+                "is_dedicated_warehouse": False,
+            }
+
         return {
             "owner_type": "STORE",
             "owner_id": main_store.id,

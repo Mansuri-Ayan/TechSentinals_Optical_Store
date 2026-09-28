@@ -140,8 +140,8 @@ class Admin(Base):
     warehouse_enabled = Column(
         Boolean,
         nullable=False,
-        default=True,
-        server_default="true",
+        default=False,
+        server_default="false",
         comment="Whether the separate warehouse feature is enabled. "
                 "When False, Main Store acts as warehouse.",
     )

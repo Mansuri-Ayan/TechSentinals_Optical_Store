@@ -2,7 +2,7 @@ import math
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, or_, func
+from sqlalchemy import select, or_, func, case, distinct
 
 from db.session import get_db
 from core.deps import get_current_user
@@ -62,6 +62,7 @@ async def create_admin(
         pan_number=payload.pan_number,
         role_id=admin_role.id,
         status=AdminStatus.ACTIVE,
+        warehouse_enabled=False,
         is_email_verified=False,
         is_phone_verified=False,
     )
@@ -194,3 +195,311 @@ async def delete_admin_endpoint(
 
     await db.commit()
     return {"success": True, "message": f"Admin business '{admin.business_name}' and all associated stores deleted successfully."}
+
+
+@router.get("/{admin_id}/overview")
+async def get_admin_360_overview(
+    admin_id: int,
+    current_user = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Returns 360-degree overview of a tenant business:
+    profile, stores summary, staff counts, sales revenue, inventory valuation, and configs.
+    """
+    check_superadmin(current_user)
+
+    admin = await db.get(Admin, admin_id)
+    if not admin or admin.deleted_at is not None:
+        raise HTTPException(status_code=404, detail="Admin business not found")
+
+    from models.store import Store
+    from models.sale import Sale, SaleStatus
+    from models.inventory import Inventory
+    from models.product import Product
+    from models.manager import Manager
+    from models.worker import Worker
+    from models.optician import Optician
+    from models.accountant import Accountant
+
+    # Stores summary
+    stores_stmt = select(
+        func.count(Store.id).label("total"),
+        func.count(case((Store.is_active == True, Store.id))).label("active")
+    ).where(Store.admin_id == admin_id, Store.deleted_at.is_(None))
+    stores_res = (await db.execute(stores_stmt)).first()
+    total_stores = int(stores_res.total or 0)
+    active_stores = int(stores_res.active or 0)
+
+    # Staff counts
+    mgr_count = (await db.execute(
+        select(func.count(Manager.id)).join(Store, Manager.store_id == Store.id).where(Store.admin_id == admin_id, Manager.deleted_at.is_(None))
+    )).scalar() or 0
+    wrk_count = (await db.execute(
+        select(func.count(Worker.id)).join(Store, Worker.store_id == Store.id).where(Store.admin_id == admin_id, Worker.deleted_at.is_(None))
+    )).scalar() or 0
+    opt_count = (await db.execute(
+        select(func.count(Optician.id)).join(Store, Optician.store_id == Store.id).where(Store.admin_id == admin_id, Optician.deleted_at.is_(None))
+    )).scalar() or 0
+    acc_count = (await db.execute(
+        select(func.count(Accountant.id)).where(Accountant.admin_id == admin_id, Accountant.deleted_at.is_(None))
+    )).scalar() or 0
+    total_staff = mgr_count + wrk_count + opt_count + acc_count
+
+    # Sales & Revenue
+    sales_stmt = select(
+        func.coalesce(func.sum(Sale.total_amount), 0).label("gmv"),
+        func.count(Sale.id).label("invoices")
+    ).where(Sale.admin_id == admin_id, Sale.status == SaleStatus.COMPLETED)
+    sales_res = (await db.execute(sales_stmt)).first()
+    gmv = float(sales_res.gmv or 0)
+    invoices = int(sales_res.invoices or 0)
+    aov = round(gmv / invoices, 2) if invoices > 0 else 0.0
+
+    # Inventory Valuation (admin-scoped products)
+    inv_stmt = select(
+        func.coalesce(func.sum(Inventory.quantity), 0).label("total_units"),
+        func.coalesce(func.sum(Inventory.quantity * func.coalesce(Product.cost_price, Product.selling_price, 0)), 0).label("valuation")
+    ).join(Product, Inventory.product_id == Product.id).where(Product.admin_id == admin_id, Inventory.is_active.is_(True))
+    inv_res = (await db.execute(inv_stmt)).first()
+    stock_units = int(inv_res.total_units or 0)
+    stock_valuation = float(inv_res.valuation or 0)
+
+    return {
+        "admin": AdminRead.model_validate(admin),
+        "stores_count": total_stores,
+        "active_stores_count": active_stores,
+        "staff_count": {
+            "total": total_staff,
+            "managers": mgr_count,
+            "workers": wrk_count,
+            "opticians": opt_count,
+            "accountants": acc_count,
+        },
+        "sales": {
+            "gmv": gmv,
+            "invoices": invoices,
+            "aov": aov,
+        },
+        "inventory": {
+            "units": stock_units,
+            "valuation": round(stock_valuation, 2),
+        },
+        "config": {
+            "warehouse_enabled": admin.warehouse_enabled,
+        }
+    }
+
+
+@router.get("/{admin_id}/stores")
+async def get_admin_stores(
+    admin_id: int,
+    current_user = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Returns all retail branches for a specific tenant with store metrics.
+    """
+    check_superadmin(current_user)
+
+    from models.store import Store
+    from models.sale import Sale, SaleStatus
+
+    stmt = (
+        select(
+            Store,
+            func.coalesce(func.sum(case((Sale.status == SaleStatus.COMPLETED, Sale.total_amount), else_=0)), 0).label("revenue"),
+            func.count(distinct(case((Sale.status == SaleStatus.COMPLETED, Sale.id)))).label("orders_count")
+        )
+        .outerjoin(Sale, Store.id == Sale.store_id)
+        .where(Store.admin_id == admin_id, Store.deleted_at.is_(None))
+        .group_by(Store.id)
+        .order_by(Store.created_at.asc())
+    )
+    res = await db.execute(stmt)
+    rows = res.all()
+
+    stores_list = []
+    for store, rev, orders in rows:
+        stores_list.append({
+            "id": store.id,
+            "store_name": store.store_name,
+            "store_code": store.store_code,
+            "address": store.address,
+            "city": store.city,
+            "state": store.state,
+            "pincode": store.pincode,
+            "phone": store.phone,
+            "email": store.email,
+            "is_active": store.is_active,
+            "is_main_store": store.is_main_store,
+            "revenue": float(rev or 0),
+            "orders_count": int(orders or 0),
+            "created_at": store.created_at.isoformat() if store.created_at else None,
+        })
+
+    return {"stores": stores_list, "total": len(stores_list)}
+
+
+@router.get("/{admin_id}/staff")
+async def get_admin_staff(
+    admin_id: int,
+    current_user = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Returns all staff members (managers, workers, opticians, accountants) under this tenant.
+    """
+    check_superadmin(current_user)
+
+    from models.store import Store
+    from models.manager import Manager
+    from models.worker import Worker
+    from models.optician import Optician
+    from models.accountant import Accountant
+
+    staff_members = []
+
+    # Managers
+    mgrs = (await db.execute(
+        select(Manager, Store.store_name)
+        .join(Store, Manager.store_id == Store.id)
+        .where(Store.admin_id == admin_id, Manager.deleted_at.is_(None))
+    )).all()
+    for m, sname in mgrs:
+        staff_members.append({
+            "id": m.id,
+            "name": f"{m.first_name} {m.last_name}",
+            "email": m.email,
+            "phone": m.phone,
+            "role": "Manager",
+            "store_id": m.store_id,
+            "store_name": sname,
+            "is_active": m.is_active,
+            "created_at": m.created_at.isoformat() if m.created_at else None,
+        })
+
+    # Workers
+    wrks = (await db.execute(
+        select(Worker, Store.store_name)
+        .join(Store, Worker.store_id == Store.id)
+        .where(Store.admin_id == admin_id, Worker.deleted_at.is_(None))
+    )).all()
+    for w, sname in wrks:
+        staff_members.append({
+            "id": w.id,
+            "name": f"{w.first_name} {w.last_name}",
+            "email": w.email,
+            "phone": w.phone,
+            "role": "Worker",
+            "store_id": w.store_id,
+            "store_name": sname,
+            "is_active": w.is_active,
+            "created_at": w.created_at.isoformat() if w.created_at else None,
+        })
+
+    # Opticians
+    opts = (await db.execute(
+        select(Optician, Store.store_name)
+        .join(Store, Optician.store_id == Store.id)
+        .where(Store.admin_id == admin_id, Optician.deleted_at.is_(None))
+    )).all()
+    for o, sname in opts:
+        staff_members.append({
+            "id": o.id,
+            "name": f"{o.first_name} {o.last_name}",
+            "email": o.email,
+            "phone": o.phone,
+            "role": "Optician",
+            "store_id": o.store_id,
+            "store_name": sname,
+            "is_active": o.is_active,
+            "created_at": o.created_at.isoformat() if o.created_at else None,
+        })
+
+    # Accountants
+    accs = (await db.execute(
+        select(Accountant)
+        .where(Accountant.admin_id == admin_id, Accountant.deleted_at.is_(None))
+    )).scalars().all()
+    for a in accs:
+        staff_members.append({
+            "id": a.id,
+            "name": f"{a.first_name} {a.last_name}",
+            "email": a.email,
+            "phone": a.phone,
+            "role": "Accountant",
+            "store_id": a.store_id,
+            "store_name": "Business Level",
+            "is_active": a.is_active,
+            "created_at": a.created_at.isoformat() if a.created_at else None,
+        })
+
+    return {"staff": staff_members, "total": len(staff_members)}
+
+
+@router.patch("/{admin_id}/status")
+async def update_admin_status(
+    admin_id: int,
+    payload: dict,
+    current_user = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Toggle or update Admin status (ACTIVE, SUSPENDED, INACTIVE).
+    """
+    check_superadmin(current_user)
+
+    new_status = payload.get("status", "").upper()
+    if new_status not in [AdminStatus.ACTIVE.value, AdminStatus.SUSPENDED.value, AdminStatus.INACTIVE.value]:
+        raise HTTPException(status_code=400, detail="Invalid status. Must be ACTIVE, SUSPENDED, or INACTIVE")
+
+    admin = await db.get(Admin, admin_id)
+    if not admin or admin.deleted_at is not None:
+        raise HTTPException(status_code=404, detail="Admin business not found")
+
+    admin.status = AdminStatus(new_status)
+    await db.commit()
+    await db.refresh(admin)
+
+    return {
+        "success": True,
+        "message": f"Tenant '{admin.business_name}' status updated to {new_status}",
+        "status": admin.status.value,
+    }
+
+
+@router.post("/{admin_id}/impersonate")
+async def impersonate_admin(
+    admin_id: int,
+    current_user = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Generate an impersonation token for the SuperAdmin to view the app as the target Admin.
+    """
+    check_superadmin(current_user)
+
+    admin = await db.get(Admin, admin_id)
+    if not admin or admin.deleted_at is not None:
+        raise HTTPException(status_code=404, detail="Admin business not found")
+    if admin.status != AdminStatus.ACTIVE:
+        raise HTTPException(status_code=400, detail="Cannot impersonate an inactive or suspended tenant")
+
+    from core.security import create_access_token
+    jwt_payload = {
+        "sub": str(admin.id),
+        "role": "admin",
+        "impersonated_by": str(current_user.id),
+        "impersonated_by_email": current_user.email,
+        "business_name": admin.business_name,
+    }
+    access_token = create_access_token(jwt_payload)
+
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "admin": AdminRead.model_validate(admin),
+        "impersonated": True,
+        "message": f"Impersonation session established for {admin.business_name}",
+    }

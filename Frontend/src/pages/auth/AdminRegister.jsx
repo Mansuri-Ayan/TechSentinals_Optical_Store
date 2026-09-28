@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { useNavigate, Link } from 'react-router-dom';
 import {
-  Building2, User, Phone, Mail, MapPin, Eye, EyeOff, Shield,
+  User, Phone, Mail, Eye, EyeOff, Shield,
   ArrowLeft, CheckCircle2, RefreshCw, Loader2, KeyRound, Sparkles
 } from 'lucide-react';
 import LoginPageImg from '../../assets/LoginPage.png';
@@ -40,7 +40,7 @@ export default function AdminRegister() {
   const { verifyAdminOtpAsync, isVerifyingOtp } = useVerifyAdminOtp();
   const { checkAdminOtpStatusAsync } = useCheckAdminOtpStatus();
 
-  const { register, handleSubmit, formState: { errors }, reset } = useForm({
+  const { register, handleSubmit, formState: { errors }, reset, watch } = useForm({
     defaultValues: formData || {},
   });
 
@@ -178,19 +178,16 @@ export default function AdminRegister() {
       const verificationToken = verifyRes.verification_token;
 
       // 2. Complete Admin Registration with token
-      const nameParts = (formData.full_name || '').trim().split(/\s+/);
+      const { confirm_password, full_name, ...registrationData } = formData;
+      const nameParts = (full_name || '').trim().split(/\s+/);
       const owner_first_name = nameParts[0] || 'Admin';
       const owner_last_name = nameParts.slice(1).join(' ') || 'Owner';
 
       await registerAdminPublicAsync({
-        ...formData,
-        business_name: formData.store_name || formData.business_name || 'Optical Store',
+        ...registrationData,
+        business_name: `${owner_first_name}'s Optical Store`,
         owner_first_name,
         owner_last_name,
-        address: formData.address || 'Main Store Address',
-        city: formData.city || 'Mumbai',
-        state: formData.state || 'Maharashtra',
-        pincode: formData.pincode || '400001',
         verification_token: verificationToken,
       });
 
@@ -360,63 +357,27 @@ export default function AdminRegister() {
                   )}
                 </div>
 
-                <div className="pt-2 border-t border-slate-100">
-                  <h3 className="text-xs font-extrabold text-slate-700 uppercase tracking-wider mb-3">
-                    First Branch Details
-                  </h3>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {/* Store Name */}
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
-                        Store Branch Name *
-                      </label>
-                      <div className="relative">
-                        <Building2 className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
-                        <input
-                          type="text"
-                          {...register('store_name', { required: 'Store name is required' })}
-                          placeholder="ClearSight Main Branch"
-                          className="w-full pl-9 pr-3 py-2.5 text-xs font-semibold border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 bg-white"
-                        />
-                      </div>
-                      {errors.store_name && (
-                        <p className="text-[10px] font-bold text-rose-500 mt-1">{errors.store_name.message}</p>
-                      )}
-                    </div>
-
-                    {/* Store Code */}
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
-                        Store Code *
-                      </label>
-                      <input
-                        type="text"
-                        {...register('store_code', { required: 'Store code is required' })}
-                        placeholder="MAIN-01"
-                        className="w-full px-3 py-2.5 text-xs font-semibold border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 bg-white"
-                      />
-                      {errors.store_code && (
-                        <p className="text-[10px] font-bold text-rose-500 mt-1">{errors.store_code.message}</p>
-                      )}
-                    </div>
+                {/* Confirm Password */}
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                    Confirm Password *
+                  </label>
+                  <div className="relative">
+                    <KeyRound className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      {...register('confirm_password', {
+                        required: 'Please confirm your password',
+                        validate: (value) =>
+                          value === watch('password') || 'Passwords do not match',
+                      })}
+                      placeholder="••••••••"
+                      className="w-full pl-9 pr-3 py-2.5 text-xs font-semibold border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 bg-white"
+                    />
                   </div>
-
-                  {/* Store Address */}
-                  <div className="mt-3">
-                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
-                      Store Address
-                    </label>
-                    <div className="relative">
-                      <MapPin className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
-                      <input
-                        type="text"
-                        {...register('address')}
-                        placeholder="123 Main Street, Suite 100"
-                        className="w-full pl-9 pr-3 py-2.5 text-xs font-semibold border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 bg-white"
-                      />
-                    </div>
-                  </div>
+                  {errors.confirm_password && (
+                    <p className="text-[10px] font-bold text-rose-500 mt-1">{errors.confirm_password.message}</p>
+                  )}
                 </div>
 
                 <button
@@ -542,7 +503,7 @@ export default function AdminRegister() {
               <div>
                 <h2 className="text-2xl font-black text-slate-900">Admin Account Created!</h2>
                 <p className="text-xs text-slate-500 font-semibold mt-1">
-                  Your store branch <span className="font-bold text-slate-800">{formData?.store_name}</span> has been set up successfully.
+                  Welcome, <span className="font-bold text-slate-800">{formData?.full_name}</span>! Your admin account has been set up successfully.
                 </p>
               </div>
 

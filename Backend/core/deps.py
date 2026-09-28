@@ -216,6 +216,26 @@ async def get_current_manager(
     return current_user
 
 
+async def get_current_superadmin(
+    current_user: SuperAdmin | Admin | Accountant | Manager | Worker | Optician = Depends(get_current_user),
+) -> SuperAdmin:
+    """
+    Dependency to enforce that the authenticated user has the 'superadmin' role.
+    Raises 403 Forbidden if the authenticated user is not an active SuperAdmin.
+    """
+    if not isinstance(current_user, SuperAdmin):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden — SuperAdmin access required",
+        )
+    if current_user.status != "ACTIVE" or current_user.deleted_at is not None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="SuperAdmin account is deactivated or suspended",
+        )
+    return current_user
+
+
 def get_user_admin_id(user) -> int | None:
     if isinstance(user, SuperAdmin):
         return None

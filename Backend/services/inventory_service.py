@@ -197,6 +197,24 @@ async def get_inventories_by_owner(
 
     owner_type = owner_type.upper()
 
+    # ── If owner_id is None (e.g. no store created yet in store hub mode) ──
+    if owner_id is None:
+        return {
+            "items": [],
+            "total": 0,
+            "page": page,
+            "limit": limit,
+            "pages": 0,
+            "stats": {
+                "total_items": 0,
+                "in_stock": 0,
+                "low_stock": 0,
+                "out_of_stock": 0,
+                "total_stock_units": 0,
+                "total_valuation": 0.0,
+            },
+        }
+
     # ── Base filter conditions ──
     base_conditions = [
         Inventory.owner_type == owner_type,

@@ -11,6 +11,18 @@ const api = axios.create({
   },
 });
 
+// Attach impersonation token if active session exists
+api.interceptors.request.use(
+  (config) => {
+    const impersonationToken = sessionStorage.getItem('impersonation_token');
+    if (impersonationToken) {
+      config.headers.Authorization = `Bearer ${impersonationToken}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
 let isRefreshing = false;
 let failedQueue = [];
 

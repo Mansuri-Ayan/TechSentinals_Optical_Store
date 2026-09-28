@@ -1,14 +1,21 @@
 import { useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useSuperAdmin } from '../../hooks/useSuperAdmin';
-import { Search, Loader2, Plus, Edit, Trash2, Building2, User, Phone, Mail, MapPin, X, Check, Eye, EyeOff } from 'lucide-react';
+import { Search, Loader2, Plus, Edit, Trash2, Building2, User, Phone, Mail, MapPin, X, Check, Eye, EyeOff, LogIn, ExternalLink, ShieldCheck } from 'lucide-react';
 import { useForm } from 'react-hook-form';
+import { toast } from 'react-toastify';
+import { impersonateAdminApi } from '../../api/superadmin/superadmin.api';
+import { useAuthStore } from '../../store/store';
 
 export default function SuperAdminAdmins() {
+  const navigate = useNavigate();
+  const { setUser } = useAuthStore();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [addEditModal, setAddEditModal] = useState({ isOpen: false, item: null });
   const [showPassword, setShowPassword] = useState(false);
+  const [impersonatingId, setImpersonatingId] = useState(null);
 
   const {
     admins,
@@ -18,6 +25,7 @@ export default function SuperAdminAdmins() {
     createAdminAsync,
     updateAdminAsync,
     deleteAdminAsync,
+    updateStatusAsync,
   } = useSuperAdmin({
     page: currentPage,
     limit: 10,
@@ -98,6 +106,31 @@ export default function SuperAdminAdmins() {
       try {
         await deleteAdminAsync(id);
       } catch (err) {}
+    }
+  };
+
+  const handleStatusChange = async (id, status) => {
+    try {
+      await updateStatusAsync({ id, status });
+    } catch (err) {}
+  };
+
+  const handleImpersonate = async (item) => {
+    if (item.status !== 'ACTIVE') {
+      toast.warning('Cannot impersonate a suspended or inactive tenant.');
+      return;
+    }
+    setImpersonatingId(item.id);
+    try {
+      const res = await impersonateAdminApi(item.id);
+      sessionStorage.setItem('impersonation_token', res.access_token);
+      sessionStorage.setItem('impersonation_session', JSON.stringify(res.admin));
+      setUser({ ...res.admin, role: 'admin' });
+      navigate('/admin/dashboard');
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to establish impersonation session');
+    } finally {
+      setImpersonatingId(null);
     }
   };
 
@@ -193,23 +226,62 @@ export default function SuperAdminAdmins() {
                       </div>
                     </td>
                     <td className="py-4 px-6">
-                      <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full font-bold border ${item.status === 'ACTIVE' ? 'text-emerald-700 bg-emerald-50 border-emerald-100' : item.status === 'SUSPENDED' ? 'text-amber-700 bg-amber-50 border-amber-100' : 'text-slate-600 bg-slate-50 border-slate-200'}`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${item.status === 'ACTIVE' ? 'bg-emerald-500' : item.status === 'SUSPENDED' ? 'bg-amber-500' : 'bg-slate-400'} flex-shrink-0`} />
-                        {item.status}
-                      </span>
+                      <select
+                        value={item.status}
+                        onChange={(e) => handleStatusChange(item.id, e.target.value)}
+                        className={`text-xs font-bold px-3 py-1 rounded-full border cursor-pointer outline-none transition-all ${
+                          item.status === 'ACTIVE'
+                            ? 'text-emerald-700 bg-emerald-50 border-emerald-200 focus:ring-2 focus:ring-emerald-500/20'
+                            : item.status === 'SUSPENDED'
+                            ? 'text-amber-700 bg-amber-50 border-amber-200 focus:ring-2 focus:ring-amber-500/20'
+                            : 'text-slate-600 bg-slate-100 border-slate-200 focus:ring-2 focus:ring-slate-500/20'
+                        }`}
+                      >
+                        <option value="ACTIVE">ACTIVE</option>
+                        <option value="SUSPENDED">SUSPENDED</option>
+                        <option value="INACTIVE">INACTIVE</option>
+                      </select>
                     </td>
                     <td className="py-4 px-6 text-right">
-                      <div className="flex items-center justify-end gap-2">
+                      <div className="flex items-center justify-end gap-1.5 sm:gap-2">
+                        {/* Inspect 360 button */}
+                        <button
+                          onClick={() => navigate(`/super-admin/admins/${item.id}`)}
+                          className="flex items-center gap-1 px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100/70 text-emerald-700 border border-emerald-200/80 rounded-lg text-xs font-bold transition-all cursor-pointer shadow-xs"
+                          title="Inspect 360° Tenant Intelligence"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          <span className="hidden md:inline">360°</span>
+                        </button>
+
+                        {/* Impersonate button */}
+                        <button
+                          onClick={() => handleImpersonate(item)}
+                          disabled={impersonatingId === item.id || item.status !== 'ACTIVE'}
+                          className="flex items-center gap-1 px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100/70 text-indigo-700 border border-indigo-200/80 rounded-lg text-xs font-bold transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shadow-xs"
+                          title={item.status === 'ACTIVE' ? 'Login as this Admin' : 'Cannot impersonate inactive/suspended tenant'}
+                        >
+                          {impersonatingId === item.id ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <LogIn className="w-3.5 h-3.5" />
+                          )}
+                          <span className="hidden md:inline">Login</span>
+                        </button>
+
+                        {/* Edit details button */}
                         <button
                           onClick={() => handleOpenEdit(item)}
-                          className="p-2 bg-white border border-slate-200 text-slate-500 hover:text-slate-900 rounded-lg hover:shadow-sm transition-all cursor-pointer"
+                          className="p-1.5 bg-white border border-slate-200 text-slate-500 hover:text-slate-900 rounded-lg hover:shadow-xs transition-all cursor-pointer"
                           title="Edit Business Details"
                         >
                           <Edit className="w-3.5 h-3.5" />
                         </button>
+
+                        {/* Delete button */}
                         <button
                           onClick={() => handleDelete(item.id, item.business_name)}
-                          className="p-2 bg-red-50 border border-red-100 text-red-600 hover:bg-red-100/50 hover:text-red-700 rounded-lg hover:shadow-sm transition-all cursor-pointer"
+                          className="p-1.5 bg-red-50 border border-red-100 text-red-600 hover:bg-red-100/50 hover:text-red-700 rounded-lg hover:shadow-xs transition-all cursor-pointer"
                           title="Delete Business"
                         >
                           <Trash2 className="w-3.5 h-3.5" />

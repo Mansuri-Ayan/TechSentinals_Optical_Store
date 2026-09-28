@@ -2,7 +2,7 @@
 
 Revision ID: e5f6a7b8c9d0
 Revises: d4e5f6a7b8c9
-Create Date: 2026-09-15 18:25:00.000000
+Create Date: 2026-09-15 18:25:00.00000      0
 
 """
 from alembic import op
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = 'e5f6a7b8c9d0'
-down_revision = 'd52f7d9b46ac'
+down_revision = 'd4e5f6a7b8c9'
 branch_labels = None
 depends_on = None
 

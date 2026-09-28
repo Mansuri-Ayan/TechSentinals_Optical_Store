@@ -80,6 +80,7 @@ async def register_admin(
         pincode=payload.pincode,
         role_id=admin_role.id,
         status=AdminStatus.ACTIVE,
+        warehouse_enabled=False,
         is_email_verified=is_email_verified,
         is_phone_verified=False,
     )
@@ -89,26 +90,5 @@ async def register_admin(
 
     # Copy global permissions defaults to admin overrides
     await copy_global_permissions_to_admin(db, new_admin.id)
-
-    # Auto-create initial store branch if store_name provided
-    store_name = payload.store_name or payload.business_name
-    if store_name:
-        from models.store import Store
-        from services.store_service import _generate_store_code
-        store_code = payload.store_code or await _generate_store_code(db)
-        initial_store = Store(
-            admin_id=new_admin.id,
-            store_name=store_name,
-            store_code=store_code,
-            address=payload.address,
-            city=payload.city,
-            state=payload.state,
-            pincode=payload.pincode,
-            phone=payload.phone,
-            email=payload.email,
-            is_active=True,
-        )
-        db.add(initial_store)
-        await db.commit()
 
     return new_admin
